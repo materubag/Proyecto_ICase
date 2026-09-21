@@ -1,0 +1,97 @@
+services:
+  # ============================================================================
+  # 1. Base de Datos - PostgreSQL
+  # ============================================================================
+  postgres:
+    image: postgres:16-alpine
+    container_name: icase_postgres
+    restart: always
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-icase_user}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-icase_password}
+      POSTGRES_DB: ${POSTGRES_DB:-icase_db}
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-icase_user} -d ${POSTGRES_DB:-icase_db}"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+    networks:
+      - icase_network
+
+  # ============================================================================
+  # 2. Backend REST API - Node.js + Express + Prisma
+  # ============================================================================
+  backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    container_name: icase_backend
+    restart: always
+    environment:
+      DATABASE_URL: postgresql://${POSTGRES_USER:-icase_user}:${POSTGRES_PASSWORD:-icase_password}@postgres:5432/${POSTGRES_DB:-icase_db}?schema=public
+      PORT: 8080
+      FRONTEND_URL: ${FRONTEND_URL:-http://localhost:3000}
+      AI_PROVIDER: ${AI_PROVIDER:-mock}
+      GEMINI_API_KEY: ${GEMINI_API_KEY:-}
+      GEMINI_MODEL: ${GEMINI_MODEL:-gemini-1.5-pro}
+      OLLAMA_BASE_URL: ${OLLAMA_BASE_URL:-http://ollama:11434}
+      OLLAMA_MODEL: ${OLLAMA_MODEL:-llama3}
+      OLLAMA_TIMEOUT: ${OLLAMA_TIMEOUT:-120000}
+      MAX_PDF_SIZE_MB: ${MAX_PDF_SIZE_MB:-10}
+      OPENAI_API_KEY: ${OPENAI_API_KEY:-}
+      OPENAI_MODEL: ${OPENAI_MODEL:-gpt-4o}
+      N8N_BASE_URL: ${N8N_BASE_URL:-}
+      N8N_ANALYZE_WEBHOOK: ${N8N_ANALYZE_WEBHOOK:-}
+      N8N_MOCKUP_WEBHOOK: ${N8N_MOCKUP_WEBHOOK:-}
+      N8N_TIMEOUT: ${N8N_TIMEOUT:-30000}
+    ports:
+      - "8080:8080"
+    depends_on:
+      postgres:
+        condition: service_healthy
+    networks:
+      - icase_network
+
+  # ============================================================================
+  # 3. Frontend SPA - React + Vite + Nginx
+  # ============================================================================
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+    container_name: icase_frontend
+    restart: always
+    ports:
+      - "3000:80"
+    depends_on:
+      - backend
+    networks:
+      - icase_network
+
+  # ============================================================================
+  # 4. Motor LLM Local - Ollama
+  # ============================================================================
+  ollama:
+    image: ollama/ollama:latest
+    container_name: icase_ollama
+    restart: always
+    ports:
+      - "11434:11434"
+    volumes:
+      - ollama_data:/root/.ollama
+    networks:
+      - icase_network
+
+volumes:
+  postgres_data:
+    driver: local
+  ollama_data:
+    driver: local
+
+networks:
+  icase_network:
+    driver: bridge

@@ -1,0 +1,224 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum ProjectStatus {
+  PLANNING
+  IN_PROGRESS
+  COMPLETED
+  ARCHIVED
+}
+
+enum RequirementType {
+  FUNCTIONAL
+  NON_FUNCTIONAL
+}
+
+enum RequirementPriority {
+  HIGH
+  MEDIUM
+  LOW
+}
+
+enum RequirementStatus {
+  PENDING
+  APPROVED
+  IMPLEMENTED
+  DISCARDED
+}
+
+model Project {
+  id                String         @id @default(uuid())
+  name              String
+  description       String?        @db.Text
+  systemDescription String?        @db.Text
+  status            ProjectStatus  @default(PLANNING)
+  createdAt         DateTime       @default(now())
+  updatedAt         DateTime       @updatedAt
+
+  // Relationships
+  requirements      Requirement[]
+  actors            Actor[]
+  entities          Entity[]
+  relationships     EntityRelationship[]
+  screens           Screen[]
+  navigationNodes   NavigationNode[]
+  architectures     Architecture[]
+
+  @@map("projects")
+}
+
+model Requirement {
+  id           String              @id @default(uuid())
+  projectId    String
+  code         String              // E.g. "RF-01", "RNF-02"
+  name         String
+  description  String              @db.Text
+  type         RequirementType     @default(FUNCTIONAL)
+  priority     RequirementPriority @default(MEDIUM)
+  status       RequirementStatus   @default(PENDING)
+  actorIds     String[]            @default([])
+  dependencies String[]            @default([])
+  createdAt    DateTime            @default(now())
+  updatedAt    DateTime            @updatedAt
+
+  // Relations
+  project      Project             @relation(fields: [projectId], references: [id], onDelete: Cascade)
+
+  @@unique([projectId, code])
+  @@map("requirements")
+}
+
+model Actor {
+  id          String   @id @default(uuid())
+  projectId   String
+  codeId      String?  // E.g. "ACT-01"
+  name        String
+  description String?  @db.Text
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  // Relations
+  project     Project  @relation(fields: [projectId], references: [id], onDelete: Cascade)
+
+  @@map("actors")
+}
+
+model Entity {
+  id          String            @id @default(uuid())
+  projectId   String
+  codeId      String?           // E.g. "ENT-01"
+  name        String
+  description String?           @db.Text
+  createdAt   DateTime          @default(now())
+  updatedAt   DateTime          @updatedAt
+
+  // Relations
+  project     Project           @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  attributes  EntityAttribute[]
+
+  @@map("entities")
+}
+
+model EntityAttribute {
+  id        String   @id @default(uuid())
+  entityId  String
+  name      String
+  type      String   // E.g. "String", "Int", "Boolean", "DateTime"
+  isPk      Boolean  @default(false)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  // Relations
+  entity    Entity   @relation(fields: [entityId], references: [id], onDelete: Cascade)
+
+  @@map("entity_attributes")
+}
+
+model EntityRelationship {
+  id          String   @id @default(uuid())
+  projectId   String
+  codeId      String?  // E.g. "REL-01"
+  source      String   // E.g. "Usuario"
+  target      String   // E.g. "Prestamo"
+  cardinality String   // E.g. "1:N", "1:1", "N:M"
+  description String?  @db.Text
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  // Relations
+  project     Project  @relation(fields: [projectId], references: [id], onDelete: Cascade)
+
+  @@map("entity_relationships")
+}
+
+model Screen {
+  id          String            @id @default(uuid())
+  projectId   String
+  codeId      String?           // E.g. "SCR-01"
+  name        String
+  description String?           @db.Text
+  route       String            // E.g. "/login", "/libros"
+  purpose     String?           @db.Text
+  createdAt   DateTime          @default(now())
+  updatedAt   DateTime          @updatedAt
+
+  // Relations
+  project     Project           @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  components  ScreenComponent[]
+
+  @@map("screens")
+}
+
+model ScreenComponent {
+  id          String   @id @default(uuid())
+  screenId    String
+  type        String   // E.g. "heading", "text", "input", "button", "table", "card", "navbar", "sidebar", "form", "list"
+  label       String?
+  placeholder String?
+  order       Int      @default(0)
+  meta        Json?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  // Relations
+  screen      Screen   @relation(fields: [screenId], references: [id], onDelete: Cascade)
+
+  @@map("screen_components")
+}
+
+model NavigationNode {
+  id        String   @id @default(uuid())
+  projectId String
+  from      String   // E.g. "Login"
+  to        String   // E.g. "Dashboard"
+  action    String?  // E.g. "Autenticar"
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  // Relations
+  project   Project  @relation(fields: [projectId], references: [id], onDelete: Cascade)
+
+  @@map("navigation_nodes")
+}
+
+model Architecture {
+  id          String                  @id @default(uuid())
+  projectId   String
+  style       String                  // E.g. "Clean Architecture en 3 Capas"
+  frontend    String                  // E.g. "React"
+  backend     String                  // E.g. "Node.js / Express"
+  database    String                  // E.g. "PostgreSQL"
+  connections Json?                   // Lista de conexiones [{ from, to, type }]
+  createdAt   DateTime                @default(now())
+  updatedAt   DateTime                @updatedAt
+
+  // Relations
+  project     Project                 @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  components  ArchitectureComponent[]
+
+  @@map("architectures")
+}
+
+model ArchitectureComponent {
+  id             String       @id @default(uuid())
+  architectureId String
+  name           String       // E.g. "Controllers", "Prisma ORM"
+  layer          String?      // E.g. "Presentation", "Business", "Data"
+  type           String?      // E.g. "service", "gateway", "ui"
+  createdAt      DateTime     @default(now())
+  updatedAt      DateTime     @updatedAt
+
+  // Relations
+  architecture   Architecture @relation(fields: [architectureId], references: [id], onDelete: Cascade)
+
+  @@map("architecture_components")
+}
