@@ -17,20 +17,29 @@ export default function ProjectDetail({
   activeTab = 'summary',
   onTabChange
 }) {
-  const [isEditingDesc, setIsEditingDesc] = useState(false);
+  const [isEditingProject, setIsEditingProject] = useState(false);
+  const [nameValue, setNameValue] = useState(project.name || '');
   const [descValue, setDescValue] = useState(project.description || '');
-  const [savingDesc, setSavingDesc] = useState(false);
+  const [savingProject, setSavingProject] = useState(false);
 
-  async function handleSaveDescription() {
+  async function handleSaveProject() {
+    if (!nameValue.trim()) {
+      alert('El nombre del proyecto no puede estar vacío.');
+      return;
+    }
     try {
-      setSavingDesc(true);
-      await projectsApi.update(project.id, { description: descValue, systemDescription: descValue });
-      setIsEditingDesc(false);
+      setSavingProject(true);
+      await projectsApi.update(project.id, {
+        name: nameValue.trim(),
+        description: descValue.trim(),
+        systemDescription: descValue.trim()
+      });
+      setIsEditingProject(false);
       await onProjectUpdated();
     } catch (err) {
-      alert(`Error al actualizar descripción: ${err.message}`);
+      alert(`Error al actualizar el proyecto: ${err.message}`);
     } finally {
-      setSavingDesc(false);
+      setSavingProject(false);
     }
   }
 
@@ -49,56 +58,73 @@ export default function ProjectDetail({
 
         <div className="card">
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', flexWrap: 'wrap', gap: '0.75rem' }}>
-            <div>
-              <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
-                <h1 style={{ fontSize: '1.4rem', fontWeight: 600, color: 'var(--text-main)' }}>
-                  {project.name}
-                </h1>
-                <span className="badge badge-in-progress">{project.status}</span>
+            {isEditingProject ? (
+              <div style={{ width: '100%', maxWidth: '750px', display: 'flex', flexDirection: 'column', gap: '0.75rem' }}>
+                <div className="form-group" style={{ marginBottom: 0 }}>
+                  <label className="form-label" style={{ fontWeight: 600 }}>Nombre del Proyecto *</label>
+                  <input
+                    type="text"
+                    className="form-control"
+                    value={nameValue}
+                    onChange={(e) => setNameValue(e.target.value)}
+                    placeholder="Nombre del proyecto"
+                    style={{ fontSize: '1.1rem', fontWeight: 600 }}
+                  />
+                </div>
+                <div className="form-group" style={{ marginBottom: 0 }}>
+                  <label className="form-label" style={{ fontWeight: 600 }}>Descripción del Proyecto</label>
+                  <textarea
+                    className="form-control"
+                    value={descValue}
+                    onChange={(e) => setDescValue(e.target.value)}
+                    placeholder="Descripción o propósito del sistema"
+                    style={{ minHeight: '90px' }}
+                  />
+                </div>
+                <div style={{ display: 'flex', gap: '0.5rem', marginTop: '0.25rem' }}>
+                  <button
+                    className="btn btn-primary btn-sm"
+                    onClick={handleSaveProject}
+                    disabled={savingProject || !nameValue.trim()}
+                  >
+                    <Save size={14} />
+                    <span>{savingProject ? 'Guardando...' : 'Guardar Cambios'}</span>
+                  </button>
+                  <button
+                    className="btn btn-secondary btn-sm"
+                    onClick={() => setIsEditingProject(false)}
+                    disabled={savingProject}
+                  >
+                    Cancelar
+                  </button>
+                </div>
               </div>
+            ) : (
+              <div>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', flexWrap: 'wrap' }}>
+                  <h1 style={{ fontSize: '1.4rem', fontWeight: 600, color: 'var(--text-main)' }}>
+                    {project.name}
+                  </h1>
+                  <span className="badge badge-in-progress">{project.status}</span>
+                  <button
+                    className="btn btn-secondary btn-sm"
+                    onClick={() => {
+                      setNameValue(project.name || '');
+                      setDescValue(project.description || '');
+                      setIsEditingProject(true);
+                    }}
+                    title="Editar nombre y descripción del proyecto"
+                  >
+                    <Edit3 size={13} />
+                    <span>Editar Proyecto</span>
+                  </button>
+                </div>
 
-              <div style={{ marginTop: '0.5rem', color: 'var(--text-muted)', fontSize: '0.875rem' }}>
-                {isEditingDesc ? (
-                  <div style={{ display: 'flex', gap: '0.5rem', marginTop: '0.25rem' }}>
-                    <input
-                      type="text"
-                      className="form-control"
-                      value={descValue}
-                      onChange={(e) => setDescValue(e.target.value)}
-                      style={{ maxWidth: '480px' }}
-                    />
-                    <button
-                      className="btn btn-primary btn-sm"
-                      onClick={handleSaveDescription}
-                      disabled={savingDesc}
-                    >
-                      <Save size={13} />
-                      <span>{savingDesc ? 'Guardando...' : 'Guardar'}</span>
-                    </button>
-                    <button
-                      className="btn btn-secondary btn-sm"
-                      onClick={() => setIsEditingDesc(false)}
-                    >
-                      Cancelar
-                    </button>
-                  </div>
-                ) : (
-                  <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-                    <span>{project.description || 'Sin descripción asignada.'}</span>
-                    <button
-                      onClick={() => {
-                        setDescValue(project.description || '');
-                        setIsEditingDesc(true);
-                      }}
-                      style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--text-muted)' }}
-                      title="Editar descripción"
-                    >
-                      <Edit3 size={13} />
-                    </button>
-                  </div>
-                )}
+                <div style={{ marginTop: '0.5rem', color: 'var(--text-muted)', fontSize: '0.875rem', maxWidth: '850px' }}>
+                  {project.description || 'Sin descripción asignada.'}
+                </div>
               </div>
-            </div>
+            )}
 
             <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>
               Actualizado: {new Date(project.updatedAt).toLocaleDateString()}

@@ -23,9 +23,6 @@ export default function ProjectPrototype({ project }) {
             <Layout size={18} color="var(--primary)" />
             <h2 style={{ fontSize: '1.125rem', fontWeight: 600 }}>Prototipado Declarativo (Mockups)</h2>
           </div>
-          <p style={{ fontSize: '0.8125rem', color: 'var(--text-muted)' }}>
-            Renderizado automático a partir de los componentes controlados almacenados en PostgreSQL (sin HTML arbitrario ni dangerouslySetInnerHTML).
-          </p>
         </div>
 
         <div style={{ display: 'flex', gap: '0.5rem' }}>

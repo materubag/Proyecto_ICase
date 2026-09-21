@@ -22,9 +22,6 @@ export default function ProjectNavigation({ project }) {
             <GitFork size={18} color="var(--primary)" />
             <h2 style={{ fontSize: '1.125rem', fontWeight: 600 }}>Árbol de Navegación del Sistema</h2>
           </div>
-          <p style={{ fontSize: '0.8125rem', color: 'var(--text-muted)' }}>
-            Diagrama generado automáticamente mediante <code>generateNavigationDiagram(navigation, screens)</code> con Mermaid flowchart.
-          </p>
         </div>
 
         <div style={{ display: 'flex', gap: '0.5rem' }}>
@@ -45,9 +42,6 @@ export default function ProjectNavigation({ project }) {
             <span className="badge badge-planning" style={{ marginLeft: '4px' }}>{navigation.length}</span>
             <span style={{ fontWeight: 600, fontSize: '0.9rem', marginLeft: '1rem' }}>Pantallas destino: </span>
             <span className="badge badge-planning" style={{ marginLeft: '4px' }}>{screens.length}</span>
-          </div>
-          <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>
-            Sintaxis: <code>flowchart TD</code>
           </div>
         </div>
       </div>

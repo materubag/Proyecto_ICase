@@ -23,9 +23,6 @@ export default function ProjectArchitecture({ project }) {
             <Cpu size={18} color="var(--primary)" />
             <h2 style={{ fontSize: '1.125rem', fontWeight: 600 }}>Arquitectura del Sistema</h2>
           </div>
-          <p style={{ fontSize: '0.8125rem', color: 'var(--text-muted)' }}>
-            Diagrama generado automáticamente mediante <code>generateArchitectureDiagram(architecture)</code> en Mermaid flowchart.
-          </p>
         </div>
 
         <div style={{ display: 'flex', gap: '0.5rem' }}>

@@ -7,7 +7,6 @@ export default function Navbar({ activeView, onViewChange, currentProject }) {
       <div className="nav-brand" onClick={() => onViewChange('projects')}>
         <Layers size={22} color="var(--primary)" />
         <span>ICASE</span>
-        <span className="brand-badge">MVP</span>
       </div>
 
       <nav className="nav-links">

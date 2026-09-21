@@ -66,7 +66,7 @@ export default function App() {
 
       <footer className="footer">
         <div>
-          <strong>ICASE</strong> • Plataforma Asistida por Software (MVP) • Universidad Nacional de Ingeniería
+          <strong>ICASE</strong> • Ingeniería de Software Asistida por Computadora
         </div>
       </footer>
     </div>

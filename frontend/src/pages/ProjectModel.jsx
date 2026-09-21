@@ -22,9 +22,6 @@ export default function ProjectModel({ project }) {
             <Database size={18} color="var(--primary)" />
             <h2 style={{ fontSize: '1.125rem', fontWeight: 600 }}>Modelo de Datos (Diagrama Entidad-Relación)</h2>
           </div>
-          <p style={{ fontSize: '0.8125rem', color: 'var(--text-muted)' }}>
-            Diagrama E/R generado automáticamente mediante la función <code>generateERDiagram(entities, relationships)</code> a partir de PostgreSQL.
-          </p>
         </div>
 
         <div style={{ display: 'flex', gap: '0.5rem' }}>
@@ -45,9 +42,6 @@ export default function ProjectModel({ project }) {
             <span className="badge badge-planning" style={{ marginLeft: '4px' }}>{entities.length}</span>
             <span style={{ fontWeight: 600, fontSize: '0.9rem', marginLeft: '1rem' }}>Relaciones: </span>
             <span className="badge badge-planning" style={{ marginLeft: '4px' }}>{relationships.length}</span>
-          </div>
-          <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>
-            Sintaxis: <code>erDiagram</code>
           </div>
         </div>
       </div>
