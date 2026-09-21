@@ -31,6 +31,14 @@ class DocumentAnalyzer {
       pageCount: extracted.pageCount
     });
 
+    const textNormalizer = require('./textNormalizer');
+    const technologyDetector = require('../analysis/technologyDetector');
+    const architectureDetector = require('../analysis/architectureDetector');
+
+    const norm = textNormalizer.normalize(cleanedText);
+    const techCatalog = technologyDetector.detect(cleanedText);
+    const archCatalog = architectureDetector.detect(cleanedText, techCatalog);
+
     // 5. Logs requeridos de depuración
     console.log(`[PDF] páginas extraídas: ${extracted.pageCount}`);
     console.log(`[PDF] caracteres extraídos: ${cleanedText.length}`);
@@ -39,6 +47,8 @@ class DocumentAnalyzer {
     console.log(`[PDF] actores encontrados: ${rules.actors.length}`);
     console.log(`[PDF] entidades encontradas: ${rules.entities.length}`);
     console.log(`[PDF] reglas encontradas: ${rules.businessRules.length}`);
+    console.log(`[PDF] tecnologías encontradas: ${(techCatalog.detected || []).length}`);
+    console.log(`[PDF] arquitectura: ${archCatalog.name} [${archCatalog.source}]`);
 
     return {
       document: {
@@ -63,6 +73,9 @@ class DocumentAnalyzer {
       architecture: rules.architecture,
       contextSections: rules.contextSections,
       rawText: cleanedText,
+      normalizedText: norm.normalizedText,
+      technologyCatalog: techCatalog,
+      architectureCatalog: archCatalog,
       // Propiedades para retrocompatibilidad con interfaces previas
       fileName: extracted.fileName || fileName,
       pageCount: extracted.pageCount,
@@ -380,86 +393,23 @@ class DocumentAnalyzer {
    * @returns {Promise<Object>} Metamodelo estructurado canónico
    */
   async analyzeWithAI(extractionData, providerOverride) {
-    const providerName = providerOverride || env.AI_PROVIDER || 'mock';
+    const analysisOrchestrator = require('../analysis/analysisOrchestrator');
     const docName = extractionData.document?.name || extractionData.fileName || 'documento.pdf';
+    const providerName = providerOverride || env.AI_PROVIDER || 'mock';
 
-    console.log(`[DocumentAnalyzer] Procesando análisis para '${docName}' con proveedor: [${providerName}]`);
+    console.log(`[DocumentAnalyzer] Ejecutando pipeline híbrido para '${docName}' con proveedor: [${providerName}]`);
 
-    // 1. Construir contexto reducido
-    const aiContext = this.buildAIContext(extractionData);
-    const systemPrompt = buildDocumentPrompt(aiContext);
-
-    // 2. Logs requeridos de depuración de IA
-    console.log(`[AI] contexto enviado: ${systemPrompt.length} caracteres`);
-    console.log(`[AI] estimación aproximada de tokens: ${Math.round(systemPrompt.length / 4)}`);
-
-    let rawAIResult = null;
-    let providerError = null;
-
-    if (providerName.toLowerCase() === 'mock') {
-      const mockProvider = createAIProvider('mock');
-      rawAIResult = await mockProvider.analyzeProject({
-        name: aiContext.projectName,
-        description: aiContext.objective,
-        context: {
-          isDocumentAnalysis: true,
-          aiContext
-        }
-      });
-    } else {
-      // Ollama u otro proveedor real
-      try {
-        const provider = createAIProvider(providerName);
-        rawAIResult = await provider.analyzeProject({
-          name: aiContext.projectName,
-          description: aiContext.objective,
-          customPrompt: systemPrompt,
-          context: aiContext
-        });
-      } catch (err) {
-        providerError = err;
-        console.warn(`[DocumentAnalyzer] Advertencia: El proveedor de IA falló (${err.message}). Activando fallback determinista.`);
-      }
-    }
-
-    // 3. Si hubo error de conexión con IA, recurrir inmediatamente a las reglas deterministas
-    if (providerError || !rawAIResult) {
-      console.log('[DocumentAnalyzer] Generando metamodelo canónico a partir de extracción de reglas deterministas.');
-      const fallbackResult = this.buildDeterministicMetamodel(
-        extractionData,
-        providerError ? `Fallo de IA: ${providerError.message}` : 'Proveedor no devolvió resultado'
-      );
-      return fallbackResult;
-    }
-
-    // 4. Normalizar y parsear la respuesta con parseAIResponse
-    const parsedAI = this.parseAIResponse(rawAIResult);
-
-    if (!parsedAI.isValid || !parsedAI.data) {
-      console.warn(`[DocumentAnalyzer] Advertencia: La IA devolvió formato no reconocible (${parsedAI.error}). Activando fallback determinista.`);
-      const fallbackResult = this.buildDeterministicMetamodel(
-        extractionData,
-        `Respuesta no interpretable: ${parsedAI.error}`
-      );
-      return fallbackResult;
-    }
-
-    // 5. Fusión y enriquecimiento: Mantener información determinista (source: "pdf")
-    // y enriquecerla con el análisis de la IA (ambigüedades, inconsistencias, dependencias)
     try {
-      const mergedResult = this.mergeAndEnrich(parsedAI.data, extractionData);
-
-      // Validar contrato canónico
-      const validation = validateAIResponse(mergedResult);
+      const orchestratorResult = await analysisOrchestrator.process(extractionData, docName, { providerOverride: providerName });
+      const validation = validateAIResponse(orchestratorResult);
       if (!validation.isValid) {
-        console.warn('[DocumentAnalyzer] Validación canónica no superada:', validation.error, 'Aplicando fallback determinista.');
+        console.warn('[DocumentAnalyzer] Validación canónica no superada:', validation.error, 'Aplicando fallback.');
         return this.buildDeterministicMetamodel(extractionData, `Validación: ${validation.error}`);
       }
-
-      return mergedResult;
-    } catch (mergeErr) {
-      console.warn('[DocumentAnalyzer] Error al fusionar resultado de IA:', mergeErr.message, 'Aplicando fallback determinista.');
-      return this.buildDeterministicMetamodel(extractionData, `Error fusión: ${mergeErr.message}`);
+      return orchestratorResult;
+    } catch (err) {
+      console.warn(`[DocumentAnalyzer] Error en orchestrator (${err.message}). Activando fallback determinista.`);
+      return this.buildDeterministicMetamodel(extractionData, `Error: ${err.message}`);
     }
   }
 
