@@ -27,3 +27,7 @@ ollama_data/
 Thumbs.db
 .vscode/
 .idea/
+
+# Binary & PDF files
+*.pdf
+
