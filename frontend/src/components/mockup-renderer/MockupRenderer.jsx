@@ -259,6 +259,30 @@ export default function MockupRenderer({ screen }) {
     );
   }
 
+  if (screen.html || screen.htmlUrl) {
+    return (
+      <div className="mockup-preview-window">
+        <div className="mockup-header-bar">
+          <div className="window-dots">
+            <div className="window-dot" style={{ backgroundColor: '#f87171' }} />
+            <div className="window-dot" style={{ backgroundColor: '#fbbf24' }} />
+            <div className="window-dot" style={{ backgroundColor: '#34d399' }} />
+          </div>
+          <div style={{ fontSize: '0.75rem', color: '#64748b', marginLeft: '0.75rem', fontFamily: 'monospace' }}>
+            {screen.route || '/'} — {screen.name}
+          </div>
+        </div>
+        <iframe
+          title={`Prototipo ${screen.name}`}
+          src={screen.html ? undefined : screen.htmlUrl}
+          srcDoc={screen.html || undefined}
+          sandbox="allow-scripts"
+          style={{ width: '100%', minHeight: '620px', border: 0, background: '#fff' }}
+        />
+      </div>
+    );
+  }
+
   const hasSidebar = screen.components?.some(c => c.type === 'sidebar');
   const nonSidebarComponents = screen.components?.filter(c => c.type !== 'sidebar') || [];
   const sidebarComponent = screen.components?.find(c => c.type === 'sidebar');

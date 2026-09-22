@@ -16,10 +16,14 @@ class MockupController {
       }
 
       const mockupData = await mockupService.generateMockup(project, prompt);
+      const screens = await projectService.replaceProjectScreens(projectId, mockupData.screens || []);
 
       res.status(200).json({
         success: true,
-        data: mockupData
+        data: {
+          ...mockupData,
+          screens
+        }
       });
     } catch (error) {
       next(error);

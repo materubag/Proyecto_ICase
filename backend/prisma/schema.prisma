@@ -148,6 +148,8 @@ model Screen {
   description String?           @db.Text
   route       String            // E.g. "/login", "/libros"
   purpose     String?           @db.Text
+  html        String?           @db.Text
+  htmlUrl     String?
   createdAt   DateTime          @default(now())
   updatedAt   DateTime          @updatedAt
 

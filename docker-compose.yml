@@ -11,7 +11,7 @@ services:
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-icase_password}
       POSTGRES_DB: ${POSTGRES_DB:-icase_db}
     ports:
-      - "5432:5432"
+      - "5433:5432"
     volumes:
       - postgres_data:/var/lib/postgresql/data
     healthcheck:
@@ -34,7 +34,7 @@ services:
     environment:
       DATABASE_URL: postgresql://${POSTGRES_USER:-icase_user}:${POSTGRES_PASSWORD:-icase_password}@postgres:5432/${POSTGRES_DB:-icase_db}?schema=public
       PORT: 8080
-      FRONTEND_URL: ${FRONTEND_URL:-http://localhost:3000}
+      FRONTEND_URL: ${FRONTEND_URL:-http://localhost:3001}
       AI_PROVIDER: ${AI_PROVIDER:-mock}
       GEMINI_API_KEY: ${GEMINI_API_KEY:-}
       GEMINI_MODEL: ${GEMINI_MODEL:-gemini-1.5-pro}
@@ -48,6 +48,7 @@ services:
       N8N_ANALYZE_WEBHOOK: ${N8N_ANALYZE_WEBHOOK:-}
       N8N_MOCKUP_WEBHOOK: ${N8N_MOCKUP_WEBHOOK:-}
       N8N_TIMEOUT: ${N8N_TIMEOUT:-30000}
+      MOCKUP_MAX_REQUIREMENTS: ${MOCKUP_MAX_REQUIREMENTS:-12}
     ports:
       - "8080:8080"
     depends_on:
@@ -66,7 +67,7 @@ services:
     container_name: icase_frontend
     restart: always
     ports:
-      - "3000:80"
+      - "3001:80"
     depends_on:
       - backend
     networks:
