@@ -1,65 +1,105 @@
 import React, { useState, useMemo } from 'react';
-import { Database, Code2 } from 'lucide-react';
 import MermaidDiagram from '../components/diagrams/MermaidDiagram';
 import { generateERDiagram } from '../utils/mermaidGenerators';
 
 export default function ProjectModel({ project }) {
   const [showCode, setShowCode] = useState(false);
-
   const entities = project.entities || [];
   const relationships = project.relationships || [];
-
-  // Generación determinística independiente sin IA
-  const generatedCode = useMemo(() => {
-    return generateERDiagram(entities, relationships);
-  }, [entities, relationships]);
+  const generatedCode = useMemo(() => generateERDiagram(entities, relationships), [entities, relationships]);
 
   return (
-    <div>
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1.25rem', flexWrap: 'wrap', gap: '0.75rem' }}>
-        <div>
-          <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-            <Database size={18} color="var(--primary)" />
-            <h2 style={{ fontSize: '1.125rem', fontWeight: 600 }}>Modelo de Datos (Diagrama Entidad-Relación)</h2>
+    <div style={{ display: 'flex', flexDirection: 'column', height: '100%', overflow: 'hidden' }}>
+      {/* Command bar */}
+      <div className="full-page-header">
+        <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+          <h2 className="page-title">Modelo de Datos</h2>
+          <div className="vdivider" />
+          <div style={{ display: 'flex', gap: '12px' }}>
+            <span style={{ fontSize: '0.8125rem', color: 'var(--secondary)' }}>
+              <strong style={{ color: 'var(--on-surface)', fontWeight: 600 }}>{entities.length}</strong> entidades
+            </span>
+            <span style={{ fontSize: '0.8125rem', color: 'var(--secondary)' }}>
+              <strong style={{ color: 'var(--on-surface)', fontWeight: 600 }}>{relationships.length}</strong> relaciones
+            </span>
           </div>
         </div>
-
-        <div style={{ display: 'flex', gap: '0.5rem' }}>
-          <button
-            className="btn btn-secondary btn-sm"
-            onClick={() => setShowCode(!showCode)}
-          >
-            <Code2 size={14} />
-            <span>{showCode ? 'Ocultar Código Mermaid' : 'Ver Código Mermaid'}</span>
-          </button>
+        <div className="page-actions">
+          <div className="view-toggle">
+            <button
+              className={`view-toggle-btn ${!showCode ? 'active' : ''}`}
+              onClick={() => setShowCode(false)}
+            >
+              <span className="ms ms-xs">account_tree</span>
+              <span>Diagrama</span>
+            </button>
+            <button
+              className={`view-toggle-btn ${showCode ? 'active' : ''}`}
+              onClick={() => setShowCode(true)}
+            >
+              <span className="ms ms-xs">code</span>
+              <span>Código Mermaid</span>
+            </button>
+          </div>
         </div>
       </div>
 
-      <div className="card" style={{ marginBottom: '1.25rem' }}>
-        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+      <div className="page-scrollable">
+        {showCode ? (
           <div>
-            <span style={{ fontWeight: 600, fontSize: '0.9rem' }}>Entidades detectadas: </span>
-            <span className="badge badge-planning" style={{ marginLeft: '4px' }}>{entities.length}</span>
-            <span style={{ fontWeight: 600, fontSize: '0.9rem', marginLeft: '1rem' }}>Relaciones: </span>
-            <span className="badge badge-planning" style={{ marginLeft: '4px' }}>{relationships.length}</span>
+            <div style={{ marginBottom: '8px', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+              <span className="detail-section-label">Código Mermaid Generado</span>
+              <button
+                className="btn btn-ghost btn-sm"
+                onClick={() => navigator.clipboard?.writeText(generatedCode)}
+                title="Copiar al portapapeles"
+              >
+                <span className="ms ms-sm">content_copy</span>
+                <span>Copiar</span>
+              </button>
+            </div>
+            <textarea
+              className="diagram-raw-editor"
+              rows={16}
+              readOnly
+              value={generatedCode}
+            />
           </div>
-        </div>
-      </div>
+        ) : (
+          <>
+            {entities.length === 0 ? (
+              <div className="empty-state" style={{ border: '1px dashed var(--outline-variant)', borderRadius: 'var(--radius-lg)' }}>
+                <div className="empty-state-icon"><span className="ms ms-xl">account_tree</span></div>
+                <p className="empty-state-title">Sin entidades generadas</p>
+                <p className="empty-state-desc">Ejecuta el análisis IA en la pestaña Resumen para generar el modelo de datos.</p>
+              </div>
+            ) : (
+              <div className="diagram-container">
+                <MermaidDiagram code={generatedCode} type="erDiagram" />
+              </div>
+            )}
 
-      {showCode && (
-        <div className="card" style={{ marginBottom: '1.25rem' }}>
-          <label className="form-label" style={{ fontWeight: 600 }}>Código Mermaid Generado</label>
-          <textarea
-            className="diagram-raw-editor"
-            rows={10}
-            readOnly
-            value={generatedCode}
-          />
-        </div>
-      )}
-
-      <div className="diagram-container">
-        <MermaidDiagram code={generatedCode} type="erDiagram" />
+            {/* Entity list summary */}
+            {entities.length > 0 && (
+              <div style={{ marginTop: '1.5rem' }}>
+                <p className="detail-section-label" style={{ marginBottom: '10px' }}>Entidades del Sistema ({entities.length})</p>
+                <div style={{ display: 'flex', flexWrap: 'wrap', gap: '8px' }}>
+                  {entities.map(ent => (
+                    <div key={ent.id} className="info-card" style={{ display: 'flex', alignItems: 'center', gap: '8px', padding: '8px 12px' }}>
+                      <span className="ms ms-sm" style={{ color: 'var(--secondary)' }}>table_chart</span>
+                      <div>
+                        <span style={{ fontSize: '0.8125rem', fontWeight: 600, color: 'var(--on-surface)' }}>{ent.name}</span>
+                        {ent.attributes && ent.attributes.length > 0 && (
+                          <span style={{ fontSize: '0.6875rem', color: 'var(--outline)', marginLeft: '6px' }}>{ent.attributes.length} atributos</span>
+                        )}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+          </>
+        )}
       </div>
     </div>
   );

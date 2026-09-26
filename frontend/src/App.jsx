@@ -1,12 +1,13 @@
 import React, { useState } from 'react';
-import Navbar from './components/common/Navbar';
+import Sidebar from './components/common/Sidebar';
+import TopHeader from './components/common/TopHeader';
 import ProjectsDashboard from './pages/ProjectsDashboard';
 import ProjectDetail from './pages/ProjectDetail';
 import { projectsApi } from './api/projects.api';
 
 export default function App() {
   const [currentProject, setCurrentProject] = useState(null);
-  const [activeView, setActiveView] = useState('projects'); // 'projects' | 'summary' | 'requirements' | 'actors' | 'model' | 'prototype' | 'navigation' | 'architecture'
+  const [activeView, setActiveView] = useState('projects');
 
   async function handleOpenProject(projectSummary) {
     try {
@@ -42,33 +43,60 @@ export default function App() {
     }
   }
 
+  // Breadcrumb label per view
+  const viewLabels = {
+    projects: 'Dashboard',
+    summary: 'Resumen',
+    requirements: 'Requisitos',
+    actors: 'Actores',
+    model: 'Modelo del Sistema',
+    prototype: 'Prototipos',
+    navigation: 'Navegación',
+    architecture: 'Arquitectura',
+  };
+
   return (
-    <div className="app-container">
-      <Navbar
+    <div className="app-shell">
+      {/* Fixed Sidebar */}
+      <Sidebar
         activeView={activeView}
         onViewChange={handleViewChange}
         currentProject={currentProject}
       />
 
-      <main className="main-content">
-        {!currentProject ? (
-          <ProjectsDashboard onOpenProject={handleOpenProject} />
-        ) : (
-          <ProjectDetail
-            project={currentProject}
-            onBack={handleBackToProjects}
-            onProjectUpdated={reloadCurrentProject}
-            activeTab={activeView}
-            onTabChange={setActiveView}
-          />
-        )}
-      </main>
+      {/* Main area */}
+      <div className="main-area">
+        {/* Fixed Top Header */}
+        <TopHeader
+          projectName={currentProject?.name}
+          currentView={viewLabels[activeView] || activeView}
+          onBack={currentProject ? handleBackToProjects : null}
+        />
 
-      <footer className="footer">
-        <div>
-          <strong>ICASE</strong> • Ingeniería de Software Asistida por Computadora
+        {/* Page Content */}
+        <div className="page-content">
+          {!currentProject ? (
+            <div className="page-scrollable">
+              <ProjectsDashboard onOpenProject={handleOpenProject} />
+              <footer className="app-footer" style={{ marginTop: '2rem' }}>
+                <span className="footer-brand">ICASE</span>
+                <span>·</span>
+                <span>Ingeniería de Software Asistida por Computadora</span>
+                <span>·</span>
+                <span>© {new Date().getFullYear()}</span>
+              </footer>
+            </div>
+          ) : (
+            <ProjectDetail
+              project={currentProject}
+              onBack={handleBackToProjects}
+              onProjectUpdated={reloadCurrentProject}
+              activeTab={activeView}
+              onTabChange={setActiveView}
+            />
+          )}
         </div>
-      </footer>
+      </div>
     </div>
   );
 }
