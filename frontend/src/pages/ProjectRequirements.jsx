@@ -1,8 +1,10 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { engineering } from '../api/engineering.api';
 import ImpactModal from '../components/common/ImpactModal';
 import { requirementsApi } from '../api/requirements.api';
 import Modal from '../components/common/Modal';
+import ProjectCandidateReview from './ProjectCandidateReview';
+import ProjectActors from './ProjectActors';
 
 const PRIORITY_DOT = {
   HIGH:   'high',
@@ -13,7 +15,13 @@ const PRIORITY_LABEL = { HIGH: 'Alta', MEDIUM: 'Media', LOW: 'Baja' };
 const STATUS_LABELS = { PENDING: 'Pendiente', APPROVED: 'Aprobado', IN_REVIEW: 'En revisión', REJECTED: 'Rechazado' };
 const TYPE_LABELS = { FUNCTIONAL: 'Funcional', NON_FUNCTIONAL: 'No Funcional' };
 
-export default function ProjectRequirements({ project, onProjectUpdated }) {
+export default function ProjectRequirements({ project, onProjectUpdated, initialSubTab = 'candidates' }) {
+  const [reqSubTab, setReqSubTab] = useState(initialSubTab);
+
+  useEffect(() => {
+    if (initialSubTab) setReqSubTab(initialSubTab);
+  }, [initialSubTab]);
+
   const [pendingChange, setPendingChange] = useState(null);
   const [changeError, setChangeError] = useState('');
   const requirements = project.requirements || [];
@@ -122,6 +130,63 @@ export default function ProjectRequirements({ project, onProjectUpdated }) {
     <div style={{ display: 'flex', flexDirection: 'column', height: '100%', overflow: 'hidden' }}>
       {changeError && <p role="alert">{changeError}</p>}
       <ImpactModal change={pendingChange} busy={savingReq} onClose={() => setPendingChange(null)} onConfirm={async () => { setSavingReq(true); setChangeError(''); try { await engineering(project.id, `/changes/${pendingChange.id}`, { status: 'APPROVED', confirmImpact: true }, 'PATCH'); setPendingChange(null); setSelected(null); await onProjectUpdated(); } catch (e) { setChangeError(e.message); } finally { setSavingReq(false); } }} />
+
+      {/* Sub-tab navigation: 1. Aprobación ISO 29148 | 2. Requisitos Especificados (Tabla 1 UTA) | 3. Actores del Sistema */}
+      <div style={{
+        display: 'flex',
+        alignItems: 'center',
+        justifyContent: 'space-between',
+        padding: '8px 20px',
+        borderBottom: '1px solid var(--outline-variant)',
+        background: 'var(--surface-container-low)',
+        flexShrink: 0
+      }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: '8px', overflowX: 'auto' }}>
+          <button
+            className={`btn btn-sm ${reqSubTab === 'candidates' ? 'btn-primary' : 'btn-outline'}`}
+            onClick={() => setReqSubTab('candidates')}
+          >
+            <span className="ms ms-xs">rate_review</span>
+            <span>1. Aprobación ISO 29148 (Candidatos)</span>
+          </button>
+          <button
+            className={`btn btn-sm ${reqSubTab === 'uta_table' ? 'btn-primary' : 'btn-outline'}`}
+            onClick={() => setReqSubTab('uta_table')}
+          >
+            <span className="ms ms-xs">checklist</span>
+            <span>2. Requisitos Especificados (Tabla 1 UTA) ({requirements.length})</span>
+          </button>
+          <button
+            className={`btn btn-sm ${reqSubTab === 'actors' ? 'btn-primary' : 'btn-outline'}`}
+            onClick={() => setReqSubTab('actors')}
+          >
+            <span className="ms ms-xs">groups</span>
+            <span>3. Actores del Sistema ({project.actors?.length || 0})</span>
+          </button>
+        </div>
+      </div>
+
+      {reqSubTab === 'candidates' && (
+        <div style={{ flex: 1, overflow: 'hidden', display: 'flex', flexDirection: 'column' }}>
+          <ProjectCandidateReview
+            project={project}
+            onProjectUpdated={onProjectUpdated}
+            onNavigateToRequirements={() => setReqSubTab('uta_table')}
+          />
+        </div>
+      )}
+
+      {reqSubTab === 'actors' && (
+        <div style={{ flex: 1, overflow: 'hidden', display: 'flex', flexDirection: 'column' }}>
+          <ProjectActors
+            project={project}
+            onProjectUpdated={onProjectUpdated}
+          />
+        </div>
+      )}
+
+      {reqSubTab === 'uta_table' && (
+        <>
       {/* Command bar */}
       <div className="full-page-header">
         <div style={{ display: 'flex', alignItems: 'center', gap: '12px', minWidth: 0 }}>
@@ -595,6 +660,9 @@ export default function ProjectRequirements({ project, onProjectUpdated }) {
           </div>
         </form>
       </Modal>
+      </>
+      )}
     </div>
   );
 }
+

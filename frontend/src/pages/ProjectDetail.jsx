@@ -3,23 +3,23 @@ import { projectsApi } from '../api/projects.api';
 
 import ProjectSummary from './ProjectSummary';
 import ProjectSources from './ProjectSources';
-import ProjectCandidateReview from './ProjectCandidateReview';
 import ProjectRequirements from './ProjectRequirements';
 import ProjectPlanning from './ProjectPlanning';
-import ProjectUseCases from './ProjectUseCases';
+import ProjectModeling from './ProjectModeling';
+import ProjectNavigation from './ProjectNavigation';
 import ProjectPrototype from './ProjectPrototype';
+import ProjectArchitecture from './ProjectArchitecture';
 import ProjectToolsTeam from './ProjectToolsTeam';
 import ProjectEngineering from './ProjectEngineering';
 
 const TABS = [
   { id: 'summary',      icon: 'auto_awesome',   label: 'Resumen' },
-  { id: 'planning',     icon: 'calendar_month', label: '1. Planificación (GANTT/PERT)' },
-  { id: 'sources',      icon: 'folder_open',    label: 'Fuentes & Entrevistas' },
-  { id: 'candidates',   icon: 'rate_review',    label: 'Revisión ISO 29148' },
-  { id: 'requirements', icon: 'checklist',      label: '2. Requisitos (Tabla 1 UTA)', countKey: 'requirements' },
-  { id: 'usecases',     icon: 'account_tree',   label: '2.2 Casos de Uso (4 Procesos)' },
-  { id: 'diagrams',     icon: 'schema',         label: '3. Modelado & Diagramas' },
-  { id: 'prototype',    icon: 'devices',        label: '3.2 Prototipos (Mockup & Info)', countKey: 'screens' },
+  { id: 'requirements', icon: 'checklist',      label: 'Requerimientos', countKey: 'requirements' },
+  { id: 'planning',     icon: 'calendar_month', label: 'Planificación' },
+  { id: 'modeling',     icon: 'schema',         label: 'Modelado' },
+  { id: 'navigation',   icon: 'account_tree',   label: 'Árbol de Navegación' },
+  { id: 'mockups',      icon: 'devices',        label: 'Mockups', countKey: 'screens' },
+  { id: 'architecture', icon: 'layers',         label: 'Arquitectura' },
   { id: 'traceability', icon: 'link',           label: 'Trazabilidad' },
   { id: 'tools_team',   icon: 'groups',         label: 'Equipo & Herramientas' },
   { id: 'changes',      icon: 'change_circle',  label: 'Cambios' },
@@ -154,15 +154,43 @@ export default function ProjectDetail({
 
       {/* Tab Content */}
       <div style={{ flex: 1, overflow: 'hidden', display: 'flex', flexDirection: 'column' }}>
-        {activeTab === 'summary'      && <ProjectSummary project={project} onProjectUpdated={onProjectUpdated} onNavigateTo={onTabChange} />}
-        {activeTab === 'planning'     && <ProjectPlanning project={project} />}
-        {activeTab === 'sources'      && <ProjectSources project={project} onNavigateToReview={() => onTabChange('candidates')} />}
-        {activeTab === 'candidates'   && <ProjectCandidateReview project={project} onProjectUpdated={onProjectUpdated} onNavigateToRequirements={() => onTabChange('requirements')} />}
-        {activeTab === 'requirements' && <ProjectRequirements project={project} onProjectUpdated={onProjectUpdated} />}
-        {activeTab === 'usecases'     && <ProjectUseCases project={project} />}
-        {activeTab === 'prototype'    && <ProjectPrototype project={project} />}
-        {activeTab === 'tools_team'   && <ProjectToolsTeam project={project} onNavigateTo={onTabChange} />}
-        {['actors', 'modeling', 'model', 'navigation', 'architecture', 'diagrams', 'traceability', 'changes', 'versions', 'chat'].includes(activeTab) && <ProjectEngineering project={project} view={({ actors: 'modeling', model: 'diagrams', navigation: 'diagrams', architecture: 'diagrams' })[activeTab] || activeTab} onProjectUpdated={onProjectUpdated} />}
+        {activeTab === 'summary' && (
+          <ProjectSummary project={project} onProjectUpdated={onProjectUpdated} onNavigateTo={onTabChange} />
+        )}
+        {(activeTab === 'requirements' || activeTab === 'candidates' || activeTab === 'actors') && (
+          <ProjectRequirements
+            project={project}
+            onProjectUpdated={onProjectUpdated}
+            initialSubTab={activeTab === 'candidates' ? 'candidates' : activeTab === 'actors' ? 'actors' : 'candidates'}
+          />
+        )}
+        {activeTab === 'planning' && (
+          <ProjectPlanning project={project} />
+        )}
+        {(activeTab === 'modeling' || activeTab === 'diagrams' || activeTab === 'model' || activeTab === 'usecases') && (
+          <ProjectModeling
+            project={project}
+            initialSubTab={activeTab === 'usecases' ? 'usecases' : 'er'}
+          />
+        )}
+        {activeTab === 'navigation' && (
+          <ProjectNavigation project={project} />
+        )}
+        {(activeTab === 'mockups' || activeTab === 'prototype') && (
+          <ProjectPrototype project={project} />
+        )}
+        {activeTab === 'architecture' && (
+          <ProjectArchitecture project={project} />
+        )}
+        {activeTab === 'sources' && (
+          <ProjectSources project={project} onNavigateToReview={() => onTabChange('requirements')} />
+        )}
+        {activeTab === 'tools_team' && (
+          <ProjectToolsTeam project={project} onNavigateTo={onTabChange} />
+        )}
+        {['traceability', 'changes', 'versions', 'chat'].includes(activeTab) && (
+          <ProjectEngineering project={project} view={activeTab} onProjectUpdated={onProjectUpdated} />
+        )}
       </div>
     </div>
   );

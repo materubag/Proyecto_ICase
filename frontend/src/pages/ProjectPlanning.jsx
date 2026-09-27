@@ -57,7 +57,7 @@ const TOOLS_EVALUATION = [
 ];
 
 export default function ProjectPlanning({ project }) {
-  const [activeSubTab, setActiveSubTab] = useState('wbs'); // 'wbs' | 'gantt' | 'pert' | 'tools'
+  const [activeSubTab, setActiveSubTab] = useState('pert'); // 'pert' | 'gantt' | 'wbs' | 'tools'
   const [tasks, setTasks] = useState(() => {
     const saved = localStorage.getItem(`icase_planning_tasks_${project.id}`);
     return saved ? JSON.parse(saved) : DEFAULT_TASKS;
@@ -223,11 +223,11 @@ export default function ProjectPlanning({ project }) {
         {/* View Switcher Tabs */}
         <div className="view-toggle" style={{ background: 'var(--surface-container-high)' }}>
           <button
-            className={`view-toggle-btn ${activeSubTab === 'wbs' ? 'active' : ''}`}
-            onClick={() => setActiveSubTab('wbs')}
+            className={`view-toggle-btn ${activeSubTab === 'pert' ? 'active' : ''}`}
+            onClick={() => setActiveSubTab('pert')}
           >
-            <span className="ms ms-xs">format_list_bulleted</span>
-            <span>Lluvia & Matriz WBS</span>
+            <span className="ms ms-xs">hub</span>
+            <span>Diagrama PERT / CPM (Ruta Crítica)</span>
           </button>
           <button
             className={`view-toggle-btn ${activeSubTab === 'gantt' ? 'active' : ''}`}
@@ -237,11 +237,11 @@ export default function ProjectPlanning({ project }) {
             <span>Diagrama GANTT</span>
           </button>
           <button
-            className={`view-toggle-btn ${activeSubTab === 'pert' ? 'active' : ''}`}
-            onClick={() => setActiveSubTab('pert')}
+            className={`view-toggle-btn ${activeSubTab === 'wbs' ? 'active' : ''}`}
+            onClick={() => setActiveSubTab('wbs')}
           >
-            <span className="ms ms-xs">hub</span>
-            <span>Diagrama PERT / CPM</span>
+            <span className="ms ms-xs">format_list_bulleted</span>
+            <span>Lluvia & Matriz WBS</span>
           </button>
           <button
             className={`view-toggle-btn ${activeSubTab === 'tools' ? 'active' : ''}`}

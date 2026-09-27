@@ -7,7 +7,25 @@ import DocumentImportModal from '../components/DocumentImportModal';
 
 export default function ProjectSummary({ project, onProjectUpdated, onNavigateTo }) {
   const [engineeringStats, setEngineeringStats] = useState(null);
-  useEffect(() => { engineering(project.id).then(setEngineeringStats).catch(() => setEngineeringStats(null)); }, [project.id, project.updatedAt]);
+  const [sources, setSources] = useState([]);
+  const [loadingSources, setLoadingSources] = useState(false);
+
+  async function loadSources() {
+    try {
+      setLoadingSources(true);
+      const res = await sourcesApi.list(project.id);
+      setSources(res || []);
+    } catch {
+      setSources([]);
+    } finally {
+      setLoadingSources(false);
+    }
+  }
+
+  useEffect(() => {
+    engineering(project.id).then(setEngineeringStats).catch(() => setEngineeringStats(null));
+    loadSources();
+  }, [project.id, project.updatedAt]);
   const [description, setDescription] = useState(
     project.systemDescription || project.description || ''
   );
@@ -228,6 +246,93 @@ export default function ProjectSummary({ project, onProjectUpdated, onNavigateTo
               </button>
             </div>
           </div>
+        </div>
+
+        {/* Uploaded Documents & Audio Sources Section */}
+        <div className="analysis-card" style={{ marginTop: '1.25rem' }}>
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '14px', flexWrap: 'wrap', gap: '8px' }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+              <div style={{
+                width: 32, height: 32, borderRadius: 'var(--radius-sm)',
+                background: 'var(--surface-container-low)',
+                border: '1px solid var(--outline-variant)',
+                display: 'flex', alignItems: 'center', justifyContent: 'center',
+              }}>
+                <span className="ms ms-sm" style={{ color: 'var(--primary)' }}>folder_open</span>
+              </div>
+              <div>
+                <h3 style={{ fontSize: '0.9375rem', fontWeight: 600, color: 'var(--on-surface)', letterSpacing: '-0.01em', margin: 0 }}>
+                  Documentos y Fuentes Subidas ({sources.length})
+                </h3>
+                <p style={{ fontSize: '0.75rem', color: 'var(--secondary)', margin: '2px 0 0' }}>
+                  Archivos PDF de especificaciones y audios de entrevistas vinculados a este proyecto.
+                </p>
+              </div>
+            </div>
+            <button className="btn btn-ghost btn-sm" onClick={loadSources} disabled={loadingSources}>
+              <span className={`ms ms-xs ${loadingSources ? 'spin' : ''}`}>refresh</span>
+              <span>Actualizar fuentes</span>
+            </button>
+          </div>
+
+          {sources.length === 0 ? (
+            <div style={{ padding: '24px', textAlign: 'center', border: '1px dashed var(--outline-variant)', borderRadius: 'var(--radius-md)', background: 'var(--surface-container-lowest)' }}>
+              <span className="ms ms-lg" style={{ color: 'var(--outline)', display: 'block', marginBottom: '8px' }}>cloud_upload</span>
+              <p style={{ fontSize: '0.8125rem', fontWeight: 500, color: 'var(--on-surface)', margin: 0 }}>No hay documentos ni audios subidos aún.</p>
+              <p style={{ fontSize: '0.75rem', color: 'var(--secondary)', margin: '4px 0 0' }}>
+                Selecciona tus archivos PDF o audios arriba y haz clic en <strong>"Analizar proyecto"</strong> para procesarlos.
+              </p>
+            </div>
+          ) : (
+            <div style={{ background: 'var(--surface-container-lowest)', borderRadius: 'var(--radius-md)', border: '1px solid var(--outline-variant)', overflowX: 'auto', boxShadow: 'var(--shadow-xs)' }}>
+              <table style={{ width: '100%', borderCollapse: 'collapse', textAlign: 'left', fontSize: '0.8125rem' }}>
+                <thead>
+                  <tr style={{ background: 'var(--surface-container-low)', borderBottom: '1px solid var(--outline-variant)', color: 'var(--on-surface-variant)' }}>
+                    <th style={{ padding: '8px 12px', width: '50px' }}>Tipo</th>
+                    <th style={{ padding: '8px 12px' }}>Nombre del Archivo</th>
+                    <th style={{ padding: '8px 12px', width: '90px' }}>Tamaño</th>
+                    <th style={{ padding: '8px 12px', width: '130px' }}>Estado</th>
+                    <th style={{ padding: '8px 12px', width: '130px' }}>Fecha Subida</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {sources.map(src => {
+                    const isAudio = src.type === 'AUDIO' || (src.mimeType && src.mimeType.startsWith('audio'));
+                    const sizeStr = src.fileSize ? `${(src.fileSize / 1024).toFixed(1)} KB` : '—';
+                    return (
+                      <tr key={src.id} style={{ borderBottom: '1px solid var(--outline-variant)' }}>
+                        <td style={{ padding: '8px 12px' }}>
+                          <span className="ms ms-sm" style={{ color: isAudio ? '#9333ea' : '#dc2626' }}>
+                            {isAudio ? 'mic' : 'picture_as_pdf'}
+                          </span>
+                        </td>
+                        <td style={{ padding: '8px 12px', fontWeight: 500, color: 'var(--on-surface)' }}>
+                          {src.name}
+                        </td>
+                        <td style={{ padding: '8px 12px', color: 'var(--secondary)' }}>
+                          {sizeStr}
+                        </td>
+                        <td style={{ padding: '8px 12px' }}>
+                          <span className={`badge ${
+                            src.status === 'ANALYZED' || src.status === 'TRANSCRIBED' ? 'badge-success' :
+                            src.status === 'TRANSCRIBING' || src.status === 'PENDING' ? 'badge-warning' : 'badge-neutral'
+                          }`} style={{ fontSize: '0.6875rem' }}>
+                            {src.status === 'TRANSCRIBED' ? 'Transcrito' :
+                             src.status === 'ANALYZED' ? 'Analizado' :
+                             src.status === 'TRANSCRIBING' ? 'Transcribiendo...' :
+                             src.status === 'EXTRACTED' ? 'Texto Extraído' : src.status}
+                          </span>
+                        </td>
+                        <td style={{ padding: '8px 12px', color: 'var(--secondary)', fontSize: '0.75rem' }}>
+                          {new Date(src.createdAt).toLocaleDateString('es', { day: '2-digit', month: 'short', year: 'numeric' })}
+                        </td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            </div>
+          )}
         </div>
 
         {/* Project info */}

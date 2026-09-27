@@ -1,20 +1,19 @@
 import React from 'react';
 
 const NAV_ITEMS = [
-  { id: 'projects',      icon: 'folder',         label: 'Proyectos',           requiresProject: false },
-  { id: 'summary',       icon: 'auto_awesome',   label: 'Resumen',             requiresProject: true },
-  { id: 'planning',      icon: 'calendar_month', label: '1. Planificación (GANTT/PERT)', requiresProject: true },
-  { id: 'sources',       icon: 'folder_open',    label: 'Fuentes & Entrevistas', requiresProject: true },
-  { id: 'candidates',    icon: 'rate_review',    label: 'Revisión ISO 29148',  requiresProject: true },
-  { id: 'requirements',  icon: 'checklist',      label: '2. Requisitos (Tabla 1 UTA)', requiresProject: true },
-  { id: 'usecases',      icon: 'account_tree',   label: '2.2 Casos de Uso (4 Procesos)', requiresProject: true },
-  { id: 'diagrams',      icon: 'schema',          label: '3. Modelado & Diagramas', requiresProject: true },
-  { id: 'prototype',     icon: 'devices',        label: '3.2 Prototipos (Mockup & Info)', requiresProject: true },
-  { id: 'traceability',  icon: 'link',           label: 'Trazabilidad',        requiresProject: true },
+  { id: 'projects',      icon: 'folder',         label: 'Proyectos',             requiresProject: false },
+  { id: 'summary',       icon: 'auto_awesome',   label: 'Resumen',               requiresProject: true },
+  { id: 'requirements',  icon: 'checklist',      label: 'Requerimientos',        requiresProject: true },
+  { id: 'planning',      icon: 'calendar_month', label: 'Planificación',         requiresProject: true },
+  { id: 'modeling',      icon: 'schema',         label: 'Modelado',              requiresProject: true },
+  { id: 'navigation',    icon: 'account_tree',   label: 'Árbol de Navegación',   requiresProject: true },
+  { id: 'mockups',       icon: 'devices',        label: 'Mockups',               requiresProject: true },
+  { id: 'architecture',  icon: 'layers',         label: 'Arquitectura',          requiresProject: true },
+  { id: 'traceability',  icon: 'link',           label: 'Trazabilidad',          requiresProject: true },
   { id: 'tools_team',    icon: 'groups',         label: 'Equipo & Herramientas', requiresProject: true },
-  { id: 'changes',       icon: 'change_circle',  label: 'Cambios',             requiresProject: true },
-  { id: 'versions',      icon: 'history',        label: 'Versiones',           requiresProject: true },
-  { id: 'chat',          icon: 'chat',           label: 'Chat IA',             requiresProject: true },
+  { id: 'changes',       icon: 'change_circle',  label: 'Cambios',               requiresProject: true },
+  { id: 'versions',      icon: 'history',        label: 'Versiones',             requiresProject: true },
+  { id: 'chat',          icon: 'chat',           label: 'Chat IA',               requiresProject: true },
 ];
 
 export default function Sidebar({ activeView, onViewChange, currentProject }) {
