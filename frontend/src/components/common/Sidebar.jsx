@@ -1,27 +1,149 @@
 import React from 'react';
 
-const NAV_ITEMS = [
-  { id: 'projects',      icon: 'folder',         label: 'Proyectos',             requiresProject: false },
-  { id: 'summary',       icon: 'auto_awesome',   label: 'Resumen',               requiresProject: true },
-  { id: 'requirements',  icon: 'checklist',      label: 'Requerimientos',        requiresProject: true },
-  { id: 'planning',      icon: 'calendar_month', label: 'Planificación',         requiresProject: true },
-  { id: 'modeling',      icon: 'schema',         label: 'Modelado',              requiresProject: true },
-  { id: 'navigation',    icon: 'account_tree',   label: 'Árbol de Navegación',   requiresProject: true },
-  { id: 'mockups',       icon: 'devices',        label: 'Mockups',               requiresProject: true },
-  { id: 'architecture',  icon: 'layers',         label: 'Arquitectura',          requiresProject: true },
-  { id: 'traceability',  icon: 'link',           label: 'Trazabilidad',          requiresProject: true },
-  { id: 'tools_team',    icon: 'groups',         label: 'Equipo & Herramientas', requiresProject: true },
-  { id: 'changes',       icon: 'change_circle',  label: 'Cambios',               requiresProject: true },
-  { id: 'versions',      icon: 'history',        label: 'Versiones',             requiresProject: true },
-  { id: 'chat',          icon: 'chat',           label: 'Chat IA',               requiresProject: true },
+const NAV_GROUPS = [
+  {
+    title: 'ANÁLISIS',
+    items: [
+      { id: 'summary', icon: 'auto_awesome', label: 'Resumen' },
+      { id: 'requirements', icon: 'checklist', label: 'Requerimientos', checkType: 'requirements' },
+      { id: 'sources', icon: 'file_copy', label: 'Fuentes & Entrevistas', checkType: 'sources' },
+    ]
+  },
+  {
+    title: 'DISEÑO',
+    items: [
+      { id: 'modeling', icon: 'schema', label: 'Modelado', checkType: 'modeling' },
+      { id: 'navigation', icon: 'account_tree', label: 'Árbol de Navegación' },
+      { id: 'mockups', icon: 'devices', label: 'Mockups', checkType: 'mockups' },
+      { id: 'architecture', icon: 'layers', label: 'Arquitectura' },
+    ]
+  },
+  {
+    title: 'INGENIERÍA',
+    items: [
+      { id: 'traceability', icon: 'link', label: 'Trazabilidad' },
+      { id: 'changes', icon: 'change_circle', label: 'Cambios' },
+      { id: 'versions', icon: 'history', label: 'Versiones' },
+    ]
+  },
+  {
+    title: 'PROYECTO',
+    items: [
+      { id: 'planning', icon: 'calendar_month', label: 'Planificación' },
+      { id: 'tools_team', icon: 'groups', label: 'Equipo & Herramientas' },
+    ]
+  },
+  {
+    title: 'ASISTENCIA',
+    items: [
+      { id: 'chat', icon: 'chat', label: 'Chat IA' },
+    ]
+  }
 ];
 
-export default function Sidebar({ activeView, onViewChange, currentProject }) {
+export default function Sidebar({
+  activeView,
+  onViewChange,
+  currentProject,
+  isProcessing = false,
+  pendingCandidatesCount = 0,
+  activeActivity = null
+}) {
+  // Derive status indicators based on real project state
+  const getItemStatus = (item) => {
+    if (!currentProject) return null;
+
+    if (item.id === 'sources') {
+      if (isProcessing) return { type: 'processing', tooltip: 'Procesando fuentes...' };
+      const count = currentProject.sources?.length ?? 0;
+      if (count > 0) return { type: 'completed', text: count };
+      return null;
+    }
+
+    if (item.id === 'requirements') {
+      if (pendingCandidatesCount > 0) {
+        return { type: 'attention', tooltip: `${pendingCandidatesCount} candidatos por revisar` };
+      }
+      const reqs = currentProject.requirements || [];
+      const hasPending = reqs.some(r => r.status === 'PENDING' || r.status === 'IN_REVIEW');
+      if (hasPending) return { type: 'attention', tooltip: 'Requisitos pendientes de aprobación' };
+      if (reqs.length > 0) return { type: 'completed', text: reqs.length };
+      return null;
+    }
+
+    if (item.id === 'modeling') {
+      const hasEntities = (currentProject.entities?.length || 0) > 0;
+      if (hasEntities) return { type: 'completed' };
+      return null;
+    }
+
+    if (item.id === 'mockups') {
+      const hasScreens = (currentProject.screens?.length || 0) > 0;
+      if (hasScreens) return { type: 'completed' };
+      return null;
+    }
+
+    return null;
+  };
+
+  const renderStatusBadge = (status) => {
+    if (!status) return null;
+
+    if (status.type === 'processing') {
+      return (
+        <span
+          className="sidebar-status-pill processing"
+          title={status.tooltip}
+          style={{ display: 'inline-flex', alignItems: 'center' }}
+        >
+          <span className="ms ms-xs spin" style={{ color: 'var(--primary)', fontSize: '13px' }}>
+            autorenew
+          </span>
+        </span>
+      );
+    }
+
+    if (status.type === 'attention') {
+      return (
+        <span
+          className="sidebar-status-pill attention"
+          title={status.tooltip}
+          style={{
+            width: '8px',
+            height: '8px',
+            borderRadius: '50%',
+            backgroundColor: '#b42318',
+            display: 'inline-block'
+          }}
+        />
+      );
+    }
+
+    if (status.type === 'completed') {
+      return (
+        <span
+          className="sidebar-status-pill completed"
+          style={{
+            fontSize: '0.6875rem',
+            color: 'var(--secondary)',
+            background: 'var(--surface-container)',
+            padding: '0 5px',
+            borderRadius: 'var(--radius-xs)',
+            fontFamily: 'var(--font-mono)'
+          }}
+        >
+          {status.text ? status.text : '✓'}
+        </span>
+      );
+    }
+
+    return null;
+  };
+
   return (
     <aside className="sidebar">
-      {/* Top section */}
+      {/* Brand Header */}
       <div className="sidebar-top">
-        {/* Brand */}
         <div className="sidebar-brand" onClick={() => onViewChange('projects')}>
           <div className="sidebar-brand-icon">
             <svg viewBox="0 0 24 24" fill="none" stroke="#fff" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
@@ -33,82 +155,112 @@ export default function Sidebar({ activeView, onViewChange, currentProject }) {
           <span className="sidebar-brand-tag">Studio</span>
         </div>
 
-        {/* Project selector */}
-        <div className="project-selector" onClick={() => onViewChange('projects')}>
+        {/* Project Selector / Dashboard Switcher */}
+        <div
+          className={`project-selector ${!currentProject ? 'no-project' : ''}`}
+          onClick={() => onViewChange('projects')}
+          title={currentProject ? `Proyecto actual: ${currentProject.name}` : 'Ir a Proyectos'}
+        >
           <div className="project-selector-inner">
-            {currentProject ? (
-              <>
-                <div className="project-dot" />
-                <span className="project-selector-name" title={currentProject.name}>
-                  {currentProject.name}
-                </span>
-              </>
-            ) : (
-              <span className="project-selector-placeholder">Seleccionar proyecto</span>
-            )}
+            <div
+              className="project-dot"
+              style={{
+                backgroundColor: currentProject ? 'var(--primary)' : 'var(--outline)'
+              }}
+            />
+            <span className="project-selector-name">
+              {currentProject ? currentProject.name : 'Mis Proyectos'}
+            </span>
           </div>
-          <span className="ms ms-xs" style={{ color: 'var(--on-surface-variant)' }}>unfold_more</span>
+          <span className="ms ms-xs" style={{ color: 'var(--on-surface-variant)' }}>
+            unfold_more
+          </span>
         </div>
 
-        {/* Navigation */}
+        {/* Main Navigation with Vertical Scroll */}
         <nav className="sidebar-nav">
-          {/* General section */}
-          <span className="sidebar-nav-section">General</span>
-          {NAV_ITEMS.filter(i => !i.requiresProject).map(item => (
-            <button
-              key={item.id}
-              className={`nav-link ${activeView === item.id ? 'active' : ''}`}
-              onClick={() => onViewChange(item.id)}
-            >
-              <span className="ms">{item.icon}</span>
-              {item.label}
-            </button>
-          ))}
+          {/* General Section */}
+          <button
+            type="button"
+            className={`nav-link ${activeView === 'projects' ? 'active' : ''}`}
+            onClick={() => onViewChange('projects')}
+          >
+            <span className="ms">folder</span>
+            <span style={{ flex: 1 }}>Dashboard</span>
+          </button>
 
-          {/* Project section */}
-          {currentProject && (
-            <>
-              <span className="sidebar-nav-section">Proyecto Actual</span>
-              {NAV_ITEMS.filter(i => i.requiresProject).map(item => (
-                <button
-                  key={item.id}
-                  className={`nav-link ${activeView === item.id ? 'active' : ''}`}
-                  onClick={() => onViewChange(item.id)}
-                >
-                  <span className="ms">{item.icon}</span>
-                  {item.label}
-                </button>
-              ))}
-            </>
-          )}
-
-          {/* Disabled items when no project */}
-          {!currentProject && (
-            <>
-              <span className="sidebar-nav-section">Proyecto Actual</span>
-              {NAV_ITEMS.filter(i => i.requiresProject).map(item => (
-                <button
-                  key={item.id}
-                  className="nav-link disabled"
-                  disabled
-                >
-                  <span className="ms">{item.icon}</span>
-                  {item.label}
-                </button>
-              ))}
-            </>
+          {/* Grouped Project Navigation */}
+          {currentProject ? (
+            NAV_GROUPS.map((group) => (
+              <div key={group.title} className="sidebar-nav-group">
+                <span className="sidebar-nav-section">{group.title}</span>
+                {group.items.map((item) => {
+                  const status = getItemStatus(item);
+                  return (
+                    <button
+                      key={item.id}
+                      type="button"
+                      className={`nav-link ${activeView === item.id ? 'active' : ''}`}
+                      onClick={() => onViewChange(item.id)}
+                    >
+                      <span className="ms">{item.icon}</span>
+                      <span style={{ flex: 1 }}>{item.label}</span>
+                      {renderStatusBadge(status)}
+                    </button>
+                  );
+                })}
+              </div>
+            ))
+          ) : (
+            <div style={{ padding: '16px 8px', textAlign: 'center' }}>
+              <p style={{ fontSize: '0.75rem', color: 'var(--outline)', margin: 0 }}>
+                Selecciona o abre un proyecto para acceder a las herramientas de ingeniería.
+              </p>
+            </div>
           )}
         </nav>
       </div>
 
-      {/* Bottom section */}
+      {/* Global Activity Widget if in progress */}
+      {isProcessing && (
+        <div
+          className="sidebar-activity-widget"
+          onClick={() => onViewChange('sources')}
+          style={{
+            margin: '8px 4px',
+            padding: '8px 10px',
+            borderRadius: 'var(--radius-md)',
+            background: 'rgba(41, 82, 217, 0.08)',
+            border: '1px solid rgba(41, 82, 217, 0.2)',
+            cursor: 'pointer',
+            display: 'flex',
+            alignItems: 'center',
+            gap: '8px'
+          }}
+          title="Ver proceso activo"
+        >
+          <span className="ms ms-xs spin" style={{ color: 'var(--primary)' }}>
+            autorenew
+          </span>
+          <div style={{ minWidth: 0, flex: 1 }}>
+            <span style={{ fontSize: '0.6875rem', fontWeight: 600, color: 'var(--primary)', display: 'block' }}>
+              Procesando fuentes
+            </span>
+            <span style={{ fontSize: '0.625rem', color: 'var(--secondary)' }}>
+              Haz clic para ver la cola
+            </span>
+          </div>
+        </div>
+      )}
+
+      {/* Sidebar Footer */}
       <div className="sidebar-bottom">
         <div className="sidebar-status">
           <div className="sidebar-status-text">
             <div className="sidebar-status-dot" />
-            Sync OK
+            <span>Workspace Ready</span>
           </div>
-          <span className="sidebar-version">v2.0</span>
+          <span className="sidebar-version">v2.1</span>
         </div>
       </div>
     </aside>

@@ -1,104 +1,101 @@
 /**
  * SemanticAnalyzer
- * Coordina el análisis semántico escalonado bajo la política AI_ANALYSIS_STRATEGY:
- * - deterministic-only: Omite llamadas a IA.
- * - ollama-only: Solo invoca a Ollama local.
- * - gpt-only: Invoca directamente a OpenAI / GPT con prompts mínimos.
- * - ollama-first: Invoca a Ollama primero; si falla, responde JSON inválido o baja confianza, escala a GPT.
+ * Coordina el análisis semántico de fragmentos ambiguos utilizando la abstracción polimórfica createAIProvider().
+ *
+ * Principios de diseño (Fase Gemini & Multi-PDF):
+ * - Cumple AI_PROVIDER (gemini | ollama | openai | mock).
+ * - CERO acoplamiento a OpenAI como fallback rígido.
+ * - Procesamiento en LOTES (batching), nunca una solicitud por fragmento.
+ * - Respeta GEMINI_MAX_ITEMS_PER_BATCH (20) y GEMINI_MAX_INPUT_CHARS (16000).
+ * - En caso de falla o 429 de IA, preserva los fragmentos como deterministas / revisión manual.
  */
 
 const env = require('../../config/env');
-const OllamaProvider = require('../ai/OllamaProvider');
-const OpenAIProvider = require('../ai/OpenAIProvider');
-const MockAIProvider = require('../ai/MockAIProvider');
+const { createAIProvider } = require('../ai/AIService');
 
 class SemanticAnalyzer {
   constructor() {
-    this.ollamaProvider = new OllamaProvider();
-    this.openAIProvider = new OpenAIProvider();
-    this.mockProvider = new MockAIProvider();
+    this.ollamaProvider = new (require('../ai/OllamaProvider'))();
+    this.geminiProvider = new (require('../ai/GeminiProvider'))();
+    this.openAIProvider = new (require('../ai/OpenAIProvider'))();
+    this.mockProvider = new (require('../ai/MockAIProvider'))();
   }
 
   /**
-   * Genera el prompt conciso para extracción de necesidades y elementos.
-   * @param {string} chunkText
-   * @param {string} [sourceType='PDF']
-   * @returns {string}
+   * Obtiene la instancia activa del proveedor de IA según configuración o sobrescritura.
    */
-  buildPrompt(chunkText, sourceType = 'PDF') {
-    return [
-      `Analiza el siguiente fragmento de ${sourceType} para ingeniería de requisitos de software:`,
-      `"""`,
-      chunkText,
-      `"""`,
-      `Extrae exclusivamente en formato JSON estricto sin explicaciones adicionales:`,
-      `{`,
-      `  "needs": [`,
-      `    { "type": "FUNCTION|QUALITY|BUSINESS_RULE|CONSTRAINT", "description": "...", "evidence": "...", "confidence": 0.0-1.0 }`,
-      `  ],`,
-      `  "actors": [ { "name": "...", "evidence": "..." } ],`,
-      `  "entities": [ { "name": "...", "evidence": "..." } ],`,
-      `  "businessRules": [ { "statement": "...", "evidence": "..." } ],`,
-      `  "constraints": [ { "statement": "...", "evidence": "..." } ],`,
-      `  "platforms": "WEB|MOBILE|BOTH|UNKNOWN",`,
-      `  "technologies": [ "..." ]`,
-      `}`
-    ].join('\n');
+  getProvider(providerOverride) {
+    const providerName = (providerOverride || env.AI_PROVIDER || 'gemini').toLowerCase();
+    if (providerName === 'gemini') return this.geminiProvider;
+    if (providerName === 'ollama') return this.ollamaProvider;
+    if (providerName === 'openai') return this.openAIProvider;
+    if (providerName === 'mock') return this.mockProvider;
+    return createAIProvider(providerName);
   }
 
   /**
-   * Extrae de forma segura un JSON de la respuesta de texto (por si viene envuelta en ```json).
-   * @param {string|Object} rawResponse
-   * @returns {Object|null}
+   * Divide los fragmentos candidatos en lotes que respetan límites de elementos y de caracteres.
+   * @param {Array<{ chunkText: string, metadata: any }>} candidateChunks
+   * @returns {Array<Array<{ id: string, s: string, metadata: any }>>}
    */
-  extractJsonSafely(rawResponse) {
-    if (!rawResponse) return null;
-    if (typeof rawResponse === 'object') return rawResponse;
+  createBatches(candidateChunks) {
+    const maxItems = env.GEMINI_MAX_ITEMS_PER_BATCH || 20;
+    const maxChars = env.GEMINI_MAX_INPUT_CHARS || 16000;
+    const batches = [];
 
-    try {
-      return JSON.parse(rawResponse);
-    } catch (e1) {
-      // Intentar extraer bloque ```json ... ```
-      const match = rawResponse.match(/```(?:json)?\s*([\s\S]*?)\s*```/);
-      if (match && match[1]) {
-        try {
-          return JSON.parse(match[1]);
-        } catch (e2) {}
+    let currentBatch = [];
+    let currentChars = 0;
+
+    candidateChunks.forEach((chunk, index) => {
+      const id = `a${index + 1}`;
+      const text = (chunk.chunkText || '').trim().slice(0, env.AI_CHUNK_MAX_LENGTH || 350);
+      const itemChars = text.length + 30; // estimación overhead JSON
+
+      if (currentBatch.length >= maxItems || (currentChars + itemChars > maxChars && currentBatch.length > 0)) {
+        batches.push(currentBatch);
+        currentBatch = [];
+        currentChars = 0;
       }
-      // Intentar extraer primer bloque entre { ... }
-      const braceMatch = rawResponse.match(/\{[\s\S]*\}/);
-      if (braceMatch) {
-        try {
-          return JSON.parse(braceMatch[0]);
-        } catch (e3) {}
-      }
+
+      currentBatch.push({ id, s: text, originalChunk: chunk.chunkText, metadata: chunk.metadata });
+      currentChars += itemChars;
+    });
+
+    if (currentBatch.length > 0) {
+      batches.push(currentBatch);
     }
-    return null;
+
+    return batches;
   }
 
   /**
-   * Normaliza la respuesta de IA al contrato estándar común.
-   * @param {Object} raw
-   * @param {string} originalChunk
-   * @returns {Object}
+   * Normaliza un resultado clasificado de IA a la estructura interna estándar de ICASE.
    */
-  normalizeResponse(raw, originalChunk) {
-    const data = raw || {};
-    const needs = Array.isArray(data.needs) ? data.needs.map(n => ({
-      type: ['FUNCTION', 'QUALITY', 'BUSINESS_RULE', 'CONSTRAINT', 'ACTOR', 'DATA', 'PLATFORM', 'TECHNOLOGY', 'ARCHITECTURE', 'UNKNOWN'].includes(n.type)
-        ? n.type
-        : 'FUNCTION',
-      description: String(n.description || n.need || n.text || '').trim(),
-      evidence: String(n.evidence || originalChunk.slice(0, 150)).trim(),
-      confidence: typeof n.confidence === 'number' ? Math.min(1, Math.max(0, n.confidence)) : 0.85
-    })).filter(n => n.description) : [];
+  mapClassifiedItem(item, originalItem) {
+    const type = item.t || 'FUNCTIONAL';
+    const statement = item.s || originalItem.s || originalItem.originalChunk;
+    const confidence = typeof item.c === 'number' ? item.c : 0.85;
 
-    const actors = Array.isArray(data.actors) ? data.actors.map(a => typeof a === 'string' ? a.trim() : String(a?.name || '').trim()).filter(Boolean) : [];
-    const entities = Array.isArray(data.entities) ? data.entities.map(e => typeof e === 'string' ? e.trim() : String(e?.name || '').trim()).filter(Boolean) : [];
-    const businessRules = Array.isArray(data.businessRules) ? data.businessRules.map(r => typeof r === 'string' ? r.trim() : String(r?.statement || r?.rule || '').trim()).filter(Boolean) : [];
-    const constraints = Array.isArray(data.constraints) ? data.constraints.map(c => typeof c === 'string' ? c.trim() : String(c?.statement || c?.constraint || '').trim()).filter(Boolean) : [];
-    const technologies = Array.isArray(data.technologies) ? data.technologies.map(t => String(t).trim()).filter(Boolean) : [];
-    const platform = ['WEB', 'MOBILE', 'BOTH', 'UNKNOWN'].includes(data.platforms) ? data.platforms : 'UNKNOWN';
+    if (type === 'IGNORE') return null;
+
+    let needType = 'FUNCTION';
+    if (type === 'NON_FUNCTIONAL') needType = 'QUALITY';
+    else if (type === 'BUSINESS_RULE') needType = 'BUSINESS_RULE';
+    else if (type === 'CONSTRAINT') needType = 'CONSTRAINT';
+    else if (type === 'ACTOR') needType = 'ACTOR';
+    else if (type === 'ENTITY') needType = 'DATA';
+
+    const needs = [{
+      type: needType,
+      description: statement,
+      evidence: originalItem.originalChunk || statement,
+      confidence
+    }];
+
+    const actors = type === 'ACTOR' ? [statement] : [];
+    const entities = type === 'ENTITY' ? [statement] : [];
+    const businessRules = type === 'BUSINESS_RULE' ? [statement] : [];
+    const constraints = type === 'CONSTRAINT' ? [statement] : [];
 
     return {
       needs,
@@ -106,113 +103,130 @@ class SemanticAnalyzer {
       entities,
       businessRules,
       constraints,
-      technologies,
-      platforms: platform
+      technologies: [],
+      platforms: 'UNKNOWN',
+      sourceChunk: originalItem.originalChunk || statement,
+      metadata: originalItem.metadata
     };
   }
 
   /**
-   * Ejecuta el análisis semántico sobre los fragmentos candidatos seleccionados.
+   * Analiza fragmentos candidatos en lotes optimizados sin sobrecargar APIs.
    * @param {Array<{ chunkText: string, metadata: any }>} candidateChunks
-   * @param {Object} options
-   * @param {string} [options.sourceType='PDF']
-   * @param {string} [options.strategy] - Sobrescritura de AI_ANALYSIS_STRATEGY
+   * @param {Object} [options]
    * @returns {Promise<{
    *   results: Array<Object>,
-   *   metrics: { ollamaCalls: number, gptCalls: number, ollamaFailures: number, gptFailures: number, durationMs: number }
+   *   metrics: { provider: string, totalChunks: number, batches: number, requestsUsed: number, durationMs: number }
    * }>}
    */
   async analyzeChunks(candidateChunks = [], options = {}) {
-    const strategy = options.strategy || env.AI_ANALYSIS_STRATEGY || 'ollama-first';
-    const confidenceThreshold = parseFloat(env.AI_FALLBACK_CONFIDENCE_THRESHOLD || '0.65');
-    const sourceType = options.sourceType || 'PDF';
+    let providerName = options.providerOverride;
+    if (!providerName) {
+      const strategy = options.strategy || env.AI_ANALYSIS_STRATEGY;
+      if (strategy === 'ollama-only' || strategy === 'ollama-first') {
+        providerName = 'ollama';
+      } else if (strategy === 'gpt-only') {
+        providerName = 'openai';
+      } else {
+        providerName = (env.AI_PROVIDER || 'gemini').toLowerCase();
+      }
+    }
+    const startTime = Date.now();
 
     const metrics = {
-      strategy,
+      provider: providerName,
+      strategy: options.strategy || env.AI_ANALYSIS_STRATEGY || 'batch-hybrid',
+      totalChunks: candidateChunks.length,
+      batches: 0,
+      requestsUsed: 0,
+      geminiCalls: 0,
+      geminiFailures: 0,
       ollamaCalls: 0,
-      gptCalls: 0,
       ollamaFailures: 0,
+      gptCalls: 0,
       gptFailures: 0,
       durationMs: 0
     };
 
-    const startTime = Date.now();
-    const results = [];
-
-    if (strategy === 'deterministic-only' || candidateChunks.length === 0) {
+    if (!candidateChunks || candidateChunks.length === 0) {
       metrics.durationMs = Date.now() - startTime;
-      return { results, metrics };
+      return { results: [], metrics };
     }
 
-    for (const chunk of candidateChunks) {
-      const prompt = this.buildPrompt(chunk.chunkText, sourceType);
-      let parsed = null;
-      let usedProvider = null;
+    const batches = this.createBatches(candidateChunks);
+    metrics.batches = batches.length;
 
-      // 1. Intentar con Ollama si la estrategia lo contempla
-      if (strategy === 'ollama-first' || strategy === 'ollama-only') {
-        metrics.ollamaCalls++;
+    const provider = this.getProvider(providerName);
+    const results = [];
+
+    for (let i = 0; i < batches.length; i++) {
+      const batch = batches[i];
+      const itemsForAi = batch.map(b => ({ id: b.id, s: b.s }));
+      let batchSuccess = false;
+
+      // 1. Si el proveedor soporta clasificación por lotes (GeminiProvider)
+      if (typeof provider.classifyAmbiguousBatches === 'function') {
         try {
-          const rawOllama = await this.ollamaProvider.analyzeProject({
+          const classifications = await provider.classifyAmbiguousBatches(itemsForAi, { batchIndex: i + 1 });
+          metrics.requestsUsed++;
+          metrics.geminiCalls++;
+          const resultMap = new Map(classifications.map(c => [c.id, c]));
+
+          batch.forEach(original => {
+            const classified = resultMap.get(original.id) || { id: original.id, t: 'FUNCTIONAL', s: original.s, c: 0.75 };
+            const mapped = this.mapClassifiedItem(classified, original);
+            if (mapped) results.push({ ...mapped, provider: providerName });
+          });
+          batchSuccess = true;
+        } catch (geminiErr) {
+          metrics.geminiFailures++;
+          console.warn(`[SemanticAnalyzer] Proveedor ${providerName} falló en lote ${i + 1}: ${geminiErr.message}.`);
+        }
+      } else {
+        // 2. Proveedor tradicional (Ollama / Mock / OpenAI vía analyzeProject)
+        try {
+          const prompt = `Analiza solo estos fragmentos. Clasifica y devuelve JSON compacto [{ "id": "...", "t": "FUNCTIONAL|NON_FUNCTIONAL|BUSINESS_RULE", "s": "...", "c": 0.8 }]:\n${JSON.stringify({ items: itemsForAi })}`;
+          const rawResponse = await provider.analyzeProject({
             projectId: options.projectId || 'temp',
-            name: 'Análisis de fragmento',
-            description: chunk.chunkText,
+            name: 'Análisis de fragmentos ambiguos',
+            description: JSON.stringify(itemsForAi),
             customPrompt: prompt
           });
-          parsed = this.extractJsonSafely(rawOllama);
-          if (parsed) {
-            usedProvider = 'ollama';
-          } else {
-            metrics.ollamaFailures++;
+          metrics.requestsUsed++;
+          if (providerName === 'ollama') metrics.ollamaCalls++;
+          else if (providerName === 'openai') metrics.gptCalls++;
+
+          let parsed = [];
+          if (Array.isArray(rawResponse)) parsed = rawResponse;
+          else if (rawResponse && typeof rawResponse === 'object') {
+            parsed = rawResponse.items || rawResponse.needs || rawResponse.requirements || [];
           }
-        } catch (ollamaErr) {
-          metrics.ollamaFailures++;
-          console.warn(`[SemanticAnalyzer] Ollama falló en fragmento: ${ollamaErr.message}`);
-        }
-      }
 
-      // Evaluar si se requiere escalamiento a GPT
-      const needsEscalation = !parsed ||
-        (strategy === 'gpt-only') ||
-        (strategy === 'ollama-first' && parsed?.needs?.some(n => (n.confidence || 0) < confidenceThreshold));
-
-      if (needsEscalation && (strategy === 'ollama-first' || strategy === 'gpt-only')) {
-        // 2. Escalamiento controlado a GPT
-        if (env.OPENAI_API_KEY && env.OPENAI_API_KEY.trim().length > 0) {
-          metrics.gptCalls++;
-          try {
-            console.log(`[SemanticAnalyzer] Escalando fragmento a GPT (OpenAI)...`);
-            const rawGpt = await this.openAIProvider.analyzeProject({
-              projectId: options.projectId || 'temp',
-              name: 'Análisis de fragmento',
-              description: chunk.chunkText,
-              customPrompt: prompt
+          if (parsed && parsed.length > 0) {
+            const resultMap = new Map(parsed.map((p, idx) => [p.id || `a${idx + 1}`, p]));
+            batch.forEach(original => {
+              const item = resultMap.get(original.id);
+              const mapped = item
+                ? this.mapClassifiedItem(item, original)
+                : this.mapClassifiedItem({ id: original.id, t: 'FUNCTIONAL', s: original.s, c: 0.75 }, original);
+              if (mapped) results.push({ ...mapped, provider: providerName });
             });
-            const gptParsed = this.extractJsonSafely(rawGpt);
-            if (gptParsed) {
-              parsed = gptParsed;
-              usedProvider = 'openai';
-            } else {
-              metrics.gptFailures++;
-            }
-          } catch (gptErr) {
-            metrics.gptFailures++;
-            console.warn(`[SemanticAnalyzer] GPT falló en fragmento: ${gptErr.message}`);
+            batchSuccess = true;
+          } else {
+            if (providerName === 'ollama') metrics.ollamaFailures++;
+            else if (providerName === 'openai') metrics.gptFailures++;
           }
-        } else {
-          // An unavailable provider cannot fabricate requirements. Evidence remains available for manual review.
-          console.warn('[SemanticAnalyzer] Sin proveedor disponible: el fragmento queda pendiente de revisi?n manual.');
+        } catch (provErr) {
+          if (providerName === 'ollama') metrics.ollamaFailures++;
+          else if (providerName === 'openai') metrics.gptFailures++;
+          else metrics.geminiFailures++;
+          console.warn(`[SemanticAnalyzer] Proveedor ${providerName} falló en lote ${i + 1}: ${provErr.message}.`);
         }
       }
 
-      if (parsed) {
-        const normalized = this.normalizeResponse(parsed, chunk.chunkText);
-        results.push({
-          ...normalized,
-          provider: usedProvider,
-          sourceChunk: chunk.chunkText,
-          metadata: chunk.metadata
-        });
+      // Si falla la IA, no inventamos candidatos adicionales para no contaminar los requisitos aprobados/deterministas
+      if (!batchSuccess) {
+        console.warn(`[SemanticAnalyzer] Lote ${i + 1} omitido por indisponibilidad de IA (${providerName}). Conservando exclusivamente extracciones deterministas.`);
       }
     }
 

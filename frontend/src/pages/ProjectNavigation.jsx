@@ -1,5 +1,5 @@
 import React, { useState, useMemo } from 'react';
-import MermaidDiagram from '../components/diagrams/MermaidDiagram';
+import DiagramViewport from '../components/common/DiagramViewport';
 import { generateNavigationDiagram } from '../utils/mermaidGenerators';
 
 export default function ProjectNavigation({ project }) {
@@ -111,9 +111,12 @@ export default function ProjectNavigation({ project }) {
               </div>
             </div>
 
-            <div className="diagram-container" style={{ minHeight: '480px', background: 'var(--surface-container-lowest)', borderRadius: 'var(--radius-md)', border: '1px solid var(--outline-variant)', padding: '20px', boxShadow: 'var(--shadow-xs)' }}>
-              <MermaidDiagram code={generatedCode} type="flowchart" />
-            </div>
+            <DiagramViewport
+              code={generatedCode}
+              type="flowchart"
+              title="Diagrama de Flujo y Rutas de Navegación"
+              minHeight="500px"
+            />
           </div>
         )}
 

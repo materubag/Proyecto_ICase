@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import MockupRenderer from '../components/mockup-renderer/MockupRenderer';
-import MermaidDiagram from '../components/diagrams/MermaidDiagram';
+import DiagramViewport from '../components/common/DiagramViewport';
 import { mockupApi } from '../api/mockup.api';
 
 export default function ProjectPrototype({ project }) {
@@ -241,9 +241,12 @@ export default function ProjectPrototype({ project }) {
                   </p>
                 </div>
 
-                <div style={{ background: 'var(--surface-container-lowest)', padding: '24px', borderRadius: 'var(--radius-md)', border: '1px solid var(--outline-variant)', boxShadow: 'var(--shadow-xs)', overflowX: 'auto' }}>
-                  <MermaidDiagram code={screenRelationsDiagram} />
-                </div>
+                <DiagramViewport
+                  code={screenRelationsDiagram}
+                  type="flowchart"
+                  title="Relación entre Pantallas y Rutas"
+                  minHeight="500px"
+                />
               </div>
             ) : viewMode === 'sketch' ? (
               <div>

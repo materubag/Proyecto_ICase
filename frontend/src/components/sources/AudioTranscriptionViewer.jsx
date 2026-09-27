@@ -28,18 +28,18 @@ export default function AudioTranscriptionViewer({
   onRetry,
   onSelectVersion
 }) {
-  const [activeTab, setActiveTab] = useState('segments'); // 'segments' | 'full' | 'meta'
+  const version = currentVersion || source?.currentVersion;
+  const segments = version?.segments || [];
+  const extractedText = version?.extractedText || '';
+  const metadata = version?.metadata || {};
+  const duration = metadata?.duration;
+
+  const [activeTab, setActiveTab] = useState(segments.length > 0 ? 'segments' : 'full'); // 'segments' | 'full' | 'meta'
   const [searchQuery, setSearchQuery] = useState('');
   const [copied, setCopied] = useState(false);
   const [retryFile, setRetryFile] = useState(null);
   const [retrying, setRetrying] = useState(false);
   const [retryError, setRetryError] = useState(null);
-
-  const version = currentVersion || source.currentVersion;
-  const segments = version?.segments || [];
-  const extractedText = version?.extractedText || '';
-  const metadata = version?.metadata || {};
-  const duration = metadata?.duration;
 
   // Filtrado de segmentos
   const filteredSegments = searchQuery.trim()
@@ -170,7 +170,7 @@ export default function AudioTranscriptionViewer({
         >
           <div style={{ display: 'flex', alignItems: 'center', gap: '8px', fontWeight: 600, fontSize: '0.88rem' }}>
             <AlertTriangle size={18} />
-            <span>Ocurrió un error al procesar la transcripción con n8n</span>
+            <span>Ocurrió un error al procesar la transcripción de audio</span>
           </div>
           <p style={{ margin: '6px 0 10px 0', fontSize: '0.82rem', color: 'var(--on-surface)' }}>
             La fuente fue conservada. Puedes adjuntar el archivo de audio nuevamente para reintentar la transcripción.

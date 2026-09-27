@@ -140,16 +140,54 @@ class CandidateConsolidator {
   /**
    * Transforma una necesidad (Need) en una propuesta de requisito (RequirementCandidate)
    * respetando la incertidumbre sin inventar actores ni métricas.
+   * Aplica reglas de redacción y gramática en español, descartando portadas, metadatos y listas no funcionales.
    * @param {Object} need
    * @param {string} temporaryCode
-   * @returns {Object}
+   * @returns {Object|null}
    */
   convertNeedToRequirementCandidate(need, temporaryCode) {
-    let statement = need.description;
+    if (!need || !need.description) return null;
 
-    // Si no está formulado formalmente, anteponer plantilla neutral
-    if (!/\b(?:deber[aá]|permitir[aá]|podr[aá]|debe)\b/i.test(statement)) {
-      statement = `El sistema deberá permitir ${statement.charAt(0).toLowerCase() + statement.slice(1)}.`;
+    // 1. Limpieza de viñetas, guiones y numeraciones iniciales
+    let cleanText = need.description
+      .replace(/^[•\-\*\d\.\s:–—]+/, '')
+      .replace(/\s+/g, ' ')
+      .trim();
+
+    // Eliminar dobles puntos finales
+    cleanText = cleanText.replace(/\.\.+$/, '.').trim();
+
+    // 2. Filtro estricto de metadatos, portada, contactos y tablas
+    const isBoilerplate = /^(?:PROPUESTA\s+(?:T[EÉ]CNICA|ECON[OÓ]MICA|CREADA)|DATOS\s+GENERALES|IDENTIFICACI[OÓ]N|Empresa\s+proponente|Soluci[oó]n\s+AUTRON|Sector\s+Taller|Modalidad\s+Plataforma|EQUIPO\s+RESPONSABLE|DATOS\s+DE\s+CONTACTO|COSTOS\s+OPERATIVOS|TOTAL\s+ESTIMADO|Tarifa\s+Subtotal|SOLUCIONES\s+DE\s+SOFTWARE|CONTROL\s+INTELIGENTE|NEXORA)/i.test(cleanText) ||
+      /^(?:Cliente|Administrador|Mec[aá]nico|Recepci[oó]n)\s*:/i.test(cleanText) ||
+      /^(?:Usuarios|Clientes|Citas|Recepci[oó]n|Diagn[oó]stico|Base|Servicios|Cotizaciones|[OÓ]rdenes|Inventario|Historial|Dashboard)\s+(?:y\s+|de\s+|con\s+)?(?:seguridad|veh[ií]culos|repuestos|ventas|reportes)/i.test(cleanText);
+
+    if (isBoilerplate || cleanText.length < 15) {
+      return null;
+    }
+
+    // 3. Formulación gramatical correcta en español
+    let statement = cleanText;
+
+    if (/^(?:El\s+sistema\s+(?:deber[aá]|permitir[aá]|podr[aá]|debe)|El\s+(?:usuario|cliente|administrador|mec[aá]nico)\s+(?:podr[aá]|deber[aá])|Cada\s+|Toda\s+|Una\s+|No\s+se\s+)/i.test(statement)) {
+      statement = statement.charAt(0).toUpperCase() + statement.slice(1);
+      if (!statement.endsWith('.')) statement += '.';
+    } else {
+      // Si empieza con verbo en infinitivo (ej: "Registrar", "Permitir", "Validar", "Integrar", etc.)
+      const startsWithInfinitive = /^(?:[a-záéíóúñ]+(?:ar|er|ir))\b/i.test(statement);
+      if (startsWithInfinitive) {
+        const lowerFirst = statement.charAt(0).toLowerCase() + statement.slice(1);
+        statement = `El sistema deberá permitir ${lowerFirst}`;
+        if (!statement.endsWith('.')) statement += '.';
+      } else if (/\b(?:deber[aá]|permitir[aá]|podr[aá]|debe)\b/i.test(statement)) {
+        statement = statement.charAt(0).toUpperCase() + statement.slice(1);
+        if (!statement.endsWith('.')) statement += '.';
+      } else {
+        // Enunciado declarativo
+        const lowerFirst = statement.charAt(0).toLowerCase() + statement.slice(1);
+        statement = `El sistema deberá contemplar ${lowerFirst}`;
+        if (!statement.endsWith('.')) statement += '.';
+      }
     }
 
     const type = need.type === 'QUALITY'
@@ -162,7 +200,7 @@ class CandidateConsolidator {
 
     return {
       temporaryCode,
-      title: need.description.slice(0, 60),
+      title: cleanText.slice(0, 60),
       statement,
       originalStatement: statement,
       type,
@@ -273,15 +311,20 @@ class CandidateConsolidator {
             platform: semResult.platforms || 'UNKNOWN'
           }
         };
-        needCandidates.push(needObj);
-
-        // Convertir Need a RequirementCandidate
+        // Convertir Need a RequirementCandidate con validación
         const isNonFunc = need.type === 'QUALITY';
+        const reqCand = this.convertNeedToRequirementCandidate(need, 'TEMP');
+        if (!reqCand) {
+          continue; // Descartar metadatos, portada o texto no funcional
+        }
+
         const tempCode = isNonFunc
           ? `CRNF-${String(rnfCounter++).padStart(2, '0')}`
           : `CRF-${String(rfCounter++).padStart(2, '0')}`;
+        reqCand.temporaryCode = tempCode;
 
-        const reqCand = this.convertNeedToRequirementCandidate(need, tempCode);
+        needCandidates.push(needObj);
+
         reqCand.projectId = projectId;
         reqCand.sourceId = sourceId;
         reqCand.sourceVersionId = sourceVersionId;
@@ -326,6 +369,234 @@ class CandidateConsolidator {
     };
   }
 
+  /**
+   * Consolida candidatos de modelos generales (Actores, Procesos, Reglas, Tecnologías, Arquitectura, Entidades, etc.)
+   * para su persistencia en ModelCandidate y revisión en el centro unificado.
+   */
+  consolidateModelCandidates({
+    actors = [],
+    processes = [],
+    businessRules = [],
+    technologies = [],
+    architecture = null,
+    entities = [],
+    relationships = [],
+    screens = [],
+    dates = [],
+    constraints = [],
+    objectives = null,
+    scope = null,
+    platforms = [],
+    projectId,
+    sourceId,
+    sourceVersionId,
+    sourceName = 'Documento'
+  }) {
+    const crypto = require('crypto');
+    const modelCandidates = [];
+    const seenFingerprints = new Set();
+
+    const addCandidate = (item) => {
+      const normalizedName = this.normalizeForComparison(item.name || item.title || '');
+      const rawKey = `${item.kind}:${normalizedName}`;
+      const fingerprint = crypto.createHash('sha256').update(rawKey).digest('hex');
+
+      if (seenFingerprints.has(fingerprint)) return;
+      seenFingerprints.add(fingerprint);
+
+      modelCandidates.push({
+        projectId,
+        kind: item.kind,
+        name: (item.name || 'Sin título').slice(0, 150),
+        content: item.content || {},
+        requirementIds: item.requirementIds || [],
+        evidence: {
+          sourceFile: sourceName,
+          sourceId,
+          sourceVersionId,
+          snippet: item.evidence || item.sourceText || item.description || '',
+          method: item.origin || 'RULE',
+          confidence: item.confidence ?? (item.origin === 'INFERRED' ? 0.8 : 0.95)
+        },
+        origin: item.origin || 'RULE',
+        confidence: item.confidence ?? (item.origin === 'INFERRED' ? 0.8 : 0.95),
+        status: 'PENDING_REVIEW',
+        fingerprint
+      });
+    };
+
+    // 1. Actores
+    actors.forEach(act => {
+      addCandidate({
+        kind: 'ACTOR',
+        name: act.name,
+        content: { name: act.name, description: act.description },
+        origin: act.source === 'explicit' ? 'RULE' : 'INFERRED',
+        evidence: act.sourceText || act.description
+      });
+    });
+
+    // 2. Procesos
+    processes.forEach(proc => {
+      addCandidate({
+        kind: 'PROCESS',
+        name: proc.name,
+        content: { name: proc.name, step: proc.step, actor: proc.actor, description: proc.description },
+        origin: 'RULE',
+        evidence: proc.sourceText || proc.description
+      });
+    });
+
+    // 3. Reglas de negocio
+    businessRules.forEach(rule => {
+      addCandidate({
+        kind: 'BUSINESS_RULE',
+        name: rule.name || rule.description?.slice(0, 60),
+        content: { name: rule.name, description: rule.description, code: rule.code },
+        origin: 'RULE',
+        evidence: rule.sourceText || rule.description
+      });
+    });
+
+    // 4. Tecnologías
+    technologies.forEach(tech => {
+      addCandidate({
+        kind: 'TECHNOLOGY',
+        name: tech.name,
+        content: { name: tech.name, category: tech.category, source: tech.source },
+        origin: 'RULE',
+        evidence: `Mención de tecnología ${tech.name} en el documento.`
+      });
+    });
+
+    // 5. Arquitectura
+    if (architecture?.all) {
+      architecture.all.forEach(arch => {
+        addCandidate({
+          kind: 'ARCHITECTURE',
+          name: arch.name,
+          content: arch.content,
+          origin: 'RULE',
+          evidence: arch.evidence
+        });
+      });
+    }
+
+    // 6. Entidades
+    entities.forEach(ent => {
+      addCandidate({
+        kind: 'ENTITY',
+        name: ent.name,
+        content: { name: ent.name, description: ent.description, attributes: ent.attributes || [] },
+        origin: 'RULE',
+        evidence: ent.description
+      });
+    });
+
+    // 7. Relaciones E/R
+    relationships.forEach(rel => {
+      addCandidate({
+        kind: 'RELATIONSHIP',
+        name: `${rel.source} -> ${rel.target} (${rel.cardinality})`,
+        content: rel,
+        origin: rel.origin || 'INFERRED',
+        evidence: rel.evidence,
+        confidence: rel.confidence || 0.8
+      });
+    });
+
+    // 8. Pantallas y Vistas
+    screens.forEach(scr => {
+      addCandidate({
+        kind: 'SCREEN',
+        name: scr.name,
+        content: { name: scr.name, description: scr.description, screenType: scr.screenType, type: scr.type },
+        origin: 'RULE',
+        evidence: scr.sourceText || scr.description
+      });
+    });
+
+    // 9. Fechas y Planificación
+    dates.forEach(d => {
+      addCandidate({
+        kind: 'DATE_MILESTONE',
+        name: d.name,
+        content: d,
+        origin: 'RULE',
+        evidence: d.sourceText || d.description
+      });
+    });
+
+    // 10. Restricciones, Supuestos y Dependencias
+    constraints.forEach(c => {
+      addCandidate({
+        kind: 'CONSTRAINT',
+        name: c.name,
+        content: c,
+        origin: 'RULE',
+        evidence: c.sourceText || c.description
+      });
+    });
+
+    // 11. Objetivos
+    if (objectives) {
+      if (objectives.general) {
+        addCandidate({
+          kind: 'OBJECTIVE',
+          name: 'Objetivo General del Proyecto',
+          content: { type: 'GENERAL', statement: objectives.general },
+          origin: 'RULE',
+          evidence: objectives.general
+        });
+      }
+      (objectives.specific || []).forEach(oe => {
+        addCandidate({
+          kind: 'OBJECTIVE',
+          name: `${oe.id}: ${oe.text.slice(0, 70)}...`,
+          content: { type: 'SPECIFIC', id: oe.id, statement: oe.text },
+          origin: 'RULE',
+          evidence: oe.text
+        });
+      });
+    }
+
+    // 12. Alcance
+    if (scope) {
+      (scope.included || []).forEach(inc => {
+        addCandidate({
+          kind: 'SCOPE',
+          name: `Alcance Incluido: ${inc.text.slice(0, 65)}...`,
+          content: { type: 'INCLUDED', id: inc.id, statement: inc.text },
+          origin: 'RULE',
+          evidence: inc.text
+        });
+      });
+      (scope.excluded || []).forEach(exc => {
+        addCandidate({
+          kind: 'SCOPE',
+          name: `Alcance Excluido: ${exc.text.slice(0, 65)}...`,
+          content: { type: 'EXCLUDED', id: exc.id, statement: exc.text },
+          origin: 'RULE',
+          evidence: exc.text
+        });
+      });
+    }
+
+    // 13. Plataformas
+    platforms.forEach(p => {
+      addCandidate({
+        kind: 'PLATFORM',
+        name: `Plataforma: ${p.type}`,
+        content: p,
+        origin: 'RULE',
+        evidence: p.evidence,
+        confidence: p.confidence
+      });
+    });
+
+    return modelCandidates;
+  }
+
   computeEvidenceHash(versionId, text) {
     const crypto = require('crypto');
     return crypto.createHash('sha256').update(`${versionId}:${text || ''}`).digest('hex');
@@ -337,3 +608,4 @@ class CandidateConsolidator {
 }
 
 module.exports = new CandidateConsolidator();
+

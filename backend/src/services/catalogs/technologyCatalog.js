@@ -150,6 +150,60 @@ const TECHNOLOGIES = [
     name: 'Nginx',
     category: 'infrastructure',
     aliases: ['nginx']
+  },
+  {
+    name: 'Apache',
+    category: 'infrastructure',
+    aliases: ['apache', 'apache http server', 'httpd']
+  },
+  {
+    name: 'MariaDB',
+    category: 'database',
+    aliases: ['mariadb', 'maria db']
+  },
+
+  // AI & Machine Learning
+  {
+    name: 'Google Gemini',
+    category: 'ai',
+    aliases: ['gemini', 'google gemini', 'gemini-3.1-flash-lite', 'gemini pro', 'gemini flash']
+  },
+  {
+    name: 'OpenAI',
+    category: 'ai',
+    aliases: ['openai', 'gpt-4o', 'gpt-4', 'chatgpt']
+  },
+  {
+    name: 'Ollama',
+    category: 'ai',
+    aliases: ['ollama']
+  },
+  {
+    name: 'Llama',
+    category: 'ai',
+    aliases: ['llama', 'llama3', 'llama-3']
+  },
+  {
+    name: 'Whisper',
+    category: 'ai',
+    aliases: ['whisper', 'faster-whisper', 'openai whisper']
+  },
+
+  // Security & Authentication & Libraries
+  {
+    name: 'JWT',
+    category: 'security',
+    aliases: ['jwt', 'json web token', 'sesiones seguras']
+  },
+  {
+    name: 'HTTPS',
+    category: 'security',
+    aliases: ['https', 'ssl', 'tls', 'conexión cifrada']
+  },
+  {
+    name: 'Prisma ORM',
+    category: 'backend',
+    aliases: ['prisma', 'prisma orm']
   }
 ];
 

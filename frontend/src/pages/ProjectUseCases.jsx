@@ -1,5 +1,5 @@
 import React, { useState, useMemo } from 'react';
-import MermaidDiagram from '../components/diagrams/MermaidDiagram';
+import DiagramViewport from '../components/common/DiagramViewport';
 import Modal from '../components/common/Modal';
 
 // 4 Procesos Fundamentales estándar adaptables al proyecto
@@ -230,9 +230,12 @@ export default function ProjectUseCases({ project }) {
             <p style={{ fontSize: '0.8125rem', color: 'var(--secondary)', marginBottom: '14px' }}>
               Relaciones entre Actores del sistema y los Casos de Uso con dependencias &laquo;include&raquo; y extensiones &laquo;extend&raquo;.
             </p>
-            <div style={{ background: 'var(--surface-container-lowest)', padding: '20px', borderRadius: 'var(--radius-md)', border: '1px solid var(--outline-variant)', boxShadow: 'var(--shadow-xs)', overflowX: 'auto' }}>
-              <MermaidDiagram code={umlDiagramCode} />
-            </div>
+            <DiagramViewport
+              code={umlDiagramCode}
+              type="flowchart"
+              title="Diagrama UML de Casos de Uso (4 Procesos)"
+              minHeight="480px"
+            />
           </div>
 
           {/* Selected Process Use Case Specification Card */}

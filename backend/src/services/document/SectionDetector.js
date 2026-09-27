@@ -73,8 +73,18 @@ class SectionDetector {
         category: 'context'
       },
       {
+        id: 'supuestos',
+        regex: /^(?:6\.1(?:\.[0-9]+)*\.?\s+)?SUPUESTOS\b/i,
+        category: 'context'
+      },
+      {
+        id: 'dependencias',
+        regex: /^(?:6\.2(?:\.[0-9]+)*\.?\s+)?DEPENDENCIAS\b/i,
+        category: 'context'
+      },
+      {
         id: 'supuestos_dependencias',
-        regex: /^(?:6(?:\.[0-9]+)*\.?\s+)?(?:SUPUESTOS\s+Y\s+DEPENDENCIAS|SUPUESTOS|DEPENDENCIAS)/i,
+        regex: /^(?:6(?:\.[0-9]+)*\.?\s+)?(?:SUPUESTOS\s+Y\s+DEPENDENCIAS)/i,
         category: 'context'
       },
       {
@@ -136,6 +146,12 @@ class SectionDetector {
       const lineLength = lines[i].length + 1; // +1 por \n
 
       if (line.length > 0 && line.length < 90) {
+        // Ignorar encabezados/pies de página tipo LaTeX que contienen " · " (e.g. "6.1 SUPUESTOS · 6.2 DEPENDENCIAS")
+        if (line.includes(' · ')) {
+          currentOffset += lineLength;
+          continue;
+        }
+
         // Comprobar si coincide con alguna definición de sección
         let matchedDef = null;
 

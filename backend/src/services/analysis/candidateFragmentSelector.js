@@ -29,6 +29,23 @@ const REQUIREMENT_SIGNALS = [
   /\b(?:reporte|informe|exportar|importar|consultar|registrar|modificar|eliminar)\b/i
 ];
 
+const METADATA_BOILERPLATE_PATTERNS = [
+  /PROPUESTA\s+(?:T[EÉ]CNICA|ECON[OÓ]MICA|CREADA\s+POR)/i,
+  /DATOS\s+GENERALES/i,
+  /IDENTIFICACI[OÓ]N\s+DE\s+LA\s+PROPUESTA/i,
+  /Empresa\s+proponente/i,
+  /EQUIPO\s+RESPONSABLE/i,
+  /DATOS\s+DE\s+CONTACTO/i,
+  /PERFILES\s+CONTEMPLADOS/i,
+  /^(?:Cliente|Administrador|Mec[aá]nico|Recepci[oó]n)\s*:/i,
+  /M[OÓ]DULOS\s+A\s+DESARROLLAR/i,
+  /COSTOS\s+OPERATIVOS/i,
+  /TOTAL\s+ESTIMADO/i,
+  /Tarifa\s+Subtotal/i,
+  /CONTROL\s+INTELIGENTE/i,
+  /SOLUCIONES\s+DE\s+SOFTWARE/i
+];
+
 class CandidateFragmentSelector {
   /**
    * Evalúa si un fragmento de texto tiene señales suficientes para ser analizado por IA.
@@ -39,6 +56,11 @@ class CandidateFragmentSelector {
     if (!text || typeof text !== 'string') return { hasSignals: false, matchedSignals: 0 };
     const trimmed = text.trim();
     if (trimmed.length < 15) return { hasSignals: false, matchedSignals: 0 };
+
+    // Descartar fragmentos que sean metadatos, portada o tablas económicas/de equipo
+    if (METADATA_BOILERPLATE_PATTERNS.some(p => p.test(trimmed))) {
+      return { hasSignals: false, matchedSignals: 0 };
+    }
 
     let count = 0;
     for (const pattern of REQUIREMENT_SIGNALS) {

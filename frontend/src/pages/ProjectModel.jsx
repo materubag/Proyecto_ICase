@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useMemo } from 'react';
-import MermaidDiagram from '../components/diagrams/MermaidDiagram';
+import DiagramViewport from '../components/common/DiagramViewport';
 import { generateERDiagram } from '../utils/mermaidGenerators';
 import { classesApi } from '../api/classes.api';
 import Modal from '../components/common/Modal';
@@ -197,9 +197,12 @@ export default function ProjectModel({ project, onProjectUpdated }) {
                     <p className="empty-state-desc">Ejecuta el análisis IA en la pestaña Resumen para generar el modelo de datos.</p>
                   </div>
                 ) : (
-                  <div className="diagram-container">
-                    <MermaidDiagram code={erDiagramCode} type="erDiagram" />
-                  </div>
+                  <DiagramViewport
+                    code={erDiagramCode}
+                    type="erDiagram"
+                    title="Diagrama Entidad-Relación (DER)"
+                    minHeight="520px"
+                  />
                 )}
 
                 {/* Entity list summary */}
@@ -246,15 +249,18 @@ export default function ProjectModel({ project, onProjectUpdated }) {
             {/* VISTA 2: DIAGRAMA DE CLASES UML (POO) */}
             {activeModelTab === 'classes' && (
               <div>
-                <div className="diagram-container">
-                  {classDiagramCode ? (
-                    <MermaidDiagram code={classDiagramCode} type="classDiagram" />
-                  ) : (
-                    <div style={{ textAlign: 'center', padding: '2rem', color: 'var(--secondary)' }}>
-                      Haz clic en "Regenerar Clases" para derivar automáticamente las clases a partir de las entidades.
-                    </div>
-                  )}
-                </div>
+                {classDiagramCode ? (
+                  <DiagramViewport
+                    code={classDiagramCode}
+                    type="classDiagram"
+                    title="Diagrama de Clases UML (POO)"
+                    minHeight="520px"
+                  />
+                ) : (
+                  <div style={{ textAlign: 'center', padding: '2rem', color: 'var(--secondary)' }}>
+                    Haz clic en "Regenerar Clases" para derivar automáticamente las clases a partir de las entidades.
+                  </div>
+                )}
 
                 {/* Grid de Clases con Métodos, Atributos y Gobernanza */}
                 <div style={{ marginTop: '1.5rem', display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(300px, 1fr))', gap: '14px' }}>

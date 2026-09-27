@@ -196,7 +196,7 @@ export default function ProjectRequirements({ project, onProjectUpdated, initial
       </div>
 
       {reqSubTab === 'candidates' && (
-        <div style={{ flex: 1, overflow: 'hidden', display: 'flex', flexDirection: 'column' }}>
+        <div className="page-scrollable" style={{ flex: 1, minHeight: 0, overflowY: 'auto', padding: '20px 24px' }}>
           <ProjectCandidateReview
             project={project}
             onProjectUpdated={onProjectUpdated}
@@ -206,7 +206,7 @@ export default function ProjectRequirements({ project, onProjectUpdated, initial
       )}
 
       {reqSubTab === 'actors' && (
-        <div style={{ flex: 1, overflow: 'hidden', display: 'flex', flexDirection: 'column' }}>
+        <div className="page-scrollable" style={{ flex: 1, minHeight: 0, overflowY: 'auto', padding: '20px 24px' }}>
           <ProjectActors
             project={project}
             onProjectUpdated={onProjectUpdated}

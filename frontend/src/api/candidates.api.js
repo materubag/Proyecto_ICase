@@ -22,5 +22,23 @@ export const candidatesApi = {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ reason })
+    }),
+  approveBatch: (projectId, ids = []) =>
+    request(`/projects/${projectId}/candidates/batch-approve`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ ids })
+    }),
+  rejectBatch: (projectId, ids = [], reason = '') =>
+    request(`/projects/${projectId}/candidates/batch-reject`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ ids, reason })
+    }),
+  approveCategory: (projectId, categoryGroup) =>
+    request(`/projects/${projectId}/candidates/approve-category`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ categoryGroup })
     })
 };

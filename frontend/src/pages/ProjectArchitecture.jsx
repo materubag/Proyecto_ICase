@@ -1,5 +1,5 @@
 import React, { useState, useMemo } from 'react';
-import MermaidDiagram from '../components/diagrams/MermaidDiagram';
+import DiagramViewport from '../components/common/DiagramViewport';
 import { generateArchitectureDiagram } from '../utils/mermaidGenerators';
 
 export default function ProjectArchitecture({ project }) {
@@ -64,21 +64,23 @@ export default function ProjectArchitecture({ project }) {
     code += `  subgraph DOCKER_COMPOSE["ENTORNO DE CONTENEDORES DOCKER"]\n`;
     code += `    NGINX["Servidor Nginx (Frontend)<br/>Puerto :3001"]:::service\n`;
     code += `    NODE_API["API REST Node.js / Express<br/>Puerto :8080"]:::service\n`;
-    code += `    POSTGRES_DB[("Base de Datos PostgreSQL 16<br/>Puerto :5433 (interno :5432)")]:::db\n`;
-    code += `    OLLAMA["Motor Ollama (LLM Local)<br/>Puerto :11434"]:::ext\n`;
+    code += `    POSTGRES_DB[("Base de Datos PostgreSQL 16<br/>Puerto :5433")]:::db\n`;
+    code += `    WHISPER_SVC["Servicio Faster-Whisper Local<br/>Puerto :8001 (CPU int8)"]:::service\n`;
+    code += `    OLLAMA["Motor Ollama (LLM Local Opcional)<br/>Puerto :11434"]:::ext\n`;
     code += `  end\n\n`;
 
     code += `  subgraph EXTERNAL["SERVICIOS EXTERNOS & IA"]\n`;
-    code += `    N8N_ENGINE["Servidor n8n Workflow<br/>(Transcripción & Mockup)"]:::ext\n`;
-    code += `    OPENAI_API["OpenAI API / Whisper Cloud"]:::ext\n`;
+    code += `    GEMINI_API["Google Gemini API<br/>(gemini-3.1-flash-lite)"]:::ext\n`;
+    code += `    N8N_ENGINE["Servidor n8n Workflow<br/>(Generación de Mockups)"]:::ext\n`;
     code += `  end\n\n`;
 
-    code += `  CLIENT -->|HTTP / SPA (Puerto 3001)| NGINX\n`;
-    code += `  CLIENT -->|API REST / JSON (Puerto 8080)| NODE_API\n`;
-    code += `  NODE_API -->|TCP / Prisma Client| POSTGRES_DB\n`;
-    code += `  NODE_API -->|HTTP REST| OLLAMA\n`;
-    code += `  NODE_API -->|Webhooks HTTP| N8N_ENGINE\n`;
-    code += `  N8N_ENGINE -->|Transcripción de audio| OPENAI_API\n`;
+    code += `  CLIENT -->|"HTTP / SPA :3001"| NGINX\n`;
+    code += `  CLIENT -->|"API REST / JSON :8080"| NODE_API\n`;
+    code += `  NODE_API -->|"TCP / Prisma Client"| POSTGRES_DB\n`;
+    code += `  NODE_API -->|"HTTP / Transcripción Local"| WHISPER_SVC\n`;
+    code += `  NODE_API -->|"HTTPS / Análisis Semántico"| GEMINI_API\n`;
+    code += `  NODE_API -.->|"HTTP / LLM Local"| OLLAMA\n`;
+    code += `  NODE_API -.->|"Webhooks HTTP Mockups"| N8N_ENGINE\n`;
 
     return code;
   }, []);
@@ -153,14 +155,14 @@ export default function ProjectArchitecture({ project }) {
         </div>
 
         {/* Overview banner */}
-        <div className="alert alert-info" style={{ marginBottom: '20px' }}>
-          <span className="ms ms-sm">info</span>
-          <div>
-            <strong>{archType === 'software' ? 'Arquitectura de Software (Clean Architecture)' : 'Arquitectura del Sistema (Despliegue Físico)'}:</strong>{' '}
+        <div style={{ display: 'flex', alignItems: 'center', gap: '8px', padding: '8px 14px', background: 'var(--surface-container-low)', borderRadius: 'var(--radius-sm)', border: '1px solid var(--border-default)', marginBottom: '16px', fontSize: '0.8125rem' }}>
+          <span className="ms ms-sm" style={{ color: 'var(--primary)' }}>layers</span>
+          <span style={{ color: 'var(--on-surface)' }}>
+            <strong>{archType === 'software' ? 'Arquitectura de Software:' : 'Arquitectura del Sistema & Despliegue:'}</strong>{' '}
             {archType === 'software'
-              ? 'Estructura modular dividida en Capa de Presentación (React SPA), Capa de Negocio (Controladores, Servicios de Dominio e ISO 29148) y Capa de Datos (Prisma ORM y PostgreSQL).'
-              : 'Ecosistema de contenedores Docker que orquesta Nginx, Express REST API, PostgreSQL relacional, n8n para automatizaciones y Ollama/OpenAI para inteligencia artificial.'}
-          </div>
+              ? 'Presentación React SPA ➔ Negocio & ISO 29148 ➔ Datos Prisma & PostgreSQL'
+              : 'Orquestación de Contenedores Docker (Nginx, Node/Express, PostgreSQL, Whisper, Ollama/Gemini)'}
+          </span>
         </div>
 
         {/* Diagram View or Code View */}
@@ -175,11 +177,12 @@ export default function ProjectArchitecture({ project }) {
             <textarea className="diagram-raw-editor" rows={16} readOnly value={activeDiagramCode} />
           </div>
         ) : (
-          <div>
-            <div style={{ background: 'var(--surface-container-lowest)', padding: '24px', borderRadius: 'var(--radius-md)', border: '1px solid var(--outline-variant)', boxShadow: 'var(--shadow-xs)', overflowX: 'auto' }}>
-              <MermaidDiagram code={activeDiagramCode} />
-            </div>
-          </div>
+          <DiagramViewport
+            code={activeDiagramCode}
+            type="flowchart"
+            title={archType === 'software' ? 'Arquitectura de Software (Clean Architecture)' : 'Arquitectura del Sistema (Despliegue Docker)'}
+            minHeight="520px"
+          />
         )}
       </div>
     </div>

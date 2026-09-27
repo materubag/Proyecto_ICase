@@ -1,5 +1,5 @@
 import React, { useState, useMemo } from 'react';
-import MermaidDiagram from '../components/diagrams/MermaidDiagram';
+import DiagramViewport from '../components/common/DiagramViewport';
 import Modal from '../components/common/Modal';
 
 // Tareas predeterminadas basadas en el ciclo de vida de desarrollo de software
@@ -406,9 +406,12 @@ export default function ProjectPlanning({ project }) {
               </p>
             </div>
 
-            <div style={{ background: 'var(--surface-container-lowest)', padding: '20px', borderRadius: 'var(--radius-md)', border: '1px solid var(--outline-variant)', boxShadow: 'var(--shadow-xs)', overflowX: 'auto' }}>
-              <MermaidDiagram code={ganttCode} />
-            </div>
+            <DiagramViewport
+              code={ganttCode}
+              type="flowchart"
+              title="Cronograma de Actividades (GANTT)"
+              minHeight="450px"
+            />
 
             <div className="alert alert-info" style={{ marginTop: '16px' }}>
               <span className="ms ms-sm">info</span>
@@ -431,9 +434,12 @@ export default function ProjectPlanning({ project }) {
               </p>
             </div>
 
-            <div style={{ background: 'var(--surface-container-lowest)', padding: '20px', borderRadius: 'var(--radius-md)', border: '1px solid var(--outline-variant)', boxShadow: 'var(--shadow-xs)', overflowX: 'auto' }}>
-              <MermaidDiagram code={pertCode} />
-            </div>
+            <DiagramViewport
+              code={pertCode}
+              type="flowchart"
+              title="Red de Dependencias y Ruta Crítica (PERT / CPM)"
+              minHeight="480px"
+            />
 
             <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(260px, 1fr))', gap: '12px', marginTop: '16px' }}>
               <div className="info-card" style={{ borderLeft: '4px solid #dc2626' }}>

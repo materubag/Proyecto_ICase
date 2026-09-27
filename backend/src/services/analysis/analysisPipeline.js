@@ -1,8 +1,11 @@
 /**
  * AnalysisPipeline
- * Pipeline unificado de análisis inteligente de requisitos para fuentes PDF y AUDIO.
- * Transforma SourceVersion.extractedText en NeedCandidate y RequirementCandidate
- * evaluados bajo criterios de calidad ISO/IEC/IEEE 29148:2018 para revisión humana.
+ * Pipeline unificado de análisis inteligente de fuentes PDF y AUDIO para ICASE Studio.
+ * Transforma SourceVersion.extractedText en:
+ * - RequirementCandidate y NeedCandidate evaluados bajo ISO/IEC/IEEE 29148:2018
+ * - ModelCandidate (Actores, Procesos, Reglas de Negocio, Tecnologías, Arquitectura,
+ *   Entidades, Relaciones, Pantallas/Vistas, Fechas/Hitos, Supuestos/Restricciones, Objetivos y Alcance)
+ * para revisión y aprobación humana antes de promoción oficial.
  */
 
 const prisma = require('../../config/prisma');
@@ -13,6 +16,14 @@ const structureDetector = require('./structureDetector');
 const requirementDetector = require('./requirementDetector');
 const technologyDetector = require('./technologyDetector');
 const architectureDetector = require('./architectureDetector');
+const actorDetector = require('./actorDetector');
+const entityDetector = require('./entityDetector');
+const processDetector = require('./processDetector');
+const screenDetector = require('./screenDetector');
+const datesDetector = require('./datesDetector');
+const platformDetector = require('./platformDetector');
+const constraintDetector = require('./constraintDetector');
+const scopeObjectiveDetector = require('./scopeObjectiveDetector');
 const candidateFragmentSelector = require('./candidateFragmentSelector');
 const semanticAnalyzer = require('./semanticAnalyzer');
 const candidateConsolidator = require('./candidateConsolidator');
@@ -61,7 +72,9 @@ class AnalysisPipeline {
         err.statusCode = 404;
         throw err;
       }
-      if (projectId && projectId !== source.projectId) throw Object.assign(new Error('La fuente pertenece a otro proyecto.'), { statusCode: 409, code: 'DEPENDENCY_CONFLICT' });
+      if (projectId && projectId !== source.projectId) {
+        throw Object.assign(new Error('La fuente pertenece a otro proyecto.'), { statusCode: 409, code: 'DEPENDENCY_CONFLICT' });
+      }
       projectId = source.projectId;
 
       version = sourceVersionId
@@ -76,7 +89,9 @@ class AnalysisPipeline {
         err.statusCode = 404;
         throw err;
       }
-      if (version.sourceId !== source.id) throw Object.assign(new Error('La versión no pertenece a esta fuente.'), { statusCode: 409, code: 'DEPENDENCY_CONFLICT' });
+      if (version.sourceId !== source.id) {
+        throw Object.assign(new Error('La versión no pertenece a esta fuente.'), { statusCode: 409, code: 'DEPENDENCY_CONFLICT' });
+      }
 
       effectiveText = (text || version.extractedText || '').trim();
       if (!effectiveText) {
@@ -87,19 +102,30 @@ class AnalysisPipeline {
 
       // Comprobar idempotencia si ya fue analizada y no se solicitó forzar
       if (version.analyzedAt && !force) {
-        const existingCandidates = await prisma.requirementCandidate.findMany({
+        const existingReqs = await prisma.requirementCandidate.findMany({
           where: { sourceVersionId: version.id },
           include: { needCandidate: true },
           orderBy: { createdAt: 'asc' }
         });
-        if (existingCandidates.length > 0) {
-          console.log(`[AnalysisPipeline] Versión ${version.id} ya analizada previamente. Retornando ${existingCandidates.length} candidatos existentes.`);
+        const existingModels = await prisma.modelCandidate.findMany({
+          where: { projectId },
+          orderBy: { createdAt: 'asc' }
+        });
+
+        if (existingReqs.length > 0 || existingModels.length > 0) {
+          console.log(`[AnalysisPipeline] Versión ${version.id} ya analizada previamente. Retornando ${existingReqs.length} reqs y ${existingModels.length} modelos existentes.`);
           return {
             sourceId: source.id,
             sourceVersionId: version.id,
             cached: true,
-            requirementCandidates: existingCandidates,
-            summary: { total: existingCandidates.length, cached: true }
+            requirementCandidates: existingReqs,
+            modelCandidates: existingModels,
+            summary: {
+              totalCandidates: existingReqs.length + existingModels.length,
+              requirementsCount: existingReqs.length,
+              totalPendingReview: existingReqs.filter(r => r.status === 'PENDING_REVIEW').length + existingModels.filter(m => m.status === 'PENDING_REVIEW').length,
+              cached: true
+            }
           };
         }
       }
@@ -112,43 +138,55 @@ class AnalysisPipeline {
     }
 
     console.log(`\n====================================================`);
-    console.log(`[AnalysisPipeline] Iniciando análisis para: ${source.name} (${source.type})`);
+    console.log(`[AnalysisPipeline] Iniciando análisis exhaustivo para: ${source.name} (${source.type})`);
     console.log(`[AnalysisPipeline] Longitud texto: ${effectiveText.length} caracteres`);
 
-    // 2. Preprocesamiento y Normalización (sin destruir original)
+    // 2. Preprocesamiento y Normalización
     const { rawText, normalizedText, paragraphs } = textNormalizer.normalize(effectiveText);
 
-    // 3. Deduplicación
+    // 3. Deduplicación de párrafos
     const { uniqueFragments, statistics: dupStats } = duplicateDetector.deduplicateFragments(paragraphs);
     console.log(`[AnalysisPipeline] Párrafos únicos: ${uniqueFragments.length} (Duplicados removidos: ${dupStats.duplicatesRemoved})`);
 
     // 4. Detección de Secciones
     const sections = sectionDetector.detectSections(rawText);
 
-    // 5. Detección de Estructura (STRUCTURED vs SEMI_STRUCTURED vs UNSTRUCTURED)
+    // 5. Detección de Estructura
     const structure = structureDetector.classify(uniqueFragments, sections);
-    console.log(`[AnalysisPipeline] Clasificación estructural: ${structure.classification} (${structure.metrics.structuredCount} estructurados, ${structure.metrics.unstructuredCount} no estructurados)`);
+    console.log(`[AnalysisPipeline] Estructura: ${structure.classification} (${structure.metrics.structuredCount} estructurados, ${structure.metrics.unstructuredCount} no estructurados)`);
 
-    // 6. Extracción Determinista (CÓDIGO - NIVEL 1: 0 llamadas a IA)
+    // 6. Extracción Determinista Multi-dimensión (Reglas y Catálogos sin IA)
     const explicitData = requirementDetector.detect(rawText, sections);
     const explicitRF = explicitData.functionalRequirements || [];
     const explicitRNF = explicitData.nonFunctionalRequirements || [];
     const explicitRules = explicitData.businessRules || [];
     const allExplicit = [...explicitRF, ...explicitRNF, ...explicitRules];
 
-    // Tecnologías y arquitecturas por catálogo determinista
+    // Detectores especializados
+    const actors = actorDetector.detect(rawText, sections);
+    const entityData = entityDetector.detect(rawText, sections);
+    const processes = processDetector.detect(rawText, sections);
+    const screens = screenDetector.detect(rawText, sections);
+    const dates = datesDetector.detect(rawText, sections);
+    const platforms = platformDetector.detect(rawText);
+    const constraintData = constraintDetector.detect(rawText, sections);
+    const scopeObjectives = scopeObjectiveDetector.detect(rawText, sections);
     const technologies = technologyDetector.detect(rawText);
     const architecture = architectureDetector.detect(rawText, technologies);
 
-    console.log(`[AnalysisPipeline] Extracción determinista: ${explicitRF.length} RF, ${explicitRNF.length} RNF, ${explicitRules.length} reglas.`);
+    console.log(`[AnalysisPipeline] Extracción determinista inicial:`);
+    console.log(`   - ${explicitRF.length} RF, ${explicitRNF.length} RNF, ${explicitRules.length} reglas`);
+    console.log(`   - ${actors.length} actores, ${entityData.entities.length} entidades, ${entityData.relationships.length} relaciones`);
+    console.log(`   - ${processes.length} procesos, ${screens.length} pantallas, ${dates.length} fechas/hitos`);
+    console.log(`   - ${(technologies.detected || []).length} tecnologías, ${(architecture.all || []).length} arquitecturas`);
+    console.log(`   - ${(constraintData.all || []).length} supuestos/dependencias, ${scopeObjectives.objectives.specific.length} objetivos esp.`);
 
     // 7. Selección de Fragmentos Candidatos para IA
-    // Solo se envían bloques no estructurados o semi-estructurados con señales de requisitos
+    // Solo se envían bloques no estructurados o ambiguos
     const unresolvedBlocks = [...structure.semiStructuredBlocks, ...structure.unstructuredBlocks];
     const candidateChunks = candidateFragmentSelector.selectCandidateFragments(unresolvedBlocks);
-    console.log(`[AnalysisPipeline] Fragmentos candidatos aislados para análisis semántico: ${candidateChunks.length}`);
 
-    // Si es audio y tiene segmentos, enriquecer los chunks con timestamps del segmento más cercano
+    // Si es audio, enriquecer con timestamps
     if (source.type === 'AUDIO' && version.segments && version.segments.length > 0) {
       candidateChunks.forEach(chunk => {
         const matchingSegment = version.segments.find(s =>
@@ -165,15 +203,26 @@ class AnalysisPipeline {
       });
     }
 
-    // 8. Análisis Semántico Escalonado (Ollama-first -> GPT fallback)
-    const { results: semanticResults, metrics: aiMetrics } = await semanticAnalyzer.analyzeChunks(candidateChunks, {
-      projectId,
-      sourceType: source.type
-    });
+    // Filtrar duplicados antes de enviar a Gemini
+    const crossDocumentDeduplicator = require('../document/crossDocumentDeduplicator');
+    const { uniqueFragments: dedupedChunks, duplicatesRemoved } = crossDocumentDeduplicator.deduplicateAmbiguousFragments(candidateChunks);
+    if (duplicatesRemoved > 0) {
+      console.log(`[DEDUP] Duplicados ambiguos removidos localmente: ${duplicatesRemoved}. Chunks a IA: ${dedupedChunks.length}`);
+    }
 
-    console.log(`[AnalysisPipeline] Métricas de IA: Ollama calls: ${aiMetrics.ollamaCalls} (${aiMetrics.ollamaFailures} fallos), GPT calls: ${aiMetrics.gptCalls}`);
+    // 8. Análisis Semántico con IA (Gemini / Ollama)
+    let semanticResults = [];
+    let aiMetrics = { provider: 'none', requestsUsed: 0, batches: 0 };
+    if (dedupedChunks.length > 0) {
+      const res = await semanticAnalyzer.analyzeChunks(dedupedChunks, {
+        projectId,
+        sourceType: source.type
+      });
+      semanticResults = res.results || [];
+      aiMetrics = res.metrics || aiMetrics;
+    }
 
-    // 9. Cargar candidatos existentes del proyecto para detectar duplicados/conflictos entre fuentes
+    // 9. Cargar candidatos existentes para detectar duplicados y conflictos
     let existingCandidates = [];
     if (persist) {
       existingCandidates = await prisma.requirementCandidate.findMany({
@@ -184,7 +233,7 @@ class AnalysisPipeline {
       existingCandidates.unshift(...official.map(r => ({ id: r.id, temporaryCode: r.code, statement: r.description, requirementId: r.id })));
     }
 
-    // 10. Consolidación de Candidatos y Validación de Calidad ISO 29148
+    // 10. Consolidación de Requisitos y Calidad ISO 29148
     const consolidation = candidateConsolidator.consolidate({
       explicitRequirements: allExplicit,
       semanticResults,
@@ -193,36 +242,62 @@ class AnalysisPipeline {
       sourceId: source.id,
       sourceVersionId: version.id
     });
+
     if (source.type === 'AUDIO') {
       for (const candidate of consolidation.requirementCandidates) {
         const segment = (version.segments || []).find(s => s.text.includes(candidate.statement) || candidate.statement.includes(s.text));
-        if (segment) { candidate.sourceSegmentId = segment.id; candidate.evidence = { ...candidate.evidence, audioSegmentId: segment.id, startTime: segment.startTime, endTime: segment.endTime, speaker: segment.speaker }; }
+        if (segment) {
+          candidate.sourceSegmentId = segment.id;
+          candidate.evidence = {
+            ...candidate.evidence,
+            audioSegmentId: segment.id,
+            startTime: segment.startTime,
+            endTime: segment.endTime,
+            speaker: segment.speaker
+          };
+        }
       }
     }
 
+    // 11. Consolidación de Model Candidates (Actores, Procesos, Reglas, Tecnologías, Arquitectura, etc.)
+    const modelCandidates = candidateConsolidator.consolidateModelCandidates({
+      actors,
+      processes,
+      businessRules: explicitRules,
+      technologies: technologies.detected || [],
+      architecture,
+      entities: entityData.entities || [],
+      relationships: entityData.relationships || [],
+      screens,
+      dates,
+      constraints: constraintData.all || [],
+      objectives: scopeObjectives.objectives,
+      scope: scopeObjectives.scope,
+      platforms,
+      projectId,
+      sourceId: source.id,
+      sourceVersionId: version.id,
+      sourceName: source.name
+    });
+
     let savedCandidates = {
       needs: consolidation.needCandidates,
-      requirements: consolidation.requirementCandidates
+      requirements: consolidation.requirementCandidates,
+      models: modelCandidates
     };
 
     if (persist) {
-      // 11. Persistencia Idempotente en PostgreSQL
+      // 12. Persistencia Transaccional e Idempotente en PostgreSQL
       savedCandidates = await prisma.$transaction(async (tx) => {
-        // Si existían candidatos no aprobados de esta misma versión, limpiarlos antes de insertar los nuevos
+        // Limpiar candidatos PENDING_REVIEW anteriores de esta misma versión
         await tx.requirementCandidate.deleteMany({
-          where: {
-            sourceVersionId: version.id,
-            status: 'PENDING_REVIEW'
-          }
+          where: { sourceVersionId: version.id, status: 'PENDING_REVIEW' }
         });
         await tx.needCandidate.deleteMany({
-          where: {
-            sourceVersionId: version.id,
-            status: 'PENDING_REVIEW'
-          }
+          where: { sourceVersionId: version.id, status: 'PENDING_REVIEW' }
         });
 
-        // Crear NeedCandidates
+        // Guardar NeedCandidates
         const createdNeeds = [];
         for (const need of consolidation.needCandidates) {
           const created = await tx.needCandidate.create({
@@ -243,7 +318,7 @@ class AnalysisPipeline {
           createdNeeds.push(created);
         }
 
-        // Crear RequirementCandidates
+        // Guardar RequirementCandidates
         const createdReqs = [];
         for (const req of consolidation.requirementCandidates) {
           const created = await tx.requirementCandidate.create({
@@ -269,6 +344,46 @@ class AnalysisPipeline {
           createdReqs.push(created);
         }
 
+        // Guardar ModelCandidates con upsert para evitar colisiones de huella digital
+        const createdModels = [];
+        for (const mc of modelCandidates) {
+          const created = await tx.modelCandidate.upsert({
+            where: {
+              projectId_fingerprint: {
+                projectId: mc.projectId,
+                fingerprint: mc.fingerprint
+              }
+            },
+            update: {
+              content: mc.content,
+              evidence: mc.evidence,
+              confidence: mc.confidence,
+              origin: mc.origin,
+              updatedAt: new Date()
+            },
+            create: {
+              projectId: mc.projectId,
+              kind: mc.kind,
+              name: mc.name,
+              content: mc.content,
+              evidence: mc.evidence,
+              origin: mc.origin,
+              confidence: mc.confidence,
+              status: 'PENDING_REVIEW',
+              fingerprint: mc.fingerprint
+            }
+          });
+          createdModels.push(created);
+        }
+
+        // Actualizar plataforma del proyecto si se detectó una web/mobile explícita
+        if (platforms.length > 0 && platforms[0].type) {
+          await tx.project.update({
+            where: { id: projectId },
+            data: { platform: platforms[0].type }
+          });
+        }
+
         // Actualizar SourceVersion y Source a ANALYZED
         await tx.sourceVersion.update({
           where: { id: version.id },
@@ -282,14 +397,18 @@ class AnalysisPipeline {
 
         return {
           needs: createdNeeds,
-          requirements: createdReqs
+          requirements: createdReqs,
+          models: createdModels
         };
       });
     }
 
     const totalDuration = Date.now() - startTime;
+    const totalPendingCount = savedCandidates.requirements.filter(r => r.status === 'PENDING_REVIEW').length +
+      savedCandidates.models.filter(m => m.status === 'PENDING_REVIEW').length;
+
     console.log(`[AnalysisPipeline] Completado con éxito en ${totalDuration}ms.`);
-    console.log(`[AnalysisPipeline] Total candidatos generados: ${savedCandidates.requirements.length}`);
+    console.log(`[AnalysisPipeline] Total candidatos: ${savedCandidates.requirements.length} requisitos + ${savedCandidates.models.length} modelos. Pendientes: ${totalPendingCount}`);
     console.log(`====================================================\n`);
 
     return {
@@ -297,7 +416,21 @@ class AnalysisPipeline {
       sourceId: source.id,
       sourceVersionId: version.id,
       summary: {
-        totalCandidates: savedCandidates.requirements.length,
+        totalCandidates: savedCandidates.requirements.length + savedCandidates.models.length,
+        requirementsCount: savedCandidates.requirements.length,
+        actorsCount: actors.length,
+        processesCount: processes.length,
+        businessRulesCount: explicitRules.length,
+        technologiesCount: (technologies.detected || []).length,
+        entitiesCount: (entityData.entities || []).length,
+        relationshipsCount: (entityData.relationships || []).length,
+        screensCount: screens.length,
+        datesCount: dates.length,
+        architectureCount: (architecture.all || []).length,
+        constraintsCount: (constraintData.all || []).length,
+        objectivesCount: (scopeObjectives.objectives?.specific || []).length + (scopeObjectives.objectives?.general ? 1 : 0),
+        scopeCount: (scopeObjectives.scope?.included || []).length + (scopeObjectives.scope?.excluded || []).length,
+        totalPendingReview: totalPendingCount,
         explicitCount: consolidation.summary.explicit,
         inferredCount: consolidation.summary.inferred,
         duplicatesDetected: consolidation.summary.duplicates,
@@ -305,7 +438,7 @@ class AnalysisPipeline {
         aiMetrics: {
           ...aiMetrics,
           totalDurationMs: totalDuration,
-          deterministicExtractions: allExplicit.length
+          deterministicExtractions: allExplicit.length + modelCandidates.length
         }
       },
       metrics: aiMetrics,
@@ -313,7 +446,8 @@ class AnalysisPipeline {
       technologies,
       architecture,
       needCandidates: savedCandidates.needs,
-      requirementCandidates: savedCandidates.requirements
+      requirementCandidates: savedCandidates.requirements,
+      modelCandidates: savedCandidates.models
     };
   }
 

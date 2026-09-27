@@ -2,7 +2,8 @@ const fs = require('fs');
 const crypto = require('crypto');
 const prisma = require('../config/prisma');
 const documentAnalyzer = require('./document/DocumentAnalyzer');
-const n8nTranscriptionService = require('./n8n/transcription.service');
+const whisperService = require('./audio/WhisperService');
+const crossDocumentDeduplicator = require('./document/crossDocumentDeduplicator');
 const { sanitizeFilename } = require('../utils/fileSecurity');
 
 function sha256FromBuffer(buffer) {
@@ -90,27 +91,60 @@ class SourceService {
   }
 
   /**
-   * Procesa la subida de documentos PDF.
+   * Procesa la subida secuencial de documentos PDF con liberación inmediata de disco/memoria.
    */
   async createPdfSources(projectId, files) {
     const project = await prisma.project.findUnique({ where: { id: projectId }, select: { id: true } });
     if (!project) {
+      // Limpiar temporales si existen
+      for (const file of files) {
+        if (file?.path && fs.existsSync(file.path)) {
+          await fs.promises.unlink(file.path).catch(() => {});
+        }
+      }
       const error = new Error(`Proyecto con ID ${projectId} no encontrado.`);
       error.statusCode = 404;
       throw error;
     }
 
     const results = [];
+    let pdfsReceived = files.length;
+    let duplicateFiles = 0;
+    let totalRf = 0, totalRnf = 0, totalRules = 0, totalActors = 0;
+
     for (const file of files) {
       const name = sanitizeFilename(file.originalname);
-      const fileHash = sha256FromBuffer(file.buffer);
+      const filePath = file.path;
+      let buffer = file.buffer;
 
+      let fileHash;
+      try {
+        if (filePath && fs.existsSync(filePath)) {
+          fileHash = await sha256FromFile(filePath);
+          if (!buffer) {
+            buffer = await fs.promises.readFile(filePath);
+          }
+        } else if (buffer) {
+          fileHash = sha256FromBuffer(buffer);
+        } else {
+          throw new Error(`No se pudo leer el archivo PDF ${name}`);
+        }
+      } catch (hashErr) {
+        if (filePath && fs.existsSync(filePath)) await fs.promises.unlink(filePath).catch(() => {});
+        throw hashErr;
+      }
+
+      // Comprobar si ya existe la misma versión exacta por hash
       const existingVersion = await prisma.sourceVersion.findFirst({
         where: { fileHash, source: { projectId } },
         select: { sourceId: true }
       });
 
       if (existingVersion) {
+        duplicateFiles++;
+        if (filePath && fs.existsSync(filePath)) {
+          await fs.promises.unlink(filePath).catch(() => {});
+        }
         results.push({
           duplicate: true,
           message: 'El documento ya existe en el proyecto (SHA-256 coincidente).',
@@ -124,7 +158,20 @@ class SourceService {
         orderBy: { updatedAt: 'desc' }
       });
 
-      const extraction = await documentAnalyzer.extractDocument(file.buffer, name);
+      let extraction;
+      try {
+        extraction = await documentAnalyzer.extractDocument(buffer, name);
+      } finally {
+        // Liberar archivo temporal en disco de inmediato
+        if (filePath && fs.existsSync(filePath)) {
+          await fs.promises.unlink(filePath).catch(() => {});
+        }
+      }
+
+      totalRf += (extraction.functionalRequirements || []).length;
+      totalRnf += (extraction.nonFunctionalRequirements || []).length;
+      totalRules += (extraction.businessRules || []).length;
+      totalActors += (extraction.actors || []).length;
 
       const source = await prisma.$transaction(async (tx) => {
         const sourceRecord = sameName
@@ -174,12 +221,17 @@ class SourceService {
 
       results.push({ duplicate: false, newVersion: Boolean(sameName), source });
     }
+
+    const pdfsUnique = pdfsReceived - duplicateFiles;
+    console.log(`[ANALYSIS] pdfsReceived=${pdfsReceived} pdfsUnique=${pdfsUnique} duplicateFiles=${duplicateFiles}`);
+    console.log(`[RULES] rfDetected=${totalRf} rnfDetected=${totalRnf} businessRulesDetected=${totalRules} actorsDetected=${totalActors}`);
+
     return results;
   }
 
   /**
-   * Procesa la subida de un archivo de audio como Source.
-   * Flujo: Upload -> Temp File -> Hash -> Source/SourceVersion -> n8n -> AudioSegment -> Unlink Temp.
+   * Procesa la subida de un archivo de audio como Source utilizando Faster-Whisper local.
+   * Flujo: Upload -> Temp File -> Hash -> Source/SourceVersion -> Faster-Whisper -> Unlink Temp.
    */
   async createAudioSource(projectId, file) {
     const project = await prisma.project.findUnique({ where: { id: projectId }, select: { id: true } });
@@ -196,7 +248,7 @@ class SourceService {
     const mimeType = file.mimetype || 'audio/mpeg';
     const filePath = file.path;
 
-    // Calcular hash SHA-256 (desde archivo en disco o buffer de memoria)
+    // Calcular hash SHA-256
     let fileHash;
     if (filePath && fs.existsSync(filePath)) {
       fileHash = await sha256FromFile(filePath);
@@ -215,7 +267,6 @@ class SourceService {
     });
 
     if (existingVersion) {
-      // Eliminar temporal si existe
       if (filePath && fs.existsSync(filePath)) {
         await fs.promises.unlink(filePath).catch(() => {});
       }
@@ -227,7 +278,7 @@ class SourceService {
       };
     }
 
-    // 2. Verificar si existe una fuente previa con el mismo nombre (versionado v2, v3...)
+    // 2. Verificar si existe una fuente previa con el mismo nombre
     const sameName = await prisma.source.findFirst({
       where: { projectId, name },
       orderBy: { updatedAt: 'desc' }
@@ -259,26 +310,22 @@ class SourceService {
       });
     }
 
-    // 4. Contactar n8n para transcripción
+    // 4. Contactar servicio local faster-whisper (sin n8n ni Gemini)
     let transcription;
     try {
-      transcription = await n8nTranscriptionService.transcribeAudio({
+      transcription = await whisperService.transcribeAudio({
         filePath,
         filename: name,
-        mimeType,
-        projectId
+        mimeType
       });
     } catch (transcriptionErr) {
-      console.error(`[SourceService] Error en transcripción n8n para fuente ${sourceRecord.id}:`, transcriptionErr.message);
+      console.error(`[SourceService] Error en transcripción Whisper para fuente ${sourceRecord.id}:`, transcriptionErr.message);
 
-      // Si falla la transcripción, actualizar estado a TRANSCRIPTION_ERROR
-      // NO eliminar la Source ni sus SourceVersions anteriores
       await prisma.source.update({
         where: { id: sourceRecord.id },
         data: { status: 'TRANSCRIPTION_ERROR' }
       });
 
-      // Si es una fuente nueva sin versiones previas, crear una SourceVersion con error registrado
       if (!sameName || !sameName.currentVersionId) {
         const count = await prisma.sourceVersion.count({ where: { sourceId: sourceRecord.id } });
         if (count === 0) {
@@ -297,17 +344,16 @@ class SourceService {
         }
       }
 
-      // Asegurar limpieza de temporal antes de relanzar
       if (filePath && fs.existsSync(filePath)) {
         await fs.promises.unlink(filePath).catch(() => {});
       }
 
-      const err = new Error(`Error en transcripción de audio: ${transcriptionErr.message}`);
+      const err = new Error(`Error en transcripción de audio local: ${transcriptionErr.message}`);
       err.statusCode = transcriptionErr.statusCode || 502;
       err.sourceId = sourceRecord.id;
       throw err;
     } finally {
-      // 5. Eliminar archivo temporal de audio una vez finalizada la comunicación
+      // 5. Eliminar archivo temporal de audio en disco en finally
       if (filePath && fs.existsSync(filePath)) {
         await fs.promises.unlink(filePath).catch((err) => {
           console.warn(`[SourceService] No se pudo eliminar archivo temporal ${filePath}:`, err.message);
@@ -315,7 +361,7 @@ class SourceService {
       }
     }
 
-    // 6. Transcripción exitosa: Guardar texto completo y segmentos en transacción
+    // 6. Transcripción exitosa: Guardar texto completo en SourceVersion
     const updatedSource = await prisma.$transaction(async (tx) => {
       const maxVersionAgg = await tx.sourceVersion.aggregate({
         where: { sourceId: sourceRecord.id },
@@ -331,26 +377,27 @@ class SourceService {
           extractedText: transcription.text,
           normalizedText: transcription.text,
           metadata: {
-            provider: 'n8n',
+            provider: 'faster-whisper',
+            language: transcription.language,
             duration: transcription.duration,
-            segmentsCount: transcription.segments.length,
             transcribedAt: new Date().toISOString()
           },
           previousVersionId: sameName?.currentVersionId || null
         }
       });
 
-      if (transcription.segments && transcription.segments.length > 0) {
-        await tx.audioSegment.createMany({
-          data: transcription.segments.map((segment) => ({
+      // Crear un segmento para mantener compatibilidad con cualquier vista que consulte segments
+      if (transcription.text && transcription.text.length > 0) {
+        await tx.audioSegment.create({
+          data: {
             sourceVersionId: newSourceVersion.id,
-            sequence: segment.sequence,
-            startTime: segment.startTime,
-            endTime: segment.endTime,
-            text: segment.text,
-            speaker: segment.speaker,
-            confidence: segment.confidence
-          }))
+            sequence: 1,
+            startTime: 0,
+            endTime: transcription.duration || 10,
+            text: transcription.text,
+            speaker: 'Hablante',
+            confidence: 0.95
+          }
         });
       }
 
@@ -382,10 +429,6 @@ class SourceService {
     };
   }
 
-  /**
-   * Reintenta la transcripción para una fuente que falló (status: TRANSCRIPTION_ERROR).
-   * Requiere el archivo de audio para reejecutar el proceso.
-   */
   async retryAudioSource(sourceId, file) {
     const source = await prisma.source.findUnique({
       where: { id: sourceId },
@@ -416,7 +459,6 @@ class SourceService {
       throw error;
     }
 
-    // Reutilizar el flujo normal de createAudioSource para el mismo proyecto y archivo
     return this.createAudioSource(source.projectId, file);
   }
 }

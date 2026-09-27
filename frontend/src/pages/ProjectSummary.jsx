@@ -3,12 +3,16 @@ import { engineering } from '../api/engineering.api';
 import { aiApi } from '../api/ai.api';
 import { projectsApi } from '../api/projects.api';
 import { sourcesApi } from '../api/sources.api';
+import { candidatesApi } from '../api/candidates.api';
 import DocumentImportModal from '../components/DocumentImportModal';
+import AnalysisCompletionModal from '../components/sources/AnalysisCompletionModal';
 
 export default function ProjectSummary({ project, onProjectUpdated, onNavigateTo }) {
   const [engineeringStats, setEngineeringStats] = useState(null);
   const [sources, setSources] = useState([]);
   const [loadingSources, setLoadingSources] = useState(false);
+  const [candidateStats, setCandidateStats] = useState(null);
+  const [completionModalData, setCompletionModalData] = useState(null);
 
   async function loadSources() {
     try {
@@ -22,10 +26,21 @@ export default function ProjectSummary({ project, onProjectUpdated, onNavigateTo
     }
   }
 
+  async function loadCandidateStats() {
+    try {
+      const stats = await candidatesApi.getStats(project.id);
+      setCandidateStats(stats);
+    } catch {
+      setCandidateStats(null);
+    }
+  }
+
   useEffect(() => {
     engineering(project.id).then(setEngineeringStats).catch(() => setEngineeringStats(null));
     loadSources();
+    loadCandidateStats();
   }, [project.id, project.updatedAt]);
+
   const [description, setDescription] = useState(
     project.systemDescription || project.description || ''
   );
@@ -42,25 +57,84 @@ export default function ProjectSummary({ project, onProjectUpdated, onNavigateTo
 
   async function handleAnalyze() {
     if (state === 'analyzing') return;
-    if (!description.trim()) {
-      setState('error');
-      setErrorMessage('Ingrese una descripción antes de analizar.');
-      return;
-    }
     try {
       setState('analyzing');
       setErrorMessage(null);
-      if (pdfFiles.length) await sourcesApi.uploadPdfs(project.id, pdfFiles);
-      if (audioFile) await sourcesApi.uploadAudio(project.id, audioFile);
-      await projectsApi.update(project.id, {
-        description: description.trim(),
-        systemDescription: description.trim()
-      });
-      await aiApi.analyzeProject(project.id, description.trim());
+
+      // 1. Subir archivos nuevos si los hay
+      const newlyUploadedSourceIds = [];
+      if (pdfFiles.length) {
+        const uploadRes = await sourcesApi.uploadPdfs(project.id, pdfFiles);
+        const items = Array.isArray(uploadRes.data) ? uploadRes.data : (Array.isArray(uploadRes) ? uploadRes : []);
+        items.forEach(item => {
+          if (item.source?.id) newlyUploadedSourceIds.push(item.source.id);
+          else if (item.id) newlyUploadedSourceIds.push(item.id);
+        });
+      }
+      if (audioFile) {
+        const audioRes = await sourcesApi.uploadAudio(project.id, audioFile);
+        if (audioRes.source?.id) newlyUploadedSourceIds.push(audioRes.source.id);
+        else if (audioRes.id) newlyUploadedSourceIds.push(audioRes.id);
+      }
+
+      // 2. Fuentes a analizar: las recién subidas o existentes en el proyecto
+      const sourcesToAnalyze = [...newlyUploadedSourceIds];
+      if (sourcesToAnalyze.length === 0 && sources && sources.length > 0) {
+        sources.forEach(s => sourcesToAnalyze.push(s.id));
+      }
+
+      // 3. Ejecutar pipeline en todas las fuentes disponibles
+      let aggregatedSummary = null;
+      if (sourcesToAnalyze.length > 0) {
+        for (const sId of sourcesToAnalyze) {
+          try {
+            const res = await sourcesApi.analyze(sId);
+            const sm = res?.data?.summary || res?.summary;
+            if (sm) {
+              aggregatedSummary = {
+                requirementsCount: (aggregatedSummary?.requirementsCount || 0) + (sm.requirementsCount || 0),
+                actorsCount: Math.max(aggregatedSummary?.actorsCount || 0, sm.actorsCount || 0),
+                processesCount: (aggregatedSummary?.processesCount || 0) + (sm.processesCount || 0),
+                businessRulesCount: (aggregatedSummary?.businessRulesCount || 0) + (sm.businessRulesCount || 0),
+                technologiesCount: Math.max(aggregatedSummary?.technologiesCount || 0, sm.technologiesCount || 0),
+                entitiesCount: Math.max(aggregatedSummary?.entitiesCount || 0, sm.entitiesCount || 0),
+                screensCount: (aggregatedSummary?.screensCount || 0) + (sm.screensCount || 0),
+                datesCount: (aggregatedSummary?.datesCount || 0) + (sm.datesCount || 0),
+                architectureCount: Math.max(aggregatedSummary?.architectureCount || 0, sm.architectureCount || 0),
+                constraintsCount: (aggregatedSummary?.constraintsCount || 0) + (sm.constraintsCount || 0),
+                objectivesCount: (aggregatedSummary?.objectivesCount || 0) + (sm.objectivesCount || 0),
+                scopeCount: (aggregatedSummary?.scopeCount || 0) + (sm.scopeCount || 0),
+                totalPendingReview: (aggregatedSummary?.totalPendingReview || 0) + (sm.totalPendingReview || 0),
+                sourcesProcessed: (aggregatedSummary?.sourcesProcessed || 0) + 1
+              };
+            }
+          } catch (sourceErr) {
+            console.warn('[ProjectSummary] Error analizando fuente:', sourceErr.message);
+          }
+        }
+      }
+
+      // 4. Actualizar descripción y sincronizar análisis de proyecto
+      if (description.trim()) {
+        await projectsApi.update(project.id, {
+          description: description.trim(),
+          systemDescription: description.trim()
+        });
+        await aiApi.analyzeProject(project.id, description.trim());
+      } else if (sourcesToAnalyze.length > 0) {
+        await aiApi.analyzeProject(project.id, 'Análisis de fuentes documentales del proyecto');
+      }
+
       setPdfFiles([]);
       setAudioFile(null);
       setState('success');
       await onProjectUpdated();
+      await loadSources();
+      await loadCandidateStats();
+
+      if (aggregatedSummary) {
+        setCompletionModalData(aggregatedSummary);
+      }
     } catch (err) {
       setState('error');
       setErrorMessage(err.message || 'Error al procesar el análisis.');
@@ -98,7 +172,7 @@ export default function ProjectSummary({ project, onProjectUpdated, onNavigateTo
           <button
             className="btn btn-primary btn-sm"
             onClick={handleAnalyze}
-            disabled={state === 'analyzing' || !description.trim()}
+            disabled={state === 'analyzing' || (!description.trim() && pdfFiles.length === 0 && !audioFile && sources.length === 0)}
           >
             {state === 'analyzing' ? (
               <>
@@ -134,6 +208,43 @@ export default function ProjectSummary({ project, onProjectUpdated, onNavigateTo
             <div className="stat-card-value">{value}</div>
           </div>
         ))}</div>}
+
+        {/* Banner de Candidatos Pendientes de Revisión en el Centro de Aprobación */}
+        {candidateStats && candidateStats.totalPending > 0 && (
+          <div style={{
+            background: 'linear-gradient(135deg, rgba(59, 130, 246, 0.08) 0%, rgba(99, 102, 241, 0.06) 100%)',
+            border: '1px solid rgba(59, 130, 246, 0.3)',
+            borderRadius: '10px',
+            padding: '14px 18px',
+            marginBottom: '16px',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'space-between',
+            gap: '16px',
+            boxShadow: '0 2px 8px rgba(59, 130, 246, 0.08)'
+          }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+              <span className="ms" style={{ color: '#2563eb', fontSize: '24px' }}>rule</span>
+              <div>
+                <div style={{ fontWeight: 600, fontSize: '0.92rem', color: 'var(--on-surface)' }}>
+                  Centro de Aprobación: <span style={{ color: '#2563eb' }}>{candidateStats.totalPending} elementos pendientes</span>
+                </div>
+                <div style={{ fontSize: '0.8rem', color: 'var(--secondary)' }}>
+                  Se han extraído requisitos, actores, procesos, pantallas, reglas, tecnologías y arquitectura de tus fuentes listos para ser validados.
+                </div>
+              </div>
+            </div>
+            <button
+              className="btn btn-primary btn-sm"
+              style={{ whiteSpace: 'nowrap', display: 'flex', alignItems: 'center', gap: '6px' }}
+              onClick={() => onNavigateTo && onNavigateTo('candidates')}
+            >
+              <span>Revisar candidatos</span>
+              <span className="ms ms-xs">arrow_forward</span>
+            </button>
+          </div>
+        )}
+
         {/* Status message */}
         {state === 'success' && (
           <div className="alert alert-success">
@@ -147,6 +258,78 @@ export default function ProjectSummary({ project, onProjectUpdated, onNavigateTo
             <span>{errorMessage}</span>
           </div>
         )}
+
+        {/* Centro de Estado del Proyecto (Compacto y Accionable) */}
+        <div style={{ marginBottom: '1.25rem', padding: '16px 20px', borderRadius: 'var(--radius-md)', background: 'var(--surface-container-lowest)', border: '1px solid var(--border-default)', boxShadow: 'var(--shadow-xs)' }}>
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '12px' }}>
+            <span style={{ fontSize: '0.8125rem', fontWeight: 600, color: 'var(--on-surface)', display: 'flex', alignItems: 'center', gap: '6px' }}>
+              <span className="ms ms-xs" style={{ color: 'var(--primary)' }}>dashboard</span>
+              Estado Global del Proyecto
+            </span>
+            {sources.length > 0 && (
+              <span style={{ fontSize: '0.75rem', color: 'var(--secondary)' }}>
+                {sources.length} fuente{sources.length > 1 ? 's' : ''} vinculada{sources.length > 1 ? 's' : ''}
+              </span>
+            )}
+          </div>
+
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(140px, 1fr))', gap: '10px' }}>
+            <div
+              style={{ padding: '10px 12px', borderRadius: '6px', background: 'var(--surface-container-low)', cursor: 'pointer' }}
+              onClick={() => onNavigateTo('sources')}
+              title="Ver fuentes y entrevistas"
+            >
+              <span style={{ fontSize: '0.6875rem', color: 'var(--secondary)', textTransform: 'uppercase', fontWeight: 600 }}>Fuentes</span>
+              <strong style={{ display: 'block', fontSize: '1rem', color: 'var(--on-surface)', marginTop: '2px' }}>
+                {sources.length} procesadas
+              </strong>
+            </div>
+
+            <div
+              style={{ padding: '10px 12px', borderRadius: '6px', background: 'var(--surface-container-low)', cursor: 'pointer' }}
+              onClick={() => onNavigateTo('requirements')}
+              title="Ver estado del análisis"
+            >
+              <span style={{ fontSize: '0.6875rem', color: 'var(--secondary)', textTransform: 'uppercase', fontWeight: 600 }}>Análisis</span>
+              <strong style={{ display: 'block', fontSize: '1rem', color: reqCount > 0 ? '#157347' : 'var(--outline)', marginTop: '2px' }}>
+                {reqCount > 0 ? '✓ Realizado' : '○ Pendiente'}
+              </strong>
+            </div>
+
+            <div
+              style={{ padding: '10px 12px', borderRadius: '6px', background: 'var(--surface-container-low)', cursor: 'pointer' }}
+              onClick={() => onNavigateTo('requirements')}
+              title="Ver requisitos oficiales"
+            >
+              <span style={{ fontSize: '0.6875rem', color: 'var(--secondary)', textTransform: 'uppercase', fontWeight: 600 }}>Requisitos</span>
+              <strong style={{ display: 'block', fontSize: '1rem', color: 'var(--primary)', marginTop: '2px' }}>
+                {reqCount} oficiales
+              </strong>
+            </div>
+
+            <div
+              style={{ padding: '10px 12px', borderRadius: '6px', background: 'var(--surface-container-low)', cursor: 'pointer' }}
+              onClick={() => onNavigateTo('modeling')}
+              title="Ver modelo del sistema"
+            >
+              <span style={{ fontSize: '0.6875rem', color: 'var(--secondary)', textTransform: 'uppercase', fontWeight: 600 }}>Modelado</span>
+              <strong style={{ display: 'block', fontSize: '1rem', color: entityCount > 0 ? '#157347' : 'var(--outline)', marginTop: '2px' }}>
+                {entityCount > 0 ? '✓ Disponible' : '○ Pendiente'}
+              </strong>
+            </div>
+
+            <div
+              style={{ padding: '10px 12px', borderRadius: '6px', background: 'var(--surface-container-low)', cursor: 'pointer' }}
+              onClick={() => onNavigateTo('mockups')}
+              title="Ver prototipos y pantallas"
+            >
+              <span style={{ fontSize: '0.6875rem', color: 'var(--secondary)', textTransform: 'uppercase', fontWeight: 600 }}>Mockups</span>
+              <strong style={{ display: 'block', fontSize: '1rem', color: screenCount > 0 ? '#157347' : 'var(--outline)', marginTop: '2px' }}>
+                {screenCount > 0 ? '✓ Disponible' : '○ Pendiente'}
+              </strong>
+            </div>
+          </div>
+        </div>
 
         {/* Stats grid */}
         <div style={{ marginBottom: '1.5rem' }}>
@@ -230,7 +413,7 @@ export default function ProjectSummary({ project, onProjectUpdated, onNavigateTo
             </label>
             <label style={{ display: 'flex', alignItems: 'center', gap: '10px', padding: '10px 12px', border: '1px dashed var(--outline-variant)', borderRadius: '6px', background: 'var(--surface-container-low)', cursor: 'pointer' }}>
               <span className="ms ms-sm" style={{ color: 'var(--primary)' }}>mic</span>
-              <span style={{ minWidth: 0, flex: 1 }}><strong style={{ display: 'block', fontSize: '0.8rem' }}>Audio / entrevista</strong><small style={{ color: 'var(--secondary)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', display: 'block' }}>{audioFile?.name || 'Opcional · transcripción n8n'}</small></span>
+              <span style={{ minWidth: 0, flex: 1 }}><strong style={{ display: 'block', fontSize: '0.8rem' }}>Audio / entrevista</strong><small style={{ color: 'var(--secondary)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', display: 'block' }}>{audioFile?.name || 'Opcional · Faster-Whisper local'}</small></span>
               <input type="file" accept="audio/*,.mp3,.wav,.m4a,.ogg,.webm" hidden disabled={state === 'analyzing'} onChange={event => setAudioFile(event.target.files?.[0] || null)} />
             </label>
           </div>
@@ -369,6 +552,18 @@ export default function ProjectSummary({ project, onProjectUpdated, onNavigateTo
         projectId={project.id}
         onImportSuccess={onProjectUpdated}
       />
+
+      {completionModalData && (
+        <AnalysisCompletionModal
+          isOpen={!!completionModalData}
+          onClose={() => setCompletionModalData(null)}
+          onReviewNow={() => {
+            setCompletionModalData(null);
+            if (onNavigateTo) onNavigateTo('candidates');
+          }}
+          summaryData={completionModalData}
+        />
+      )}
     </div>
   );
 }

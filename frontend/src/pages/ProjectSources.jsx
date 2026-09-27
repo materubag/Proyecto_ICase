@@ -21,6 +21,8 @@ import {
 } from 'lucide-react';
 import { sourcesApi } from '../api/sources.api';
 import AudioTranscriptionViewer from '../components/sources/AudioTranscriptionViewer';
+import FileUploadQueue from '../components/sources/FileUploadQueue';
+import AnalysisCompletionModal from '../components/sources/AnalysisCompletionModal';
 
 const statusConfig = {
   PENDING: { label: 'Pendiente', badgeClass: 'badge-planning', icon: Clock },
@@ -34,15 +36,18 @@ const statusConfig = {
   FAILED: { label: 'Error', badgeClass: 'badge-archived', icon: AlertTriangle, error: true }
 };
 
-export default function ProjectSources({ project, embedded = false, onNavigateToReview }) {
+export default function ProjectSources({ project, embedded = false, onNavigateToReview, onNavigateToSummary }) {
   const [sources, setSources] = useState([]);
-  const [pdfFiles, setPdfFiles] = useState([]);
-  const [audioFile, setAudioFile] = useState(null);
+  const [queueFiles, setQueueFiles] = useState([]);
+  const [isBatchProcessing, setIsBatchProcessing] = useState(false);
+  const [processedCount, setProcessedCount] = useState(0);
+  const [currentProcessingFile, setCurrentProcessingFile] = useState(null);
+  const [completionModalOpen, setCompletionModalOpen] = useState(false);
+  const [completionSummary, setCompletionSummary] = useState({});
+
   const [typeFilter, setTypeFilter] = useState(''); // '' | 'PDF' | 'AUDIO'
   const [statusFilter, setStatusFilter] = useState('');
   const [loading, setLoading] = useState(true);
-  const [uploadingPdf, setUploadingPdf] = useState(false);
-  const [uploadingAudio, setUploadingAudio] = useState(false);
   const [analyzingSourceId, setAnalyzingSourceId] = useState(null);
   const [message, setMessage] = useState(null);
   const [selectedSourceId, setSelectedSourceId] = useState(null);
@@ -71,10 +76,15 @@ export default function ProjectSources({ project, embedded = false, onNavigateTo
     try {
       const res = await sourcesApi.analyze(sourceId, { force });
       const summary = res.data?.summary || {};
-      setMessage({
-        type: 'success',
-        text: `Pipeline Fase 3 completado: ${summary.totalCandidates || 0} candidatos generados (${summary.explicitCount || 0} deterministas por código, ${summary.inferredCount || 0} inferidos semánticamente). Revisa los candidatos para aprobar o rechazar.`
+      setCompletionSummary({
+        sourcesCount: 1,
+        pdfCount: 1,
+        audioCount: 0,
+        ...summary,
+        totalCandidates: summary.totalCandidates || 0,
+        pendingReviewCount: summary.totalPendingReview || summary.totalCandidates || 0
       });
+      setCompletionModalOpen(true);
       await loadSources();
     } catch (err) {
       setMessage({ type: 'error', text: `Error en análisis: ${err.message}` });
@@ -83,89 +93,140 @@ export default function ProjectSources({ project, embedded = false, onNavigateTo
     }
   }
 
+  async function handleStartBatchProcessing() {
+    if (!queueFiles.length || isBatchProcessing) return;
+    setIsBatchProcessing(true);
+    setProcessedCount(0);
+    setMessage(null);
+
+    let totalCands = 0;
+    let explicitCands = 0;
+    let inferredCands = 0;
+    let errors = 0;
+    const uploadedSourceIds = [];
+
+    const pdfQueue = queueFiles.filter((f) => f.type === 'PDF');
+    const audioQueue = queueFiles.filter((f) => f.type === 'AUDIO');
+
+    // 1. Process PDFs batch
+    if (pdfQueue.length > 0) {
+      setCurrentProcessingFile(`Subiendo ${pdfQueue.length} documento(s) PDF`);
+      setQueueFiles((prev) =>
+        prev.map((f) => (f.type === 'PDF' ? { ...f, status: 'UPLOADING' } : f))
+      );
+      try {
+        const rawPdfs = pdfQueue.map((f) => f.rawFile);
+        const result = await sourcesApi.uploadPdfs(project.id, rawPdfs);
+        result.forEach((item) => {
+          if (item.source?.id) uploadedSourceIds.push(item.source.id);
+          else if (item.id) uploadedSourceIds.push(item.id);
+        });
+        setQueueFiles((prev) =>
+          prev.map((f) => (f.type === 'PDF' ? { ...f, status: 'COMPLETED' } : f))
+        );
+        setProcessedCount((prev) => prev + pdfQueue.length);
+      } catch (err) {
+        errors += pdfQueue.length;
+        setQueueFiles((prev) =>
+          prev.map((f) =>
+            f.type === 'PDF' ? { ...f, status: 'ERROR', error: err.message } : f
+          )
+        );
+      }
+    }
+
+    // 2. Process Audios sequentially
+    for (const audioItem of audioQueue) {
+      setCurrentProcessingFile(`Transcribiendo "${audioItem.name}"...`);
+      setQueueFiles((prev) =>
+        prev.map((f) => (f.id === audioItem.id ? { ...f, status: 'PROCESSING' } : f))
+      );
+      try {
+        const result = await sourcesApi.uploadAudio(project.id, audioItem.rawFile);
+        if (result.source?.id) uploadedSourceIds.push(result.source.id);
+        else if (result.id) uploadedSourceIds.push(result.id);
+        setQueueFiles((prev) =>
+          prev.map((f) => (f.id === audioItem.id ? { ...f, status: 'COMPLETED' } : f))
+        );
+        setProcessedCount((prev) => prev + 1);
+      } catch (err) {
+        errors++;
+        setQueueFiles((prev) =>
+          prev.map((f) =>
+            f.id === audioItem.id ? { ...f, status: 'ERROR', error: err.message } : f
+          )
+        );
+      }
+    }
+
+    // 3. Analyze newly uploaded sources
+    let catTotals = {
+      requirementsCount: 0,
+      actorsCount: 0,
+      processesCount: 0,
+      businessRulesCount: 0,
+      technologiesCount: 0,
+      entitiesCount: 0,
+      screensCount: 0,
+      datesCount: 0,
+      architectureCount: 0,
+      constraintsCount: 0,
+      objectivesCount: 0,
+      scopeCount: 0,
+      totalPendingReview: 0
+    };
+
+    if (uploadedSourceIds.length > 0) {
+      setCurrentProcessingFile('Analizando fuentes para extracción integral...');
+      for (const sourceId of uploadedSourceIds) {
+        try {
+          const res = await sourcesApi.analyze(sourceId, { force: true });
+          const s = res.data?.summary || {};
+          totalCands += s.totalCandidates || 0;
+          explicitCands += s.explicitCount || 0;
+          inferredCands += s.inferredCount || 0;
+          catTotals.requirementsCount += s.requirementsCount || 0;
+          catTotals.actorsCount += s.actorsCount || 0;
+          catTotals.processesCount += s.processesCount || 0;
+          catTotals.businessRulesCount += s.businessRulesCount || 0;
+          catTotals.technologiesCount += s.technologiesCount || 0;
+          catTotals.entitiesCount += s.entitiesCount || 0;
+          catTotals.screensCount += s.screensCount || 0;
+          catTotals.datesCount += s.datesCount || 0;
+          catTotals.architectureCount += s.architectureCount || 0;
+          catTotals.constraintsCount += s.constraintsCount || 0;
+          catTotals.objectivesCount += s.objectivesCount || 0;
+          catTotals.scopeCount += s.scopeCount || 0;
+          catTotals.totalPendingReview += s.totalPendingReview || s.totalCandidates || 0;
+        } catch (err) {
+          console.error('Error analizando fuente:', sourceId, err);
+        }
+      }
+    }
+
+    await loadSources();
+    setIsBatchProcessing(false);
+    setCurrentProcessingFile(null);
+
+    // Open completion modal with accurate metrics
+    setCompletionSummary({
+      sourcesCount: queueFiles.length,
+      pdfCount: pdfQueue.length,
+      audioCount: audioQueue.length,
+      totalCandidates: totalCands,
+      explicitCount: explicitCands,
+      inferredCount: inferredCands,
+      ...catTotals,
+      pendingReviewCount: catTotals.totalPendingReview || totalCands,
+      approvedCount: project.requirements?.filter((r) => r.status === 'APPROVED')?.length || 0,
+      errorCount: errors
+    });
+    setCompletionModalOpen(true);
+  }
+
   useEffect(() => {
     loadSources();
   }, [project.id, typeFilter, statusFilter]);
-
-  async function handlePdfUpload(event) {
-    event.preventDefault();
-    if (!pdfFiles.length) return;
-    const invalid = pdfFiles.filter(f => !f.name.toLowerCase().endsWith('.pdf'));
-    if (invalid.length > 0) {
-      const audioExts = ['.mp3', '.wav', '.m4a', '.ogg', '.webm', '.aac', '.flac', '.mp4'];
-      const hasAudio = invalid.some(f => audioExts.some(ext => f.name.toLowerCase().endsWith(ext)));
-      setMessage({
-        type: 'error',
-        text: hasAudio
-          ? `Has seleccionado un archivo de audio en la sección de PDF ("${invalid.map(f => f.name).join(', ')}"). Utiliza la sección "Subir Audio de Entrevista".`
-          : `Solo se permiten archivos PDF. Archivo no válido: "${invalid.map(f => f.name).join(', ')}".`
-      });
-      return;
-    }
-    setUploadingPdf(true);
-    setMessage(null);
-    try {
-      const result = await sourcesApi.uploadPdfs(project.id, pdfFiles);
-      const duplicates = result.filter((item) => item.duplicate).length;
-      const newVersions = result.filter((item) => item.newVersion).length;
-
-      if (duplicates > 0) {
-        setMessage({
-          type: 'warning',
-          text: `${result.length} archivo(s) procesado(s). ${duplicates} duplicado(s) (SHA-256 coincidente).`
-        });
-      } else {
-        setMessage({
-          type: 'success',
-          text: `${result.length} documento(s) PDF procesado(s) exitosamente. ${newVersions ? `${newVersions} nueva(s) versión(es).` : ''}`
-        });
-      }
-      setPdfFiles([]);
-      event.target.reset();
-      await loadSources();
-    } catch (error) {
-      setMessage({ type: 'error', text: error.message });
-    } finally {
-      setUploadingPdf(false);
-    }
-  }
-
-  async function handleAudioUpload(event) {
-    event.preventDefault();
-    if (!audioFile) return;
-    setUploadingAudio(true);
-    setMessage(null);
-    try {
-      const result = await sourcesApi.uploadAudio(project.id, audioFile);
-      if (result.duplicate) {
-        setMessage({
-          type: 'warning',
-          text: result.message || 'El audio ya existe con el mismo hash SHA-256. No requiere nueva transcripción.'
-        });
-        setSelectedSourceId(result.source?.id);
-      } else {
-        setMessage({
-          type: 'success',
-          text: result.newVersion
-            ? `Nueva versión generada y transcrita exitosamente para "${result.source?.name}".`
-            : `Audio transcrito y registrado exitosamente como fuente ("${result.source?.name}").`
-        });
-        setSelectedSourceId(result.source?.id);
-      }
-      setAudioFile(null);
-      event.target.reset();
-      await loadSources();
-    } catch (error) {
-      setMessage({
-        type: 'error',
-        text: `Error en transcripción: ${error.message}`
-      });
-      // Recargar fuentes para mostrar la fuente guardada en estado TRANSCRIPTION_ERROR
-      await loadSources();
-    } finally {
-      setUploadingAudio(false);
-    }
-  }
 
   async function handleRetryAudio(sourceId, file) {
     try {
@@ -239,144 +300,16 @@ export default function ProjectSources({ project, embedded = false, onNavigateTo
           </button>
         </div>
 
-        {/* Zona de subida (PDF y Audio) */}
-        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))', gap: '14px', marginBottom: '20px' }}>
-          {/* Subida de Documentos PDF */}
-          <form
-            onSubmit={handlePdfUpload}
-            style={{
-              padding: '16px',
-              border: '1px dashed var(--outline-variant)',
-              borderRadius: '8px',
-              background: 'var(--surface-container-low)',
-              display: 'flex',
-              flexDirection: 'column',
-              justifyContent: 'space-between'
-            }}
-          >
-            <div>
-              <input
-                id={`pdf-source-${project.id}`}
-                type="file"
-                accept="application/pdf,.pdf"
-                multiple
-                hidden
-                onChange={(e) => {
-                  const files = Array.from(e.target.files || []);
-                  const invalid = files.filter(f => !f.name.toLowerCase().endsWith('.pdf'));
-                  if (invalid.length > 0) {
-                    const audioExts = ['.mp3', '.wav', '.m4a', '.ogg', '.webm', '.aac', '.flac', '.mp4'];
-                    const hasAudio = invalid.some(f => audioExts.some(ext => f.name.toLowerCase().endsWith(ext)));
-                    setMessage({
-                      type: 'error',
-                      text: hasAudio
-                        ? `Has seleccionado un archivo de audio ("${invalid.map(f => f.name).join(', ')}"). Utiliza la sección "Subir Audio de Entrevista".`
-                        : `Solo se permiten archivos PDF. Archivo no válido: "${invalid.map(f => f.name).join(', ')}".`
-                    });
-                  }
-                  setPdfFiles(files.filter(f => f.name.toLowerCase().endsWith('.pdf')));
-                }}
-              />
-              <label
-                htmlFor={`pdf-source-${project.id}`}
-                style={{ display: 'flex', gap: '12px', alignItems: 'center', cursor: 'pointer' }}
-              >
-                <div
-                  style={{
-                    width: '38px',
-                    height: '38px',
-                    borderRadius: '8px',
-                    background: 'rgba(21, 115, 71, 0.1)',
-                    color: '#157347',
-                    display: 'grid',
-                    placeItems: 'center',
-                    flexShrink: 0
-                  }}
-                >
-                  <FileText size={20} />
-                </div>
-                <div>
-                  <strong style={{ fontSize: '0.92rem' }}>Subir Documentos PDF</strong>
-                  <br />
-                  <small style={{ color: 'var(--secondary)' }}>
-                    {pdfFiles.length
-                      ? `${pdfFiles.length} archivo(s) listo(s)`
-                      : 'Especificaciones, manuales o actas (.pdf)'}
-                  </small>
-                </div>
-              </label>
-            </div>
-            <button
-              className="btn btn-primary btn-sm"
-              type="submit"
-              disabled={!pdfFiles.length || uploadingPdf}
-              style={{ marginTop: '14px', alignSelf: 'flex-start' }}
-            >
-              <Upload size={14} />
-              {uploadingPdf ? 'Extrayendo PDF...' : 'Subir documentos'}
-            </button>
-          </form>
-
-          {/* Subida de Audios de Entrevistas */}
-          <form
-            onSubmit={handleAudioUpload}
-            style={{
-              padding: '16px',
-              border: '1px dashed var(--outline-variant)',
-              borderRadius: '8px',
-              background: 'var(--surface-container-low)',
-              display: 'flex',
-              flexDirection: 'column',
-              justifyContent: 'space-between'
-            }}
-          >
-            <div>
-              <input
-                id={`audio-source-${project.id}`}
-                type="file"
-                accept="audio/*,.mp3,.wav,.m4a,.ogg,.webm,.mp4"
-                hidden
-                onChange={(e) => setAudioFile(e.target.files?.[0] || null)}
-              />
-              <label
-                htmlFor={`audio-source-${project.id}`}
-                style={{ display: 'flex', gap: '12px', alignItems: 'center', cursor: 'pointer' }}
-              >
-                <div
-                  style={{
-                    width: '38px',
-                    height: '38px',
-                    borderRadius: '8px',
-                    background: 'rgba(103, 80, 164, 0.1)',
-                    color: 'var(--primary)',
-                    display: 'grid',
-                    placeItems: 'center',
-                    flexShrink: 0
-                  }}
-                >
-                  <Mic size={20} />
-                </div>
-                <div>
-                  <strong style={{ fontSize: '0.92rem' }}>Subir Audio de Entrevista</strong>
-                  <br />
-                  <small style={{ color: 'var(--secondary)' }}>
-                    {audioFile
-                      ? `${audioFile.name} (${(audioFile.size / (1024 * 1024)).toFixed(1)} MB)`
-                      : 'Grabaciones (.mp3, .wav, .m4a, .webm, .ogg)'}
-                  </small>
-                </div>
-              </label>
-            </div>
-            <button
-              className="btn btn-primary btn-sm"
-              type="submit"
-              disabled={!audioFile || uploadingAudio}
-              style={{ marginTop: '14px', alignSelf: 'flex-start' }}
-            >
-              <Mic size={14} className={uploadingAudio ? 'spin' : ''} />
-              {uploadingAudio ? 'Transcribiendo con n8n...' : 'Subir y transcribir audio'}
-            </button>
-          </form>
+        {/* Zona de subida unificada con cola de archivos (PDF y Audio) */}
+        <div style={{ marginBottom: '20px' }}>
+          <FileUploadQueue
+            files={queueFiles}
+            onFilesChange={setQueueFiles}
+            isProcessing={isBatchProcessing}
+            processedCount={processedCount}
+            currentProcessingFile={currentProcessingFile}
+            onStartProcessing={handleStartBatchProcessing}
+          />
         </div>
 
         {/* Mensajes de notificación */}
@@ -924,6 +857,15 @@ export default function ProjectSources({ project, embedded = false, onNavigateTo
           </div>
         )}
       </section>
+
+      {/* Modal de Finalización del Análisis */}
+      <AnalysisCompletionModal
+        isOpen={completionModalOpen}
+        onClose={() => setCompletionModalOpen(false)}
+        onNavigateToReview={onNavigateToReview}
+        onNavigateToSummary={onNavigateToSummary}
+        summaryData={completionSummary}
+      />
     </div>
   );
 }

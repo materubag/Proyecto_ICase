@@ -12,27 +12,13 @@ import ProjectArchitecture from './ProjectArchitecture';
 import ProjectToolsTeam from './ProjectToolsTeam';
 import ProjectEngineering from './ProjectEngineering';
 
-const TABS = [
-  { id: 'summary',      icon: 'auto_awesome',   label: 'Resumen' },
-  { id: 'requirements', icon: 'checklist',      label: 'Requerimientos', countKey: 'requirements' },
-  { id: 'planning',     icon: 'calendar_month', label: 'Planificación' },
-  { id: 'modeling',     icon: 'schema',         label: 'Modelado' },
-  { id: 'navigation',   icon: 'account_tree',   label: 'Árbol de Navegación' },
-  { id: 'mockups',      icon: 'devices',        label: 'Mockups', countKey: 'screens' },
-  { id: 'architecture', icon: 'layers',         label: 'Arquitectura' },
-  { id: 'traceability', icon: 'link',           label: 'Trazabilidad' },
-  { id: 'tools_team',   icon: 'groups',         label: 'Equipo & Herramientas' },
-  { id: 'changes',      icon: 'change_circle',  label: 'Cambios' },
-  { id: 'versions',     icon: 'history',        label: 'Versiones' },
-  { id: 'chat',         icon: 'chat',           label: 'Chat IA' },
-];
-
 export default function ProjectDetail({
   project,
   onBack,
   onProjectUpdated,
   activeTab = 'summary',
-  onTabChange
+  onTabChange,
+  pendingCandidatesCount = 0
 }) {
   const [isEditing, setIsEditing] = useState(false);
   const [nameValue, setNameValue] = useState(project.name || '');
@@ -57,51 +43,64 @@ export default function ProjectDetail({
     }
   }
 
-  const getCount = (key) => {
-    if (!key) return null;
-    return project[key]?.length ?? project._count?.[key] ?? null;
-  };
-
   const statusBadge = () => {
     switch (project.status) {
-      case 'IN_PROGRESS': return <span className="badge badge-in-progress">En Progreso</span>;
-      case 'COMPLETED':   return <span className="badge badge-success">Completado</span>;
-      default:            return <span className="badge badge-planning">Planificación</span>;
+      case 'IN_PROGRESS':
+        return <span className="badge badge-in-progress">En Progreso</span>;
+      case 'COMPLETED':
+        return <span className="badge badge-success">Completado</span>;
+      default:
+        return <span className="badge badge-planning">Planificación</span>;
     }
   };
 
   return (
-    <div className="full-page">
-      {/* Sub-header: project info + tabs */}
+    <div className="full-page" style={{ display: 'flex', flexDirection: 'column', height: '100%', overflow: 'hidden' }}>
+      {/* Workspace Sub-header: project context & quick actions (without duplicate tab navigation) */}
       <div className="page-subheader">
-        {/* Row 1: project name + actions */}
         <div className="page-subheader-row">
-          <div style={{ display: 'flex', alignItems: 'center', gap: '8px', minWidth: 0 }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '10px', minWidth: 0, flexWrap: 'wrap' }}>
             {isEditing ? (
               <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap' }}>
                 <input
                   type="text"
                   className="form-control"
                   value={nameValue}
-                  onChange={e => setNameValue(e.target.value)}
+                  onChange={(e) => setNameValue(e.target.value)}
                   style={{ width: '280px', height: '32px', padding: '0 8px', fontWeight: 600 }}
                   autoFocus
                 />
-                <button className="btn btn-primary btn-sm" onClick={handleSave} disabled={saving || !nameValue.trim()}>
+                <button
+                  type="button"
+                  className="btn btn-primary btn-sm"
+                  onClick={handleSave}
+                  disabled={saving || !nameValue.trim()}
+                >
                   {saving ? 'Guardando...' : 'Guardar'}
                 </button>
-                <button className="btn btn-outline btn-sm" onClick={() => setIsEditing(false)} disabled={saving}>
+                <button
+                  type="button"
+                  className="btn btn-outline btn-sm"
+                  onClick={() => setIsEditing(false)}
+                  disabled={saving}
+                >
                   Cancelar
                 </button>
               </div>
             ) : (
               <>
-                <h1 className="page-title">{project.name}</h1>
+                <h1 className="page-title" style={{ margin: 0 }}>{project.name}</h1>
                 {statusBadge()}
                 <button
+                  type="button"
                   className="btn btn-ghost btn-icon btn-sm"
-                  onClick={() => { setNameValue(project.name); setDescValue(project.description || ''); setIsEditing(true); }}
-                  title="Editar proyecto"
+                  onClick={() => {
+                    setNameValue(project.name);
+                    setDescValue(project.description || '');
+                    setIsEditing(true);
+                  }}
+                  title="Editar nombre y descripción"
+                  aria-label="Editar proyecto"
                 >
                   <span className="ms ms-sm">edit</span>
                 </button>
@@ -109,51 +108,55 @@ export default function ProjectDetail({
             )}
           </div>
 
-          <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flexShrink: 0 }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '10px', flexShrink: 0 }}>
+            {/* Attention banner if pending candidates exist */}
+            {pendingCandidatesCount > 0 && activeTab !== 'requirements' && (
+              <button
+                type="button"
+                className="btn btn-outline btn-sm"
+                onClick={() => onTabChange('requirements')}
+                style={{
+                  color: '#b42318',
+                  borderColor: 'rgba(180, 35, 24, 0.3)',
+                  background: 'rgba(180, 35, 24, 0.05)',
+                  fontSize: '0.75rem'
+                }}
+                title="Ir a revisión de candidatos ISO 29148"
+              >
+                <span className="ms ms-xs">rate_review</span>
+                <span>{pendingCandidatesCount} candidatos por revisar</span>
+              </button>
+            )}
+
             <span style={{ fontSize: '0.75rem', color: 'var(--outline)' }}>
               Actualizado: {new Date(project.updatedAt).toLocaleDateString('es', { day: '2-digit', month: 'short', year: 'numeric' })}
             </span>
-            <button className="btn btn-ghost btn-sm" onClick={onBack}>
+            <button
+              type="button"
+              className="btn btn-ghost btn-sm"
+              onClick={onBack}
+              title="Volver a lista de proyectos"
+            >
               <span className="ms ms-sm">arrow_back</span>
               <span>Proyectos</span>
             </button>
           </div>
         </div>
 
-        {/* Row 2: description (if editing) */}
+        {/* Inline description editor if editing */}
         {isEditing && (
           <textarea
             className="form-control"
             value={descValue}
-            onChange={e => setDescValue(e.target.value)}
+            onChange={(e) => setDescValue(e.target.value)}
             placeholder="Descripción del proyecto..."
-            style={{ minHeight: '60px' }}
+            style={{ minHeight: '60px', marginTop: '6px' }}
           />
         )}
-
-        {/* Row 3: Tab navigation */}
-        <div style={{ display: 'flex', alignItems: 'center', gap: '2px', overflowX: 'auto' }}>
-          {TABS.map(tab => {
-            const count = getCount(tab.countKey);
-            return (
-              <button
-                key={tab.id}
-                className={`seg-btn ${activeTab === tab.id ? 'active' : ''}`}
-                onClick={() => onTabChange(tab.id)}
-              >
-                <span className="ms ms-sm">{tab.icon}</span>
-                <span>{tab.label}</span>
-                {count !== null && (
-                  <span className="seg-btn-count">{count}</span>
-                )}
-              </button>
-            );
-          })}
-        </div>
       </div>
 
-      {/* Tab Content */}
-      <div style={{ flex: 1, overflow: 'hidden', display: 'flex', flexDirection: 'column' }}>
+      {/* Module Workspace Content */}
+      <div style={{ flex: 1, minHeight: 0, overflow: 'hidden', display: 'flex', flexDirection: 'column' }}>
         {activeTab === 'summary' && (
           <ProjectSummary project={project} onProjectUpdated={onProjectUpdated} onNavigateTo={onTabChange} />
         )}
@@ -162,6 +165,13 @@ export default function ProjectDetail({
             project={project}
             onProjectUpdated={onProjectUpdated}
             initialSubTab={activeTab === 'candidates' ? 'candidates' : activeTab === 'actors' ? 'actors' : 'candidates'}
+          />
+        )}
+        {activeTab === 'sources' && (
+          <ProjectSources
+            project={project}
+            onNavigateToReview={() => onTabChange('requirements')}
+            onNavigateToSummary={() => onTabChange('summary')}
           />
         )}
         {activeTab === 'planning' && (
@@ -181,9 +191,6 @@ export default function ProjectDetail({
         )}
         {activeTab === 'architecture' && (
           <ProjectArchitecture project={project} onProjectUpdated={onProjectUpdated} />
-        )}
-        {activeTab === 'sources' && (
-          <ProjectSources project={project} onNavigateToReview={() => onTabChange('requirements')} />
         )}
         {activeTab === 'tools_team' && (
           <ProjectToolsTeam project={project} onNavigateTo={onTabChange} />

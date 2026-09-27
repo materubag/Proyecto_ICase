@@ -17,22 +17,12 @@ const sourceController = require('../controllers/source.controller');
 const candidateController = require('../controllers/candidate.controller');
 const env = require('../config/env');
 const { audioUpload } = require('../middleware/audioUpload.middleware');
+const { sourceUpload } = require('../middleware/pdfUpload.middleware');
 
 // Multer memory storage para subida de múltiples archivos (documentos y audios)
 const uploadMulti = multer({
   storage: multer.memoryStorage(),
   limits: { fileSize: 35 * 1024 * 1024 } // 35 MB por archivo
-});
-
-const sourceUpload = multer({
-  storage: multer.memoryStorage(),
-  limits: { fileSize: (env.MAX_PDF_SIZE_MB || 10) * 1024 * 1024, files: 20 },
-  fileFilter: (req, file, cb) => {
-    if (file.mimetype === 'application/pdf' || file.originalname.toLowerCase().endsWith('.pdf')) return cb(null, true);
-    const error = new Error(`Solo se permiten archivos PDF en Fuentes. Archivo recibido: "${file.originalname}". Para grabaciones, utiliza la opción de Subir Audio.`);
-    error.statusCode = 400;
-    cb(error);
-  }
 });
 
 // Projects CRUD
@@ -81,9 +71,12 @@ router.get('/:projectId/sources', (req, res, next) => sourceController.list(req,
 router.post('/:projectId/sources', sourceUpload.array('files', 20), (req, res, next) => sourceController.upload(req, res, next));
 router.post('/:projectId/sources/audio', audioUpload.single('file'), (req, res, next) => sourceController.uploadAudio(req, res, next));
 
-// Project Requirement Candidates & ISO 29148 Review
+// Project Candidates & Approval Center
 router.get('/:projectId/candidates', (req, res, next) => candidateController.listByProject(req, res, next));
 router.get('/:projectId/candidates/stats', (req, res, next) => candidateController.getStats(req, res, next));
+router.post('/:projectId/candidates/batch-approve', (req, res, next) => candidateController.approveBatch(req, res, next));
+router.post('/:projectId/candidates/batch-reject', (req, res, next) => candidateController.rejectBatch(req, res, next));
+router.post('/:projectId/candidates/approve-category', (req, res, next) => candidateController.approveCategory(req, res, next));
 
 // AI Analysis for Project
 router.post('/:projectId/analyze', (req, res, next) => aiController.analyze(req, res, next));
