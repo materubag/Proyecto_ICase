@@ -23,7 +23,8 @@ class RequirementService {
       throw error;
     }
 
-    return await prisma.requirement.create({
+    return require('./engineering/domain').transaction(async tx => {
+    const created = await tx.requirement.create({
       data: {
         projectId,
         code: code.trim().toUpperCase(),
@@ -32,9 +33,13 @@ class RequirementService {
         type: type || 'FUNCTIONAL',
         priority: priority || 'MEDIUM',
         status: status || 'PENDING',
+        qualityReport: require('./engineering/change.service').requirementData(data).qualityReport,
         actorIds: Array.isArray(actorIds) ? actorIds : [],
         dependencies: Array.isArray(dependencies) ? dependencies : []
       }
+    });
+    await require('./engineering/change.service').remember(tx, created);
+    return created;
     });
   }
 
@@ -46,10 +51,21 @@ class RequirementService {
       throw error;
     }
 
+    if (existing.status === 'APPROVED' || existing.status === 'IMPLEMENTED' || existing.revision > 1) {
+      const error = new Error('Este requisito requiere revisión de impacto. Crea una solicitud en Cambios.');
+      error.code = 'IMPACT_CONFIRMATION_REQUIRED'; error.statusCode = 409; throw error;
+    }
     const { code, name, description, type, priority, status, actorIds, dependencies } = data;
-    return await prisma.requirement.update({
+    const qualityReport = require('./engineering/change.service').requirementData(data, existing).qualityReport;
+    return require('./engineering/domain').transaction(async tx => {
+    const current = await tx.requirement.findUnique({ where: { id } });
+    if (current.revision !== existing.revision || current.status !== existing.status) throw Object.assign(new Error('El requisito cambió. Actualiza la vista.'), { statusCode: 409, code: 'VERSION_CONFLICT' });
+    await require('./engineering/change.service').remember(tx, current);
+    const updated = await tx.requirement.update({
       where: { id },
       data: {
+        qualityReport,
+        revision: { increment: 1 },
         ...(code !== undefined && { code: code.trim().toUpperCase() }),
         ...(name !== undefined && { name: name.trim() }),
         ...(description !== undefined && { description: description.trim() }),
@@ -59,6 +75,9 @@ class RequirementService {
         ...(actorIds !== undefined && { actorIds: Array.isArray(actorIds) ? actorIds : [] }),
         ...(dependencies !== undefined && { dependencies: Array.isArray(dependencies) ? dependencies : [] })
       }
+    });
+    await require('./engineering/change.service').remember(tx, updated);
+    return updated;
     });
   }
 
@@ -70,9 +89,8 @@ class RequirementService {
       throw error;
     }
 
-    return await prisma.requirement.delete({
-      where: { id }
-    });
+    const error = new Error('La eliminación conserva el historial y requiere una solicitud en Cambios.');
+    error.code = 'IMPACT_CONFIRMATION_REQUIRED'; error.statusCode = 409; throw error;
   }
 }
 

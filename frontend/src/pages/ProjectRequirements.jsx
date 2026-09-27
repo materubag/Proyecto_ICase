@@ -1,4 +1,6 @@
 import React, { useState } from 'react';
+import { engineering } from '../api/engineering.api';
+import ImpactModal from '../components/common/ImpactModal';
 import { requirementsApi } from '../api/requirements.api';
 import Modal from '../components/common/Modal';
 
@@ -12,9 +14,12 @@ const STATUS_LABELS = { PENDING: 'Pendiente', APPROVED: 'Aprobado', IN_REVIEW: '
 const TYPE_LABELS = { FUNCTIONAL: 'Funcional', NON_FUNCTIONAL: 'No Funcional' };
 
 export default function ProjectRequirements({ project, onProjectUpdated }) {
+  const [pendingChange, setPendingChange] = useState(null);
+  const [changeError, setChangeError] = useState('');
   const requirements = project.requirements || [];
   const actorsMap = new Map((project.actors || []).map(a => [a.codeId || a.id, a.name]));
 
+  const [viewMode, setViewMode] = useState('uta_table'); // 'uta_table' | 'split'
   const [selected, setSelected] = useState(requirements[0] || null);
   const [search, setSearch] = useState('');
   const [filterType, setFilterType] = useState('all');
@@ -30,6 +35,8 @@ export default function ProjectRequirements({ project, onProjectUpdated }) {
   const [status, setStatus] = useState('PENDING');
   const [actorIdsStr, setActorIdsStr] = useState('');
   const [dependenciesStr, setDependenciesStr] = useState('');
+  const [preconditions, setPreconditions] = useState('');
+  const [postconditions, setPostconditions] = useState('');
   const [savingReq, setSavingReq] = useState(false);
 
   const counts = {
@@ -54,6 +61,8 @@ export default function ProjectRequirements({ project, onProjectUpdated }) {
     setName(''); setDescription('');
     setType('FUNCTIONAL'); setPriority('MEDIUM'); setStatus('PENDING');
     setActorIdsStr(''); setDependenciesStr('');
+    setPreconditions('El usuario debe estar autenticado con rol y permisos correspondientes.');
+    setPostconditions('El sistema actualiza el registro en la base de datos y refleja los cambios.');
     setReqModalOpen(true);
   }
 
@@ -64,6 +73,8 @@ export default function ProjectRequirements({ project, onProjectUpdated }) {
     setType(req.type); setPriority(req.priority); setStatus(req.status);
     setActorIdsStr((req.actorIds || []).join(', '));
     setDependenciesStr((req.dependencies || []).join(', '));
+    setPreconditions(req.qualityReport?.preconditions || req.preconditions || 'El usuario debe estar autenticado con rol y permisos correspondientes.');
+    setPostconditions(req.qualityReport?.postconditions || req.postconditions || 'El sistema actualiza el registro en la base de datos y refleja los cambios.');
     setReqModalOpen(true);
   }
 
@@ -76,9 +87,16 @@ export default function ProjectRequirements({ project, onProjectUpdated }) {
         code, name, description, type, priority, status,
         actorIds: actorIdsStr.split(',').map(s => s.trim()).filter(Boolean),
         dependencies: dependenciesStr.split(',').map(s => s.trim()).filter(Boolean),
+        qualityReport: {
+          ...(editingReq?.qualityReport || {}),
+          preconditions,
+          postconditions
+        }
       };
       if (editingReq) {
-        await requirementsApi.update(editingReq.id, payload);
+        if (['APPROVED', 'IMPLEMENTED', 'REMOVED', 'DEPRECATED'].includes(editingReq.status) || editingReq.revision > 1) {
+          setPendingChange(await engineering(project.id, '/changes', { type: 'UPDATE', elementType: 'Requirement', elementId: editingReq.id, proposedState: payload, reason: 'Edición manual del requisito' }));
+        } else await requirementsApi.update(editingReq.id, payload);
       } else {
         await requirementsApi.create(project.id, payload);
       }
@@ -93,11 +111,8 @@ export default function ProjectRequirements({ project, onProjectUpdated }) {
 
   async function handleDelete(id, e) {
     e?.stopPropagation();
-    if (!window.confirm('¿Eliminar este requisito?')) return;
     try {
-      await requirementsApi.delete(id);
-      if (selected?.id === id) setSelected(null);
-      await onProjectUpdated();
+      setPendingChange(await engineering(project.id, '/changes', { type: 'DELETE', elementType: 'Requirement', elementId: id, reason: 'Desactivar requisito conservando historial' }));
     } catch (err) {
       alert(`Error: ${err.message}`);
     }
@@ -105,6 +120,8 @@ export default function ProjectRequirements({ project, onProjectUpdated }) {
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', height: '100%', overflow: 'hidden' }}>
+      {changeError && <p role="alert">{changeError}</p>}
+      <ImpactModal change={pendingChange} busy={savingReq} onClose={() => setPendingChange(null)} onConfirm={async () => { setSavingReq(true); setChangeError(''); try { await engineering(project.id, `/changes/${pendingChange.id}`, { status: 'APPROVED', confirmImpact: true }, 'PATCH'); setPendingChange(null); setSelected(null); await onProjectUpdated(); } catch (e) { setChangeError(e.message); } finally { setSavingReq(false); } }} />
       {/* Command bar */}
       <div className="full-page-header">
         <div style={{ display: 'flex', alignItems: 'center', gap: '12px', minWidth: 0 }}>
@@ -127,14 +144,19 @@ export default function ProjectRequirements({ project, onProjectUpdated }) {
           </div>
         </div>
         <div className="page-actions">
-          <div className="search-bar" style={{ width: '260px' }}>
-            <span className="ms">search</span>
-            <input type="text" placeholder="Buscar por código o descripción..." value={search} onChange={e => setSearch(e.target.value)} />
+          <div className="view-toggle">
+            <button className={`view-toggle-btn ${viewMode === 'uta_table' ? 'active' : ''}`} onClick={() => setViewMode('uta_table')}>
+              <span className="ms ms-xs">table_chart</span>
+              <span>Tabla 1 (UTA)</span>
+            </button>
+            <button className={`view-toggle-btn ${viewMode === 'split' ? 'active' : ''}`} onClick={() => setViewMode('split')}>
+              <span className="ms ms-xs">splitscreen</span>
+              <span>Editor Detalle</span>
+            </button>
           </div>
-          <div className="vdivider" />
-          <button className="btn btn-outline btn-sm">
-            <span className="ms ms-sm">tune</span>
-            <span>Filtros</span>
+          <button className="btn btn-outline btn-sm" onClick={() => window.print()} title="Imprimir / Exportar a PDF con formato académico UTA">
+            <span className="ms ms-sm">print</span>
+            <span>Imprimir UTA</span>
           </button>
           <button className="btn btn-primary btn-sm" onClick={openNewModal}>
             <span className="ms ms-sm">add</span>
@@ -143,7 +165,121 @@ export default function ProjectRequirements({ project, onProjectUpdated }) {
         </div>
       </div>
 
-      {/* Split view */}
+      {viewMode === 'uta_table' ? (
+        <div className="page-scrollable" style={{ padding: '24px', flex: 1, overflowY: 'auto' }}>
+          {/* Institutional Academic Header */}
+          <div style={{ textAlign: 'center', padding: '18px 24px', borderBottom: '2px solid var(--primary)', background: 'var(--surface-container-low)', marginBottom: '20px', borderRadius: 'var(--radius-md)', boxShadow: 'var(--shadow-xs)' }}>
+            <h3 style={{ margin: 0, fontSize: '1.1rem', fontWeight: 700, color: 'var(--primary)', letterSpacing: '0.02em' }}>
+              UNIVERSIDAD TÉCNICA DE AMBATO
+            </h3>
+            <h4 style={{ margin: '4px 0 2px', fontSize: '0.9rem', fontWeight: 600, color: 'var(--on-surface)' }}>
+              FACULTAD DE INGENIERÍA EN SISTEMAS, ELECTRÓNICA E INDUSTRIAL
+            </h4>
+            <p style={{ margin: 0, fontSize: '0.8125rem', color: 'var(--secondary)' }}>
+              CARRERA DE SOFTWARE — DESARROLLO ASISTIDO POR SOFTWARE
+            </p>
+            <div style={{ marginTop: '10px', display: 'inline-block', padding: '4px 16px', background: 'var(--primary)', color: '#ffffff', borderRadius: '20px', fontSize: '0.8125rem', fontWeight: 600 }}>
+              Tabla 1. Ejemplo de formato para requisitos funcionales y no funcionales
+            </div>
+          </div>
+
+          {/* Controls inside UTA view */}
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '14px', flexWrap: 'wrap', gap: '10px' }}>
+            <span style={{ fontSize: '0.8125rem', color: 'var(--secondary)' }}>
+              Total: {filtered.length} requisitos ({counts.FUNCTIONAL} funcionales, {counts.NON_FUNCTIONAL} no funcionales)
+            </span>
+            <div className="search-bar" style={{ width: '280px' }}>
+              <span className="ms">search</span>
+              <input type="text" placeholder="Buscar requisito..." value={search} onChange={e => setSearch(e.target.value)} />
+            </div>
+          </div>
+
+          {/* Official Academic Table */}
+          <div style={{ background: 'var(--surface-container-lowest)', borderRadius: 'var(--radius-md)', border: '1px solid var(--outline-variant)', overflowX: 'auto', boxShadow: 'var(--shadow-xs)' }}>
+            <table style={{ width: '100%', borderCollapse: 'collapse', textAlign: 'left', fontSize: '0.8125rem' }}>
+              <thead>
+                <tr style={{ background: 'var(--surface-container-low)', borderBottom: '2px solid var(--primary)', color: 'var(--on-surface)' }}>
+                  <th style={{ padding: '12px 14px', width: '90px', fontWeight: 700 }}>ID del requerimiento</th>
+                  <th style={{ padding: '12px 14px', width: '220px', fontWeight: 700 }}>Nombre del requerimiento</th>
+                  <th style={{ padding: '12px 14px', minWidth: '240px', fontWeight: 700 }}>Descripción</th>
+                  <th style={{ padding: '12px 14px', width: '120px', fontWeight: 700 }}>Dependencias</th>
+                  <th style={{ padding: '12px 14px', width: '100px', fontWeight: 700 }}>Prioridad (alta/media/baja)</th>
+                  <th style={{ padding: '12px 14px', width: '140px', fontWeight: 700 }}>Actores</th>
+                  <th style={{ padding: '12px 14px', minWidth: '180px', fontWeight: 700 }}>Precondiciones</th>
+                  <th style={{ padding: '12px 14px', minWidth: '180px', fontWeight: 700 }}>Postcondiciones</th>
+                  <th style={{ padding: '12px 14px', width: '80px', textAlign: 'center', fontWeight: 700 }}>Acciones</th>
+                </tr>
+              </thead>
+              <tbody>
+                {filtered.map((req, idx) => {
+                  const pre = req.qualityReport?.preconditions || req.preconditions || 'El usuario debe estar autenticado con rol y permisos correspondientes.';
+                  const post = req.qualityReport?.postconditions || req.postconditions || 'El sistema actualiza el registro en la base de datos y refleja los cambios.';
+                  const actors = (req.actorIds || []).map(id => actorsMap.get(id) || id).join(', ') || 'Usuario del sistema';
+                  const deps = (req.dependencies || []).join(', ') || 'Ninguna';
+
+                  return (
+                    <tr
+                      key={req.id}
+                      style={{
+                        borderBottom: '1px solid var(--outline-variant)',
+                        background: idx % 2 === 0 ? 'transparent' : 'rgba(0,0,0,0.015)',
+                        verticalAlign: 'top'
+                      }}
+                    >
+                      <td style={{ padding: '12px 14px', fontFamily: 'var(--font-mono)', fontWeight: 700, color: 'var(--primary)' }}>
+                        {req.code}
+                      </td>
+                      <td style={{ padding: '12px 14px', fontWeight: 600, color: 'var(--on-surface)' }}>
+                        {req.name}
+                        <div style={{ marginTop: '4px' }}>
+                          <span className="tag" style={{ fontSize: '0.6875rem' }}>
+                            {req.type === 'FUNCTIONAL' ? 'Funcional' : 'No Funcional'}
+                          </span>
+                        </div>
+                      </td>
+                      <td style={{ padding: '12px 14px', color: 'var(--on-surface-variant)', lineHeight: 1.5 }}>
+                        {req.description}
+                      </td>
+                      <td style={{ padding: '12px 14px', fontFamily: 'var(--font-mono)', fontSize: '0.75rem', color: 'var(--secondary)' }}>
+                        {deps}
+                      </td>
+                      <td style={{ padding: '12px 14px' }}>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                          <div className={`priority-dot ${PRIORITY_DOT[req.priority] || 'medium'}`} />
+                          <span style={{ fontWeight: 600 }}>{PRIORITY_LABEL[req.priority] || req.priority}</span>
+                        </div>
+                      </td>
+                      <td style={{ padding: '12px 14px', color: 'var(--secondary)' }}>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
+                          <span className="ms ms-xs" style={{ color: 'var(--primary)' }}>person</span>
+                          <span>{actors}</span>
+                        </div>
+                      </td>
+                      <td style={{ padding: '12px 14px', color: 'var(--on-surface-variant)', fontSize: '0.75rem', lineHeight: 1.4 }}>
+                        {pre}
+                      </td>
+                      <td style={{ padding: '12px 14px', color: 'var(--on-surface-variant)', fontSize: '0.75rem', lineHeight: 1.4 }}>
+                        {post}
+                      </td>
+                      <td style={{ padding: '12px 14px', textAlign: 'center' }}>
+                        <div style={{ display: 'flex', gap: '4px', justifyContent: 'center' }}>
+                          <button className="btn btn-ghost btn-icon btn-sm" onClick={(e) => openEditModal(req, e)} title="Editar">
+                            <span className="ms ms-xs">edit</span>
+                          </button>
+                          <button className="btn btn-ghost btn-icon btn-sm" style={{ color: 'var(--error)' }} onClick={(e) => handleDelete(req.id, e)} title="Eliminar">
+                            <span className="ms ms-xs">delete</span>
+                          </button>
+                        </div>
+                      </td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      ) : (
+      /* Split view */
       <div className="split-view">
         {/* LEFT: table */}
         <section className="split-left">
@@ -290,6 +426,7 @@ export default function ProjectRequirements({ project, onProjectUpdated }) {
                 </div>
 
                 {/* Actors */}
+                {selected.qualityReport && <div className="detail-section"><span className="detail-section-label">Evaluación basada en criterios de ISO/IEC/IEEE 29148:2018</span><p>Puntuación: {selected.qualityReport.score ?? 'Sin evaluar'}</p><pre style={{ whiteSpace: 'pre-wrap', fontSize: 12 }}>{JSON.stringify(selected.qualityReport.warnings || [], null, 2)}</pre></div>}
                 {selected.actorIds && selected.actorIds.length > 0 && (
                   <div className="detail-section">
                     <span className="detail-section-label">Actores Involucrados</span>
@@ -367,6 +504,7 @@ export default function ProjectRequirements({ project, onProjectUpdated }) {
           )}
         </aside>
       </div>
+      )}
 
       {/* Modal Requisito */}
       <Modal
@@ -418,8 +556,8 @@ export default function ProjectRequirements({ project, onProjectUpdated }) {
               <select className="form-control" value={status} onChange={e => setStatus(e.target.value)}>
                 <option value="PENDING">Pendiente</option>
                 <option value="APPROVED">Aprobado</option>
-                <option value="IN_REVIEW">En revisión</option>
-                <option value="REJECTED">Rechazado</option>
+                <option value="IMPLEMENTED">Implementado</option>
+                <option value="DISCARDED">Descartado</option>
               </select>
             </div>
           </div>
@@ -431,6 +569,28 @@ export default function ProjectRequirements({ project, onProjectUpdated }) {
             <div className="form-group">
               <label className="form-label">Dependencias (códigos)</label>
               <input type="text" className="form-control" placeholder="RF-01, RF-02" value={dependenciesStr} onChange={e => setDependenciesStr(e.target.value)} />
+            </div>
+          </div>
+          <div className="grid-2">
+            <div className="form-group">
+              <label className="form-label">Precondiciones (Tabla 1 UTA)</label>
+              <textarea
+                className="form-control"
+                rows={2}
+                placeholder="Condiciones previas para ejecutar el requerimiento..."
+                value={preconditions}
+                onChange={e => setPreconditions(e.target.value)}
+              />
+            </div>
+            <div className="form-group">
+              <label className="form-label">Postcondiciones (Tabla 1 UTA)</label>
+              <textarea
+                className="form-control"
+                rows={2}
+                placeholder="Resultado esperado tras la ejecución..."
+                value={postconditions}
+                onChange={e => setPostconditions(e.target.value)}
+              />
             </div>
           </div>
         </form>

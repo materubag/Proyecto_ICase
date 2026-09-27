@@ -40,6 +40,9 @@ class ActorService {
       throw error;
     }
 
+    if (existing.status === 'APPROVED' || existing.status === 'OUTDATED') {
+      throw Object.assign(new Error('Edita este actor desde Cambios para revisar su impacto.'), { code: 'IMPACT_CONFIRMATION_REQUIRED', statusCode: 409 });
+    }
     const { name, description } = data;
     return await prisma.actor.update({
       where: { id },
@@ -58,9 +61,7 @@ class ActorService {
       throw error;
     }
 
-    return await prisma.actor.delete({
-      where: { id }
-    });
+    throw Object.assign(new Error('Desactiva este actor desde Cambios para conservar su historial.'), { code: 'IMPACT_CONFIRMATION_REQUIRED', statusCode: 409 });
   }
 }
 

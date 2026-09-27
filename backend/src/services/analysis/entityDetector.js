@@ -22,20 +22,8 @@ class EntityDetector {
       source: 'explicit'
     }));
 
-    // Relaciones simples entre entidades consecutivas si no hay grafo explícito
+    // Co-occurrence is not evidence of a relationship or cardinality.
     const relationships = [];
-    if (entities.length > 1) {
-      for (let i = 0; i < entities.length - 1; i++) {
-        relationships.push({
-          id: `REL-${String(i + 1).padStart(2, '0')}`,
-          source: entities[i].name,
-          target: entities[i + 1].name,
-          cardinality: '1:N',
-          description: `relaciona ${entities[i].name} con ${entities[i + 1].name}`,
-          source: 'inferred'
-        });
-      }
-    }
 
     return {
       entities,

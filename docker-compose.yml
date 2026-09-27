@@ -47,11 +47,15 @@ services:
       OPENAI_MODEL: ${OPENAI_MODEL:-gpt-4o}
       N8N_BASE_URL: ${N8N_BASE_URL:-}
       N8N_ANALYZE_WEBHOOK: ${N8N_ANALYZE_WEBHOOK:-}
-      N8N_TRANSCRIBE_WEBHOOK: ${N8N_TRANSCRIBE_WEBHOOK:-https://rasheeda-nonexplorative-thickly.ngrok-free.dev/webhook-test/traslate_audio_texto}
-      N8N_TRANSCRIPTION_WEBHOOK: ${N8N_TRANSCRIPTION_WEBHOOK:-https://rasheeda-nonexplorative-thickly.ngrok-free.dev/webhook-test/traslate_audio_texto}
+      N8N_TRANSCRIBE_WEBHOOK: ${N8N_TRANSCRIBE_WEBHOOK:-}
+      N8N_TRANSCRIPTION_WEBHOOK: ${N8N_TRANSCRIPTION_WEBHOOK:-}
       N8N_MOCKUP_WEBHOOK: ${N8N_MOCKUP_WEBHOOK:-}
       N8N_TIMEOUT: ${N8N_TIMEOUT:-120000}
       MOCKUP_MAX_REQUIREMENTS: ${MOCKUP_MAX_REQUIREMENTS:-12}
+      AI_ANALYSIS_STRATEGY: ${AI_ANALYSIS_STRATEGY:-ollama-first}
+      AI_MAX_CHUNKS: ${AI_MAX_CHUNKS:-12}
+      AI_CHUNK_MAX_LENGTH: ${AI_CHUNK_MAX_LENGTH:-350}
+      AI_FALLBACK_CONFIDENCE_THRESHOLD: ${AI_FALLBACK_CONFIDENCE_THRESHOLD:-0.65}
     ports:
       - "8080:8080"
     depends_on:

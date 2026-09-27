@@ -21,7 +21,7 @@ import {
 } from 'lucide-react';
 import { candidatesApi } from '../api/candidates.api';
 
-export default function ProjectCandidateReview({ project, onNavigateToRequirements }) {
+export default function ProjectCandidateReview({ project, onNavigateToRequirements, onProjectUpdated }) {
   const [candidates, setCandidates] = useState([]);
   const [stats, setStats] = useState(null);
   const [loading, setLoading] = useState(true);
@@ -74,6 +74,7 @@ export default function ProjectCandidateReview({ project, onNavigateToRequiremen
     try {
       setMessage(null);
       const res = await candidatesApi.approve(candidate.id);
+      await onProjectUpdated?.();
       setMessage({
         type: 'success',
         text: `Candidato ${candidate.temporaryCode} aprobado y promovido a requisito oficial (${res.data?.requirement?.code || 'RF'}).`
@@ -158,7 +159,7 @@ export default function ProjectCandidateReview({ project, onNavigateToRequiremen
               Revisión de Candidatos a Requisito
             </h2>
             <p className="section-subtitle" style={{ margin: '4px 0 0 0', fontSize: '0.86rem' }}>
-              Ningún requisito es oficial sin tu aprobación. Validados según criterios de la norma <strong>ISO/IEC/IEEE 29148:2018</strong>.
+              Ningún requisito es oficial sin tu aprobación. Evaluación basada en criterios de <strong>ISO/IEC/IEEE 29148:2018</strong>.
             </p>
           </div>
 
@@ -387,7 +388,7 @@ export default function ProjectCandidateReview({ project, onNavigateToRequiremen
                       {evidence.page && (
                         <span>Página {evidence.page}</span>
                       )}
-                      <span>Score Calidad ISO: <strong>{quality.score || 100}/100</strong></span>
+                      <span>Score Calidad ISO: <strong>{quality.score ?? 'Sin evaluar'}/100</strong></span>
                     </div>
                   </div>
 

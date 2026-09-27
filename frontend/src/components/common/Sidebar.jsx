@@ -1,16 +1,20 @@
 import React from 'react';
 
 const NAV_ITEMS = [
-  { id: 'projects',      icon: 'folder',        label: 'Proyectos',           requiresProject: false },
-  { id: 'summary',       icon: 'auto_awesome',  label: 'Resumen',             requiresProject: true },
-  { id: 'sources',       icon: 'folder_open',   label: 'Fuentes (PDF/Audio)', requiresProject: true },
-  { id: 'candidates',    icon: 'rate_review',   label: 'Revisión Candidatos', requiresProject: true },
-  { id: 'requirements',  icon: 'checklist',     label: 'Requisitos',          requiresProject: true },
-  { id: 'actors',        icon: 'people',        label: 'Actores',             requiresProject: true },
-  { id: 'model',         icon: 'account_tree',  label: 'Modelo del Sistema',  requiresProject: true },
-  { id: 'prototype',     icon: 'devices',       label: 'Prototipos',          requiresProject: true },
-  { id: 'navigation',    icon: 'fork_right',    label: 'Navegación',          requiresProject: true },
-  { id: 'architecture',  icon: 'hub',           label: 'Arquitectura',        requiresProject: true },
+  { id: 'projects',      icon: 'folder',         label: 'Proyectos',           requiresProject: false },
+  { id: 'summary',       icon: 'auto_awesome',   label: 'Resumen',             requiresProject: true },
+  { id: 'planning',      icon: 'calendar_month', label: '1. Planificación (GANTT/PERT)', requiresProject: true },
+  { id: 'sources',       icon: 'folder_open',    label: 'Fuentes & Entrevistas', requiresProject: true },
+  { id: 'candidates',    icon: 'rate_review',    label: 'Revisión ISO 29148',  requiresProject: true },
+  { id: 'requirements',  icon: 'checklist',      label: '2. Requisitos (Tabla 1 UTA)', requiresProject: true },
+  { id: 'usecases',      icon: 'account_tree',   label: '2.2 Casos de Uso (4 Procesos)', requiresProject: true },
+  { id: 'diagrams',      icon: 'schema',          label: '3. Modelado & Diagramas', requiresProject: true },
+  { id: 'prototype',     icon: 'devices',        label: '3.2 Prototipos (Mockup & Info)', requiresProject: true },
+  { id: 'traceability',  icon: 'link',           label: 'Trazabilidad',        requiresProject: true },
+  { id: 'tools_team',    icon: 'groups',         label: 'Equipo & Herramientas', requiresProject: true },
+  { id: 'changes',       icon: 'change_circle',  label: 'Cambios',             requiresProject: true },
+  { id: 'versions',      icon: 'history',        label: 'Versiones',           requiresProject: true },
+  { id: 'chat',          icon: 'chat',           label: 'Chat IA',             requiresProject: true },
 ];
 
 export default function Sidebar({ activeView, onViewChange, currentProject }) {

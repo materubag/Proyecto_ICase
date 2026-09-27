@@ -11,7 +11,7 @@ const errorHandler = (err, req, res, next) => {
     success: false,
     error: {
       message,
-      details: process.env.NODE_ENV === 'development' ? err.stack : undefined
+      code: err.code || 'INTERNAL_ERROR'
     }
   });
 };

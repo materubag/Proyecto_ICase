@@ -61,6 +61,8 @@ class AnalysisPipeline {
         err.statusCode = 404;
         throw err;
       }
+      if (projectId && projectId !== source.projectId) throw Object.assign(new Error('La fuente pertenece a otro proyecto.'), { statusCode: 409, code: 'DEPENDENCY_CONFLICT' });
+      projectId = source.projectId;
 
       version = sourceVersionId
         ? await prisma.sourceVersion.findUnique({
@@ -74,6 +76,7 @@ class AnalysisPipeline {
         err.statusCode = 404;
         throw err;
       }
+      if (version.sourceId !== source.id) throw Object.assign(new Error('La versión no pertenece a esta fuente.'), { statusCode: 409, code: 'DEPENDENCY_CONFLICT' });
 
       effectiveText = (text || version.extractedText || '').trim();
       if (!effectiveText) {
@@ -175,8 +178,10 @@ class AnalysisPipeline {
     if (persist) {
       existingCandidates = await prisma.requirementCandidate.findMany({
         where: { projectId, status: { not: 'REJECTED' } },
-        select: { id: true, temporaryCode: true, statement: true, description: true }
+        select: { id: true, temporaryCode: true, statement: true, promotedRequirementId: true }
       });
+      const official = await prisma.requirement.findMany({ where: { projectId, status: 'APPROVED' } });
+      existingCandidates.unshift(...official.map(r => ({ id: r.id, temporaryCode: r.code, statement: r.description, requirementId: r.id })));
     }
 
     // 10. Consolidación de Candidatos y Validación de Calidad ISO 29148
@@ -188,6 +193,12 @@ class AnalysisPipeline {
       sourceId: source.id,
       sourceVersionId: version.id
     });
+    if (source.type === 'AUDIO') {
+      for (const candidate of consolidation.requirementCandidates) {
+        const segment = (version.segments || []).find(s => s.text.includes(candidate.statement) || candidate.statement.includes(s.text));
+        if (segment) { candidate.sourceSegmentId = segment.id; candidate.evidence = { ...candidate.evidence, audioSegmentId: segment.id, startTime: segment.startTime, endTime: segment.endTime, speaker: segment.speaker }; }
+      }
+    }
 
     let savedCandidates = {
       needs: consolidation.needCandidates,

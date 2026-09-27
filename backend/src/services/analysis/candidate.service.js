@@ -75,6 +75,7 @@ class CandidateService {
     }
 
     const statement = updateData.statement ? updateData.statement.trim() : current.statement;
+    if (current.status !== 'PENDING_REVIEW') throw Object.assign(new Error('El candidato ya fue revisado.'), { statusCode: 409, code: 'VERSION_CONFLICT' });
     const title = updateData.title ? updateData.title.trim() : current.title;
     const priority = updateData.priority || current.priority;
     const type = updateData.type || current.type;
@@ -126,8 +127,13 @@ class CandidateService {
       const existingReq = await prisma.requirement.findUnique({ where: { id: candidate.promotedRequirementId } });
       return { candidate, requirement: existingReq };
     }
+    if (['CONFLICT', 'UPDATE'].includes(candidate.evidence?.relationship?.relation) && candidate.evidence?.relationship?.requirementId) throw Object.assign(new Error('Este candidato propone un cambio a un requisito existente. Revísalo en Cambios.'), { code: 'IMPACT_CONFIRMATION_REQUIRED', statusCode: 409 });
 
-    return prisma.$transaction(async (tx) => {
+    if (candidate.status !== 'PENDING_REVIEW') throw Object.assign(new Error('El candidato ya fue revisado.'), { statusCode: 409, code: 'VERSION_CONFLICT' });
+    return require('../engineering/domain').transaction(async (tx) => {
+      const locked = await tx.requirementCandidate.findUnique({ where: { id } });
+      if (locked.status !== 'PENDING_REVIEW') throw Object.assign(new Error('El candidato ya fue revisado.'), { statusCode: 409, code: 'VERSION_CONFLICT' });
+      if (locked.updatedAt.getTime() !== candidate.updatedAt.getTime()) throw Object.assign(new Error('El candidato cambió. Actualiza la vista.'), { statusCode: 409, code: 'VERSION_CONFLICT' });
       // 1. Determinar el código secuencial oficial (ej. RF-01 o RNF-01)
       const prefix = candidate.type === 'NON_FUNCTIONAL' ? 'RNF' : 'RF';
       const existingReqs = await tx.requirement.findMany({
@@ -157,11 +163,17 @@ class CandidateService {
           description: candidate.statement,
           type: candidate.type === 'NON_FUNCTIONAL' ? 'NON_FUNCTIONAL' : 'FUNCTIONAL',
           priority: candidate.priority,
-          status: 'APPROVED'
+          status: 'APPROVED',
+          qualityReport: candidate.qualityReport || requirementQualityService.evaluate(candidate)
         }
       });
 
       // 3. Actualizar el candidato a APPROVED vinculando el ID oficial
+      const domain = require('../engineering/domain');
+      await require('../engineering/change.service').remember(tx, requirement);
+      for (const [kind, value] of [['Source', candidate.sourceId], ['SourceVersion', candidate.sourceVersionId], ['AudioSegment', candidate.sourceSegmentId]]) {
+        if (value) await domain.link(tx, candidate.projectId, kind, value, 'Requirement', requirement.id, 'EVIDENCE');
+      }
       const updatedCandidate = await tx.requirementCandidate.update({
         where: { id },
         data: {
@@ -185,6 +197,7 @@ class CandidateService {
       throw err;
     }
 
+    if (candidate.status !== 'PENDING_REVIEW') throw Object.assign(new Error('El candidato ya fue revisado.'), { statusCode: 409, code: 'VERSION_CONFLICT' });
     return prisma.requirementCandidate.update({
       where: { id },
       data: {
@@ -233,7 +246,7 @@ class CandidateService {
       }
     });
 
-    const averageQualityScore = scoreCount > 0 ? Math.round(scoreSum / scoreCount) : 100;
+    const averageQualityScore = scoreCount > 0 ? Math.round(scoreSum / scoreCount) : null;
 
     return {
       total,

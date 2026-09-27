@@ -1,10 +1,13 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
+import { engineering } from '../api/engineering.api';
 import { aiApi } from '../api/ai.api';
 import { projectsApi } from '../api/projects.api';
 import { sourcesApi } from '../api/sources.api';
 import DocumentImportModal from '../components/DocumentImportModal';
 
 export default function ProjectSummary({ project, onProjectUpdated, onNavigateTo }) {
+  const [engineeringStats, setEngineeringStats] = useState(null);
+  useEffect(() => { engineering(project.id).then(setEngineeringStats).catch(() => setEngineeringStats(null)); }, [project.id, project.updatedAt]);
   const [description, setDescription] = useState(
     project.systemDescription || project.description || ''
   );
@@ -95,11 +98,22 @@ export default function ProjectSummary({ project, onProjectUpdated, onNavigateTo
       </div>
 
       <div className="page-scrollable">
+        {engineeringStats && <div className="grid-4" style={{ marginBottom: 20 }}>{[
+          ['Fuentes', engineeringStats.sources.length],
+          ['RF aprobados', engineeringStats.Requirement.filter(r => r.status === 'APPROVED' && r.type === 'FUNCTIONAL').length],
+          ['RNF aprobados', engineeringStats.Requirement.filter(r => r.status === 'APPROVED' && r.type === 'NON_FUNCTIONAL').length],
+          ['Casos de uso', engineeringStats.UseCase.filter(r => r.status === 'APPROVED').length],
+          ['Diagramas', engineeringStats.Artifact.filter(a => a.type !== 'MOCKUP').length],
+          ['Mockups', engineeringStats.Artifact.filter(a => a.type === 'MOCKUP').length],
+          ['Cambios pendientes', engineeringStats.changes.filter(c => c.status === 'PENDING_APPROVAL').length],
+          ['OUTDATED', ['Actor', 'UseCase', 'Entity', 'NavigationNode', 'Architecture', 'Artifact'].flatMap(t => engineeringStats[t]).filter(x => x.status === 'OUTDATED').length],
+          ['Requisitos sin cobertura completa', engineeringStats.matrix.filter(r => r.missing.length).length]
+        ].map(([label, value]) => <div className="stat-card" key={label}><span>{label}</span><strong className="stat-card-value">{value}</strong></div>)}</div>}
         {/* Status message */}
         {state === 'success' && (
           <div className="alert alert-success">
             <span className="ms ms-sm">check_circle</span>
-            <span>Análisis completado exitosamente. Los artefactos han sido generados.</span>
+            <span>Análisis completado. Revisa y aprueba los candidatos antes de generar modelos.</span>
           </div>
         )}
         {state === 'error' && (
@@ -168,7 +182,26 @@ export default function ProjectSummary({ project, onProjectUpdated, onNavigateTo
             <label style={{ display: 'flex', alignItems: 'center', gap: '10px', padding: '10px 12px', border: '1px dashed var(--outline-variant)', borderRadius: '6px', background: 'var(--surface-container-low)', cursor: 'pointer' }}>
               <span className="ms ms-sm" style={{ color: 'var(--primary)' }}>description</span>
               <span style={{ minWidth: 0, flex: 1 }}><strong style={{ display: 'block', fontSize: '0.8rem' }}>Documentos PDF</strong><small style={{ color: 'var(--secondary)' }}>{pdfFiles.length ? `${pdfFiles.length} seleccionado(s)` : 'Opcional · varios archivos'}</small></span>
-              <input type="file" accept="application/pdf,.pdf" multiple hidden disabled={state === 'analyzing'} onChange={event => setPdfFiles(Array.from(event.target.files || []))} />
+              <input
+                type="file"
+                accept="application/pdf,.pdf"
+                multiple
+                hidden
+                disabled={state === 'analyzing'}
+                onChange={event => {
+                  const files = Array.from(event.target.files || []);
+                  const invalid = files.filter(f => !f.name.toLowerCase().endsWith('.pdf'));
+                  if (invalid.length > 0) {
+                    const audioExts = ['.mp3', '.wav', '.m4a', '.ogg', '.webm', '.aac', '.flac', '.mp4'];
+                    const hasAudio = invalid.some(f => audioExts.some(ext => f.name.toLowerCase().endsWith(ext)));
+                    setState('error');
+                    setErrorMessage(hasAudio
+                      ? `Has seleccionado un archivo de audio en la opción de PDF ("${invalid.map(f => f.name).join(', ')}"). Utiliza la opción de "Audio / entrevista".`
+                      : `Solo se permiten archivos PDF. Archivo no válido: "${invalid.map(f => f.name).join(', ')}".`);
+                  }
+                  setPdfFiles(files.filter(f => f.name.toLowerCase().endsWith('.pdf')));
+                }}
+              />
             </label>
             <label style={{ display: 'flex', alignItems: 'center', gap: '10px', padding: '10px 12px', border: '1px dashed var(--outline-variant)', borderRadius: '6px', background: 'var(--surface-container-low)', cursor: 'pointer' }}>
               <span className="ms ms-sm" style={{ color: 'var(--primary)' }}>mic</span>

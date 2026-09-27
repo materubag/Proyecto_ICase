@@ -200,19 +200,8 @@ class SemanticAnalyzer {
             console.warn(`[SemanticAnalyzer] GPT falló en fragmento: ${gptErr.message}`);
           }
         } else {
-          // Fallback a Mock si GPT no tiene API Key configurada
-          console.log(`[SemanticAnalyzer] OPENAI_API_KEY no configurada. Utilizando MockProvider para fragmento.`);
-          parsed = {
-            needs: [
-              {
-                type: 'FUNCTION',
-                description: `Gestionar operación mencionada en: "${chunk.chunkText.slice(0, 60)}..."`,
-                evidence: chunk.chunkText.slice(0, 100),
-                confidence: 0.8
-              }
-            ]
-          };
-          usedProvider = 'mock';
+          // An unavailable provider cannot fabricate requirements. Evidence remains available for manual review.
+          console.warn('[SemanticAnalyzer] Sin proveedor disponible: el fragmento queda pendiente de revisi?n manual.');
         }
       }
 

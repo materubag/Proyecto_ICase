@@ -18,13 +18,14 @@ const sourceUpload = multer({
 	limits: { fileSize: (env.MAX_PDF_SIZE_MB || 10) * 1024 * 1024, files: 20 },
 	fileFilter: (req, file, cb) => {
 		if (file.mimetype === 'application/pdf' || file.originalname.toLowerCase().endsWith('.pdf')) return cb(null, true);
-		const error = new Error('Solo se permiten archivos PDF en Fuentes.');
+		const error = new Error(`Solo se permiten archivos PDF en Fuentes. Archivo recibido: "${file.originalname}". Para grabaciones, utiliza la opción de Subir Audio.`);
 		error.statusCode = 400;
 		cb(error);
 	}
 });
 
 // Projects CRUD
+router.use('/:projectId/engineering', require('./engineering.routes'));
 router.get('/', (req, res, next) => projectController.getAll(req, res, next));
 router.get('/:id', (req, res, next) => projectController.getById(req, res, next));
 router.post('/', (req, res, next) => projectController.create(req, res, next));

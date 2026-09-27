@@ -1784,3 +1784,59 @@ textarea.form-control {
   background: rgba(0, 74, 198, 0.08);
   border-color: rgba(0, 74, 198, 0.2);
 }
+
+/* ===== PRINT STYLES FOR ACADEMIC DELIVERABLES (UTA) ===== */
+@media print {
+  body {
+    background: #ffffff !important;
+    color: #000000 !important;
+  }
+
+  .sidebar,
+  .top-header,
+  .page-subheader,
+  .full-page-header,
+  .page-actions,
+  .btn,
+  .view-toggle,
+  .seg-control,
+  .app-footer,
+  .search-bar {
+    display: none !important;
+  }
+
+  .main-area,
+  .page-content,
+  .full-page,
+  .page-scrollable {
+    overflow: visible !important;
+    height: auto !important;
+    padding: 0 !important;
+    margin: 0 !important;
+    display: block !important;
+  }
+
+  table {
+    border-collapse: collapse !important;
+    width: 100% !important;
+    font-size: 9pt !important;
+    page-break-inside: auto;
+  }
+
+  tr {
+    page-break-inside: avoid;
+    page-break-after: auto;
+  }
+
+  th, td {
+    border: 1px solid #cbd5e1 !important;
+    padding: 6px 8px !important;
+    color: #000000 !important;
+  }
+
+  th {
+    background: #f1f5f9 !important;
+    font-weight: bold !important;
+  }
+}
+

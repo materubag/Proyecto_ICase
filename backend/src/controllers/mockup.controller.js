@@ -1,4 +1,3 @@
-const mockupService = require('../services/mockup/mockup.service');
 const projectService = require('../services/project.service');
 
 class MockupController {
@@ -15,8 +14,8 @@ class MockupController {
         });
       }
 
-      const mockupData = await mockupService.generateMockup(project, prompt);
-      const screens = await projectService.replaceProjectScreens(projectId, mockupData.screens || []);
+      const mockupData = await require('../services/engineering/mockup-artifact.service').generate(projectId, prompt, req.body.artifactId);
+      const screens = mockupData.screens;
 
       res.status(200).json({
         success: true,

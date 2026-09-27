@@ -240,7 +240,7 @@ class CandidateConsolidator {
           text: explicit.evidence || statement,
           page: explicit.page || null,
           section: explicit.section || null,
-          relationship: rel.relation !== 'NEW' ? { relation: rel.relation, target: rel.matchedItem?.temporaryCode } : null
+            relationship: rel.relation !== 'NEW' ? { relation: rel.relation, target: rel.matchedItem?.temporaryCode, requirementId: rel.matchedItem?.requirementId || rel.matchedItem?.promotedRequirementId || null } : null
         }
       };
 
@@ -304,7 +304,7 @@ class CandidateConsolidator {
         if (rel.relation === 'CONFLICT') conflictCount++;
 
         reqCand.evidence.relationship = rel.relation !== 'NEW'
-          ? { relation: rel.relation, target: rel.matchedItem?.temporaryCode }
+          ? { relation: rel.relation, target: rel.matchedItem?.temporaryCode, requirementId: rel.matchedItem?.requirementId || rel.matchedItem?.promotedRequirementId || null }
           : null;
 
         // Evaluación ISO 29148

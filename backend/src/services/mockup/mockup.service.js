@@ -13,7 +13,7 @@ class MockupService {
     const limit = Math.max(1, env.MOCKUP_MAX_REQUIREMENTS || 12);
 
     return requirements
-      .filter((requirement) => requirement.status !== 'DISCARDED')
+      .filter((requirement) => requirement.status === 'APPROVED')
       .sort((first, second) => {
         const firstScore =
           (priorityWeight[first.priority] || 0) * 10 +
@@ -27,6 +27,7 @@ class MockupService {
       })
       .slice(0, limit)
       .map((requirement) => ({
+        id: requirement.id,
         code: requirement.code,
         name: requirement.name,
         description: requirement.description,
@@ -37,34 +38,13 @@ class MockupService {
   }
 
   buildScreenPlan(project, requirements) {
-    const context = requirements
-      .map((requirement) => `${requirement.code}: ${requirement.name} - ${requirement.description || ''}`)
-      .join('; ');
-    const projectName = project.name || 'Sistema';
-
-    return [
-      {
-        name: 'login',
-        title: 'Inicio de sesion',
-        description: `Acceso seguro al sistema ${projectName}. Incluir correo, contrasena, recordar sesion, recuperar contrasena y boton de ingreso.`,
-        actors: ['Usuario'],
-        requirements: context
-      },
-      {
-        name: 'dashboard',
-        title: 'Dashboard principal',
-        description: `Vista principal despues del login para ${projectName}. Incluir resumen de indicadores, actividad reciente, acciones principales, navegacion lateral y estado de los procesos.`,
-        actors: ['Usuario'],
-        requirements: context
-      },
-      {
-        name: 'main-management',
-        title: 'Gestion principal',
-        description: `Pantalla de gestion de la funcionalidad principal del sistema ${projectName}. Incluir listado, busqueda, filtros, estados y accion para crear o editar.`,
-        actors: ['Usuario'],
-        requirements: context
-      }
-    ];
+    return (project.navigationNodes || []).map(node => ({
+      name: node.name, title: node.name, route: node.route,
+      platform: node.platform === 'UNKNOWN' ? project.platform : node.platform,
+      description: requirements.filter(r => node.requirementIds.includes(r.id)).map(r => r.description).join('\n'),
+      actors: (project.actors || []).filter(a => node.actorIds.includes(a.id)).map(a => a.name),
+      requirements: requirements.filter(r => node.requirementIds.includes(r.id))
+    }));
   }
 
   /**
@@ -79,7 +59,7 @@ class MockupService {
       prompt,
       `Generar exactamente ${screens.length} pantallas profesionales para ${project.name}.`,
       'Respetar estrictamente los nombres y objetivos de screens recibidos.',
-      'La primera pantalla debe ser login y la segunda debe ser dashboard.',
+      'No agregar login, dashboard ni otros flujos sin requisitos aprobados.',
       'No generar pantallas absurdas, genericas, de configuracion o de contenido inventado.',
       'Usar los requisitos solo para definir contenido, campos, indicadores y acciones relevantes.',
       'Cada pantalla debe tener una jerarquia visual clara, navegacion coherente y datos de ejemplo realistas.'
@@ -92,11 +72,13 @@ class MockupService {
         const response = await fetch(env.N8N_MOCKUP_WEBHOOK, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
+          signal: AbortSignal.timeout(env.N8N_TIMEOUT),
           body: JSON.stringify({
             projectId: project.id,
             projectName: project.name,
-            description: project.description,
-            systemDescription: project.systemDescription,
+            platform: project.platform,
+            actors: project.actors,
+            useCases: project.useCases,
             requirements: relevantRequirements,
             requirementsTotal: (project.requirements || []).length,
             screens,
@@ -111,16 +93,15 @@ class MockupService {
             ...await this.normalizeN8nResult(n8nResult)
           };
         } else {
-          console.warn(`[MockupService] n8n webhook responded with status ${response.status}. Falling back to mock.`);
+          throw new Error('n8n no pudo generar el mockup. HTTP ' + response.status);
         }
       } catch (err) {
-        console.warn(`[MockupService] Error contacting n8n webhook: ${err.message}. Falling back to mock.`);
+        throw err;
       }
     }
 
-    // Default Mock Provider
-    console.log('[MockupService] Generating mockups via MockMockupProvider.');
-    return await this.mockProvider.generateMockup(project, prompt);
+    // Missing external workflow is an explicit error, never synthetic official content.
+    throw Object.assign(new Error('Configura N8N_MOCKUP_WEBHOOK para generar mockups.'), { statusCode: 503 });
   }
 
   async normalizeN8nResult(result) {

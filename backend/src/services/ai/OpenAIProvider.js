@@ -29,7 +29,7 @@ Analiza la especificación de sistema y responde ÚNICAMENTE con un JSON válido
           response_format: { type: 'json_object' },
           messages: [
             { role: 'system', content: systemPrompt },
-            { role: 'user', content: `Nombre: ${input.name}\nDescripción: ${input.description}` }
+            { role: 'user', content: input.customPrompt || `Nombre: ${input.name}\nDescripción: ${input.description}` }
           ]
         })
       });

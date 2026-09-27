@@ -104,40 +104,8 @@ class ProjectService {
     });
   }
 
-  async replaceProjectScreens(projectId, screens) {
-    return await prisma.$transaction(async (transaction) => {
-      await transaction.screen.deleteMany({ where: { projectId } });
-
-      for (const [index, screen] of screens.entries()) {
-        await transaction.screen.create({
-          data: {
-            projectId,
-            codeId: screen.id || `SCR-${index + 1}`,
-            name: screen.name || screen.title || `Pantalla ${index + 1}`,
-            description: screen.description || null,
-            route: screen.route || `/screen-${index + 1}`,
-            purpose: screen.purpose || null,
-            html: screen.html || null,
-            htmlUrl: screen.htmlUrl || null,
-            components: {
-              create: (screen.components || []).map((component, componentIndex) => ({
-                type: component.type || 'text',
-                label: component.label || null,
-                placeholder: component.placeholder || null,
-                order: component.order ?? componentIndex,
-                meta: component.meta || null
-              }))
-            }
-          }
-        });
-      }
-
-      return await transaction.screen.findMany({
-        where: { projectId },
-        include: { components: { orderBy: { order: 'asc' } } },
-        orderBy: { route: 'asc' }
-      });
-    });
+  async replaceProjectScreens() {
+    throw Object.assign(new Error('Las pantallas generadas requieren revisi?n como ArtifactVersion. Usa el servicio de mockups versionados.'), { code: 'IMPACT_CONFIRMATION_REQUIRED', statusCode: 409 });
   }
 
   async deleteProject(id) {
@@ -148,8 +116,9 @@ class ProjectService {
       throw error;
     }
 
-    return await prisma.project.delete({
-      where: { id }
+    return await prisma.project.update({
+      where: { id },
+      data: { status: 'ARCHIVED' }
     });
   }
 }

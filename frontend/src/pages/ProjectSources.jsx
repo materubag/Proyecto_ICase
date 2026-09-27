@@ -90,6 +90,18 @@ export default function ProjectSources({ project, embedded = false, onNavigateTo
   async function handlePdfUpload(event) {
     event.preventDefault();
     if (!pdfFiles.length) return;
+    const invalid = pdfFiles.filter(f => !f.name.toLowerCase().endsWith('.pdf'));
+    if (invalid.length > 0) {
+      const audioExts = ['.mp3', '.wav', '.m4a', '.ogg', '.webm', '.aac', '.flac', '.mp4'];
+      const hasAudio = invalid.some(f => audioExts.some(ext => f.name.toLowerCase().endsWith(ext)));
+      setMessage({
+        type: 'error',
+        text: hasAudio
+          ? `Has seleccionado un archivo de audio en la sección de PDF ("${invalid.map(f => f.name).join(', ')}"). Utiliza la sección "Subir Audio de Entrevista".`
+          : `Solo se permiten archivos PDF. Archivo no válido: "${invalid.map(f => f.name).join(', ')}".`
+      });
+      return;
+    }
     setUploadingPdf(true);
     setMessage(null);
     try {
@@ -249,7 +261,21 @@ export default function ProjectSources({ project, embedded = false, onNavigateTo
                 accept="application/pdf,.pdf"
                 multiple
                 hidden
-                onChange={(e) => setPdfFiles(Array.from(e.target.files || []))}
+                onChange={(e) => {
+                  const files = Array.from(e.target.files || []);
+                  const invalid = files.filter(f => !f.name.toLowerCase().endsWith('.pdf'));
+                  if (invalid.length > 0) {
+                    const audioExts = ['.mp3', '.wav', '.m4a', '.ogg', '.webm', '.aac', '.flac', '.mp4'];
+                    const hasAudio = invalid.some(f => audioExts.some(ext => f.name.toLowerCase().endsWith(ext)));
+                    setMessage({
+                      type: 'error',
+                      text: hasAudio
+                        ? `Has seleccionado un archivo de audio ("${invalid.map(f => f.name).join(', ')}"). Utiliza la sección "Subir Audio de Entrevista".`
+                        : `Solo se permiten archivos PDF. Archivo no válido: "${invalid.map(f => f.name).join(', ')}".`
+                    });
+                  }
+                  setPdfFiles(files.filter(f => f.name.toLowerCase().endsWith('.pdf')));
+                }}
               />
               <label
                 htmlFor={`pdf-source-${project.id}`}

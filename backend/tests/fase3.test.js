@@ -5,6 +5,10 @@ const candidateFragmentSelector = require('../src/services/analysis/candidateFra
 const requirementQualityService = require('../src/services/analysis/requirementQualityService');
 const candidateConsolidator = require('../src/services/analysis/candidateConsolidator');
 const semanticAnalyzer = require('../src/services/analysis/semanticAnalyzer');
+// Explicit provider fixture: these tests verify consolidation, not a live Ollama installation.
+const env = require('../src/config/env');
+env.AI_ANALYSIS_STRATEGY = 'ollama-only';
+semanticAnalyzer.ollamaProvider.analyzeProject = async ({ description }) => ({ needs: [{ type: 'FUNCTION', description, evidence: description, confidence: 0.9 }] });
 
 async function runFase3Tests() {
   console.log('================================================================');
@@ -125,6 +129,8 @@ async function runFase3Tests() {
     
     Texto complementario que requiere análisis semántico sobre gestión de préstamos.
   `;
+  const savedProvider = semanticAnalyzer.ollamaProvider.analyzeProject;
+  semanticAnalyzer.ollamaProvider.analyzeProject = async () => { throw new Error('Explicit test outage'); };
   const resultF = await analysisPipeline.runPipeline({
     projectId: 'test-proj-f',
     sourceId: 'src-f',
@@ -135,6 +141,9 @@ async function runFase3Tests() {
   });
   assert(resultF.explicitRequirements.length >= 1, 'Los requisitos explícitos deben conservarse siempre');
   assert.strictEqual(resultF.explicitRequirements[0].code, 'RF-01');
+  assert.strictEqual(resultF.metrics.ollamaFailures, 1);
+  assert.strictEqual(resultF.requirementCandidates.length, 1, 'No inventar candidatos cuando falla IA');
+  semanticAnalyzer.ollamaProvider.analyzeProject = savedProvider;
   console.log('✓ CASO F superado: Extracción determinista garantizada aún si IA falla o usa fallback.\n');
 
   // CASO G — AUDIO CON TIMESTAMPS

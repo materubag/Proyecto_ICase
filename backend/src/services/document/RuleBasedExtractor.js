@@ -372,11 +372,7 @@ class RuleBasedExtractor {
               id: `ENT-${String(entities.length + 1).padStart(2, '0')}`,
               name: c,
               description: `Entidad ${c} identificada en el documento.`,
-              attributes: [
-                { name: 'id', type: 'String', isPk: true },
-                { name: 'nombre', type: 'String', isPk: false },
-                { name: 'fechaCreacion', type: 'DateTime', isPk: false }
-              ],
+              attributes: [],
               source: 'pdf'
             });
           }
@@ -403,11 +399,7 @@ class RuleBasedExtractor {
               id: `ENT-${String(entities.length + 1).padStart(2, '0')}`,
               name: kw,
               description: `Entidad ${kw} identificada en el dominio del documento.`,
-              attributes: [
-                { name: 'id', type: 'String', isPk: true },
-                { name: 'descripcion', type: 'String', isPk: false },
-                { name: 'fechaRegistro', type: 'DateTime', isPk: false }
-              ],
+              attributes: [],
               source: 'pdf'
             });
           }
@@ -484,15 +476,15 @@ class RuleBasedExtractor {
     const archSection = sections.find(s => s.sectionId === 'arquitectura');
     const content = archSection ? archSection.content : text;
 
-    let style = 'Arquitectura Web Modular Cliente-Servidor';
+    let style = 'UNKNOWN';
     if (/tres capas/i.test(content)) style = 'Arquitectura Web de Tres Capas';
     if (/microservicios/i.test(content)) style = 'Arquitectura de Microservicios';
     if (/hexagonal|clean architecture/i.test(content)) style = 'Arquitectura Limpia / Hexagonal';
 
     // Determinar capas principales con base en tecnologías detectadas
-    const frontendTech = detectedTech.find(t => ['React', 'Vue', 'Angular', 'Next.js'].includes(t)) || 'React';
-    const backendTech = detectedTech.find(t => ['Node.js', 'Express', 'FastAPI', 'Spring Boot', 'Django'].includes(t)) || 'Node.js + Express';
-    const dbTech = detectedTech.find(t => ['PostgreSQL', 'Postgres', 'MySQL', 'MongoDB', 'SQLite'].includes(t)) || 'PostgreSQL';
+    const frontendTech = detectedTech.find(t => ['React', 'Vue', 'Angular', 'Next.js'].includes(t)) || 'UNKNOWN';
+    const backendTech = detectedTech.find(t => ['Node.js', 'Express', 'FastAPI', 'Spring Boot', 'Django'].includes(t)) || 'UNKNOWN';
+    const dbTech = detectedTech.find(t => ['PostgreSQL', 'Postgres', 'MySQL', 'MongoDB', 'SQLite'].includes(t)) || 'UNKNOWN';
 
     return {
       style,
@@ -500,16 +492,8 @@ class RuleBasedExtractor {
       backend: backendTech,
       database: dbTech,
       technologies: detectedTech,
-      connections: [
-        `${frontendTech} -> ${backendTech} (API REST)`,
-        `${backendTech} -> ${dbTech} (Persistencia Relacional)`
-      ],
-      components: [
-        { name: 'Portal Web / UI', layer: 'Presentation', type: frontendTech },
-        { name: 'API REST Controllers', layer: 'Business', type: backendTech },
-        { name: 'Servicios de Dominio', layer: 'Business', type: 'Domain Services' },
-        { name: 'Base de Datos Relacional', layer: 'Data', type: dbTech }
-      ],
+      connections: [],
+      components: detectedTech.map(name => ({ name, layer: null, type: null })),
       source: 'pdf'
     };
   }

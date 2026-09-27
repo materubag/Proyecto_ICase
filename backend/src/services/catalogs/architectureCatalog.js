@@ -122,25 +122,23 @@ class ArchitectureCatalog {
           return {
             name: arch.name,
             description: arch.description,
-            components: arch.components,
-            relations: arch.relations,
+            components: (detectedTechnologies.detected || []).map(t => ({ name: t.name, layer: t.category })),
+            relations: [],
             source: 'explicit',
-            mermaidDiagram: arch.template ? arch.template(detectedTechnologies) : ''
+            mermaidDiagram: require('../diagrams/architectureGenerator').generate({ components: (detectedTechnologies.detected || []).map(t => ({ name: t.name, layer: t.category })) })
           };
         }
       }
     }
 
     // 2. Si no se especificó ninguna arquitectura, usar la arquitectura por defecto con source: "default"
-    const defaultArch = this.catalog.find(a => a.name === DEFAULT_ARCHITECTURE_NAME) || this.catalog[0];
-
     return {
-      name: defaultArch.name,
-      description: defaultArch.description,
-      components: defaultArch.components,
-      relations: defaultArch.relations,
-      source: 'default',
-      mermaidDiagram: defaultArch.template ? defaultArch.template(detectedTechnologies) : ''
+      name: 'UNKNOWN',
+      description: 'Arquitectura pendiente de confirmación.',
+      components: [],
+      relations: [],
+      source: 'unknown',
+      mermaidDiagram: ''
     };
   }
 

@@ -47,14 +47,23 @@ export default function App() {
   const viewLabels = {
     projects: 'Dashboard',
     summary: 'Resumen',
-    sources: 'Fuentes (PDF y Audio)',
-    candidates: 'Revisión de Candidatos',
-    requirements: 'Requisitos',
+    planning: '1. Planificación (GANTT/PERT)',
+    sources: 'Fuentes & Entrevistas',
+    candidates: 'Revisión ISO 29148',
+    requirements: '2. Requisitos (Tabla 1 UTA)',
+    usecases: '2.2 Casos de Uso (4 Procesos)',
+    prototype: '3.2 Prototipos (Mockup & Info)',
     actors: 'Actores',
     model: 'Modelo del Sistema',
-    prototype: 'Prototipos',
     navigation: 'Navegación',
     architecture: 'Arquitectura',
+    modeling: 'Modelado',
+    diagrams: '3. Modelado & Diagramas',
+    traceability: 'Trazabilidad',
+    tools_team: 'Equipo & Herramientas',
+    changes: 'Cambios',
+    versions: 'Versiones',
+    chat: 'Chat IA',
   };
 
   return (
