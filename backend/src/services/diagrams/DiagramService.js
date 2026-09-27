@@ -17,8 +17,9 @@ async function snapshot(tx, projectId, type) {
     model = { actors, useCases }; add('Actor', actors); add('UseCase', useCases);
   } else if (type === 'NAVIGATION_DIAGRAM') {
     const navigationNodes = await tx.navigationNode.findMany({ where, orderBy: { id: 'asc' } });
-    if (!navigationNodes.length) d.fail('APPROVED_MODELS_REQUIRED', 'Define y aprueba navegación primero.', 400);
-    model = { navigationNodes }; add('NavigationNode', navigationNodes);
+    const screens = await tx.screen.findMany({ where: { projectId, status: 'APPROVED', isDeleted: false }, orderBy: { id: 'asc' } });
+    if (!navigationNodes.length && !screens.length) d.fail('APPROVED_MODELS_REQUIRED', 'Define y aprueba navegación o pantallas primero.', 400);
+    model = { navigationNodes, screens }; add('NavigationNode', navigationNodes); add('Screen', screens);
   } else {
     const architecture = await tx.architecture.findFirst({ where: { ...where, kind: type }, include: { components: { orderBy: { id: 'asc' } } }, orderBy: { createdAt: 'desc' } });
     if (!architecture) d.fail('APPROVED_MODELS_REQUIRED', 'Define y aprueba esta arquitectura. La infraestructura desconocida no se infiere.', 400);

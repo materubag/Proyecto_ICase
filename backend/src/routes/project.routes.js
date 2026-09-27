@@ -15,6 +15,7 @@ const fileController = require('../controllers/file.controller');
 const versionHistoryController = require('../controllers/versionHistory.controller');
 const sourceController = require('../controllers/source.controller');
 const candidateController = require('../controllers/candidate.controller');
+const diagramController = require('../controllers/diagram.controller');
 const env = require('../config/env');
 const { audioUpload } = require('../middleware/audioUpload.middleware');
 const { sourceUpload } = require('../middleware/pdfUpload.middleware');
@@ -40,6 +41,47 @@ router.post('/:projectId/requirements', (req, res, next) => requirementControlle
 // Nested Project Actors
 router.get('/:projectId/actors', (req, res, next) => actorController.getByProject(req, res, next));
 router.post('/:projectId/actors', (req, res, next) => actorController.create(req, res, next));
+router.post('/:projectId/actors/approve-all', async (req, res, next) => {
+  try {
+    const { projectId } = req.params;
+    const prisma = require('../config/prisma');
+    const updated = await prisma.actor.updateMany({
+      where: { projectId },
+      data: { reviewStatus: 'APPROVED', status: 'APPROVED' }
+    });
+    res.json({ success: true, count: updated.count });
+  } catch (err) { next(err); }
+});
+
+// Nested Entities & Approvals
+router.patch('/:projectId/entities/:entityId/status', async (req, res, next) => {
+  try {
+    const { entityId } = req.params;
+    const { reviewStatus } = req.body;
+    const prisma = require('../config/prisma');
+    const updated = await prisma.entity.update({
+      where: { id: entityId },
+      data: { reviewStatus: reviewStatus || 'APPROVED', status: reviewStatus || 'APPROVED' }
+    });
+    res.json({ success: true, data: updated });
+  } catch (err) { next(err); }
+});
+
+router.post('/:projectId/entities/approve-all', async (req, res, next) => {
+  try {
+    const { projectId } = req.params;
+    const prisma = require('../config/prisma');
+    const updated = await prisma.entity.updateMany({
+      where: { projectId },
+      data: { reviewStatus: 'APPROVED', status: 'APPROVED' }
+    });
+    await prisma.entityRelationship.updateMany({
+      where: { projectId },
+      data: { reviewStatus: 'APPROVED', status: 'APPROVED' }
+    });
+    res.json({ success: true, count: updated.count });
+  } catch (err) { next(err); }
+});
 
 // Subida Múltiple Opcional de Documentos y Audios
 router.get('/:projectId/files', (req, res, next) => fileController.getByProject(req, res, next));
@@ -86,5 +128,10 @@ router.post('/:projectId/import-analysis', (req, res, next) => documentControlle
 
 // Mockup Generation for Project (n8n prepared legacy)
 router.post('/:projectId/mockup', (req, res, next) => mockupController.generate(req, res, next));
+
+// Generación Inteligente de Diagramas Mermaid (Gemini + Validación + Fallback)
+router.get('/:projectId/diagrams/availability', (req, res, next) => diagramController.getAvailability(req, res, next));
+router.get('/:projectId/diagrams/:type', (req, res, next) => diagramController.getDiagram(req, res, next));
+router.post('/:projectId/diagrams/generate', (req, res, next) => diagramController.generate(req, res, next));
 
 module.exports = router;

@@ -1,5 +1,6 @@
-import React, { useState, useMemo } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import DiagramViewport from '../components/common/DiagramViewport';
+import { diagramsApi } from '../api/diagrams.api';
 import Modal from '../components/common/Modal';
 
 // 4 Procesos Fundamentales estándar adaptables al proyecto
@@ -105,11 +106,54 @@ const DEFAULT_PROCESSES = [
   }
 ];
 
-export default function ProjectUseCases({ project }) {
+export default function ProjectUseCases({ project, onProjectUpdated }) {
   const [selectedProcess, setSelectedProcess] = useState(DEFAULT_PROCESSES[0]);
   const [editingProcess, setEditingProcess] = useState(null);
+  const [storedUseCaseDiagram, setStoredUseCaseDiagram] = useState('');
+  const [isOutdated, setIsOutdated] = useState(false);
+  const [generating, setGenerating] = useState(false);
 
-  // Generate Mermaid Use Case Diagram
+  useEffect(() => {
+    loadUseCaseDiagram();
+  }, [project.id]);
+
+  async function loadUseCaseDiagram() {
+    try {
+      const [avail, res] = await Promise.allSettled([
+        diagramsApi.getAvailability(project.id),
+        diagramsApi.getDiagram(project.id, 'USE_CASE')
+      ]);
+
+      if (res.status === 'fulfilled' && res.value?.artifact?.mermaidCode) {
+        setStoredUseCaseDiagram(res.value.artifact.mermaidCode);
+        setIsOutdated(!!res.value.isOutdated);
+      }
+      if (avail.status === 'fulfilled') {
+        const d = avail.value?.diagrams?.USE_CASE;
+        if (d?.isOutdated) setIsOutdated(true);
+      }
+    } catch (err) {
+      console.error('Error loading use case diagram:', err);
+    }
+  }
+
+  async function handleGenerateUseCase(force = false) {
+    try {
+      setGenerating(true);
+      const res = await diagramsApi.generateDiagram(project.id, 'USE_CASE', { force });
+      if (res.diagram?.mermaidCode) {
+        setStoredUseCaseDiagram(res.diagram.mermaidCode);
+        setIsOutdated(false);
+      }
+      if (onProjectUpdated) await onProjectUpdated();
+    } catch (err) {
+      alert(`Error al generar casos de uso: ${err.message}`);
+    } finally {
+      setGenerating(false);
+    }
+  }
+
+  // Generate Mermaid Use Case Diagram (Local fallback)
   const umlDiagramCode = useMemo(() => {
     let code = `graph LR\n`;
     code += `  %% Estilos para Diagrama UML de Casos de Uso\n`;
@@ -171,6 +215,19 @@ export default function ProjectUseCases({ project }) {
             Diagrama UML de Casos de Uso con relaciones &laquo;include&raquo; / &laquo;extend&raquo; y fichas de especificación formal
           </span>
         </div>
+        <div>
+          <button
+            className="btn btn-outline btn-sm"
+            onClick={() => handleGenerateUseCase(true)}
+            disabled={generating}
+            title="Generar o regenerar casos de uso con IA a partir de actores y requisitos"
+          >
+            <span className={`ms ms-xs ${generating ? 'spin' : ''}`}>
+              {generating ? 'autorenew' : 'auto_awesome'}
+            </span>
+            <span>{generating ? 'Generando...' : storedUseCaseDiagram ? 'Regenerar Casos de Uso' : 'Generar casos de uso'}</span>
+          </button>
+        </div>
       </div>
 
       {/* Main split content */}
@@ -231,10 +288,13 @@ export default function ProjectUseCases({ project }) {
               Relaciones entre Actores del sistema y los Casos de Uso con dependencias &laquo;include&raquo; y extensiones &laquo;extend&raquo;.
             </p>
             <DiagramViewport
-              code={umlDiagramCode}
+              code={storedUseCaseDiagram || umlDiagramCode}
               type="flowchart"
               title="Diagrama UML de Casos de Uso (4 Procesos)"
               minHeight="480px"
+              isOutdated={isOutdated}
+              onRegenerate={() => handleGenerateUseCase(true)}
+              canGenerate={true}
             />
           </div>
 

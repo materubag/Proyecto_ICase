@@ -419,12 +419,14 @@ class CandidateService {
           break;
         }
         case 'SCREEN': {
+          const screenRoute = content?.route ||
+            '/' + name.toLowerCase().replace(/\s+/g, '-').replace(/[^a-z0-9\-]/g, '');
           promotedItem = await tx.screen.create({
             data: {
               projectId,
               name,
               description: content?.description || name,
-              type: content?.screenType || 'STANDARD',
+              route: screenRoute,
               status: 'APPROVED',
               reviewStatus: 'APPROVED'
             }

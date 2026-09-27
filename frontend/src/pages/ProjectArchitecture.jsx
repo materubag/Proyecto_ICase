@@ -1,10 +1,62 @@
-import React, { useState, useMemo } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import DiagramViewport from '../components/common/DiagramViewport';
 import { generateArchitectureDiagram } from '../utils/mermaidGenerators';
+import { diagramsApi } from '../api/diagrams.api';
 
-export default function ProjectArchitecture({ project }) {
+export default function ProjectArchitecture({ project, onProjectUpdated }) {
   const [archType, setArchType] = useState('software'); // 'software' | 'system'
   const [showCode, setShowCode] = useState(false);
+
+  const [storedArchDiagram, setStoredArchDiagram] = useState('');
+  const [isOutdated, setIsOutdated] = useState(false);
+  const [generatingArch, setGeneratingArch] = useState(false);
+
+  useEffect(() => {
+    loadArchDiagram();
+  }, [project.id]);
+
+  async function loadArchDiagram() {
+    try {
+      const [avail, res] = await Promise.allSettled([
+        diagramsApi.getAvailability(project.id),
+        diagramsApi.getDiagram(project.id, 'ARCHITECTURE')
+      ]);
+
+      if (res.status === 'fulfilled' && res.value?.artifact?.mermaidCode) {
+        setStoredArchDiagram(res.value.artifact.mermaidCode);
+        setIsOutdated(!!res.value.isOutdated);
+      }
+      if (avail.status === 'fulfilled') {
+        const d = avail.value?.diagrams?.ARCHITECTURE;
+        if (d?.isOutdated) setIsOutdated(true);
+      }
+    } catch (err) {
+      console.error('Error loading architecture diagram:', err);
+    }
+  }
+
+  async function handleGenerateArch(force = false) {
+    try {
+      setGeneratingArch(true);
+      const avail = await diagramsApi.getAvailability(project.id);
+      const archCheck = avail?.diagrams?.ARCHITECTURE;
+      if (archCheck?.status === 'INSUFFICIENT' && !force) {
+        alert(`Información arquitectónica insuficiente:\n• ${archCheck.missing?.join('\n• ')}`);
+        return;
+      }
+
+      const res = await diagramsApi.generateDiagram(project.id, 'ARCHITECTURE', { force });
+      if (res.diagram?.mermaidCode) {
+        setStoredArchDiagram(res.diagram.mermaidCode);
+        setIsOutdated(false);
+      }
+      if (onProjectUpdated) await onProjectUpdated();
+    } catch (err) {
+      alert(`Error al generar arquitectura: ${err.message}`);
+    } finally {
+      setGeneratingArch(false);
+    }
+  }
 
   const architecture = project.architectures && project.architectures.length > 0
     ? project.architectures[0]
@@ -85,7 +137,8 @@ export default function ProjectArchitecture({ project }) {
     return code;
   }, []);
 
-  const activeDiagramCode = archType === 'software' ? softwareArchCode : systemArchCode;
+  const effectiveSoftwareArchCode = storedArchDiagram || softwareArchCode;
+  const activeDiagramCode = archType === 'software' ? effectiveSoftwareArchCode : systemArchCode;
 
   const specItems = [
     { label: 'Estilo de Arquitectura', value: architecture?.style || 'Clean Architecture en 3 Capas', icon: 'layers' },
@@ -111,6 +164,20 @@ export default function ProjectArchitecture({ project }) {
         </div>
 
         <div className="page-actions">
+          {archType === 'software' && (
+            <button
+              className="btn btn-outline btn-sm"
+              onClick={() => handleGenerateArch(true)}
+              disabled={generatingArch}
+              title="Generar o regenerar arquitectura de software con IA"
+            >
+              <span className={`ms ms-xs ${generatingArch ? 'spin' : ''}`}>
+                {generatingArch ? 'autorenew' : 'auto_awesome'}
+              </span>
+              <span>{generatingArch ? 'Generando...' : storedArchDiagram ? 'Regenerar Arquitectura' : 'Generar arquitectura'}</span>
+            </button>
+          )}
+
           <div className="view-toggle">
             <button
               className={`view-toggle-btn ${archType === 'software' ? 'active' : ''}`}
@@ -182,6 +249,9 @@ export default function ProjectArchitecture({ project }) {
             type="flowchart"
             title={archType === 'software' ? 'Arquitectura de Software (Clean Architecture)' : 'Arquitectura del Sistema (Despliegue Docker)'}
             minHeight="520px"
+            isOutdated={archType === 'software' ? isOutdated : false}
+            onRegenerate={archType === 'software' ? () => handleGenerateArch(true) : undefined}
+            canGenerate={archType === 'software'}
           />
         )}
       </div>

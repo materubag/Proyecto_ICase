@@ -2,6 +2,8 @@ import React, { useState, useEffect, useMemo } from 'react';
 import DiagramViewport from '../components/common/DiagramViewport';
 import { generateERDiagram } from '../utils/mermaidGenerators';
 import { classesApi } from '../api/classes.api';
+import { diagramsApi } from '../api/diagrams.api';
+import { entitiesApi } from '../api/entities.api';
 import Modal from '../components/common/Modal';
 
 export default function ProjectModel({ project, onProjectUpdated }) {
@@ -11,6 +13,12 @@ export default function ProjectModel({ project, onProjectUpdated }) {
   const [classDiagramCode, setClassDiagramCode] = useState('');
   const [loadingClasses, setLoadingClasses] = useState(false);
   const [generatingClasses, setGeneratingClasses] = useState(false);
+  const [classIsOutdated, setClassIsOutdated] = useState(false);
+
+  // ER Diagram states
+  const [erStoredCode, setErStoredCode] = useState('');
+  const [generatingER, setGeneratingER] = useState(false);
+  const [erIsOutdated, setErIsOutdated] = useState(false);
 
   const [editClassModalOpen, setEditClassModalOpen] = useState(false);
   const [editClassData, setEditClassData] = useState({});
@@ -18,23 +26,48 @@ export default function ProjectModel({ project, onProjectUpdated }) {
   const entities = project.entities || [];
   const relationships = project.relationships || [];
 
-  // DER Generado
-  const erDiagramCode = useMemo(() => {
+  const pendingEntitiesCount = entities.filter(e => e.reviewStatus !== 'APPROVED').length;
+
+  async function handleUpdateEntityStatus(entityId, newStatus) {
+    try {
+      await entitiesApi.updateStatus(project.id, entityId, newStatus);
+      if (onProjectUpdated) await onProjectUpdated();
+      await loadDiagrams();
+    } catch (err) {
+      alert(`Error al actualizar estado de entidad: ${err.message}`);
+    }
+  }
+
+  async function handleApproveAllEntities() {
+    try {
+      await entitiesApi.approveAll(project.id);
+      if (onProjectUpdated) await onProjectUpdated();
+      await loadDiagrams();
+    } catch (err) {
+      alert(`Error al aprobar entidades: ${err.message}`);
+    }
+  }
+
+  // DER Generado local (fallback)
+  const erLocalCode = useMemo(() => {
     return generateERDiagram(entities, relationships);
   }, [entities, relationships]);
 
+  const effectiveERCode = erStoredCode || erLocalCode;
+
   useEffect(() => {
     loadClasses();
+    loadDiagrams();
   }, [project.id]);
 
   async function loadClasses() {
     try {
       setLoadingClasses(true);
       const data = await classesApi.getByProject(project.id);
-      setClasses(data);
-      if (data.length > 0) {
+      setClasses(data || []);
+      if (data && data.length > 0) {
         const diag = await classesApi.getDiagram(project.id);
-        setClassDiagramCode(diag.diagram);
+        if (diag?.diagram) setClassDiagramCode(diag.diagram);
       }
     } catch (err) {
       console.error('Error loading classes:', err);
@@ -43,16 +76,62 @@ export default function ProjectModel({ project, onProjectUpdated }) {
     }
   }
 
-  async function handleGenerateClasses() {
+  async function loadDiagrams() {
     try {
-      setGeneratingClasses(true);
-      const created = await classesApi.generate(project.id);
-      setClasses(created);
-      const diag = await classesApi.getDiagram(project.id);
-      setClassDiagramCode(diag.diagram);
+      const [avail, erDiag, classDiag] = await Promise.allSettled([
+        diagramsApi.getAvailability(project.id),
+        diagramsApi.getDiagram(project.id, 'ER'),
+        diagramsApi.getDiagram(project.id, 'CLASS')
+      ]);
+
+      if (erDiag.status === 'fulfilled' && erDiag.value?.artifact?.mermaidCode) {
+        setErStoredCode(erDiag.value.artifact.mermaidCode);
+        setErIsOutdated(!!erDiag.value.isOutdated);
+      }
+      if (classDiag.status === 'fulfilled' && classDiag.value?.artifact?.mermaidCode) {
+        setClassDiagramCode(classDiag.value.artifact.mermaidCode);
+        setClassIsOutdated(!!classDiag.value.isOutdated);
+      }
+      if (avail.status === 'fulfilled') {
+        const d = avail.value?.diagrams;
+        if (d?.ER) setErIsOutdated(!!d.ER.isOutdated);
+        if (d?.CLASS) setClassIsOutdated(!!d.CLASS.isOutdated);
+      }
+    } catch (err) {
+      console.error('Error loading diagrams in ProjectModel:', err);
+    }
+  }
+
+  async function handleGenerateER(force = false) {
+    try {
+      setGeneratingER(true);
+      const res = await diagramsApi.generateDiagram(project.id, 'ER', { force });
+      if (res.diagram?.mermaidCode) {
+        setErStoredCode(res.diagram.mermaidCode);
+        setErIsOutdated(false);
+      }
       if (onProjectUpdated) await onProjectUpdated();
     } catch (err) {
-      alert(`Error al generar clases: ${err.message}`);
+      alert(`Error al generar diagrama E/R: ${err.message}`);
+    } finally {
+      setGeneratingER(false);
+    }
+  }
+
+  async function handleGenerateClassDiagram(force = true) {
+    try {
+      setGeneratingClasses(true);
+      // Generate diagram with Gemini
+      const res = await diagramsApi.generateDiagram(project.id, 'CLASS', { force });
+      if (res.diagram?.mermaidCode) {
+        setClassDiagramCode(res.diagram.mermaidCode);
+        setClassIsOutdated(false);
+      }
+      // Also sync class entities if needed
+      await loadClasses();
+      if (onProjectUpdated) await onProjectUpdated();
+    } catch (err) {
+      alert(`Error al generar diagrama de clases: ${err.message}`);
     } finally {
       setGeneratingClasses(false);
     }
@@ -90,7 +169,7 @@ export default function ProjectModel({ project, onProjectUpdated }) {
     }
   }
 
-  const activeCode = activeModelTab === 'er' ? erDiagramCode : classDiagramCode;
+  const activeCode = activeModelTab === 'er' ? effectiveERCode : classDiagramCode;
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', height: '100%', overflow: 'hidden' }}>
@@ -131,15 +210,44 @@ export default function ProjectModel({ project, onProjectUpdated }) {
             </button>
           </div>
 
+          {activeModelTab === 'er' && (
+            <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
+              {pendingEntitiesCount > 0 && (
+                <button
+                  className="btn btn-outline btn-sm"
+                  onClick={handleApproveAllEntities}
+                  style={{ color: '#15803d', borderColor: '#86efac', background: '#f0fdf4' }}
+                  title="Aprobar todas las entidades para habilitar la generación de diagramas"
+                >
+                  <span className="ms ms-xs">done_all</span>
+                  <span>Aprobar entidades ({pendingEntitiesCount})</span>
+                </button>
+              )}
+              <button
+                className="btn btn-outline btn-sm"
+                onClick={() => handleGenerateER(true)}
+                disabled={generatingER}
+                title="Generar o regenerar modelo Entidad-Relación con IA"
+              >
+                <span className={`ms ms-xs ${generatingER ? 'spin' : ''}`}>
+                  {generatingER ? 'autorenew' : 'auto_awesome'}
+                </span>
+                <span>{generatingER ? 'Generando E/R...' : erStoredCode ? 'Regenerar E/R' : 'Generar diagrama E/R'}</span>
+              </button>
+            </div>
+          )}
+
           {activeModelTab === 'classes' && (
             <button
               className="btn btn-outline btn-sm"
-              onClick={handleGenerateClasses}
+              onClick={() => handleGenerateClassDiagram(true)}
               disabled={generatingClasses}
-              title="Regenerar clases a partir de las entidades"
+              title="Generar o regenerar clases con IA"
             >
-              <span className={`ms ms-xs ${generatingClasses ? 'spin' : ''}`}>sync</span>
-              <span>{generatingClasses ? 'Generando...' : 'Regenerar Clases'}</span>
+              <span className={`ms ms-xs ${generatingClasses ? 'spin' : ''}`}>
+                {generatingClasses ? 'autorenew' : 'auto_awesome'}
+              </span>
+              <span>{generatingClasses ? 'Generando...' : classDiagramCode ? 'Regenerar Clases' : 'Generar Clases'}</span>
             </button>
           )}
 
@@ -190,18 +298,27 @@ export default function ProjectModel({ project, onProjectUpdated }) {
             {/* VISTA 1: DIAGRAMA ENTIDAD-RELACIÓN */}
             {activeModelTab === 'er' && (
               <>
-                {entities.length === 0 ? (
+                {entities.length === 0 && !erStoredCode ? (
                   <div className="empty-state" style={{ border: '1px dashed var(--outline-variant)', borderRadius: 'var(--radius-lg)' }}>
                     <div className="empty-state-icon"><span className="ms ms-xl">account_tree</span></div>
                     <p className="empty-state-title">Sin entidades generadas</p>
-                    <p className="empty-state-desc">Ejecuta el análisis IA en la pestaña Resumen para generar el modelo de datos.</p>
+                    <p className="empty-state-desc">Ejecuta el análisis IA en la pestaña Resumen o genera el diagrama E/R directamente.</p>
+                    <div style={{ marginTop: '12px' }}>
+                      <button className="btn btn-primary btn-sm" onClick={() => handleGenerateER(false)} disabled={generatingER}>
+                        <span className="ms ms-xs">auto_awesome</span>
+                        <span>Generar diagrama E/R</span>
+                      </button>
+                    </div>
                   </div>
                 ) : (
                   <DiagramViewport
-                    code={erDiagramCode}
+                    code={effectiveERCode}
                     type="erDiagram"
                     title="Diagrama Entidad-Relación (DER)"
                     minHeight="520px"
+                    isOutdated={erIsOutdated}
+                    onRegenerate={() => handleGenerateER(true)}
+                    canGenerate={true}
                   />
                 )}
 
@@ -255,10 +372,21 @@ export default function ProjectModel({ project, onProjectUpdated }) {
                     type="classDiagram"
                     title="Diagrama de Clases UML (POO)"
                     minHeight="520px"
+                    isOutdated={classIsOutdated}
+                    onRegenerate={() => handleGenerateClassDiagram(true)}
+                    canGenerate={true}
                   />
                 ) : (
-                  <div style={{ textAlign: 'center', padding: '2rem', color: 'var(--secondary)' }}>
-                    Haz clic en "Regenerar Clases" para derivar automáticamente las clases a partir de las entidades.
+                  <div className="empty-state" style={{ border: '1px dashed var(--outline-variant)', borderRadius: 'var(--radius-lg)' }}>
+                    <div className="empty-state-icon"><span className="ms ms-xl">schema</span></div>
+                    <p className="empty-state-title">Sin diagrama de clases generado</p>
+                    <p className="empty-state-desc">Genera el diagrama de clases con IA a partir de las entidades, atributos y relaciones del proyecto.</p>
+                    <div style={{ marginTop: '12px' }}>
+                      <button className="btn btn-primary btn-sm" onClick={() => handleGenerateClassDiagram(true)} disabled={generatingClasses}>
+                        <span className="ms ms-xs">auto_awesome</span>
+                        <span>Generar Clases</span>
+                      </button>
+                    </div>
                   </div>
                 )}
 

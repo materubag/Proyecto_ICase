@@ -1,12 +1,67 @@
-import React, { useState, useMemo } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import DiagramViewport from '../components/common/DiagramViewport';
 import { generateNavigationDiagram } from '../utils/mermaidGenerators';
+import { diagramsApi } from '../api/diagrams.api';
 
-export default function ProjectNavigation({ project }) {
+export default function ProjectNavigation({ project, onProjectUpdated }) {
   const [activeTab, setActiveTab] = useState('diagram'); // 'diagram' | 'hierarchy' | 'matrix' | 'code'
   const navigation = project.navigationNodes || [];
   const screens = project.screens || [];
   const generatedCode = useMemo(() => generateNavigationDiagram(navigation, screens), [navigation, screens]);
+
+  const [storedNavDiagram, setStoredNavDiagram] = useState('');
+  const [isOutdated, setIsOutdated] = useState(false);
+  const [generatingNav, setGeneratingNav] = useState(false);
+
+  useEffect(() => {
+    loadNavDiagram();
+  }, [project.id]);
+
+  async function loadNavDiagram() {
+    try {
+      const [avail, res] = await Promise.allSettled([
+        diagramsApi.getAvailability(project.id),
+        diagramsApi.getDiagram(project.id, 'NAVIGATION')
+      ]);
+
+      if (res.status === 'fulfilled' && res.value?.artifact?.mermaidCode) {
+        setStoredNavDiagram(res.value.artifact.mermaidCode);
+        setIsOutdated(!!res.value.isOutdated);
+      }
+      if (avail.status === 'fulfilled') {
+        const d = avail.value?.diagrams?.NAVIGATION;
+        if (d?.isOutdated) setIsOutdated(true);
+      }
+    } catch (err) {
+      console.error('Error loading navigation diagram:', err);
+    }
+  }
+
+  async function handleGenerateNav(force = false) {
+    try {
+      setGeneratingNav(true);
+      // Pre-check availability
+      const avail = await diagramsApi.getAvailability(project.id);
+      const navCheck = avail?.diagrams?.NAVIGATION;
+      if (navCheck?.status === 'INSUFFICIENT' && !force) {
+        alert(`Información insuficiente para generar el árbol de navegación:\n• ${navCheck.missing?.join('\n• ')}`);
+        return;
+      }
+
+      const res = await diagramsApi.generateDiagram(project.id, 'NAVIGATION', { force });
+      if (res.diagram?.mermaidCode) {
+        setStoredNavDiagram(res.diagram.mermaidCode);
+        setIsOutdated(false);
+      }
+      if (onProjectUpdated) await onProjectUpdated();
+    } catch (err) {
+      alert(`Error al generar árbol de navegación: ${err.message}`);
+    } finally {
+      setGeneratingNav(false);
+    }
+  }
+
+  const effectiveCode = storedNavDiagram || generatedCode;
 
   // Derived transitions list
   const transitions = useMemo(() => {
@@ -63,36 +118,50 @@ export default function ProjectNavigation({ project }) {
           </div>
         </div>
 
-        {/* View Toggle */}
-        <div className="view-toggle" style={{ background: 'var(--surface-container-high)' }}>
+        {/* View Toggle & Actions */}
+        <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
           <button
-            className={`view-toggle-btn ${activeTab === 'diagram' ? 'active' : ''}`}
-            onClick={() => setActiveTab('diagram')}
+            className="btn btn-outline btn-sm"
+            onClick={() => handleGenerateNav(true)}
+            disabled={generatingNav}
+            title="Generar o regenerar árbol de navegación con IA"
           >
-            <span className="ms ms-xs">fork_right</span>
-            <span>Diagrama de Flujo</span>
+            <span className={`ms ms-xs ${generatingNav ? 'spin' : ''}`}>
+              {generatingNav ? 'autorenew' : 'auto_awesome'}
+            </span>
+            <span>{generatingNav ? 'Generando...' : storedNavDiagram ? 'Regenerar Árbol' : 'Generar árbol'}</span>
           </button>
-          <button
-            className={`view-toggle-btn ${activeTab === 'hierarchy' ? 'active' : ''}`}
-            onClick={() => setActiveTab('hierarchy')}
-          >
-            <span className="ms ms-xs">list_alt</span>
-            <span>Jerarquía de Pantallas</span>
-          </button>
-          <button
-            className={`view-toggle-btn ${activeTab === 'matrix' ? 'active' : ''}`}
-            onClick={() => setActiveTab('matrix')}
-          >
-            <span className="ms ms-xs">swap_horiz</span>
-            <span>Matriz de Transiciones</span>
-          </button>
-          <button
-            className={`view-toggle-btn ${activeTab === 'code' ? 'active' : ''}`}
-            onClick={() => setActiveTab('code')}
-          >
-            <span className="ms ms-xs">code</span>
-            <span>Código Mermaid</span>
-          </button>
+
+          <div className="view-toggle" style={{ background: 'var(--surface-container-high)' }}>
+            <button
+              className={`view-toggle-btn ${activeTab === 'diagram' ? 'active' : ''}`}
+              onClick={() => setActiveTab('diagram')}
+            >
+              <span className="ms ms-xs">fork_right</span>
+              <span>Diagrama de Flujo</span>
+            </button>
+            <button
+              className={`view-toggle-btn ${activeTab === 'hierarchy' ? 'active' : ''}`}
+              onClick={() => setActiveTab('hierarchy')}
+            >
+              <span className="ms ms-xs">list_alt</span>
+              <span>Jerarquía de Pantallas</span>
+            </button>
+            <button
+              className={`view-toggle-btn ${activeTab === 'matrix' ? 'active' : ''}`}
+              onClick={() => setActiveTab('matrix')}
+            >
+              <span className="ms ms-xs">swap_horiz</span>
+              <span>Matriz de Transiciones</span>
+            </button>
+            <button
+              className={`view-toggle-btn ${activeTab === 'code' ? 'active' : ''}`}
+              onClick={() => setActiveTab('code')}
+            >
+              <span className="ms ms-xs">code</span>
+              <span>Código Mermaid</span>
+            </button>
+          </div>
         </div>
       </div>
 
@@ -112,10 +181,13 @@ export default function ProjectNavigation({ project }) {
             </div>
 
             <DiagramViewport
-              code={generatedCode}
+              code={effectiveCode}
               type="flowchart"
               title="Diagrama de Flujo y Rutas de Navegación"
               minHeight="500px"
+              isOutdated={isOutdated}
+              onRegenerate={() => handleGenerateNav(true)}
+              canGenerate={true}
             />
           </div>
         )}
@@ -295,11 +367,11 @@ export default function ProjectNavigation({ project }) {
           <div>
             <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '8px' }}>
               <span className="detail-section-label">Código Mermaid Generado (Flowchart)</span>
-              <button className="btn btn-ghost btn-sm" onClick={() => navigator.clipboard?.writeText(generatedCode)}>
+              <button className="btn btn-ghost btn-sm" onClick={() => navigator.clipboard?.writeText(effectiveCode)}>
                 <span className="ms ms-sm">content_copy</span><span>Copiar Código</span>
               </button>
             </div>
-            <textarea className="diagram-raw-editor" rows={16} readOnly value={generatedCode} />
+            <textarea className="diagram-raw-editor" rows={16} readOnly value={effectiveCode} />
           </div>
         )}
       </div>
