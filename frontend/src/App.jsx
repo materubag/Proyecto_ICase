@@ -47,6 +47,8 @@ export default function App() {
   const viewLabels = {
     projects: 'Dashboard',
     summary: 'Resumen',
+    sources: 'Fuentes (PDF y Audio)',
+    candidates: 'Revisión de Candidatos',
     requirements: 'Requisitos',
     actors: 'Actores',
     model: 'Modelo del Sistema',

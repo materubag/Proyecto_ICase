@@ -1,14 +1,16 @@
 import React from 'react';
 
 const NAV_ITEMS = [
-  { id: 'projects',      icon: 'folder',       label: 'Proyectos',         requiresProject: false },
-  { id: 'summary',       icon: 'auto_awesome',  label: 'Resumen',           requiresProject: true },
-  { id: 'requirements',  icon: 'checklist',     label: 'Requisitos',        requiresProject: true },
-  { id: 'actors',        icon: 'people',        label: 'Actores',           requiresProject: true },
-  { id: 'model',         icon: 'account_tree',  label: 'Modelo del Sistema',requiresProject: true },
-  { id: 'prototype',     icon: 'devices',       label: 'Prototipos',        requiresProject: true },
-  { id: 'navigation',    icon: 'fork_right',    label: 'Navegación',        requiresProject: true },
-  { id: 'architecture',  icon: 'hub',           label: 'Arquitectura',      requiresProject: true },
+  { id: 'projects',      icon: 'folder',        label: 'Proyectos',           requiresProject: false },
+  { id: 'summary',       icon: 'auto_awesome',  label: 'Resumen',             requiresProject: true },
+  { id: 'sources',       icon: 'folder_open',   label: 'Fuentes (PDF/Audio)', requiresProject: true },
+  { id: 'candidates',    icon: 'rate_review',   label: 'Revisión Candidatos', requiresProject: true },
+  { id: 'requirements',  icon: 'checklist',     label: 'Requisitos',          requiresProject: true },
+  { id: 'actors',        icon: 'people',        label: 'Actores',             requiresProject: true },
+  { id: 'model',         icon: 'account_tree',  label: 'Modelo del Sistema',  requiresProject: true },
+  { id: 'prototype',     icon: 'devices',       label: 'Prototipos',          requiresProject: true },
+  { id: 'navigation',    icon: 'fork_right',    label: 'Navegación',          requiresProject: true },
+  { id: 'architecture',  icon: 'hub',           label: 'Arquitectura',        requiresProject: true },
 ];
 
 export default function Sidebar({ activeView, onViewChange, currentProject }) {

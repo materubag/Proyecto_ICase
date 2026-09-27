@@ -2,6 +2,8 @@ import React, { useState } from 'react';
 import { projectsApi } from '../api/projects.api';
 
 import ProjectSummary from './ProjectSummary';
+import ProjectSources from './ProjectSources';
+import ProjectCandidateReview from './ProjectCandidateReview';
 import ProjectRequirements from './ProjectRequirements';
 import ProjectActors from './ProjectActors';
 import ProjectModel from './ProjectModel';
@@ -11,6 +13,8 @@ import ProjectArchitecture from './ProjectArchitecture';
 
 const TABS = [
   { id: 'summary',       icon: 'auto_awesome',  label: 'Resumen' },
+  { id: 'sources',       icon: 'folder_open',   label: 'Fuentes' },
+  { id: 'candidates',    icon: 'rate_review',   label: 'Revisión Candidatos' },
   { id: 'requirements',  icon: 'checklist',     label: 'Requisitos',    countKey: 'requirements' },
   { id: 'actors',        icon: 'people',        label: 'Actores',       countKey: 'actors' },
   { id: 'model',         icon: 'account_tree',  label: 'Modelo',        countKey: 'entities' },
@@ -147,6 +151,8 @@ export default function ProjectDetail({
       {/* Tab Content */}
       <div style={{ flex: 1, overflow: 'hidden', display: 'flex', flexDirection: 'column' }}>
         {activeTab === 'summary'      && <ProjectSummary project={project} onProjectUpdated={onProjectUpdated} onNavigateTo={onTabChange} />}
+        {activeTab === 'sources'      && <ProjectSources project={project} onNavigateToReview={() => onTabChange('candidates')} />}
+        {activeTab === 'candidates'   && <ProjectCandidateReview project={project} onNavigateToRequirements={() => onTabChange('requirements')} />}
         {activeTab === 'requirements' && <ProjectRequirements project={project} onProjectUpdated={onProjectUpdated} />}
         {activeTab === 'actors'       && <ProjectActors project={project} onProjectUpdated={onProjectUpdated} />}
         {activeTab === 'model'        && <ProjectModel project={project} />}

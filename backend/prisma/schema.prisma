@@ -35,31 +35,218 @@ enum RequirementStatus {
   DISCARDED
 }
 
+enum SourceType {
+  PDF
+  AUDIO
+  CHAT
+  MANUAL
+}
+
+enum SourceStatus {
+  PENDING
+  UPLOADED
+  EXTRACTED
+  TRANSCRIBING
+  TRANSCRIBED
+  TRANSCRIPTION_ERROR
+  ANALYZED
+  PENDING_REVIEW
+  FAILED
+}
+
+enum CandidateStatus {
+  PENDING_REVIEW
+  APPROVED
+  REJECTED
+}
+
+enum CandidateOrigin {
+  EXPLICIT
+  INFERRED
+  MANUAL
+  CHAT
+}
+
+enum NeedType {
+  FUNCTION
+  QUALITY
+  BUSINESS_RULE
+  CONSTRAINT
+  ACTOR
+  DATA
+  PLATFORM
+  TECHNOLOGY
+  ARCHITECTURE
+  UNKNOWN
+}
+
+enum CandidateType {
+  FUNCTIONAL
+  NON_FUNCTIONAL
+  BUSINESS_RULE
+  CONSTRAINT
+}
+
 model Project {
-  id                String         @id @default(uuid())
+  id                String        @id @default(uuid())
   name              String
-  description       String?        @db.Text
-  systemDescription String?        @db.Text
-  status            ProjectStatus  @default(PLANNING)
-  createdAt         DateTime       @default(now())
-  updatedAt         DateTime       @updatedAt
+  description       String?       @db.Text
+  systemDescription String?       @db.Text
+  status            ProjectStatus @default(PLANNING)
+  createdAt         DateTime      @default(now())
+  updatedAt         DateTime      @updatedAt
 
   // Relationships
-  requirements      Requirement[]
-  actors            Actor[]
-  entities          Entity[]
-  relationships     EntityRelationship[]
-  screens           Screen[]
-  navigationNodes   NavigationNode[]
-  architectures     Architecture[]
+  requirements          Requirement[]
+  actors                Actor[]
+  entities              Entity[]
+  relationships         EntityRelationship[]
+  screens               Screen[]
+  navigationNodes       NavigationNode[]
+  architectures         Architecture[]
+  sources               Source[]
+  needCandidates        NeedCandidate[]
+  requirementCandidates RequirementCandidate[]
 
   @@map("projects")
+}
+
+model Source {
+  id               String       @id @default(uuid())
+  projectId        String
+  name             String
+  type             SourceType   @default(PDF)
+  mimeType         String?
+  fileSize         Int?
+  fileHash         String
+  status           SourceStatus @default(PENDING)
+  currentVersionId String?      @unique
+  createdAt        DateTime     @default(now())
+  updatedAt        DateTime     @updatedAt
+
+  project               Project                @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  versions              SourceVersion[]
+  currentVersion        SourceVersion?         @relation("CurrentSourceVersion", fields: [currentVersionId], references: [id], onDelete: SetNull)
+  needCandidates        NeedCandidate[]
+  requirementCandidates RequirementCandidate[]
+
+  @@unique([projectId, fileHash])
+  @@index([projectId, name])
+  @@map("sources")
+}
+
+model SourceVersion {
+  id                String    @id @default(uuid())
+  sourceId          String
+  version           Int
+  fileHash          String
+  extractedText     String?   @db.Text
+  normalizedText    String?   @db.Text
+  metadata          Json?
+  previousVersionId String?
+  createdAt         DateTime  @default(now())
+  analyzedAt        DateTime?
+
+  source                Source                 @relation(fields: [sourceId], references: [id], onDelete: Cascade)
+  currentFor            Source?                @relation("CurrentSourceVersion")
+  previousVersion       SourceVersion?         @relation("SourceVersionHistory", fields: [previousVersionId], references: [id], onDelete: SetNull)
+  nextVersions          SourceVersion[]        @relation("SourceVersionHistory")
+  segments              AudioSegment[]
+  needCandidates        NeedCandidate[]
+  requirementCandidates RequirementCandidate[]
+
+  @@unique([sourceId, version])
+  @@index([fileHash])
+  @@map("source_versions")
+}
+
+model AudioSegment {
+  id              String   @id @default(uuid())
+  sourceVersionId String
+  sequence        Int?
+  startTime       Float
+  endTime         Float
+  text            String   @db.Text
+  speaker         String?
+  confidence      Float?
+  createdAt       DateTime @default(now())
+
+  sourceVersion         SourceVersion          @relation(fields: [sourceVersionId], references: [id], onDelete: Cascade)
+  needCandidates        NeedCandidate[]
+  requirementCandidates RequirementCandidate[]
+
+  @@index([sourceVersionId, startTime])
+  @@map("audio_segments")
+}
+
+model NeedCandidate {
+  id              String          @id @default(uuid())
+  projectId       String
+  sourceId        String?
+  sourceVersionId String?
+  sourceSegmentId String?
+  type            NeedType        @default(FUNCTION)
+  description     String          @db.Text
+  evidence        Json?
+  confidence      Float?
+  origin          CandidateOrigin @default(INFERRED)
+  status          CandidateStatus @default(PENDING_REVIEW)
+  metadata        Json?
+  createdAt       DateTime        @default(now())
+  updatedAt       DateTime        @updatedAt
+
+  project         Project                @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  source          Source?                @relation(fields: [sourceId], references: [id], onDelete: SetNull)
+  sourceVersion   SourceVersion?         @relation(fields: [sourceVersionId], references: [id], onDelete: SetNull)
+  sourceSegment   AudioSegment?          @relation(fields: [sourceSegmentId], references: [id], onDelete: SetNull)
+  requirements    RequirementCandidate[]
+
+  @@index([projectId, status])
+  @@index([sourceId])
+  @@map("need_candidates")
+}
+
+model RequirementCandidate {
+  id                    String              @id @default(uuid())
+  projectId             String
+  sourceId              String?
+  sourceVersionId       String?
+  sourceSegmentId       String?
+  needCandidateId       String?
+  temporaryCode         String              // E.g. "CRF-01", "CRNF-02"
+  title                 String
+  statement             String              @db.Text
+  originalStatement     String?             @db.Text
+  type                  CandidateType       @default(FUNCTIONAL)
+  category              String?             // E.g. "PERFORMANCE", "SECURITY", "USABILITY"
+  priority              RequirementPriority @default(MEDIUM)
+  origin                CandidateOrigin     @default(INFERRED)
+  confidence            Float?
+  status                CandidateStatus     @default(PENDING_REVIEW)
+  rejectionReason       String?             @db.Text
+  evidence              Json?
+  qualityReport         Json?               // ISO/IEC/IEEE 29148:2018 validation details
+  promotedRequirementId String?             @unique
+  createdAt             DateTime            @default(now())
+  updatedAt             DateTime            @updatedAt
+
+  project               Project             @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  source                Source?             @relation(fields: [sourceId], references: [id], onDelete: SetNull)
+  sourceVersion         SourceVersion?      @relation(fields: [sourceVersionId], references: [id], onDelete: SetNull)
+  sourceSegment         AudioSegment?       @relation(fields: [sourceSegmentId], references: [id], onDelete: SetNull)
+  needCandidate         NeedCandidate?      @relation(fields: [needCandidateId], references: [id], onDelete: SetNull)
+  promotedRequirement   Requirement?        @relation("PromotedRequirement", fields: [promotedRequirementId], references: [id], onDelete: SetNull)
+
+  @@index([projectId, status])
+  @@index([projectId, temporaryCode])
+  @@index([sourceId])
+  @@map("requirement_candidates")
 }
 
 model Requirement {
   id           String              @id @default(uuid())
   projectId    String
-  code         String              // E.g. "RF-01", "RNF-02"
+  code         String // E.g. "RF-01", "RNF-02"
   name         String
   description  String              @db.Text
   type         RequirementType     @default(FUNCTIONAL)
@@ -71,7 +258,8 @@ model Requirement {
   updatedAt    DateTime            @updatedAt
 
   // Relations
-  project      Project             @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  project         Project                @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  candidateOrigin RequirementCandidate?  @relation("PromotedRequirement")
 
   @@unique([projectId, code])
   @@map("requirements")
@@ -80,30 +268,30 @@ model Requirement {
 model Actor {
   id          String   @id @default(uuid())
   projectId   String
-  codeId      String?  // E.g. "ACT-01"
+  codeId      String? // E.g. "ACT-01"
   name        String
   description String?  @db.Text
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
 
   // Relations
-  project     Project  @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  project Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
 
   @@map("actors")
 }
 
 model Entity {
-  id          String            @id @default(uuid())
+  id          String   @id @default(uuid())
   projectId   String
-  codeId      String?           // E.g. "ENT-01"
+  codeId      String? // E.g. "ENT-01"
   name        String
-  description String?           @db.Text
-  createdAt   DateTime          @default(now())
-  updatedAt   DateTime          @updatedAt
+  description String?  @db.Text
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
 
   // Relations
-  project     Project           @relation(fields: [projectId], references: [id], onDelete: Cascade)
-  attributes  EntityAttribute[]
+  project    Project           @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  attributes EntityAttribute[]
 
   @@map("entities")
 }
@@ -112,13 +300,13 @@ model EntityAttribute {
   id        String   @id @default(uuid())
   entityId  String
   name      String
-  type      String   // E.g. "String", "Int", "Boolean", "DateTime"
+  type      String // E.g. "String", "Int", "Boolean", "DateTime"
   isPk      Boolean  @default(false)
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
   // Relations
-  entity    Entity   @relation(fields: [entityId], references: [id], onDelete: Cascade)
+  entity Entity @relation(fields: [entityId], references: [id], onDelete: Cascade)
 
   @@map("entity_attributes")
 }
@@ -126,36 +314,36 @@ model EntityAttribute {
 model EntityRelationship {
   id          String   @id @default(uuid())
   projectId   String
-  codeId      String?  // E.g. "REL-01"
-  source      String   // E.g. "Usuario"
-  target      String   // E.g. "Prestamo"
-  cardinality String   // E.g. "1:N", "1:1", "N:M"
+  codeId      String? // E.g. "REL-01"
+  source      String // E.g. "Usuario"
+  target      String // E.g. "Prestamo"
+  cardinality String // E.g. "1:N", "1:1", "N:M"
   description String?  @db.Text
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
 
   // Relations
-  project     Project  @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  project Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
 
   @@map("entity_relationships")
 }
 
 model Screen {
-  id          String            @id @default(uuid())
+  id          String   @id @default(uuid())
   projectId   String
-  codeId      String?           // E.g. "SCR-01"
+  codeId      String? // E.g. "SCR-01"
   name        String
-  description String?           @db.Text
-  route       String            // E.g. "/login", "/libros"
-  purpose     String?           @db.Text
-  html        String?           @db.Text
+  description String?  @db.Text
+  route       String // E.g. "/login", "/libros"
+  purpose     String?  @db.Text
+  html        String?  @db.Text
   htmlUrl     String?
-  createdAt   DateTime          @default(now())
-  updatedAt   DateTime          @updatedAt
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
 
   // Relations
-  project     Project           @relation(fields: [projectId], references: [id], onDelete: Cascade)
-  components  ScreenComponent[]
+  project    Project           @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  components ScreenComponent[]
 
   @@map("screens")
 }
@@ -163,7 +351,7 @@ model Screen {
 model ScreenComponent {
   id          String   @id @default(uuid())
   screenId    String
-  type        String   // E.g. "heading", "text", "input", "button", "table", "card", "navbar", "sidebar", "form", "list"
+  type        String // E.g. "heading", "text", "input", "button", "table", "card", "navbar", "sidebar", "form", "list"
   label       String?
   placeholder String?
   order       Int      @default(0)
@@ -172,7 +360,7 @@ model ScreenComponent {
   updatedAt   DateTime @updatedAt
 
   // Relations
-  screen      Screen   @relation(fields: [screenId], references: [id], onDelete: Cascade)
+  screen Screen @relation(fields: [screenId], references: [id], onDelete: Cascade)
 
   @@map("screen_components")
 }
@@ -180,47 +368,47 @@ model ScreenComponent {
 model NavigationNode {
   id        String   @id @default(uuid())
   projectId String
-  from      String   // E.g. "Login"
-  to        String   // E.g. "Dashboard"
-  action    String?  // E.g. "Autenticar"
+  from      String // E.g. "Login"
+  to        String // E.g. "Dashboard"
+  action    String? // E.g. "Autenticar"
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
   // Relations
-  project   Project  @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  project Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
 
   @@map("navigation_nodes")
 }
 
 model Architecture {
-  id          String                  @id @default(uuid())
+  id          String   @id @default(uuid())
   projectId   String
-  style       String                  // E.g. "Clean Architecture en 3 Capas"
-  frontend    String                  // E.g. "React"
-  backend     String                  // E.g. "Node.js / Express"
-  database    String                  // E.g. "PostgreSQL"
-  connections Json?                   // Lista de conexiones [{ from, to, type }]
-  createdAt   DateTime                @default(now())
-  updatedAt   DateTime                @updatedAt
+  style       String // E.g. "Clean Architecture en 3 Capas"
+  frontend    String // E.g. "React"
+  backend     String // E.g. "Node.js / Express"
+  database    String // E.g. "PostgreSQL"
+  connections Json? // Lista de conexiones [{ from, to, type }]
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
 
   // Relations
-  project     Project                 @relation(fields: [projectId], references: [id], onDelete: Cascade)
-  components  ArchitectureComponent[]
+  project    Project                 @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  components ArchitectureComponent[]
 
   @@map("architectures")
 }
 
 model ArchitectureComponent {
-  id             String       @id @default(uuid())
+  id             String   @id @default(uuid())
   architectureId String
-  name           String       // E.g. "Controllers", "Prisma ORM"
-  layer          String?      // E.g. "Presentation", "Business", "Data"
-  type           String?      // E.g. "service", "gateway", "ui"
-  createdAt      DateTime     @default(now())
-  updatedAt      DateTime     @updatedAt
+  name           String // E.g. "Controllers", "Prisma ORM"
+  layer          String? // E.g. "Presentation", "Business", "Data"
+  type           String? // E.g. "service", "gateway", "ui"
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
 
   // Relations
-  architecture   Architecture @relation(fields: [architectureId], references: [id], onDelete: Cascade)
+  architecture Architecture @relation(fields: [architectureId], references: [id], onDelete: Cascade)
 
   @@map("architecture_components")
 }

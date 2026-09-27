@@ -19,6 +19,7 @@ module.exports = {
 
   // Configuración Documentos / PDF
   MAX_PDF_SIZE_MB: parseInt(process.env.MAX_PDF_SIZE_MB || '10', 10),
+  MAX_AUDIO_SIZE_MB: parseInt(process.env.MAX_AUDIO_SIZE_MB || '100', 10),
 
   // Configuración OpenAI
   OPENAI_API_KEY: process.env.OPENAI_API_KEY || '',
@@ -27,7 +28,15 @@ module.exports = {
   // Configuración n8n
   N8N_BASE_URL: process.env.N8N_BASE_URL || '',
   N8N_ANALYZE_WEBHOOK: process.env.N8N_ANALYZE_WEBHOOK || '',
+  N8N_TRANSCRIBE_WEBHOOK: process.env.N8N_TRANSCRIBE_WEBHOOK || process.env.N8N_TRANSCRIPTION_WEBHOOK || '',
+  N8N_TRANSCRIPTION_WEBHOOK: process.env.N8N_TRANSCRIBE_WEBHOOK || process.env.N8N_TRANSCRIPTION_WEBHOOK || '',
   N8N_MOCKUP_WEBHOOK: process.env.N8N_MOCKUP_WEBHOOK || '',
-  N8N_TIMEOUT: parseInt(process.env.N8N_TIMEOUT || '30000', 10),
-  MOCKUP_MAX_REQUIREMENTS: parseInt(process.env.MOCKUP_MAX_REQUIREMENTS || '12', 10)
+  N8N_TIMEOUT: parseInt(process.env.N8N_TIMEOUT || '120000', 10),
+  MOCKUP_MAX_REQUIREMENTS: parseInt(process.env.MOCKUP_MAX_REQUIREMENTS || '12', 10),
+
+  // Configuración de Análisis Inteligente de Requisitos (Fase 3)
+  AI_ANALYSIS_STRATEGY: process.env.AI_ANALYSIS_STRATEGY || 'ollama-first',
+  AI_FALLBACK_CONFIDENCE_THRESHOLD: parseFloat(process.env.AI_FALLBACK_CONFIDENCE_THRESHOLD || '0.65'),
+  AI_MAX_CHUNKS: parseInt(process.env.AI_MAX_CHUNKS || '12', 10),
+  AI_CHUNK_MAX_LENGTH: parseInt(process.env.AI_CHUNK_MAX_LENGTH || '350', 10)
 };

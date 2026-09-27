@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { aiApi } from '../api/ai.api';
 import { projectsApi } from '../api/projects.api';
+import { sourcesApi } from '../api/sources.api';
 import DocumentImportModal from '../components/DocumentImportModal';
 
 export default function ProjectSummary({ project, onProjectUpdated, onNavigateTo }) {
@@ -10,6 +11,8 @@ export default function ProjectSummary({ project, onProjectUpdated, onNavigateTo
   const [state, setState] = useState('idle');
   const [errorMessage, setErrorMessage] = useState(null);
   const [isImportModalOpen, setIsImportModalOpen] = useState(false);
+  const [pdfFiles, setPdfFiles] = useState([]);
+  const [audioFile, setAudioFile] = useState(null);
 
   const reqCount    = project.requirements?.length ?? project._count?.requirements ?? 0;
   const actorCount  = project.actors?.length       ?? project._count?.actors       ?? 0;
@@ -26,11 +29,15 @@ export default function ProjectSummary({ project, onProjectUpdated, onNavigateTo
     try {
       setState('analyzing');
       setErrorMessage(null);
+      if (pdfFiles.length) await sourcesApi.uploadPdfs(project.id, pdfFiles);
+      if (audioFile) await sourcesApi.uploadAudio(project.id, audioFile);
       await projectsApi.update(project.id, {
         description: description.trim(),
         systemDescription: description.trim()
       });
       await aiApi.analyzeProject(project.id, description.trim());
+      setPdfFiles([]);
+      setAudioFile(null);
       setState('success');
       await onProjectUpdated();
     } catch (err) {
@@ -75,7 +82,7 @@ export default function ProjectSummary({ project, onProjectUpdated, onNavigateTo
             {state === 'analyzing' ? (
               <>
                 <span className="ms ms-sm spin">autorenew</span>
-                <span>Analizando...</span>
+                <span>{pdfFiles.length || audioFile ? 'Procesando fuentes...' : 'Analizando...'}</span>
               </>
             ) : (
               <>
@@ -157,26 +164,31 @@ export default function ProjectSummary({ project, onProjectUpdated, onNavigateTo
             />
           </div>
 
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(240px, 1fr))', gap: '10px', marginBottom: '14px' }}>
+            <label style={{ display: 'flex', alignItems: 'center', gap: '10px', padding: '10px 12px', border: '1px dashed var(--outline-variant)', borderRadius: '6px', background: 'var(--surface-container-low)', cursor: 'pointer' }}>
+              <span className="ms ms-sm" style={{ color: 'var(--primary)' }}>description</span>
+              <span style={{ minWidth: 0, flex: 1 }}><strong style={{ display: 'block', fontSize: '0.8rem' }}>Documentos PDF</strong><small style={{ color: 'var(--secondary)' }}>{pdfFiles.length ? `${pdfFiles.length} seleccionado(s)` : 'Opcional · varios archivos'}</small></span>
+              <input type="file" accept="application/pdf,.pdf" multiple hidden disabled={state === 'analyzing'} onChange={event => setPdfFiles(Array.from(event.target.files || []))} />
+            </label>
+            <label style={{ display: 'flex', alignItems: 'center', gap: '10px', padding: '10px 12px', border: '1px dashed var(--outline-variant)', borderRadius: '6px', background: 'var(--surface-container-low)', cursor: 'pointer' }}>
+              <span className="ms ms-sm" style={{ color: 'var(--primary)' }}>mic</span>
+              <span style={{ minWidth: 0, flex: 1 }}><strong style={{ display: 'block', fontSize: '0.8rem' }}>Audio / entrevista</strong><small style={{ color: 'var(--secondary)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', display: 'block' }}>{audioFile?.name || 'Opcional · transcripción n8n'}</small></span>
+              <input type="file" accept="audio/*,.mp3,.wav,.m4a,.ogg,.webm" hidden disabled={state === 'analyzing'} onChange={event => setAudioFile(event.target.files?.[0] || null)} />
+            </label>
+          </div>
+
           <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: '8px' }}>
             <p style={{ fontSize: '0.75rem', color: 'var(--outline)' }}>
               {description.length} caracteres · El análisis puede tomar entre 30–120 segundos.
             </p>
             <div style={{ display: 'flex', gap: '8px' }}>
               <button
-                className="btn btn-outline btn-sm"
-                onClick={() => setIsImportModalOpen(true)}
-                disabled={state === 'analyzing'}
-              >
-                <span className="ms ms-sm">upload_file</span>
-                <span>Importar PDF</span>
-              </button>
-              <button
                 className="btn btn-primary btn-sm"
                 onClick={handleAnalyze}
                 disabled={state === 'analyzing' || !description.trim()}
               >
                 {state === 'analyzing' ? (
-                  <><span className="ms ms-sm spin">autorenew</span><span>Analizando...</span></>
+                    <><span className="ms ms-sm spin">autorenew</span><span>{pdfFiles.length || audioFile ? 'Procesando fuentes...' : 'Analizando...'}</span></>
                 ) : (
                   <><span className="ms ms-sm">play_arrow</span><span>Analizar proyecto</span></>
                 )}
