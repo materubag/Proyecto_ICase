@@ -144,7 +144,7 @@ function cleanUtf8(str) {
         }
       }
 
-      // Guardar Requisitos
+      // Guardar Requisitos ISO/IEC/IEEE 29148:2018
       if (rawResult.requirements && rawResult.requirements.length > 0) {
         for (const req of rawResult.requirements) {
           await tx.requirement.create({
@@ -157,7 +157,9 @@ function cleanUtf8(str) {
               priority: req.priority === 'ALTA' ? 'HIGH' : req.priority === 'BAJA' ? 'LOW' : 'MEDIUM',
               status: 'APPROVED',
               actorIds: req.actorIds || [],
-              dependencies: req.dependencies || []
+              dependencies: req.dependencies || [],
+              preconditions: req.preconditions ? cleanUtf8(req.preconditions) : (req.type === 'NO_FUNCIONAL' || req.type === 'NON_FUNCTIONAL' ? 'Entorno operativo y conectividad estándar' : 'Usuario con sesión activa y permisos correspondientes'),
+              postconditions: req.postconditions ? cleanUtf8(req.postconditions) : (req.type === 'NO_FUNCIONAL' || req.type === 'NON_FUNCTIONAL' ? 'Métricas de calidad y estabilidad verificadas' : 'Estado del sistema actualizado y transacción persistida con éxito')
             }
           });
         }
@@ -216,7 +218,10 @@ function cleanUtf8(str) {
               name: cleanUtf8(scr.name),
               description: scr.description ? cleanUtf8(scr.description) : null,
               route: scr.route || '/',
-              purpose: scr.purpose ? cleanUtf8(scr.purpose) : null
+              purpose: scr.purpose ? cleanUtf8(scr.purpose) : null,
+              selectedForGeneration: true,
+              requirementIds: scr.requirementIds || [],
+              actorIds: scr.actorIds || []
             }
           });
 
@@ -252,34 +257,45 @@ function cleanUtf8(str) {
         }
       }
 
-      // Guardar Arquitectura con Componentes
-      if (rawResult.architecture) {
-        const arch = rawResult.architecture;
-        const createdArch = await tx.architecture.create({
-          data: {
-            projectId,
-            style: arch.style || 'Clean Architecture',
-            frontend: arch.frontend || 'React',
-            backend: arch.backend || 'Node.js Express',
-            database: arch.database || 'PostgreSQL',
-            connections: arch.connections || []
-          }
-        });
+      // Guardar Arquitectura con Componentes y Diagramas de Software y Despliegue
+      const architectureGenerator = require('../diagrams/architectureGenerator');
+      const arch = rawResult.architecture || {};
+      const createdArch = await tx.architecture.create({
+        data: {
+          projectId,
+          style: arch.style || 'Clean Architecture / 3 Capas',
+          frontend: arch.frontend || 'React',
+          backend: arch.backend || 'Node.js Express',
+          database: arch.database || 'PostgreSQL',
+          connections: arch.connections || [],
+          softwareDiagram: architectureGenerator.generateSoftwareArchitecture(arch),
+          deploymentDiagram: architectureGenerator.generateDeploymentArchitecture(rawResult.technologies || {})
+        }
+      });
 
-        if (arch.components && Array.isArray(arch.components)) {
-          for (const comp of arch.components) {
-            await tx.architectureComponent.create({
-              data: {
-                architectureId: createdArch.id,
-                name: comp.name,
-                layer: comp.layer || 'Application',
-                type: comp.type || 'Component'
-              }
-            });
-          }
+      if (arch.components && Array.isArray(arch.components)) {
+        for (const comp of arch.components) {
+          await tx.architectureComponent.create({
+            data: {
+              architectureId: createdArch.id,
+              name: comp.name,
+              layer: comp.layer || 'Application',
+              type: comp.type || 'Component'
+            }
+          });
         }
       }
     });
+
+    // Generar Casos de Uso Fundamentales y Diagrama de Clases
+    try {
+      const useCaseService = require('./useCase.service');
+      const classModelService = require('./classModel.service');
+      await useCaseService.generateFundamentalUseCases(projectId);
+      await classModelService.generateClassesFromEntities(projectId);
+    } catch (postErr) {
+      console.warn('[AIService] Advertencia generando casos de uso o clases:', postErr.message);
+    }
 
     return true;
   }

@@ -1,10 +1,11 @@
 import React, { useState } from 'react';
-import { ArrowLeft, Sparkles, CheckSquare, Users, Database, Layout, GitFork, Cpu, Edit3, Save } from 'lucide-react';
+import { ArrowLeft, Sparkles, CheckSquare, Users, Database, Layout, GitFork, Cpu, Edit3, Save, Layers } from 'lucide-react';
 import { projectsApi } from '../api/projects.api';
 
 import ProjectSummary from './ProjectSummary';
 import ProjectRequirements from './ProjectRequirements';
 import ProjectActors from './ProjectActors';
+import ProjectUseCases from './ProjectUseCases';
 import ProjectModel from './ProjectModel';
 import ProjectPrototype from './ProjectPrototype';
 import ProjectNavigation from './ProjectNavigation';
@@ -157,6 +158,13 @@ export default function ProjectDetail({
           <span>Actores ({project.actors?.length ?? 0})</span>
         </button>
         <button
+          className={`tab-button ${activeTab === 'usecases' ? 'active' : ''}`}
+          onClick={() => onTabChange('usecases')}
+        >
+          <Layers size={16} />
+          <span>Casos de Uso ({project.useCases?.length ?? 4})</span>
+        </button>
+        <button
           className={`tab-button ${activeTab === 'model' ? 'active' : ''}`}
           onClick={() => onTabChange('model')}
         >
@@ -207,14 +215,22 @@ export default function ProjectDetail({
             onProjectUpdated={onProjectUpdated}
           />
         )}
+        {activeTab === 'usecases' && (
+          <ProjectUseCases
+            project={project}
+            onProjectUpdated={onProjectUpdated}
+          />
+        )}
         {activeTab === 'model' && (
           <ProjectModel
             project={project}
+            onProjectUpdated={onProjectUpdated}
           />
         )}
         {activeTab === 'prototype' && (
           <ProjectPrototype
             project={project}
+            onProjectUpdated={onProjectUpdated}
           />
         )}
         {activeTab === 'navigation' && (

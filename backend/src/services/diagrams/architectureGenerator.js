@@ -1,53 +1,102 @@
 /**
- * Generador determinista de diagramas de Arquitectura Tecnológica (Mermaid flowchart).
- * Prioriza las plantillas de catálogo y enlaza las tecnologías detectadas.
+ * Generador determinista de diagramas de Arquitectura de Software y Despliegue del Sistema.
  */
 
 class ArchitectureGenerator {
   /**
-   * Genera el diagrama de arquitectura tecnológica.
-   * @param {Object} architecture - Arquitectura detectada
-   * @param {Object} technologies - Tecnologías detectadas
-   * @returns {string} Código Mermaid
+   * Genera el diagrama de Arquitectura de Software (Capas lógicas y componentes).
    */
-  generate(architecture = {}, technologies = {}) {
-    // 1. Si la arquitectura ya provee un diagrama generado por plantilla de catálogo
-    if (architecture && architecture.mermaidDiagram) {
-      return architecture.mermaidDiagram;
-    }
-
-    // 2. Extraer tecnologías por capa
-    const fe = (technologies.frontend && technologies.frontend.length > 0)
-      ? technologies.frontend.join(' + ')
-      : 'Cliente Web / Frontend';
-
-    const be = (technologies.backend && technologies.backend.length > 0)
-      ? technologies.backend.join(' + ')
-      : 'Servidor API / Backend';
-
-    const db = (technologies.database && technologies.database.length > 0)
-      ? technologies.database.join(' + ')
-      : 'Base de Datos';
-
-    const infra = (technologies.infrastructure && technologies.infrastructure.length > 0)
-      ? technologies.infrastructure.join(' + ')
-      : null;
-
+  generateSoftwareArchitecture(architecture = {}, components = []) {
+    const style = architecture.style || 'Clean Architecture / 3 Capas';
     const lines = ['flowchart TD'];
 
-    lines.push(`    CLIENT["Frontend<br/>${fe}"]`);
-    lines.push(`    API["Backend<br/>${be}"]`);
-    lines.push(`    DB[("${db}")]`);
+    lines.push(`    subgraph PRESENTATION ["Capas de Presentación"]`);
+    lines.push(`        UI["Interfaz de Usuario (SPA / Vistas React)"]`);
+    lines.push(`        CONTROLLERS["Controladores REST API / Routers"]`);
+    lines.push(`    end`);
 
-    lines.push('    CLIENT -->|Peticiones HTTP/REST| API');
-    lines.push('    API -->|Consultas y Persistencia| DB');
+    lines.push(`    subgraph APPLICATION ["Capa de Lógica y Aplicación"]`);
+    lines.push(`        AUTH_SRV["Servicio de Autenticación y Autorización"]`);
+    lines.push(`        CORE_SRV["Servicio de Reglas de Negocio / Casos de Uso"]`);
+    lines.push(`        ORCHESTRATOR["Orquestador de Procesos"]`);
+    lines.push(`    end`);
 
-    if (infra) {
-      lines.push(`    INFRA["Infraestructura y Despliegue<br/>${infra}"]`);
-      lines.push('    API -.-> INFRA');
-    }
+    lines.push(`    subgraph DOMAIN ["Capa de Dominio y Modelos"]`);
+    lines.push(`        ENTITIES["Entidades del Dominio / Validadores"]`);
+    lines.push(`        CONTRACTS["Interfaces y Contratos de Servicio"]`);
+    lines.push(`    end`);
+
+    lines.push(`    subgraph INFRASTRUCTURE ["Capa de Datos e Infraestructura"]`);
+    lines.push(`        ORM["Prisma ORM / Mapeador Relacional"]`);
+    lines.push(`        N8N_ADAPTER["Adaptador Webhooks n8n (Audio/Flujos)"]`);
+    lines.push(`        AI_ADAPTER["Proveedor de IA (gpt-5.4-nano / LLM)"]`);
+    lines.push(`    end`);
+
+    lines.push(`    UI -->|Peticiones HTTP JSON| CONTROLLERS`);
+    lines.push(`    CONTROLLERS -->|Invoca| CORE_SRV`);
+    lines.push(`    CONTROLLERS -->|Valida| AUTH_SRV`);
+    lines.push(`    CORE_SRV -->|Aplica reglas| ENTITIES`);
+    lines.push(`    CORE_SRV -->|Persistencia| ORM`);
+    lines.push(`    CORE_SRV -->|Automatización| N8N_ADAPTER`);
+    lines.push(`    ORCHESTRATOR -->|Consultas semánticas| AI_ADAPTER`);
 
     return lines.join('\n');
+  }
+
+  /**
+   * Genera el diagrama de Arquitectura del Sistema / Despliegue Físico.
+   */
+  generateDeploymentArchitecture(technologies = {}) {
+    const lines = ['flowchart TB'];
+
+    lines.push(`    subgraph CLIENTS ["Dispositivos Clientes"]`);
+    lines.push(`        BROWSER["🖥️ Navegador Web / Mobile Client (HTTPS)"]`);
+    lines.push(`    end`);
+
+    lines.push(`    subgraph DOCKER_HOST ["Servidor de Contenedores Docker (ICASE Infraestructura)"]`);
+    lines.push(`        subgraph FRONTEND_CONTAINER ["Contenedor Frontend (icase_frontend)"]`);
+    lines.push(`            NGINX["Servidor Nginx (Puerto 3001:80)"]`);
+    lines.push(`            STATIC_FILES["Bundle React / Vite SPA"]`);
+    lines.push(`        end`);
+
+    lines.push(`        subgraph BACKEND_CONTAINER ["Contenedor Backend (icase_backend)"]`);
+    lines.push(`            NODE["Node.js 20 Express API (Puerto 8080)"]`);
+            lines.push(`            PRISMA["Prisma Client Engine"]`);
+    lines.push(`        end`);
+
+    lines.push(`        subgraph DB_CONTAINER ["Contenedor Base de Datos (icase_postgres)"]`);
+    lines.push(`            PG["PostgreSQL 16 Alpine (Puerto 5433:5432)"]`);
+    lines.push(`            VOLUME[("Volumen postgres_data")]`);
+    lines.push(`        end`);
+
+    lines.push(`        subgraph OLLAMA_CONTAINER ["Contenedor LLM Local (icase_ollama)"]`);
+    lines.push(`            OLLAMA["Motor Ollama LLM (Puerto 11434)"]`);
+    lines.push(`        end`);
+    lines.push(`    end`);
+
+    lines.push(`    subgraph EXTERNAL_SERVICES ["Servicios Externos / Integración"]`);
+    lines.push(`        N8N["⚡ Plataforma n8n (Webhooks de Audio y Procesos)"]`);
+    lines.push(`        OPENAI["🤖 OpenAI API (gpt-5.4-nano / gpt-4o)"]`);
+    lines.push(`    end`);
+
+    lines.push(`    BROWSER -->|HTTP 3001| NGINX`);
+    lines.push(`    NGINX -.-> STATIC_FILES`);
+    lines.push(`    BROWSER -->|REST API 8080| NODE`);
+    lines.push(`    NODE --> PRISMA`);
+    lines.push(`    PRISMA -->|TCP 5432 / SQL| PG`);
+    lines.push(`    PG --- VOLUME`);
+    lines.push(`    NODE -.->|HTTP 11434| OLLAMA`);
+    lines.push(`    NODE -->|Webhooks HTTP/JSON| N8N`);
+    lines.push(`    NODE -->|HTTPS Tokens Optimizados| OPENAI`);
+
+    return lines.join('\n');
+  }
+
+  /**
+   * Método por defecto para compatibilidad.
+   */
+  generate(architecture = {}, technologies = {}) {
+    return this.generateSoftwareArchitecture(architecture);
   }
 }
 

@@ -52,6 +52,19 @@ class ProjectService {
             components: true
           },
           orderBy: { createdAt: 'desc' }
+        },
+        useCases: {
+          orderBy: { codeId: 'asc' }
+        },
+        classModels: {
+          orderBy: { name: 'asc' }
+        },
+        files: {
+          orderBy: { createdAt: 'desc' }
+        },
+        versions: {
+          orderBy: { createdAt: 'desc' },
+          take: 50
         }
       }
     });

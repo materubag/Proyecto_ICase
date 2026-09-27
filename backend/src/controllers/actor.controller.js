@@ -40,13 +40,28 @@ class ActorController {
     }
   }
 
+  async updateStatus(req, res, next) {
+    try {
+      const { id } = req.params;
+      const { reviewStatus } = req.body;
+      const updated = await actorService.updateStatus(id, reviewStatus);
+      res.status(200).json({
+        success: true,
+        data: updated
+      });
+    } catch (error) {
+      next(error);
+    }
+  }
+
   async delete(req, res, next) {
     try {
       const { id } = req.params;
-      await actorService.deleteActor(id);
+      const result = await actorService.deleteActor(id);
       res.status(200).json({
         success: true,
-        data: { message: `Actor ${id} successfully deleted` }
+        data: result,
+        message: `Actor ${id} successfully deleted`
       });
     } catch (error) {
       next(error);

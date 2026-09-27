@@ -47,63 +47,117 @@ model Project {
   // Relationships
   requirements      Requirement[]
   actors            Actor[]
+  useCases          UseCase[]
   entities          Entity[]
   relationships     EntityRelationship[]
+  classModels       ClassModel[]
   screens           Screen[]
   navigationNodes   NavigationNode[]
   architectures     Architecture[]
+  files             ProjectFile[]
+  versions          ProjectVersionHistory[]
 
   @@map("projects")
 }
 
+model ProjectFile {
+  id          String   @id @default(uuid())
+  projectId   String
+  name        String
+  fileType    String   // "DOCUMENT" | "AUDIO"
+  mimeType    String?
+  size        Int      @default(0)
+  content     String?  @db.Text // extracted text or transcription
+  status      String   @default("UPLOADED") // UPLOADED, ANALYZED, ERROR
+  summary     String?  @db.Text
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  project     Project  @relation(fields: [projectId], references: [id], onDelete: Cascade)
+
+  @@map("project_files")
+}
+
 model Requirement {
-  id           String              @id @default(uuid())
-  projectId    String
-  code         String              // E.g. "RF-01", "RNF-02"
-  name         String
-  description  String              @db.Text
-  type         RequirementType     @default(FUNCTIONAL)
-  priority     RequirementPriority @default(MEDIUM)
-  status       RequirementStatus   @default(PENDING)
-  actorIds     String[]            @default([])
-  dependencies String[]            @default([])
-  createdAt    DateTime            @default(now())
-  updatedAt    DateTime            @updatedAt
+  id             String              @id @default(uuid())
+  projectId      String
+  code           String              // E.g. "RF-01", "RNF-02"
+  name           String
+  description    String              @db.Text
+  type           RequirementType     @default(FUNCTIONAL)
+  priority       RequirementPriority @default(MEDIUM)
+  status         RequirementStatus   @default(PENDING)
+  actorIds       String[]            @default([])
+  dependencies   String[]            @default([])
+  preconditions  String?             @db.Text // ISO/IEC/IEEE 29148:2018
+  postconditions String?             @db.Text // ISO/IEC/IEEE 29148:2018
+  isDeleted      Boolean             @default(false)
+  createdAt      DateTime            @default(now())
+  updatedAt      DateTime            @updatedAt
 
   // Relations
-  project      Project             @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  project        Project             @relation(fields: [projectId], references: [id], onDelete: Cascade)
 
   @@unique([projectId, code])
   @@map("requirements")
 }
 
 model Actor {
-  id          String   @id @default(uuid())
-  projectId   String
-  codeId      String?  // E.g. "ACT-01"
-  name        String
-  description String?  @db.Text
-  createdAt   DateTime @default(now())
-  updatedAt   DateTime @updatedAt
+  id           String   @id @default(uuid())
+  projectId    String
+  codeId       String?  // E.g. "ACT-01"
+  name         String
+  description  String?  @db.Text
+  reviewStatus String   @default("PENDING") // PENDING, APPROVED, DISCARDED
+  isDeleted    Boolean  @default(false)
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
 
   // Relations
-  project     Project  @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  project      Project  @relation(fields: [projectId], references: [id], onDelete: Cascade)
 
   @@map("actors")
 }
 
-model Entity {
-  id          String            @id @default(uuid())
-  projectId   String
-  codeId      String?           // E.g. "ENT-01"
-  name        String
-  description String?           @db.Text
-  createdAt   DateTime          @default(now())
-  updatedAt   DateTime          @updatedAt
+model UseCase {
+  id                String   @id @default(uuid())
+  projectId         String
+  codeId            String?  // E.g. "CU-01"
+  name              String
+  processType       String   // "AUTH_ACCESS" | "CORE_OPERATION" | "REPORT_QUERY" | "NOTIFICATION_AUDIT"
+  description       String?  @db.Text
+  primaryActorId    String?
+  secondaryActorIds String[] @default([])
+  preconditions     String?  @db.Text
+  postconditions    String?  @db.Text
+  mainFlow          Json?    // Array of steps [{ step: 1, action: "..." }]
+  altFlows          Json?    // Array of alternatives
+  requirementIds    String[] @default([])
+  reviewStatus      String   @default("PENDING") // PENDING, APPROVED, DISCARDED
+  isDeleted         Boolean  @default(false)
+  createdAt         DateTime @default(now())
+  updatedAt         DateTime @updatedAt
 
   // Relations
-  project     Project           @relation(fields: [projectId], references: [id], onDelete: Cascade)
-  attributes  EntityAttribute[]
+  project           Project  @relation(fields: [projectId], references: [id], onDelete: Cascade)
+
+  @@map("use_cases")
+}
+
+model Entity {
+  id           String            @id @default(uuid())
+  projectId    String
+  codeId       String?           // E.g. "ENT-01"
+  name         String
+  description  String?           @db.Text
+  reviewStatus String            @default("PENDING")
+  isDeleted    Boolean           @default(false)
+  createdAt    DateTime          @default(now())
+  updatedAt    DateTime          @updatedAt
+
+  // Relations
+  project      Project           @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  attributes   EntityAttribute[]
 
   @@map("entities")
 }
@@ -140,22 +194,46 @@ model EntityRelationship {
   @@map("entity_relationships")
 }
 
+model ClassModel {
+  id            String   @id @default(uuid())
+  projectId     String
+  codeId        String?  // E.g. "CLS-01"
+  name          String
+  description   String?  @db.Text
+  attributes    Json?    // [{ name, type, visibility }]
+  methods       Json?    // [{ name, returnType, visibility, params }]
+  relationships Json?    // [{ targetClass, type, cardinality }]
+  reviewStatus  String   @default("PENDING")
+  isDeleted     Boolean  @default(false)
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  project       Project  @relation(fields: [projectId], references: [id], onDelete: Cascade)
+
+  @@map("class_models")
+}
+
 model Screen {
-  id          String            @id @default(uuid())
-  projectId   String
-  codeId      String?           // E.g. "SCR-01"
-  name        String
-  description String?           @db.Text
-  route       String            // E.g. "/login", "/libros"
-  purpose     String?           @db.Text
-  html        String?           @db.Text
-  htmlUrl     String?
-  createdAt   DateTime          @default(now())
-  updatedAt   DateTime          @updatedAt
+  id                    String            @id @default(uuid())
+  projectId             String
+  codeId                String?           // E.g. "SCR-01"
+  name                  String
+  description           String?           @db.Text
+  route                 String            // E.g. "/login", "/libros"
+  purpose               String?           @db.Text
+  html                  String?           @db.Text
+  htmlUrl               String?
+  selectedForGeneration Boolean           @default(false)
+  requirementIds        String[]          @default([])
+  actorIds              String[]          @default([])
+  reviewStatus          String            @default("PENDING")
+  isDeleted             Boolean           @default(false)
+  createdAt             DateTime          @default(now())
+  updatedAt             DateTime          @updatedAt
 
   // Relations
-  project     Project           @relation(fields: [projectId], references: [id], onDelete: Cascade)
-  components  ScreenComponent[]
+  project               Project           @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  components            ScreenComponent[]
 
   @@map("screens")
 }
@@ -178,34 +256,40 @@ model ScreenComponent {
 }
 
 model NavigationNode {
-  id        String   @id @default(uuid())
-  projectId String
-  from      String   // E.g. "Login"
-  to        String   // E.g. "Dashboard"
-  action    String?  // E.g. "Autenticar"
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
+  id           String   @id @default(uuid())
+  projectId    String
+  from         String   // E.g. "Login"
+  to           String   // E.g. "Dashboard"
+  action       String?  // E.g. "Autenticar"
+  actorIds     String[] @default([])
+  reviewStatus String   @default("PENDING")
+  isDeleted    Boolean  @default(false)
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
 
   // Relations
-  project   Project  @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  project      Project  @relation(fields: [projectId], references: [id], onDelete: Cascade)
 
   @@map("navigation_nodes")
 }
 
 model Architecture {
-  id          String                  @id @default(uuid())
-  projectId   String
-  style       String                  // E.g. "Clean Architecture en 3 Capas"
-  frontend    String                  // E.g. "React"
-  backend     String                  // E.g. "Node.js / Express"
-  database    String                  // E.g. "PostgreSQL"
-  connections Json?                   // Lista de conexiones [{ from, to, type }]
-  createdAt   DateTime                @default(now())
-  updatedAt   DateTime                @updatedAt
+  id                String                  @id @default(uuid())
+  projectId         String
+  style             String                  // E.g. "Clean Architecture en 3 Capas"
+  frontend          String                  // E.g. "React"
+  backend           String                  // E.g. "Node.js / Express"
+  database          String                  // E.g. "PostgreSQL"
+  connections       Json?                   // Lista de conexiones [{ from, to, type }]
+  softwareDiagram   String?                 @db.Text // Mermaid para arquitectura de software
+  deploymentDiagram String?                 @db.Text // Mermaid para arquitectura del sistema / despliegue
+  reviewStatus      String                  @default("PENDING")
+  createdAt         DateTime                @default(now())
+  updatedAt         DateTime                @updatedAt
 
   // Relations
-  project     Project                 @relation(fields: [projectId], references: [id], onDelete: Cascade)
-  components  ArchitectureComponent[]
+  project           Project                 @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  components        ArchitectureComponent[]
 
   @@map("architectures")
 }
@@ -223,4 +307,21 @@ model ArchitectureComponent {
   architecture   Architecture @relation(fields: [architectureId], references: [id], onDelete: Cascade)
 
   @@map("architecture_components")
+}
+
+model ProjectVersionHistory {
+  id         String   @id @default(uuid())
+  projectId  String
+  entityType String   // "REQUIREMENT" | "ACTOR" | "USE_CASE" | "SCREEN" | "ENTITY" | "CLASS"
+  entityId   String
+  action     String   // "DELETED" | "UPDATED" | "CREATED"
+  summary    String?  @db.Text
+  snapshot   Json     // datos completos serializados
+  isRestored Boolean  @default(false)
+  createdAt  DateTime @default(now())
+
+  // Relations
+  project    Project  @relation(fields: [projectId], references: [id], onDelete: Cascade)
+
+  @@map("project_version_history")
 }

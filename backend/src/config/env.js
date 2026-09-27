@@ -22,11 +22,12 @@ module.exports = {
 
   // Configuración OpenAI
   OPENAI_API_KEY: process.env.OPENAI_API_KEY || '',
-  OPENAI_MODEL: process.env.OPENAI_MODEL || 'gpt-4o',
+  OPENAI_MODEL: process.env.OPENAI_MODEL || 'gpt-5.4-nano',
 
   // Configuración n8n
   N8N_BASE_URL: process.env.N8N_BASE_URL || '',
   N8N_ANALYZE_WEBHOOK: process.env.N8N_ANALYZE_WEBHOOK || '',
+  N8N_AUDIO_WEBHOOK: process.env.N8N_AUDIO_WEBHOOK || process.env.N8N_ANALYZE_WEBHOOK || '',
   N8N_MOCKUP_WEBHOOK: process.env.N8N_MOCKUP_WEBHOOK || '',
   N8N_TIMEOUT: parseInt(process.env.N8N_TIMEOUT || '30000', 10),
   MOCKUP_MAX_REQUIREMENTS: parseInt(process.env.MOCKUP_MAX_REQUIREMENTS || '12', 10)

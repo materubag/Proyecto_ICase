@@ -1,11 +1,24 @@
 const express = require('express');
 const router = express.Router();
+const multer = require('multer');
+
 const projectController = require('../controllers/project.controller');
 const requirementController = require('../controllers/requirement.controller');
 const actorController = require('../controllers/actor.controller');
 const aiController = require('../controllers/ai.controller');
 const mockupController = require('../controllers/mockup.controller');
 const documentController = require('../controllers/document.controller');
+const useCaseController = require('../controllers/useCase.controller');
+const classModelController = require('../controllers/classModel.controller');
+const screenController = require('../controllers/screen.controller');
+const fileController = require('../controllers/file.controller');
+const versionHistoryController = require('../controllers/versionHistory.controller');
+
+// Multer memory storage para subida de múltiples archivos (documentos y audios)
+const uploadMulti = multer({
+  storage: multer.memoryStorage(),
+  limits: { fileSize: 35 * 1024 * 1024 } // 35 MB por archivo
+});
 
 // Projects CRUD
 router.get('/', (req, res, next) => projectController.getAll(req, res, next));
@@ -22,13 +35,38 @@ router.post('/:projectId/requirements', (req, res, next) => requirementControlle
 router.get('/:projectId/actors', (req, res, next) => actorController.getByProject(req, res, next));
 router.post('/:projectId/actors', (req, res, next) => actorController.create(req, res, next));
 
+// Subida Múltiple Opcional de Documentos y Audios
+router.get('/:projectId/files', (req, res, next) => fileController.getByProject(req, res, next));
+router.post('/:projectId/files', uploadMulti.array('files', 15), (req, res, next) => fileController.upload(req, res, next));
+router.post('/:projectId/analyze-consolidated', (req, res, next) => fileController.analyzeConsolidated(req, res, next));
+
+// Casos de Uso (4 Procesos Fundamentales)
+router.get('/:projectId/use-cases', (req, res, next) => useCaseController.getByProject(req, res, next));
+router.post('/:projectId/use-cases', (req, res, next) => useCaseController.create(req, res, next));
+router.post('/:projectId/use-cases/generate', (req, res, next) => useCaseController.generate(req, res, next));
+router.get('/:projectId/use-cases/diagram', (req, res, next) => useCaseController.getDiagram(req, res, next));
+
+// Modelado de Datos y Diagrama de Clases
+router.get('/:projectId/classes', (req, res, next) => classModelController.getByProject(req, res, next));
+router.post('/:projectId/classes', (req, res, next) => classModelController.create(req, res, next));
+router.post('/:projectId/classes/generate', (req, res, next) => classModelController.generate(req, res, next));
+router.get('/:projectId/classes/diagram', (req, res, next) => classModelController.getDiagram(req, res, next));
+
+// Pantallas y Generación de Mockups Seleccionados
+router.get('/:projectId/screens', (req, res, next) => screenController.getByProject(req, res, next));
+router.post('/:projectId/screens/select-multiple', (req, res, next) => screenController.selectMultiple(req, res, next));
+router.post('/:projectId/screens/generate-selected', (req, res, next) => screenController.generateSelectedMockups(req, res, next));
+
+// Historial de Versiones y Recuperación
+router.get('/:projectId/history', (req, res, next) => versionHistoryController.getByProject(req, res, next));
+
 // AI Analysis for Project
 router.post('/:projectId/analyze', (req, res, next) => aiController.analyze(req, res, next));
 
 // Import Document Analysis into Project
 router.post('/:projectId/import-analysis', (req, res, next) => documentController.importAnalysis(req, res, next));
 
-// Mockup Generation for Project (n8n prepared)
+// Mockup Generation for Project (n8n prepared legacy)
 router.post('/:projectId/mockup', (req, res, next) => mockupController.generate(req, res, next));
 
 module.exports = router;

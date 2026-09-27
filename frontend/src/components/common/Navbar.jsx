@@ -42,6 +42,13 @@ export default function Navbar({ activeView, onViewChange, currentProject }) {
               <span>Actores</span>
             </button>
             <button
+              className={`nav-item ${activeView === 'usecases' ? 'active' : ''}`}
+              onClick={() => onViewChange('usecases')}
+            >
+              <Layers size={16} />
+              <span>Casos de Uso</span>
+            </button>
+            <button
               className={`nav-item ${activeView === 'model' ? 'active' : ''}`}
               onClick={() => onViewChange('model')}
             >
