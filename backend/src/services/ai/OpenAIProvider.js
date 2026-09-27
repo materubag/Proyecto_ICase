@@ -66,7 +66,7 @@ Reglas:
           response_format: { type: 'json_object' },
           messages: [
             { role: 'system', content: systemPrompt },
-            { role: 'user', content: userMessage }
+            { role: 'user', content: input.customPrompt || userMessage }
           ],
           temperature: 0.2
         })

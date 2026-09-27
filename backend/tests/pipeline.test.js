@@ -57,7 +57,7 @@ async function runPipelineTests() {
   const arch3 = architectureCatalog.detect(textCaso3, tech2);
   assert.strictEqual(arch3.name, 'Arquitectura Web Modular Cliente-Servidor');
   assert.strictEqual(arch3.source, 'explicit');
-  assert(arch3.mermaidDiagram.includes('flowchart LR'), 'Debe generar diagrama flowchart LR');
+  assert(arch3.mermaidDiagram.includes('flowchart TD'), 'Debe generar diagrama determinista');
   assert(arch3.mermaidDiagram.includes('React'), 'Debe incluir la tecnología detectada');
   console.log('   ✓ Caso 3 superado: Arquitectura reconocida como explicit con plantilla Mermaid.');
 
@@ -65,8 +65,9 @@ async function runPipelineTests() {
   console.log('\n[CASO 4] Arquitectura por defecto cuando el documento no la menciona');
   const textCaso4 = 'Documento simple que describe únicamente reglas de inventario de almacén sin mencionar infraestructura.';
   const arch4 = architectureCatalog.detect(textCaso4, {});
-  assert.strictEqual(arch4.name, 'Arquitectura Web Modular Cliente-Servidor');
-  assert.strictEqual(arch4.source, 'default', 'El origen debe ser estrictamente "default"');
+  assert.strictEqual(arch4.name, 'UNKNOWN');
+  assert.strictEqual(arch4.source, 'unknown', 'No se debe inventar arquitectura sin evidencia');
+  assert.deepStrictEqual(arch4.components, []);
   console.log('   ✓ Caso 4 superado: Arquitectura predeterminada asignada con source: "default".');
 
   // CASO 5: PDF con contenido repetido (Detección de duplicados y registro estadístico)

@@ -1,0 +1,37 @@
+const router = require('express').Router({ mergeParams: true });
+const d = require('../services/engineering/domain');
+const models = require('../services/engineering/model.service');
+const workspace = require('../services/engineering/workspace.service');
+const diagrams = require('../services/diagrams/DiagramService');
+const change = require('../services/engineering/change.service');
+const impact = require('../services/engineering/ImpactAnalysisService');
+const route = fn => async (req, res, next) => { try { res.json({ success: true, data: await fn(req) }); } catch (e) { next(e); } };
+router.get('/', route(r => workspace.get(r.params.projectId)));
+router.post('/models/generate', route(r => models.generate(r.params.projectId, r.body.requirementIds)));
+router.post('/models', route(r => models.create(r.params.projectId, r.body)));
+router.patch('/models/:id', route(r => models.review(r.params.projectId, r.params.id, r.body)));
+router.post('/diagrams', route(r => diagrams.generate(r.params.projectId, r.body.type, r.body.artifactId)));
+router.patch('/versions/:id', route(r => diagrams.review(r.params.projectId, r.params.id, r.body)));
+router.post('/versions/:id/restore', route(r => diagrams.restore(r.params.projectId, r.params.id)));
+router.get('/impact/:type/:id', route(async r => { await d.element(d.prisma, r.params.projectId, r.params.type, r.params.id); return impact.analyze(r.params.projectId, r.params.type, r.params.id); }));
+router.post('/changes', route(r => change.propose(r.params.projectId, r.body)));
+router.patch('/changes/:id', route(r => change.review(r.params.projectId, r.params.id, r.body)));
+router.post('/baselines', route(r => workspace.baseline(r.params.projectId, r.body)));
+router.get('/baselines/:id', route(async r => { const b = await d.prisma.projectBaseline.findFirst({ where: { id: r.params.id, projectId: r.params.projectId } }); if (!b) d.fail('BASELINE_NOT_FOUND', undefined, 404); return b; }));
+router.post('/compare', route(async r => {
+  const delegate = r.body.type === 'Requirement' ? 'requirementVersion' : r.body.type === 'Baseline' ? 'projectBaseline' : 'artifactVersion';
+  const whereProject = delegate === 'requirementVersion' ? { requirement: { projectId: r.params.projectId } } : delegate === 'projectBaseline' ? { projectId: r.params.projectId } : { artifact: { projectId: r.params.projectId } };
+  const rows = await d.prisma[delegate].findMany({ where: { id: { in: [r.body.before, r.body.after] }, ...whereProject } });
+  const a = rows.find(v => v.id === r.body.before), b = rows.find(v => v.id === r.body.after);
+  if (!a || !b) d.fail('VERSION_NOT_FOUND', undefined, 404);
+  if ((a.requirementId || a.artifactId || a.projectId) !== (b.requirementId || b.artifactId || b.projectId)) d.fail('VERSION_CONFLICT', 'Selecciona versiones del mismo elemento.', 400);
+  return change.diff(a.content || a.structuredContent || a.snapshot, b.content || b.structuredContent || b.snapshot);
+}));
+router.patch('/platform', route(async r => {
+  if (!models.platforms.includes(r.body.platform)) d.fail('INVALID_PLATFORM', undefined, 400);
+  return d.prisma.project.update({ where: { id: r.params.projectId }, data: { platform: r.body.platform } });
+}));
+router.post('/sources/text', route(r => workspace.textSource(r.params.projectId, r.body)));
+router.post('/chat', route(r => workspace.chat(r.params.projectId, r.body)));
+router.get('/export', route(r => workspace.get(r.params.projectId)));
+module.exports = router;

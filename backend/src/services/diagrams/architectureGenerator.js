@@ -1,3 +1,5 @@
+const { id, label } = require('./mermaidSyntax');
+
 /**
  * Generador determinista de diagramas de Arquitectura de Software y Despliegue del Sistema.
  */
@@ -93,10 +95,23 @@ class ArchitectureGenerator {
   }
 
   /**
-   * Método por defecto para compatibilidad.
+   * Método de generación con soporte a componentes y compatibilidad.
    */
   generate(architecture = {}, technologies = {}) {
-    return this.generateSoftwareArchitecture(architecture);
+    if (architecture.components || architecture.connections) {
+      const lines = ['flowchart TD'];
+      const components = architecture.components || [];
+      const names = new Set(components.map(c => c.name));
+      for (const c of components) lines.push('    ' + id(c.name) + '["' + label(c.name) + (c.layer ? ' ' + label(c.layer) : '') + '"]');
+      for (const r of architecture.connections || []) {
+        if (names.has(r.from) && names.has(r.to) && r.evidence) lines.push('    ' + id(r.from) + ' -->|"' + label(r.type || '') + '"| ' + id(r.to));
+      }
+      return lines.join('\n');
+    }
+    if (architecture.style) {
+      return this.generateSoftwareArchitecture(architecture);
+    }
+    return 'flowchart TD';
   }
 }
 

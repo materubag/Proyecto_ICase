@@ -1,371 +1,275 @@
-import React, { useState, useEffect } from 'react';
-import { Layout, Monitor, Code, Sparkles, Loader2, CheckSquare, Square, Check, X, Edit2, Play, ExternalLink } from 'lucide-react';
-import { screensApi } from '../api/screens.api';
+import React, { useState, useEffect, useMemo } from 'react';
 import MockupRenderer from '../components/mockup-renderer/MockupRenderer';
-import Modal from '../components/common/Modal';
+import MermaidDiagram from '../components/diagrams/MermaidDiagram';
+import { mockupApi } from '../api/mockup.api';
 
-export default function ProjectPrototype({ project, onProjectUpdated }) {
-  const [screens, setScreens] = useState(project.screens || []);
-  const [selectedScreenId, setSelectedScreenId] = useState(null);
+export default function ProjectPrototype({ project }) {
+  const [generatedScreens, setGeneratedScreens] = useState([]);
   const [isGenerating, setIsGenerating] = useState(false);
-  const [viewMode, setViewMode] = useState('interactive'); // 'interactive' | 'components'
-  const [editModalOpen, setEditModalOpen] = useState(false);
-  const [editData, setEditData] = useState({});
+  const [generationError, setGenerationError] = useState(null);
+  const screens = generatedScreens.length > 0 ? generatedScreens : (project.screens || []);
+  const [selectedScreenId, setSelectedScreenId] = useState(screens[0]?.id || null);
+  const [viewMode, setViewMode] = useState('render'); // 'render' | 'sketch' | 'structure' | 'relations' | 'html'
 
   useEffect(() => {
-    loadScreens();
-  }, [project.id]);
-
-  async function loadScreens() {
-    try {
-      const data = await screensApi.getByProject(project.id);
-      setScreens(data);
-      if (data.length > 0 && !selectedScreenId) {
-        setSelectedScreenId(data[0].id);
-      }
-    } catch (err) {
-      console.error('Error loading screens:', err);
+    if (screens.length > 0 && (!selectedScreenId || !screens.some(s => s.id === selectedScreenId))) {
+      setSelectedScreenId(screens[0].id);
     }
-  }
+  }, [screens]);
 
-  // Toggle selección de una pantalla para generar
-  async function handleToggleSelect(screenId, currentStatus) {
-    try {
-      await screensApi.toggleSelect(screenId, !currentStatus);
-      setScreens(screens.map(s => s.id === screenId ? { ...s, selectedForGeneration: !currentStatus } : s));
-    } catch (err) {
-      alert(`Error al actualizar selección: ${err.message}`);
-    }
-  }
-
-  // Seleccionar todas o deseleccionar todas
-  async function handleSelectAll(select) {
-    try {
-      const ids = screens.map(s => s.id);
-      await screensApi.selectMultiple(project.id, ids, select);
-      setScreens(screens.map(s => ({ ...s, selectedForGeneration: select })));
-    } catch (err) {
-      alert(`Error al seleccionar pantallas: ${err.message}`);
-    }
-  }
-
-  // Generar prototipos para las pantallas seleccionadas
-  async function handleGenerateSelected() {
-    const selectedCount = screens.filter(s => s.selectedForGeneration).length;
-    if (selectedCount === 0) {
-      alert('Por favor seleccione al menos una pantalla marcando la casilla de verificación.');
-      return;
-    }
-
+  async function handleGenerateMockup() {
+    if (isGenerating) return;
     try {
       setIsGenerating(true);
-      await screensApi.generateSelected(project.id);
-      await loadScreens();
-      if (onProjectUpdated) await onProjectUpdated();
-      alert(`¡Se generaron exitosamente los prototipos de las ${selectedCount} pantallas seleccionadas!`);
-    } catch (err) {
-      alert(`Error al generar prototipos: ${err.message}`);
+      setGenerationError(null);
+      const result = await mockupApi.generateMockup(
+        project.id,
+        `Generar un prototipo visual para: ${project.systemDescription || project.description || project.name}`
+      );
+      const nextScreens = result?.screens || result?.data?.screens || [];
+      if (nextScreens.length === 0) throw new Error('El backend no devolvió pantallas para mostrar.');
+      setGeneratedScreens(nextScreens);
+      setSelectedScreenId(nextScreens[0]?.id || null);
+    } catch (error) {
+      setGenerationError(error.message || 'No se pudo generar el prototipo.');
     } finally {
       setIsGenerating(false);
     }
   }
 
-  async function handleUpdateStatus(screenId, reviewStatus) {
-    try {
-      await screensApi.updateStatus(screenId, reviewStatus);
-      await loadScreens();
-      if (onProjectUpdated) await onProjectUpdated();
-    } catch (err) {
-      alert(`Error al actualizar estado: ${err.message}`);
-    }
-  }
+  const currentScreen = screens.find(s => s.id === selectedScreenId) || screens[0];
 
-  function openEditModal(screen) {
-    setEditData({
-      id: screen.id,
-      name: screen.name,
-      route: screen.route,
-      purpose: screen.purpose || screen.description || '',
-      reviewStatus: screen.reviewStatus || 'APPROVED'
+  // Generate Mermaid diagram for screen relations / navigation tree
+  const screenRelationsDiagram = useMemo(() => {
+    let code = `graph TD\n`;
+    code += `  %% Estilos para el Mapa de Navegación\n`;
+    code += `  classDef home fill:#2563eb,stroke:#1d4ed8,stroke-width:2px,color:#ffffff,font-weight:bold;\n`;
+    code += `  classDef screen fill:#f8fafc,stroke:#0284c7,stroke-width:1.5px,color:#0f172a;\n`;
+    code += `  classDef modal fill:#fef3c7,stroke:#d97706,stroke-width:1.5px,color:#78350f;\n\n`;
+
+    if (screens.length === 0) {
+      return `graph TD\n  NODATA["Sin pantallas en el prototipo"]`;
+    }
+
+    const root = screens[0];
+    code += `  ROOT["<b>🏠 ${root.name}</b><br/>${root.route || '/'}"]:::home\n`;
+
+    screens.slice(1).forEach((scr, idx) => {
+      const scrId = `SCR_${idx + 1}`;
+      code += `  ${scrId}["<b>📄 ${scr.name}</b><br/>${scr.route || '/vista'}"]:::screen\n`;
+      code += `  ROOT -->|Navegación / Menú| ${scrId}\n`;
     });
-    setEditModalOpen(true);
-  }
 
-  async function handleSaveEdit(e) {
-    e.preventDefault();
-    try {
-      await screensApi.update(editData.id, editData);
-      setEditModalOpen(false);
-      await loadScreens();
-      if (onProjectUpdated) await onProjectUpdated();
-    } catch (err) {
-      alert(`Error al guardar cambios: ${err.message}`);
-    }
-  }
-
-  const currentScreen = screens.find((s) => s.id === selectedScreenId) || screens[0];
-  const selectedCount = screens.filter(s => s.selectedForGeneration).length;
+    return code;
+  }, [screens]);
 
   return (
-    <div>
-      {/* Barra de Encabezado y Acción de Generación */}
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1.25rem', flexWrap: 'wrap', gap: '0.75rem' }}>
-        <div>
-          <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-            <Layout size={20} color="var(--primary)" />
-            <h2 style={{ fontSize: '1.2rem', fontWeight: 600, margin: 0 }}>
-              Prototipado Visual y Mockups Interactivos
+    <div style={{ display: 'flex', flexDirection: 'column', height: '100%', overflow: 'hidden' }}>
+      {/* Command bar */}
+      <div className="full-page-header">
+        <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+          <div>
+            <h2 className="page-title" style={{ fontSize: '1.125rem' }}>
+              Prototipos de la Aplicación (Sketch & Mockup)
             </h2>
+            <span style={{ fontSize: '0.75rem', color: 'var(--secondary)' }}>
+              {screens.length} pantalla{screens.length !== 1 ? 's' : ''} · Visualización, relaciones entre pantallas y estructura de organización
+            </span>
           </div>
-          <p style={{ fontSize: '0.8125rem', color: 'var(--text-muted)', marginTop: '0.25rem' }}>
-            Seleccione las pantallas que desea generar y renderice prototipos funcionales HTML.
-          </p>
         </div>
 
-        <div style={{ display: 'flex', gap: '0.6rem', alignItems: 'center' }}>
-          <button
-            className="btn btn-primary"
-            onClick={handleGenerateSelected}
-            disabled={isGenerating || selectedCount === 0}
-            style={{ display: 'flex', alignItems: 'center', gap: '6px' }}
-          >
+        <div className="page-actions">
+          {screens.length > 0 && (
+            <div className="view-toggle">
+              <button
+                className={`view-toggle-btn ${viewMode === 'render' ? 'active' : ''}`}
+                onClick={() => setViewMode('render')}
+                title="Mockup interactivo en alta fidelidad"
+              >
+                <span className="ms ms-xs">palette</span><span>Mockup</span>
+              </button>
+              <button
+                className={`view-toggle-btn ${viewMode === 'sketch' ? 'active' : ''}`}
+                onClick={() => setViewMode('sketch')}
+                title="Sketch / Wireframe en baja fidelidad"
+              >
+                <span className="ms ms-xs">draw</span><span>Sketch</span>
+              </button>
+              <button
+                className={`view-toggle-btn ${viewMode === 'structure' ? 'active' : ''}`}
+                onClick={() => setViewMode('structure')}
+                title="Estructura de organización de la información de la vista"
+              >
+                <span className="ms ms-xs">view_quilt</span><span>Estructura de Información</span>
+              </button>
+              <button
+                className={`view-toggle-btn ${viewMode === 'relations' ? 'active' : ''}`}
+                onClick={() => setViewMode('relations')}
+                title="Relaciones entre pantallas y árbol de navegación"
+              >
+                <span className="ms ms-xs">account_tree</span><span>Relaciones</span>
+              </button>
+              <button
+                className={`view-toggle-btn ${viewMode === 'html' ? 'active' : ''}`}
+                onClick={() => setViewMode('html')}
+              >
+                <span className="ms ms-xs">code</span><span>HTML</span>
+              </button>
+            </div>
+          )}
+
+          <button className="btn btn-primary btn-sm" onClick={handleGenerateMockup} disabled={isGenerating}>
             {isGenerating ? (
-              <>
-                <Loader2 size={15} className="spin" />
-                <span>Generando Prototipos...</span>
-              </>
+              <><span className="ms ms-sm spin">autorenew</span><span>Generando...</span></>
             ) : (
-              <>
-                <Sparkles size={15} />
-                <span>Generar Seleccionadas ({selectedCount})</span>
-              </>
+              <><span className="ms ms-sm">auto_awesome</span><span>Generar con n8n</span></>
             )}
           </button>
         </div>
       </div>
 
-      {/* Panel de Selección de Pantallas a Generar */}
-      <div className="card" style={{ marginBottom: '1.5rem', padding: '1rem 1.25rem' }}>
-        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.75rem', flexWrap: 'wrap', gap: '0.5rem' }}>
-          <span style={{ fontSize: '0.9rem', fontWeight: 600, color: 'var(--text-main)' }}>
-            Selección de Pantallas a Construir ({selectedCount} de {screens.length} seleccionadas)
-          </span>
-
-          <div style={{ display: 'flex', gap: '0.5rem' }}>
-            <button className="btn btn-secondary btn-sm" onClick={() => handleSelectAll(true)}>
-              Seleccionar Todas
-            </button>
-            <button className="btn btn-secondary btn-sm" onClick={() => handleSelectAll(false)}>
-              Deseleccionar Todas
-            </button>
-          </div>
-        </div>
-
-        {/* Checkbox Grid de Pantallas */}
-        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))', gap: '0.6rem' }}>
-          {screens.map((scr) => {
-            const isSelected = Boolean(scr.selectedForGeneration);
-            const isCurrent = scr.id === selectedScreenId;
-            return (
-              <div
-                key={scr.id}
-                style={{
-                  display: 'flex',
-                  alignItems: 'center',
-                  gap: '0.6rem',
-                  padding: '0.6rem 0.8rem',
-                  borderRadius: '6px',
-                  border: isCurrent ? '2px solid var(--primary)' : '1px solid var(--border)',
-                  backgroundColor: isCurrent ? 'rgba(37,99,235,0.04)' : 'var(--bg-secondary)',
-                  cursor: 'pointer'
-                }}
-                onClick={() => setSelectedScreenId(scr.id)}
-              >
-                <div
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    handleToggleSelect(scr.id, isSelected);
-                  }}
-                  style={{ display: 'flex', alignItems: 'center', color: isSelected ? 'var(--primary)' : 'var(--text-muted)' }}
-                  title={isSelected ? 'Desmarcar' : 'Marcar para generar'}
-                >
-                  {isSelected ? <CheckSquare size={18} /> : <Square size={18} />}
-                </div>
-
-                <div style={{ flex: 1, minWidth: 0 }}>
-                  <div style={{ fontWeight: 600, fontSize: '0.85rem', color: 'var(--text-main)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
-                    {scr.name}
-                  </div>
-                  <div style={{ fontSize: '0.725rem', color: 'var(--text-muted)', fontFamily: 'monospace' }}>
-                    {scr.route}
-                  </div>
-                </div>
-
-                <span
-                  className="badge"
-                  style={{
-                    fontSize: '0.65rem',
-                    padding: '2px 5px',
-                    backgroundColor: scr.html ? '#dcfce7' : '#f1f5f9',
-                    color: scr.html ? '#15803d' : '#64748b'
-                  }}
-                >
-                  {scr.html ? 'HTML' : 'Pendiente'}
-                </span>
-              </div>
-            );
-          })}
-        </div>
-      </div>
-
-      {/* Visualizador del Mockup Seleccionado con Gobernanza */}
-      {currentScreen && (
-        <div className="card" style={{ padding: '1.25rem' }}>
-          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1rem', flexWrap: 'wrap', gap: '0.75rem' }}>
-            <div>
-              <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-                <h3 style={{ fontSize: '1.1rem', fontWeight: 600, margin: 0 }}>
-                  {currentScreen.name}
-                </h3>
-                <code style={{ fontSize: '0.8rem', color: 'var(--primary)' }}>{currentScreen.route}</code>
-                <span
-                  className="badge"
-                  style={{
-                    backgroundColor: currentScreen.reviewStatus === 'APPROVED' ? '#dcfce7' : currentScreen.reviewStatus === 'DISCARDED' ? '#fee2e2' : '#fef3c7',
-                    color: currentScreen.reviewStatus === 'APPROVED' ? '#15803d' : currentScreen.reviewStatus === 'DISCARDED' ? '#b91c1c' : '#b45309'
-                  }}
-                >
-                  {currentScreen.reviewStatus === 'APPROVED' ? 'Aprobado' : currentScreen.reviewStatus === 'DISCARDED' ? 'Rechazado' : 'Pendiente'}
-                </span>
-              </div>
-              <p style={{ fontSize: '0.8rem', color: 'var(--text-muted)', marginTop: '0.25rem' }}>
-                {currentScreen.purpose || currentScreen.description || 'Vista declarativa de usuario'}
-              </p>
-            </div>
-
-            {/* Acciones de Gobernanza: Aprobar, Rechazar, Editar */}
-            <div style={{ display: 'flex', gap: '0.5rem', alignItems: 'center' }}>
-              <button
-                className="btn btn-secondary btn-sm"
-                style={{ color: '#16a34a' }}
-                onClick={() => handleUpdateStatus(currentScreen.id, 'APPROVED')}
-                title="Aprobar prototipo"
-              >
-                <Check size={14} />
-                <span>Aprobar</span>
-              </button>
-
-              <button
-                className="btn btn-secondary btn-sm"
-                style={{ color: '#dc2626' }}
-                onClick={() => handleUpdateStatus(currentScreen.id, 'DISCARDED')}
-                title="Rechazar prototipo"
-              >
-                <X size={14} />
-                <span>Rechazar</span>
-              </button>
-
-              <button
-                className="btn btn-secondary btn-sm"
-                onClick={() => openEditModal(currentScreen)}
-                title="Editar información de pantalla"
-              >
-                <Edit2 size={14} />
-                <span>Editar</span>
-              </button>
-            </div>
-          </div>
-
-          {/* Selector de Modo: Interactivo HTML vs Componentes */}
-          <div style={{ display: 'flex', gap: '0.5rem', marginBottom: '1rem' }}>
-            <button
-              className={`btn ${viewMode === 'interactive' ? 'btn-primary' : 'btn-secondary'} btn-sm`}
-              onClick={() => setViewMode('interactive')}
-            >
-              <Monitor size={14} style={{ marginRight: '4px' }} />
-              Vista Interactiva HTML
-            </button>
-            <button
-              className={`btn ${viewMode === 'components' ? 'btn-primary' : 'btn-secondary'} btn-sm`}
-              onClick={() => setViewMode('components')}
-            >
-              <Code size={14} style={{ marginRight: '4px' }} />
-              Componentes Estructurados
-            </button>
-          </div>
-
-          {/* Renderizado */}
-          {viewMode === 'interactive' ? (
-            currentScreen.html ? (
-              <div style={{ border: '1px solid var(--border)', borderRadius: '8px', overflow: 'hidden', minHeight: '480px' }}>
-                <iframe
-                  title={currentScreen.name}
-                  srcDoc={currentScreen.html}
-                  style={{ width: '100%', height: '520px', border: 'none', backgroundColor: '#fff' }}
-                  sandbox="allow-scripts"
-                />
-              </div>
-            ) : (
-              <div style={{ textAlign: 'center', padding: '3rem', backgroundColor: 'var(--bg-secondary)', borderRadius: '8px' }}>
-                <p style={{ color: 'var(--text-muted)', marginBottom: '1rem' }}>
-                  Esta pantalla aún no tiene el prototipo HTML generado.
-                </p>
-                <button className="btn btn-primary btn-sm" onClick={handleGenerateSelected} disabled={isGenerating}>
-                  <Sparkles size={14} />
-                  <span>Generar Prototipo HTML Ahora</span>
-                </button>
-              </div>
-            )
-          ) : (
-            <MockupRenderer screen={currentScreen} />
-          )}
+      {/* Error */}
+      {generationError && (
+        <div className="alert alert-danger" style={{ margin: '12px 24px 0' }}>
+          <span className="ms ms-sm">error_outline</span>
+          <span>{generationError}</span>
         </div>
       )}
 
-      {/* Modal Editar Pantalla */}
-      <Modal
-        isOpen={editModalOpen}
-        onClose={() => setEditModalOpen(false)}
-        title="Editar Pantalla / Mockup"
-        footer={(
-          <>
-            <button className="btn btn-secondary" onClick={() => setEditModalOpen(false)}>Cancelar</button>
-            <button className="btn btn-primary" onClick={handleSaveEdit}>Guardar Cambios</button>
-          </>
-        )}
-      >
-        <form onSubmit={handleSaveEdit}>
-          <div className="form-group">
-            <label className="form-label" style={{ fontWeight: 600 }}>Nombre de la Pantalla *</label>
-            <input
-              type="text"
-              className="form-control"
-              value={editData.name || ''}
-              onChange={(e) => setEditData({ ...editData, name: e.target.value })}
-              required
-            />
+      {screens.length === 0 ? (
+        <div className="page-scrollable">
+          <div className="empty-state" style={{ border: '1px dashed var(--outline-variant)', borderRadius: 'var(--radius-lg)' }}>
+            <div className="empty-state-icon"><span className="ms ms-xl">devices</span></div>
+            <p className="empty-state-title">Sin pantallas generadas</p>
+            <p className="empty-state-desc">
+              Ejecuta el análisis IA en la pestaña Resumen o usa el botón "Generar con n8n" para crear los mockups.
+            </p>
+            <button className="btn btn-primary btn-sm" onClick={handleGenerateMockup} disabled={isGenerating}>
+              <span className="ms ms-sm">auto_awesome</span>
+              <span>{isGenerating ? 'Generando...' : 'Generar prototipo'}</span>
+            </button>
           </div>
-          <div className="form-group">
-            <label className="form-label" style={{ fontWeight: 600 }}>Ruta de Navegación *</label>
-            <input
-              type="text"
-              className="form-control"
-              value={editData.route || ''}
-              onChange={(e) => setEditData({ ...editData, route: e.target.value })}
-              required
-            />
+        </div>
+      ) : (
+        <>
+          {/* Screen selector tabs */}
+          {viewMode !== 'relations' && (
+            <div className="screen-selector">
+              {screens.map(screen => (
+                <button
+                  key={screen.id}
+                  className={`screen-tab ${selectedScreenId === screen.id ? 'active' : ''}`}
+                  onClick={() => setSelectedScreenId(screen.id)}
+                >
+                  <span className="ms ms-xs">monitor</span>
+                  <span>{screen.name}</span>
+                  {screen.route && (
+                    <span style={{ fontSize: '0.6875rem', opacity: 0.7 }}>{screen.route}</span>
+                  )}
+                </button>
+              ))}
+            </div>
+          )}
+
+          {/* Content */}
+          <div className="page-scrollable" style={{ padding: '20px 24px' }}>
+            {viewMode === 'structure' ? (
+              <div>
+                <div style={{ marginBottom: '16px' }}>
+                  <h3 style={{ fontSize: '1rem', fontWeight: 600, color: 'var(--on-surface)', margin: 0 }}>
+                    Estructura de Organización de la Información — {currentScreen?.name}
+                  </h3>
+                  <p style={{ fontSize: '0.8125rem', color: 'var(--secondary)', margin: '2px 0 0' }}>
+                    Explicación de la arquitectura de información, zonas visuales y jerarquía de componentes de esta vista.
+                  </p>
+                </div>
+
+                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))', gap: '14px', marginBottom: '20px' }}>
+                  <div className="info-card" style={{ borderLeft: '4px solid var(--primary)' }}>
+                    <strong style={{ fontSize: '0.875rem', display: 'flex', alignItems: 'center', gap: '6px' }}>
+                      <span className="ms ms-xs">web</span> 1. Cabecera (Header)
+                    </strong>
+                    <p style={{ fontSize: '0.8125rem', color: 'var(--secondary)', margin: '6px 0 0', lineHeight: 1.4 }}>
+                      Identidad institucional, logo del sistema, título de la pantalla activa ({currentScreen?.name}), buscador global y panel de usuario con avatar y rol.
+                    </p>
+                  </div>
+
+                  <div className="info-card" style={{ borderLeft: '4px solid #0284c7' }}>
+                    <strong style={{ fontSize: '0.875rem', display: 'flex', alignItems: 'center', gap: '6px' }}>
+                      <span className="ms ms-xs">menu</span> 2. Navegación (Sidebar / Menú)
+                    </strong>
+                    <p style={{ fontSize: '0.8125rem', color: 'var(--secondary)', margin: '6px 0 0', lineHeight: 1.4 }}>
+                      Árbol de navegación con enlaces a las vistas principales ({screens.map(s => s.name).join(', ')}), badges de notificación y botón de repliegue.
+                    </p>
+                  </div>
+
+                  <div className="info-card" style={{ borderLeft: '4px solid #16a34a' }}>
+                    <strong style={{ fontSize: '0.875rem', display: 'flex', alignItems: 'center', gap: '6px' }}>
+                      <span className="ms ms-xs">dashboard</span> 3. Área Central de Trabajo
+                    </strong>
+                    <p style={{ fontSize: '0.8125rem', color: 'var(--secondary)', margin: '6px 0 0', lineHeight: 1.4 }}>
+                      Muestra los datos primarios de la pantalla: tablas de datos, tarjetas de indicadores (KPIs), filtros dinámicos y estados de carga.
+                    </p>
+                  </div>
+
+                  <div className="info-card" style={{ borderLeft: '4px solid #9333ea' }}>
+                    <strong style={{ fontSize: '0.875rem', display: 'flex', alignItems: 'center', gap: '6px' }}>
+                      <span className="ms ms-xs">touch_app</span> 4. Interacción & Formularios
+                    </strong>
+                    <p style={{ fontSize: '0.8125rem', color: 'var(--secondary)', margin: '6px 0 0', lineHeight: 1.4 }}>
+                      Formularios con validaciones en tiempo real, modales de confirmación, botones de acción primaria ("Guardar", "Registrar") y avisos de estado.
+                    </p>
+                  </div>
+                </div>
+
+                {/* Live Preview with wireframe overlay */}
+                <div style={{ background: 'var(--surface-container-lowest)', padding: '16px', borderRadius: 'var(--radius-md)', border: '1px solid var(--outline-variant)' }}>
+                  <span style={{ fontSize: '0.75rem', color: 'var(--secondary)', textTransform: 'uppercase', fontWeight: 600, display: 'block', marginBottom: '8px' }}>
+                    Previsualización de la Pantalla:
+                  </span>
+                  <MockupRenderer screen={currentScreen} />
+                </div>
+              </div>
+            ) : viewMode === 'relations' ? (
+              <div>
+                <div style={{ marginBottom: '16px' }}>
+                  <h3 style={{ fontSize: '1rem', fontWeight: 600, color: 'var(--on-surface)', margin: 0 }}>
+                    Relación entre Pantallas y Árbol de Navegación
+                  </h3>
+                  <p style={{ fontSize: '0.8125rem', color: 'var(--secondary)', margin: '2px 0 0' }}>
+                    Diagrama que muestra cómo los usuarios navegan y transitan entre cada una de las vistas del sistema.
+                  </p>
+                </div>
+
+                <div style={{ background: 'var(--surface-container-lowest)', padding: '24px', borderRadius: 'var(--radius-md)', border: '1px solid var(--outline-variant)', boxShadow: 'var(--shadow-xs)', overflowX: 'auto' }}>
+                  <MermaidDiagram code={screenRelationsDiagram} />
+                </div>
+              </div>
+            ) : viewMode === 'sketch' ? (
+              <div>
+                <div className="alert alert-info" style={{ marginBottom: '14px', fontSize: '0.75rem' }}>
+                  <span className="ms ms-xs">draw</span>
+                  <span><strong>Modo Sketch / Wireframe:</strong> Renderizado de baja fidelidad en escala de grises para validar la distribución de bloques sin distracción de color.</span>
+                </div>
+                <div style={{ filter: 'grayscale(1) contrast(1.15)', border: '2px dashed #94a3b8', borderRadius: '8px', padding: '10px', background: '#fafafa' }}>
+                  <MockupRenderer screen={currentScreen} />
+                </div>
+              </div>
+            ) : viewMode === 'html' ? (
+              <div>
+                <p className="detail-section-label" style={{ marginBottom: '8px' }}>
+                  HTML — {currentScreen?.name}
+                </p>
+                <pre className="code-viewer" style={{ background: '#f8fafc', color: 'var(--on-surface)' }}>
+                  {currentScreen?.html || 'Esta pantalla no contiene HTML.'}
+                </pre>
+              </div>
+            ) : (
+              <MockupRenderer screen={currentScreen} />
+            )}
           </div>
-          <div className="form-group">
-            <label className="form-label" style={{ fontWeight: 600 }}>Propósito de la Vista</label>
-            <textarea
-              className="form-control"
-              rows={3}
-              value={editData.purpose || ''}
-              onChange={(e) => setEditData({ ...editData, purpose: e.target.value })}
-            />
-          </div>
-        </form>
-      </Modal>
+        </>
+      )}
     </div>
   );
 }

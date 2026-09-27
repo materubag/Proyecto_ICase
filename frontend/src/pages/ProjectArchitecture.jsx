@@ -1,197 +1,186 @@
 import React, { useState, useMemo } from 'react';
-import { Cpu, Code2, Layers, Globe, Server, Database, Check, X, ServerCrash } from 'lucide-react';
 import MermaidDiagram from '../components/diagrams/MermaidDiagram';
+import { generateArchitectureDiagram } from '../utils/mermaidGenerators';
 
 export default function ProjectArchitecture({ project }) {
-  const [archTab, setArchTab] = useState('software'); // 'software' | 'deployment'
+  const [archType, setArchType] = useState('software'); // 'software' | 'system'
   const [showCode, setShowCode] = useState(false);
-  const [reviewStatus, setReviewStatus] = useState('APPROVED');
 
   const architecture = project.architectures && project.architectures.length > 0
     ? project.architectures[0]
     : null;
 
-  // Diagrama de Arquitectura de Software por defecto
-  const defaultSoftwareDiagram = useMemo(() => {
+  // Software Architecture Diagram (Clean Architecture 3-tier)
+  const softwareArchCode = useMemo(() => {
     if (architecture?.softwareDiagram) return architecture.softwareDiagram;
-    return `flowchart TD
-    subgraph PRESENTATION ["Capas de Presentación"]
-        UI["Interfaz de Usuario (SPA / Vistas React)"]
-        CONTROLLERS["Controladores REST API / Routers"]
-    end
-    subgraph APPLICATION ["Capa de Lógica y Aplicación"]
-        AUTH_SRV["Servicio de Autenticación y Autorización"]
-        CORE_SRV["Servicio de Reglas de Negocio / Casos de Uso"]
-        ORCHESTRATOR["Orquestador de Procesos ICASE"]
-    end
-    subgraph DOMAIN ["Capa de Dominio y Modelos"]
-        ENTITIES["Entidades del Dominio / Validadores"]
-        CONTRACTS["Interfaces y Contratos de Servicio"]
-    end
-    subgraph INFRASTRUCTURE ["Capa de Datos e Infraestructura"]
-        ORM["Prisma ORM / Mapeador Relacional"]
-        N8N_ADAPTER["Adaptador Webhooks n8n (Audio/Flujos)"]
-        AI_ADAPTER["Proveedor de IA (gpt-5.4-nano / LLM)"]
-    end
-    UI -->|Peticiones HTTP JSON| CONTROLLERS
-    CONTROLLERS -->|Invoca| CORE_SRV
-    CONTROLLERS -->|Valida| AUTH_SRV
-    CORE_SRV -->|Aplica reglas| ENTITIES
-    CORE_SRV -->|Persistencia| ORM
-    CORE_SRV -->|Automatización| N8N_ADAPTER
-    ORCHESTRATOR -->|Consultas semánticas| AI_ADAPTER`;
-  }, [architecture]);
+    let code = `graph TD\n`;
+    code += `  %% Estilos para Arquitectura de Software\n`;
+    code += `  classDef presentation fill:#eff6ff,stroke:#2563eb,stroke-width:2px,color:#1e3a8a,font-weight:bold;\n`;
+    code += `  classDef domain fill:#f0fdf4,stroke:#16a34a,stroke-width:2px,color:#14532d,font-weight:bold;\n`;
+    code += `  classDef data fill:#fef3c7,stroke:#d97706,stroke-width:2px,color:#78350f,font-weight:bold;\n\n`;
 
-  // Diagrama de Arquitectura del Sistema / Despliegue por defecto
-  const defaultDeploymentDiagram = useMemo(() => {
+    code += `  subgraph PRESENTATION["1. CAPA DE PRESENTACIÓN (FRONTEND)"]\n`;
+    code += `    UI_COMP["Componentes React SPA"]:::presentation\n`;
+    code += `    UI_ROUTER["Enrutador & Vistas"]:::presentation\n`;
+    code += `    UI_STATE["Gestores de Estado / Hooks"]:::presentation\n`;
+    code += `  end\n\n`;
+
+    code += `  subgraph DOMAIN["2. CAPA DE NEGOCIO & DOMINIO (BACKEND)"]\n`;
+    code += `    SVC_CORE["Controladores REST & Middleware"]:::domain\n`;
+    code += `    SVC_RULES["Servicios de Negocio & Reglas ISO"]:::domain\n`;
+    code += `    SVC_PIPELINE["Pipeline de Análisis & Normalización"]:::domain\n`;
+    code += `  end\n\n`;
+
+    code += `  subgraph DATA["3. CAPA DE DATOS & INFRAESTRUCTURA"]\n`;
+    code += `    ORM_PRISMA["Prisma ORM (Data Access Layer)"]:::data\n`;
+    code += `    DB_POSTGRES["PostgreSQL Relacional (ACID)"]:::data\n`;
+    code += `    EXT_AI["Proveedores de IA & Automatización (n8n/LLM)"]:::data\n`;
+    code += `  end\n\n`;
+
+    code += `  UI_COMP --> UI_ROUTER\n`;
+    code += `  UI_ROUTER -->|Peticiones HTTP/REST| SVC_CORE\n`;
+    code += `  SVC_CORE --> SVC_RULES\n`;
+    code += `  SVC_RULES --> SVC_PIPELINE\n`;
+    code += `  SVC_RULES --> ORM_PRISMA\n`;
+    code += `  SVC_PIPELINE --> EXT_AI\n`;
+    code += `  ORM_PRISMA -->|Consultas SQL Seguras| DB_POSTGRES\n`;
+
+    return code;
+  }, []);
+
+  // System Architecture Diagram (Physical Infrastructure & Deployment)
+  const systemArchCode = useMemo(() => {
     if (architecture?.deploymentDiagram) return architecture.deploymentDiagram;
-    return `flowchart TB
-    subgraph CLIENTS ["Dispositivos Clientes"]
-        BROWSER["🖥️ Navegador Web / Mobile Client (HTTPS)"]
-    end
-    subgraph DOCKER_HOST ["Servidor de Contenedores Docker (ICASE Infraestructura)"]
-        subgraph FRONTEND_CONTAINER ["Contenedor Frontend (icase_frontend)"]
-            NGINX["Servidor Nginx (Puerto 3001:80)"]
-            STATIC_FILES["Bundle React / Vite SPA"]
-        end
-        subgraph BACKEND_CONTAINER ["Contenedor Backend (icase_backend)"]
-            NODE["Node.js 20 Express API (Puerto 8080)"]
-            PRISMA["Prisma Client Engine"]
-        end
-        subgraph DB_CONTAINER ["Contenedor Base de Datos (icase_postgres)"]
-            PG["PostgreSQL 16 Alpine (Puerto 5433:5432)"]
-            VOLUME[("Volumen postgres_data")]
-        end
-        subgraph OLLAMA_CONTAINER ["Contenedor LLM Local (icase_ollama)"]
-            OLLAMA["Motor Ollama LLM (Puerto 11434)"]
-        end
-    end
-    subgraph EXTERNAL_SERVICES ["Servicios Externos / Integración"]
-        N8N["⚡ Plataforma n8n (Webhooks de Audio y Procesos)"]
-        OPENAI["🤖 OpenAI API (gpt-5.4-nano / gpt-4o)"]
-    end
-    BROWSER -->|HTTP 3001| NGINX
-    NGINX -.-> STATIC_FILES
-    BROWSER -->|REST API 8080| NODE
-    NODE --> PRISMA
-    PRISMA -->|TCP 5432 / SQL| PG
-    PG --- VOLUME
-    NODE -.->|HTTP 11434| OLLAMA
-    NODE -->|Webhooks HTTP/JSON| N8N
-    NODE -->|HTTPS Tokens Optimizados| OPENAI`;
-  }, [architecture]);
+    let code = `graph TB\n`;
+    code += `  %% Estilos para Arquitectura del Sistema\n`;
+    code += `  classDef client fill:#f1f5f9,stroke:#475569,stroke-width:2px,color:#0f172a,font-weight:bold;\n`;
+    code += `  classDef docker fill:#e0f2fe,stroke:#0284c7,stroke-width:2px,color:#0369a1,font-weight:bold;\n`;
+    code += `  classDef service fill:#ffffff,stroke:#2563eb,stroke-width:1.5px,color:#1e3a8a;\n`;
+    code += `  classDef db fill:#ecfdf5,stroke:#059669,stroke-width:2px,color:#065f46;\n`;
+    code += `  classDef ext fill:#faf5ff,stroke:#9333ea,stroke-width:1.5px,color:#581c87;\n\n`;
 
-  const activeDiagramCode = archTab === 'software' ? defaultSoftwareDiagram : defaultDeploymentDiagram;
+    code += `  CLIENT["🌐 Navegador Web del Usuario<br/>(Desktop / Móvil)"]:::client\n\n`;
+
+    code += `  subgraph DOCKER_COMPOSE["ENTORNO DE CONTENEDORES DOCKER"]\n`;
+    code += `    NGINX["Servidor Nginx (Frontend)<br/>Puerto :3001"]:::service\n`;
+    code += `    NODE_API["API REST Node.js / Express<br/>Puerto :8080"]:::service\n`;
+    code += `    POSTGRES_DB[("Base de Datos PostgreSQL 16<br/>Puerto :5433 (interno :5432)")]:::db\n`;
+    code += `    OLLAMA["Motor Ollama (LLM Local)<br/>Puerto :11434"]:::ext\n`;
+    code += `  end\n\n`;
+
+    code += `  subgraph EXTERNAL["SERVICIOS EXTERNOS & IA"]\n`;
+    code += `    N8N_ENGINE["Servidor n8n Workflow<br/>(Transcripción & Mockup)"]:::ext\n`;
+    code += `    OPENAI_API["OpenAI API / Whisper Cloud"]:::ext\n`;
+    code += `  end\n\n`;
+
+    code += `  CLIENT -->|HTTP / SPA (Puerto 3001)| NGINX\n`;
+    code += `  CLIENT -->|API REST / JSON (Puerto 8080)| NODE_API\n`;
+    code += `  NODE_API -->|TCP / Prisma Client| POSTGRES_DB\n`;
+    code += `  NODE_API -->|HTTP REST| OLLAMA\n`;
+    code += `  NODE_API -->|Webhooks HTTP| N8N_ENGINE\n`;
+    code += `  N8N_ENGINE -->|Transcripción de audio| OPENAI_API\n`;
+
+    return code;
+  }, []);
+
+  const activeDiagramCode = archType === 'software' ? softwareArchCode : systemArchCode;
+
+  const specItems = [
+    { label: 'Estilo de Arquitectura', value: architecture?.style || 'Clean Architecture en 3 Capas', icon: 'layers' },
+    { label: 'Frontend', value: architecture?.frontend || 'React 18 + Vite SPA', icon: 'web' },
+    { label: 'Backend', value: architecture?.backend || 'Node.js + Express REST API', icon: 'dns' },
+    { label: 'Base de Datos', value: architecture?.database || 'PostgreSQL 16 + Prisma ORM', icon: 'storage' },
+  ];
 
   return (
-    <div>
-      {/* Botones de Selección de Vista: Software vs Despliegue */}
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1.25rem', flexWrap: 'wrap', gap: '0.75rem' }}>
-        <div style={{ display: 'flex', gap: '0.5rem' }}>
-          <button
-            className={`btn ${archTab === 'software' ? 'btn-primary' : 'btn-secondary'} btn-sm`}
-            onClick={() => setArchTab('software')}
-            style={{ display: 'flex', alignItems: 'center', gap: '6px' }}
-          >
-            <Layers size={15} />
-            <span>1. Arquitectura de Software (Capas & Lógica)</span>
-          </button>
-          <button
-            className={`btn ${archTab === 'deployment' ? 'btn-primary' : 'btn-secondary'} btn-sm`}
-            onClick={() => setArchTab('deployment')}
-            style={{ display: 'flex', alignItems: 'center', gap: '6px' }}
-          >
-            <Server size={15} />
-            <span>2. Arquitectura del Sistema / Despliegue</span>
-          </button>
+    <div style={{ display: 'flex', flexDirection: 'column', height: '100%', overflow: 'hidden' }}>
+      {/* Header */}
+      <div className="full-page-header" style={{ borderBottom: '1px solid var(--outline-variant)', background: 'var(--surface)' }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: '14px' }}>
+          <div>
+            <h2 className="page-title" style={{ fontSize: '1.125rem', display: 'flex', alignItems: 'center', gap: '8px' }}>
+              <span className="ms ms-sm" style={{ color: 'var(--primary)' }}>layers</span>
+              Diseño de la Arquitectura de la Aplicación
+            </h2>
+            <span style={{ fontSize: '0.75rem', color: 'var(--secondary)' }}>
+              Arquitectura de Software (patrón en capas) y Arquitectura del Sistema (infraestructura física y contenedores)
+            </span>
+          </div>
         </div>
 
-        <div style={{ display: 'flex', gap: '0.5rem', alignItems: 'center' }}>
-          <span
-            className="badge"
-            style={{
-              backgroundColor: reviewStatus === 'APPROVED' ? '#dcfce7' : '#fee2e2',
-              color: reviewStatus === 'APPROVED' ? '#15803d' : '#b91c1c'
-            }}
-          >
-            {reviewStatus === 'APPROVED' ? 'Aprobado' : 'Rechazado'}
-          </span>
-
-          <button
-            className="btn btn-secondary btn-sm"
-            style={{ color: '#16a34a' }}
-            onClick={() => setReviewStatus('APPROVED')}
-            title="Aceptar arquitectura"
-          >
-            <Check size={14} />
-            <span>Aceptar</span>
-          </button>
-
-          <button
-            className="btn btn-secondary btn-sm"
-            style={{ color: '#dc2626' }}
-            onClick={() => setReviewStatus('DISCARDED')}
-            title="Rechazar arquitectura"
-          >
-            <X size={14} />
-            <span>Rechazar</span>
-          </button>
-
-          <button
-            className="btn btn-secondary btn-sm"
-            onClick={() => setShowCode(!showCode)}
-          >
-            <Code2 size={14} />
-            <span>{showCode ? 'Ocultar Mermaid' : 'Ver Código Mermaid'}</span>
-          </button>
-        </div>
-      </div>
-
-      {/* Ficha Tecnológica */}
-      <div className="card" style={{ marginBottom: '1.25rem' }}>
-        <h3 style={{ fontSize: '0.95rem', fontWeight: 600, marginBottom: '0.75rem', display: 'flex', alignItems: 'center', gap: '6px' }}>
-          <Cpu size={16} color="var(--primary)" />
-          <span>Ficha Técnica y Stack del Sistema</span>
-        </h3>
-
-        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: '1rem' }}>
-          <div>
-            <span style={{ fontSize: '0.75rem', color: 'var(--text-muted)', display: 'block' }}>Estilo de Software</span>
-            <strong style={{ fontSize: '0.9rem', color: 'var(--text-main)' }}>{architecture?.style || 'Clean Architecture en 3 Capas'}</strong>
+        <div className="page-actions">
+          <div className="view-toggle">
+            <button
+              className={`view-toggle-btn ${archType === 'software' ? 'active' : ''}`}
+              onClick={() => setArchType('software')}
+            >
+              <span className="ms ms-xs">account_tree</span>
+              <span>Arquitectura de Software</span>
+            </button>
+            <button
+              className={`view-toggle-btn ${archType === 'system' ? 'active' : ''}`}
+              onClick={() => setArchType('system')}
+            >
+              <span className="ms ms-xs">dns</span>
+              <span>Arquitectura del Sistema</span>
+            </button>
           </div>
-          <div>
-            <span style={{ fontSize: '0.75rem', color: 'var(--text-muted)', display: 'flex', alignItems: 'center', gap: '4px' }}>
-              <Globe size={12} /> Frontend
-            </span>
-            <strong style={{ fontSize: '0.9rem', color: 'var(--text-main)' }}>{architecture?.frontend || 'React SPA / Nginx'}</strong>
-          </div>
-          <div>
-            <span style={{ fontSize: '0.75rem', color: 'var(--text-muted)', display: 'flex', alignItems: 'center', gap: '4px' }}>
-              <Server size={12} /> Backend
-            </span>
-            <strong style={{ fontSize: '0.9rem', color: 'var(--text-main)' }}>{architecture?.backend || 'Node.js 20 Express'}</strong>
-          </div>
-          <div>
-            <span style={{ fontSize: '0.75rem', color: 'var(--text-muted)', display: 'flex', alignItems: 'center', gap: '4px' }}>
-              <Database size={12} /> Persistencia
-            </span>
-            <strong style={{ fontSize: '0.9rem', color: 'var(--text-main)' }}>{architecture?.database || 'PostgreSQL 16 Engine'}</strong>
+
+          <div className="view-toggle">
+            <button className={`view-toggle-btn ${!showCode ? 'active' : ''}`} onClick={() => setShowCode(false)}>
+              <span className="ms ms-xs">visibility</span><span>Diagrama</span>
+            </button>
+            <button className={`view-toggle-btn ${showCode ? 'active' : ''}`} onClick={() => setShowCode(true)}>
+              <span className="ms ms-xs">code</span><span>Código</span>
+            </button>
           </div>
         </div>
       </div>
 
-      {showCode && (
-        <div className="card" style={{ marginBottom: '1.25rem' }}>
-          <label className="form-label" style={{ fontWeight: 600 }}>
-            Código Mermaid ({archTab === 'software' ? 'Arquitectura de Software' : 'Despliegue del Sistema'})
-          </label>
-          <textarea className="diagram-raw-editor" rows={10} readOnly value={activeDiagramCode} />
+      {/* Main Content */}
+      <div className="page-scrollable" style={{ padding: '24px', flex: 1, overflowY: 'auto' }}>
+        {/* Spec Grid */}
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))', gap: '14px', marginBottom: '20px' }}>
+          {specItems.map(item => (
+            <div key={item.label} className="info-card" style={{ background: 'var(--surface-container-lowest)', border: '1px solid var(--outline-variant)', boxShadow: 'var(--shadow-xs)' }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '6px' }}>
+                <span className="ms ms-xs" style={{ color: 'var(--primary)' }}>{item.icon}</span>
+                <span style={{ fontSize: '0.6875rem', color: 'var(--secondary)', textTransform: 'uppercase', fontWeight: 600 }}>{item.label}</span>
+              </div>
+              <span style={{ fontSize: '0.875rem', fontWeight: 600, color: 'var(--on-surface)' }}>{item.value}</span>
+            </div>
+          ))}
         </div>
-      )}
 
-      {/* Renderizado del Diagrama Mermaid */}
-      <div className="diagram-container">
-        <MermaidDiagram code={activeDiagramCode} type="flowchart" />
+        {/* Overview banner */}
+        <div className="alert alert-info" style={{ marginBottom: '20px' }}>
+          <span className="ms ms-sm">info</span>
+          <div>
+            <strong>{archType === 'software' ? 'Arquitectura de Software (Clean Architecture)' : 'Arquitectura del Sistema (Despliegue Físico)'}:</strong>{' '}
+            {archType === 'software'
+              ? 'Estructura modular dividida en Capa de Presentación (React SPA), Capa de Negocio (Controladores, Servicios de Dominio e ISO 29148) y Capa de Datos (Prisma ORM y PostgreSQL).'
+              : 'Ecosistema de contenedores Docker que orquesta Nginx, Express REST API, PostgreSQL relacional, n8n para automatizaciones y Ollama/OpenAI para inteligencia artificial.'}
+          </div>
+        </div>
+
+        {/* Diagram View or Code View */}
+        {showCode ? (
+          <div>
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '8px' }}>
+              <span className="detail-section-label">Código Mermaid ({archType === 'software' ? 'Software' : 'Sistema'})</span>
+              <button className="btn btn-ghost btn-sm" onClick={() => navigator.clipboard?.writeText(activeDiagramCode)}>
+                <span className="ms ms-sm">content_copy</span><span>Copiar</span>
+              </button>
+            </div>
+            <textarea className="diagram-raw-editor" rows={16} readOnly value={activeDiagramCode} />
+          </div>
+        ) : (
+          <div>
+            <div style={{ background: 'var(--surface-container-lowest)', padding: '24px', borderRadius: 'var(--radius-md)', border: '1px solid var(--outline-variant)', boxShadow: 'var(--shadow-xs)', overflowX: 'auto' }}>
+              <MermaidDiagram code={activeDiagramCode} />
+            </div>
+          </div>
+        )}
       </div>
     </div>
   );

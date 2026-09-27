@@ -30,4 +30,6 @@ Thumbs.db
 
 # Binary & PDF files
 *.pdf
+test-results/
+playwright-report/
 

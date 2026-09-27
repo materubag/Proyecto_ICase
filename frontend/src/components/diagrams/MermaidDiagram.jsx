@@ -5,11 +5,13 @@ import mermaid from 'mermaid';
 mermaid.initialize({
   startOnLoad: false,
   theme: 'neutral',
-  securityLevel: 'loose',
+  securityLevel: 'strict',
   fontFamily: 'Inter, system-ui, sans-serif'
 });
 
-export default function MermaidDiagram({ code, type = 'flowchart', className = '' }) {
+export default function MermaidDiagram({ code, type = 'flowchart', className = '', onValidated }) {
+  const validationCallback = useRef(onValidated);
+  validationCallback.current = onValidated;
   const containerRef = useRef(null);
   const [svgContent, setSvgContent] = useState('');
   const [error, setError] = useState(null);
@@ -27,14 +29,19 @@ export default function MermaidDiagram({ code, type = 'flowchart', className = '
 
       try {
         setError(null);
+        setSvgContent('');
+        await mermaid.parse(code.trim());
         const { svg } = await mermaid.render(id, code.trim());
         if (isMounted) {
           setSvgContent(svg);
+          validationCallback.current?.(true);
         }
       } catch (err) {
         console.error('[Mermaid Render Error]:', err);
         if (isMounted) {
           setError(err.message || 'Error al renderizar el diagrama de Mermaid.');
+          setSvgContent('');
+          validationCallback.current?.(false, err.message);
         }
       }
     }

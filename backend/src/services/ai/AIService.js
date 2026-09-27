@@ -73,7 +73,7 @@ class AIService {
     }
 
     // 3. Crear el proveedor seleccionado
-    const provider = createAIProvider(providerOverride || env.AI_PROVIDER);
+    let provider = createAIProvider(providerOverride || env.AI_PROVIDER);
     console.log(`[AIService] Ejecutando análisis para proyecto '${project.name}' utilizando proveedor: [${provider.constructor.name}]`);
 
     // 4. Invocar analyzeProject(input)

@@ -19,7 +19,13 @@ export async function request(endpoint, options = {}) {
   }
 
   const response = await fetch(url, config);
-  const json = await response.json();
+  const raw = await response.text();
+  let json;
+  try {
+    json = raw ? JSON.parse(raw) : {};
+  } catch {
+    throw new Error(response.status === 413 ? 'El archivo supera el límite permitido de 100 MB.' : `El servidor respondió con HTML (HTTP ${response.status}).`);
+  }
 
   if (!response.ok || json.success === false) {
     const message = json.error?.message || `Request failed with status ${response.status}`;

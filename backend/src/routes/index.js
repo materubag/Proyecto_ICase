@@ -10,6 +10,8 @@ const classModelRoutes = require('./classModel.routes');
 const screenRoutes = require('./screen.routes');
 const fileRoutes = require('./file.routes');
 const versionHistoryRoutes = require('./versionHistory.routes');
+const sourceRoutes = require('./source.routes');
+const candidateRoutes = require('./candidate.routes');
 
 // Health Check
 router.get('/health', (req, res) => {
@@ -33,5 +35,7 @@ router.use('/classes', classModelRoutes);
 router.use('/screens', screenRoutes);
 router.use('/files', fileRoutes);
 router.use('/history', versionHistoryRoutes);
+router.use('/sources', sourceRoutes);
+router.use('/candidates', candidateRoutes);
 
 module.exports = router;
