@@ -20,13 +20,16 @@ Analiza la siguiente especificación de sistema y responde ÚNICAMENTE con un ob
 {
   "project": { "name": "${input.name}", "description": "${input.description}" },
   "actors": [{ "id": "ACT-01", "name": "", "description": "" }],
-  "requirements": [{ "code": "RF-01", "name": "", "description": "", "type": "FUNCIONAL", "priority": "ALTA", "actorIds": ["ACT-01"], "dependencies": [] }],
+  "requirements": [{ "code": "RF-01 o RNF-01", "name": "", "description": "", "type": "FUNCIONAL o NO_FUNCIONAL", "priority": "ALTA" | "MEDIA" | "BAJA", "actorIds": ["ACT-01"], "dependencies": [] }],
   "entities": [{ "id": "ENT-01", "name": "", "description": "", "attributes": [{ "name": "id", "type": "Int" }] }],
   "relationships": [{ "id": "REL-01", "source": "", "target": "", "cardinality": "1:N", "description": "" }],
-  "screens": [{ "id": "SCR-01", "name": "", "description": "", "route": "/ruta", "purpose": "", "components": [] }],
-  "navigation": [{ "from": "", "to": "", "action": "" }],
+  "screens": [{ "id": "SCR-01", "name": "NombrePantalla", "description": "", "route": "/ruta", "purpose": "", "components": [] }],
+  "navigation": [{ "from": "NombrePantallaOrigen", "to": "NombrePantallaDestino", "action": "" }],
   "architecture": { "style": "Clean Architecture", "frontend": "React", "backend": "Node.js Express", "database": "PostgreSQL", "components": [], "connections": [] }
-}`;
+}
+Reglas obligatorias:
+- Debes incluir tanto Requisitos Funcionales (RF-01, RF-02... type "FUNCIONAL") como Requisitos No Funcionales (RNF-01, RNF-02... type "NO_FUNCIONAL", ej: seguridad, rendimiento, disponibilidad, respaldo).
+- En "navigation", los campos "from" y "to" DEBEN coincidir exactamente con el "name" de una de las pantallas definidas en "screens" (ej: "Inicio de Sesión", "Tablero Principal"). No uses rutas "/..." en "from" ni en "to".`;
 
     try {
       const response = await fetch(endpoint, {

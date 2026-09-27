@@ -5,7 +5,7 @@ const GeminiProvider = require('./GeminiProvider');
 const OllamaProvider = require('./OllamaProvider');
 const OpenAIProvider = require('./OpenAIProvider');
 const N8nProvider = require('./N8nProvider');
-const { validateAIResponse } = require('./ai.contract.validator');
+const { validateAIResponse, normalizeAIResponse } = require('./ai.contract.validator');
 
 /**
  * Factory function to instantiate the selected AI provider.
@@ -84,8 +84,11 @@ class AIService {
       context: input.context || {}
     });
 
-    // 5. Validar contrato de respuesta estricto
-    const validation = validateAIResponse(rawResult);
+    // 5. Normalizar datos y resolver referencias cruzadas de rutas y pantallas
+    const normalizedResult = normalizeAIResponse(rawResult);
+
+    // 6. Validar contrato de respuesta estricto
+    const validation = validateAIResponse(normalizedResult);
     if (!validation.isValid) {
       console.error('[AIService] Error de validación de contrato:', validation.error);
       const err = new Error(validation.error || 'La respuesta del proveedor de IA no cumple el contrato esperado.');
@@ -93,19 +96,19 @@ class AIService {
       throw err;
     }
 
-    // 6. Persistencia transaccional en PostgreSQL (reemplazo limpio sin duplicados)
-    await this.persistProjectAnalysis(projectId, rawResult);
+    // 7. Persistencia transaccional en PostgreSQL (reemplazo limpio sin duplicados)
+    await this.persistProjectAnalysis(projectId, normalizedResult);
 
-    // 7. Devolver el JSON estructurado canónico
+    // 8. Devolver el JSON estructurado canónico
     return {
-      project: rawResult.project,
-      actors: rawResult.actors,
-      requirements: rawResult.requirements,
-      entities: rawResult.entities,
-      relationships: rawResult.relationships,
-      screens: rawResult.screens,
-      navigation: rawResult.navigation,
-      architecture: rawResult.architecture
+      project: normalizedResult.project,
+      actors: normalizedResult.actors,
+      requirements: normalizedResult.requirements,
+      entities: normalizedResult.entities,
+      relationships: normalizedResult.relationships,
+      screens: normalizedResult.screens,
+      navigation: normalizedResult.navigation,
+      architecture: normalizedResult.architecture
     };
   }
 
@@ -153,13 +156,19 @@ function cleanUtf8(str) {
               code: req.code.trim().toUpperCase(),
               name: cleanUtf8(req.name),
               description: req.description ? cleanUtf8(req.description) : '',
-              type: req.type === 'NO_FUNCIONAL' ? 'NON_FUNCTIONAL' : 'FUNCTIONAL',
-              priority: req.priority === 'ALTA' ? 'HIGH' : req.priority === 'BAJA' ? 'LOW' : 'MEDIUM',
+              type: (req.type === 'NON_FUNCTIONAL' || req.type === 'NO_FUNCIONAL' || req.type === 'RNF' || req.code.trim().toUpperCase().startsWith('RNF'))
+                ? 'NON_FUNCTIONAL'
+                : 'FUNCTIONAL',
+              priority: (req.priority === 'ALTA' || req.priority === 'HIGH')
+                ? 'HIGH'
+                : (req.priority === 'BAJA' || req.priority === 'LOW')
+                  ? 'LOW'
+                  : 'MEDIUM',
               status: 'APPROVED',
               actorIds: req.actorIds || [],
               dependencies: req.dependencies || [],
-              preconditions: req.preconditions ? cleanUtf8(req.preconditions) : (req.type === 'NO_FUNCIONAL' || req.type === 'NON_FUNCTIONAL' ? 'Entorno operativo y conectividad estándar' : 'Usuario con sesión activa y permisos correspondientes'),
-              postconditions: req.postconditions ? cleanUtf8(req.postconditions) : (req.type === 'NO_FUNCIONAL' || req.type === 'NON_FUNCTIONAL' ? 'Métricas de calidad y estabilidad verificadas' : 'Estado del sistema actualizado y transacción persistida con éxito')
+              preconditions: req.preconditions ? cleanUtf8(req.preconditions) : ((req.type === 'NON_FUNCTIONAL' || req.type === 'NO_FUNCIONAL' || req.code.trim().toUpperCase().startsWith('RNF')) ? 'Entorno operativo y conectividad estándar' : 'Usuario con sesión activa y permisos correspondientes'),
+              postconditions: req.postconditions ? cleanUtf8(req.postconditions) : ((req.type === 'NON_FUNCTIONAL' || req.type === 'NO_FUNCIONAL' || req.code.trim().toUpperCase().startsWith('RNF')) ? 'Métricas de calidad y estabilidad verificadas' : 'Estado del sistema actualizado y transacción persistida con éxito')
             }
           });
         }

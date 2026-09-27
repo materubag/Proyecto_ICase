@@ -37,10 +37,14 @@ Genera un JSON conciso con las siguientes claves:
   "entities": [{ "id": "ENT-01", "name": string, "attributes": [{ "name": string, "type": string }] }],
   "relationships": [{ "source": string, "target": string, "cardinality": "1:N" | "1:1" | "N:M" }],
   "screens": [{ "id": "SCR-01", "name": string, "route": "/ruta", "purpose": string, "requirementIds": ["RF-01"], "actorIds": ["ACT-01"] }],
-  "navigation": [{ "from": string, "to": string, "action": string }],
+  "navigation": [{ "from": "NombrePantallaOrigen", "to": "NombrePantallaDestino", "action": string }],
   "architecture": { "style": string, "frontend": string, "backend": string, "database": string }
 }
-Reglas: Requisitos atómicos, verificables, sin ambigüedades. No agregues texto fuera del JSON.`;
+Reglas:
+- Requisitos atómicos, verificables, sin ambigüedades.
+- DEBES incluir obligatoriamente tanto Requisitos Funcionales (códigos "RF-01", "RF-02"... con type "FUNCTIONAL") como Requisitos No Funcionales (códigos "RNF-01", "RNF-02"... con type "NON_FUNCTIONAL", cubriendo áreas como rendimiento, seguridad, disponibilidad, respaldo e integridad).
+- Toda pantalla mencionada en "navigation" ('from' y 'to') DEBE estar declarada en el arreglo "screens" y su valor DEBE ser el campo "name" exacto de la pantalla (ej: "Inicio de Sesión", "Panel Principal", "Catálogo"). No uses rutas "/..." en "from" ni en "to".
+- No agregues texto fuera del JSON.`;
 
     // Compactar descripción para no desperdiciar tokens
     const cleanDescription = (input.description || '')
