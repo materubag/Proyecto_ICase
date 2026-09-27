@@ -154,7 +154,7 @@ export default function ProjectRequirements({ project, onProjectUpdated, initial
             onClick={() => setReqSubTab('uta_table')}
           >
             <span className="ms ms-xs">checklist</span>
-            <span>2. Requisitos Especificados (Tabla 1 UTA) ({requirements.length})</span>
+            <span>2. Requisitos Especificados (Tabla 1 ) ({requirements.length})</span>
           </button>
           <button
             className={`btn btn-sm ${reqSubTab === 'actors' ? 'btn-primary' : 'btn-outline'}`}
@@ -232,21 +232,8 @@ export default function ProjectRequirements({ project, onProjectUpdated, initial
 
       {viewMode === 'uta_table' ? (
         <div className="page-scrollable" style={{ padding: '24px', flex: 1, overflowY: 'auto' }}>
-          {/* Institutional Academic Header */}
-          <div style={{ textAlign: 'center', padding: '18px 24px', borderBottom: '2px solid var(--primary)', background: 'var(--surface-container-low)', marginBottom: '20px', borderRadius: 'var(--radius-md)', boxShadow: 'var(--shadow-xs)' }}>
-            <h3 style={{ margin: 0, fontSize: '1.1rem', fontWeight: 700, color: 'var(--primary)', letterSpacing: '0.02em' }}>
-              UNIVERSIDAD TÉCNICA DE AMBATO
-            </h3>
-            <h4 style={{ margin: '4px 0 2px', fontSize: '0.9rem', fontWeight: 600, color: 'var(--on-surface)' }}>
-              FACULTAD DE INGENIERÍA EN SISTEMAS, ELECTRÓNICA E INDUSTRIAL
-            </h4>
-            <p style={{ margin: 0, fontSize: '0.8125rem', color: 'var(--secondary)' }}>
-              CARRERA DE SOFTWARE — DESARROLLO ASISTIDO POR SOFTWARE
-            </p>
-            <div style={{ marginTop: '10px', display: 'inline-block', padding: '4px 16px', background: 'var(--primary)', color: '#ffffff', borderRadius: '20px', fontSize: '0.8125rem', fontWeight: 600 }}>
-              Tabla 1. Ejemplo de formato para requisitos funcionales y no funcionales
-            </div>
-          </div>
+
+
 
           {/* Controls inside UTA view */}
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '14px', flexWrap: 'wrap', gap: '10px' }}>

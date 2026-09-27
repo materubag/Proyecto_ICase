@@ -117,16 +117,23 @@ export default function ProjectSummary({ project, onProjectUpdated, onNavigateTo
 
       <div className="page-scrollable">
         {engineeringStats && <div className="grid-4" style={{ marginBottom: 20 }}>{[
-          ['Fuentes', engineeringStats.sources.length],
-          ['RF aprobados', engineeringStats.Requirement.filter(r => r.status === 'APPROVED' && r.type === 'FUNCTIONAL').length],
-          ['RNF aprobados', engineeringStats.Requirement.filter(r => r.status === 'APPROVED' && r.type === 'NON_FUNCTIONAL').length],
-          ['Casos de uso', engineeringStats.UseCase.filter(r => r.status === 'APPROVED').length],
-          ['Diagramas', engineeringStats.Artifact.filter(a => a.type !== 'MOCKUP').length],
-          ['Mockups', engineeringStats.Artifact.filter(a => a.type === 'MOCKUP').length],
-          ['Cambios pendientes', engineeringStats.changes.filter(c => c.status === 'PENDING_APPROVAL').length],
-          ['OUTDATED', ['Actor', 'UseCase', 'Entity', 'NavigationNode', 'Architecture', 'Artifact'].flatMap(t => engineeringStats[t]).filter(x => x.status === 'OUTDATED').length],
-          ['Requisitos sin cobertura completa', engineeringStats.matrix.filter(r => r.missing.length).length]
-        ].map(([label, value]) => <div className="stat-card" key={label}><span>{label}</span><strong className="stat-card-value">{value}</strong></div>)}</div>}
+          ['Fuentes', engineeringStats.sources.length, 'source'],
+          ['RF aprobados', engineeringStats.Requirement.filter(r => r.status === 'APPROVED' && r.type === 'FUNCTIONAL').length, 'task_alt'],
+          ['RNF aprobados', engineeringStats.Requirement.filter(r => r.status === 'APPROVED' && r.type === 'NON_FUNCTIONAL').length, 'verified'],
+          ['Casos de uso', engineeringStats.UseCase.filter(r => r.status === 'APPROVED').length, 'person_play'],
+          ['Diagramas', engineeringStats.Artifact.filter(a => a.type !== 'MOCKUP').length, 'account_tree'],
+          ['Mockups', engineeringStats.Artifact.filter(a => a.type === 'MOCKUP').length, 'devices'],
+          ['Cambios pendientes', engineeringStats.changes.filter(c => c.status === 'PENDING_APPROVAL').length, 'pending_actions'],
+          ['Sin cobertura', engineeringStats.matrix.filter(r => r.missing.length).length, 'warning'],
+        ].map(([label, value, icon]) => (
+          <div className="stat-card" key={label}>
+            <div className="stat-card-header">
+              <span className="stat-card-label">{label}</span>
+              <span className="ms ms-sm" style={{ color: 'var(--secondary)', opacity: 0.6 }}>{icon}</span>
+            </div>
+            <div className="stat-card-value">{value}</div>
+          </div>
+        ))}</div>}
         {/* Status message */}
         {state === 'success' && (
           <div className="alert alert-success">

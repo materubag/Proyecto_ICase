@@ -136,23 +136,40 @@ export default function ProjectPlanning({ project }) {
     }
   }
 
-  // Generate Mermaid GANTT code
+  // Generate Mermaid GANTT code using explicit dates (avoids 'Invalid date' errors with 'after' syntax)
   const ganttCode = useMemo(() => {
+    // Use Monday of current week as base
+    const baseDate = new Date();
+    baseDate.setDate(baseDate.getDate() - baseDate.getDay() + 1);
+
+    function addWorkdays(date, days) {
+      const d = new Date(date);
+      let added = 0;
+      while (added < days) {
+        d.setDate(d.getDate() + 1);
+        if (d.getDay() !== 0 && d.getDay() !== 6) added++;
+      }
+      return d;
+    }
+
+    function toYMD(date) {
+      return date.toISOString().slice(0, 10);
+    }
+
     let code = `gantt\n  title Cronograma del Proyecto - ${project.name || 'Sistema'}\n  dateFormat YYYY-MM-DD\n  axisFormat %d/%m\n\n`;
     const phases = [...new Set(tasks.map(t => t.phase))];
-    
-    // Base date
-    const baseDate = new Date();
-    
+
     phases.forEach(ph => {
       code += `  section ${ph}\n`;
       const phaseTasks = tasks.filter(t => t.phase === ph);
       phaseTasks.forEach(t => {
-        const cleanName = t.name.replace(/[:;#]/g, ' - ').slice(0, 45);
+        const cleanName = t.name.replace(/[,:;#]/g, ' ').slice(0, 50);
         const taskState = t.status === 'DONE' ? 'done, ' : t.status === 'IN_PROGRESS' ? 'active, ' : '';
         const crit = t.isCritical ? 'crit, ' : '';
-        const dep = t.dependsOn ? `after ${t.dependsOn.split(',')[0].trim().replace('-', '')}, ` : '';
-        code += `  ${cleanName} :${crit}${taskState}${t.id.replace('-', '')}, ${dep}${t.days}d\n`;
+        // Compute start date from startDay offset (1-based)
+        const startDate = toYMD(addWorkdays(baseDate, (t.startDay || 1) - 1));
+        const taskId = t.id.replace(/-/g, '_');
+        code += `  ${cleanName} :${crit}${taskState}${taskId}, ${startDate}, ${t.days}d\n`;
       });
     });
     return code;
