@@ -7,6 +7,7 @@ import Modal from '../components/common/Modal';
 import ImpactModal from '../components/common/ImpactModal';
 import StatusBadge from '../components/common/StatusBadge';
 import ModelEditor from '../components/ModelEditor';
+import ProjectChatView from '../components/chat/ProjectChatView';
 
 const kinds = { Actor: 'Actores', UseCase: 'Casos de uso', Entity: 'Entidades', EntityAttribute: 'Atributos', EntityRelationship: 'Relaciones', BusinessRule: 'Reglas', NavigationNode: 'Navegación', Architecture: 'Arquitectura', Technology: 'Tecnologías' };
 const diagramTypes = { ER_DIAGRAM: 'Entidad–relación', USE_CASE_DIAGRAM: 'Casos de uso', NAVIGATION_DIAGRAM: 'Navegación', SOFTWARE_ARCHITECTURE: 'Arquitectura de software', SYSTEM_ARCHITECTURE: 'Arquitectura del sistema' };
@@ -63,7 +64,54 @@ export default function ProjectEngineering({ project, view = 'modeling', onProje
       <label>Plataforma confirmada <select className="form-control" value={data.project.platform} disabled={busy} onChange={e => run(() => api('/platform', { platform: e.target.value }, 'PATCH'))}>{['UNKNOWN', 'WEB', 'MOBILE', 'BOTH'].map(p => <option key={p}>{p}</option>)}</select></label><p>Detección desde requisitos: {data.detectedPlatform}</p>
       {artifactList.map(a => <article className="info-card" key={a.id} style={{ marginTop: 12 }}><strong>{diagramTypes[a.type] || a.versions[0]?.structuredContent.screen?.name || a.name}</strong> <StatusBadge status={a.status} /><p>Versión oficial: {a.versions.find(v => v.id === a.approvedVersionId)?.version || 'ninguna'}</p><button className="btn btn-outline" disabled={busy} onClick={() => run(() => a.type === 'MOCKUP' ? request(`/projects/${project.id}/mockup`, { method: 'POST', body: { artifactId: a.id } }) : api('/diagrams', { type: a.type, artifactId: a.id }))}>Regenerar este artefacto</button>{a.versions.map(v => <button className="btn btn-ghost" key={v.id} onClick={() => inspect(v)}>v{v.version} · {v.status}</button>)}</article>)}
     </>}
-    {view === 'traceability' && <><h2>Matriz de trazabilidad</h2><p>Las ausencias se muestran para revisión; no se generan elementos para rellenarlas.</p><table style={{ width: '100%' }}><thead><tr><th>Requisito</th><th>Fuente</th><th>Modelos y artefactos</th><th>Sin cobertura</th></tr></thead><tbody>{data.matrix.map(row => <tr key={row.requirement.id}><td>{row.requirement.code}: {row.requirement.name}</td><td>{data.sources.find(s => s.id === row.evidence?.sourceId)?.name || 'Manual / sin fuente'}{row.evidence?.sourceSegmentId && <small>AudioSegment: {row.evidence.sourceSegmentId}</small>}</td><td>{row.coverage.map(c => <div key={c.id}>{c.type}: {data[c.type]?.find(x => x.id === c.id)?.name || c.id}</div>)}</td><td>{row.missing.join(', ') || 'Cubierto'}</td></tr>)}</tbody></table></>}
+    {view === 'traceability' && <>
+      <h2>Matriz de trazabilidad</h2>
+      <p style={{ color: 'var(--secondary)', marginBottom: 16 }}>Las ausencias se muestran para revisión; no se generan elementos para rellenarlas sin evidencia confirmada.</p>
+      <div className="table-responsive card">
+        <table className="modern-table">
+          <thead>
+            <tr>
+              <th>Requisito</th>
+              <th>Fuente de Evidencia</th>
+              <th>Modelos y Artefactos</th>
+              <th>Estado de Cobertura</th>
+            </tr>
+          </thead>
+          <tbody>
+            {data.matrix.map(row => (
+              <tr key={row.requirement.id}>
+                <td>
+                  <span className="code-tag code-tag-primary" style={{ marginRight: 6 }}>{row.requirement.code}</span>
+                  <strong>{row.requirement.name}</strong>
+                </td>
+                <td>
+                  {data.sources.find(s => s.id === row.evidence?.sourceId)?.name || 'Manual / sin fuente'}
+                  {row.evidence?.sourceSegmentId && (
+                    <div style={{ fontSize: '0.75rem', color: 'var(--secondary)' }}>
+                      Segmento: {row.evidence.sourceSegmentId}
+                    </div>
+                  )}
+                </td>
+                <td>
+                  {row.coverage.map(c => (
+                    <div key={c.id} style={{ display: 'inline-block', marginRight: 6, marginBottom: 4 }}>
+                      <span className="badge badge-neutral">{c.type}: {data[c.type]?.find(x => x.id === c.id)?.name || c.id}</span>
+                    </div>
+                  ))}
+                </td>
+                <td>
+                  {row.missing.length > 0 ? (
+                    <span className="badge badge-warning">Sin: {row.missing.join(', ')}</span>
+                  ) : (
+                    <span className="badge badge-success">✓ Totalmente cubierto</span>
+                  )}
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+    </>}
     {view === 'changes' && <><h2>Cambios</h2><p>Los cambios aprobados conservan versiones y marcan las dependencias OUTDATED.</p>
       {data.requirementCandidates.filter(c => c.status === 'PENDING_REVIEW' && c.evidence?.relationship?.requirementId).map(c => <article className="info-card" key={c.id}><strong>Posible {c.evidence.relationship.relation}: {c.evidence.relationship.target}</strong><p>{c.statement}</p><button className="btn btn-outline" disabled={busy} onClick={() => run(async () => setChange(await api('/changes', { type: 'UPDATE', elementType: 'Requirement', elementId: c.evidence.relationship.requirementId, proposedState: { description: c.statement }, sourceCandidateId: c.id, reason: 'Nueva evidencia: ' + c.title }))) }>Proponer cambio desde evidencia</button></article>)}
       {data.changes.map(c => <article className="info-card" key={c.id} style={{ marginTop: 12 }}><strong>{c.type}: {c.previousState.code || c.previousState.name || c.elementId}</strong> <StatusBadge status={c.status} /><p>{c.reason}</p><details><summary>Antes / propuesta / impacto</summary><Json value={c.previousState} /><Json value={c.proposedState} /><Json value={c.impact} /></details>{c.status === 'PENDING_APPROVAL' && <div className="page-actions"><button className="btn btn-primary" onClick={() => setChange(c)}>Revisar impacto</button><button className="btn btn-outline" disabled={busy} onClick={() => run(() => api(`/changes/${c.id}`, { status: 'REJECTED' }, 'PATCH'))}>Rechazar</button></div>}</article>)}</>}
@@ -72,7 +120,7 @@ export default function ProjectEngineering({ project, view = 'modeling', onProje
       {comparison && <Json value={comparison} />}{versions().map(v => <article className="info-card" key={v.id}><strong>{v.label}</strong><details><summary>Consultar contenido</summary><Json value={v.content || v.structuredContent || v} /></details>{v.category !== 'Baseline' ? <button className="btn btn-outline" disabled={busy} onClick={() => run(async () => { if (v.category === 'Artifact') inspect(await api(`/versions/${v.id}/restore`, {})); else setChange(await api('/changes', { type: 'RESTORE', elementType: 'Requirement', elementId: v.requirementId, basedOnVersionId: v.id, reason: `Restaurar contenido v${v.version}` })); })}>Restaurar como nueva versión</button> : <button className="btn btn-outline" disabled={busy} onClick={() => run(async () => setComparison((await api(`/baselines/${v.id}`)).snapshot))}>Consultar snapshot</button>}</article>)}
       <button className="btn btn-outline" onClick={() => download(`${project.name}.json`, JSON.stringify(data, null, 2))}>Exportar JSON</button><button className="btn btn-outline" onClick={() => download(`${project.name}.md`, `# ${project.name}\n\n` + data.Requirement.map(r => `## ${r.code}: ${r.name}\n\n${r.description}\n\nEstado: ${r.status}`).join('\n\n'), 'text/markdown')}>Exportar Markdown</button>
     </>}
-    {view === 'chat' && <><h2>Chat del proyecto</h2><p>Consulta evidencia e impacto. Para proponer un cambio, activa la revisión de candidatos.</p><textarea className="form-control" value={message} onChange={e => setMessage(e.target.value)} rows={4} /><label><input type="checkbox" checked={proposeChange} onChange={e => setProposeChange(e.target.checked)} /> Proponer cambio para revisión</label><select className="form-control" value={provider} onChange={e => setProvider(e.target.value)}><option value="local">Consulta local sin IA</option><option value="ollama">Ollama</option><option value="openai">GPT</option></select><button className="btn btn-primary" disabled={busy || !message.trim()} onClick={() => run(async () => setChat(await api('/chat', { message, proposeChange, provider })))}>Enviar</button>{chat && <><p>{chat.answer}</p><Json value={chat.context} /></>}<h3>Fuente manual</h3><textarea className="form-control" value={sourceText} onChange={e => setSourceText(e.target.value)} rows={4} /><button className="btn btn-outline" disabled={busy || !sourceText.trim()} onClick={() => run(async () => { await api('/sources/text', { text: sourceText, type: 'MANUAL' }); setSourceText(''); })}>Guardar fuente para analizar</button></>}
+    {view === 'chat' && <ProjectChatView project={project} onProjectUpdated={onProjectUpdated} />}
     <Modal isOpen={!!editor} onClose={() => setEditor(null)} title={editor?.change ? 'Proponer cambio controlado' : `Candidato: ${kinds[editor?.kind] || ''}`} footer={<button className="btn btn-primary" disabled={busy} onClick={editor?.change ? () => run(async () => { setChange(await api('/changes', { type: 'UPDATE', elementType: editor.kind, elementId: editor.row.id, proposedState: JSON.parse(content), reason: 'Edición manual del modelo' })); setEditor(null); }) : saveEditor}>Guardar propuesta</button>}>
       {!editor?.id && !editor?.change && <label>Requisitos aprobados (selección múltiple)<select multiple className="form-control" value={reqIds} onChange={e => setReqIds([...e.target.selectedOptions].map(o => o.value))}>{approvedReqs.map(r => <option key={r.id} value={r.id}>{r.code}: {r.name}</option>)}</select></label>}
       <p>Define únicamente datos confirmados. Deja sin especificar lo que aún no tenga evidencia.</p>{editor && <ModelEditor kind={editor.kind} value={content} onChange={setContent} data={data} targetId={editor.targetId || editor.row?.id} />}

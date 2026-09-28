@@ -277,7 +277,7 @@ export default function MockupRenderer({ screen }) {
           src={screen.html ? undefined : screen.htmlUrl}
           srcDoc={screen.html || undefined}
           sandbox="allow-scripts"
-          style={{ width: '100%', minHeight: '620px', border: 0, background: '#fff' }}
+          style={{ width: '100%', minHeight: '620px', border: 0, background: 'rgba(255,255,255,0.03)' }}
         />
       </div>
     );

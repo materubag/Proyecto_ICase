@@ -321,7 +321,7 @@ export default function ProjectModel({ project, onProjectUpdated }) {
                           </button>
                           <button
                             className="btn btn-ghost btn-sm"
-                            style={{ color: '#dc2626' }}
+                            style={{ color: '#f87171' }}
                             onClick={() => handleUpdateClassStatus(cls.id, 'DISCARDED')}
                             title="Rechazar clase"
                           >

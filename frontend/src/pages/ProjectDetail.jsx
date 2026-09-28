@@ -11,6 +11,7 @@ import ProjectPrototype from './ProjectPrototype';
 import ProjectArchitecture from './ProjectArchitecture';
 import ProjectToolsTeam from './ProjectToolsTeam';
 import ProjectEngineering from './ProjectEngineering';
+import ProjectChatView from '../components/chat/ProjectChatView';
 
 export default function ProjectDetail({
   project,
@@ -116,9 +117,9 @@ export default function ProjectDetail({
                 className="btn btn-outline btn-sm"
                 onClick={() => onTabChange('requirements')}
                 style={{
-                  color: '#b42318',
-                  borderColor: 'rgba(180, 35, 24, 0.3)',
-                  background: 'rgba(180, 35, 24, 0.05)',
+                  color: '#f87171',
+                  borderColor: 'rgba(248, 113, 113, 0.2)',
+                  background: 'rgba(248, 113, 113, 0.08)',
                   fontSize: '0.75rem'
                 }}
                 title="Ir a revisión de candidatos ISO 29148"
@@ -195,7 +196,10 @@ export default function ProjectDetail({
         {activeTab === 'tools_team' && (
           <ProjectToolsTeam project={project} onNavigateTo={onTabChange} />
         )}
-        {['traceability', 'changes', 'versions', 'chat'].includes(activeTab) && (
+        {activeTab === 'chat' && (
+          <ProjectChatView project={project} onProjectUpdated={onProjectUpdated} />
+        )}
+        {['traceability', 'changes', 'versions'].includes(activeTab) && (
           <ProjectEngineering project={project} view={activeTab} onProjectUpdated={onProjectUpdated} />
         )}
       </div>

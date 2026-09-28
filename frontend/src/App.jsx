@@ -119,11 +119,11 @@ export default function App() {
           {!currentProject ? (
             <div className="page-scrollable">
               <ProjectsDashboard onOpenProject={handleOpenProject} />
-              <footer className="app-footer" style={{ marginTop: '2.5rem', textAlign: 'center', color: 'var(--outline)', fontSize: '0.75rem' }}>
-                <span className="footer-brand" style={{ fontWeight: 600, color: 'var(--secondary)' }}>ICASE Studio</span>
-                <span style={{ margin: '0 6px' }}>·</span>
+              <footer className="app-footer" style={{ marginTop: '2.5rem', textAlign: 'center' }}>
+                <span className="footer-brand">ICASE Studio</span>
+                <span style={{ margin: '0 6px', color: 'var(--outline)' }}>·</span>
                 <span>Ingeniería de Software Asistida por Computadora</span>
-                <span style={{ margin: '0 6px' }}>·</span>
+                <span style={{ margin: '0 6px', color: 'var(--outline)' }}>·</span>
                 <span>ISO/IEC/IEEE 29148:2018</span>
               </footer>
             </div>

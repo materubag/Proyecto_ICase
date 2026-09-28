@@ -138,7 +138,7 @@ export default function ProjectNavigation({ project }) {
                   <span className="badge badge-primary" style={{ fontSize: '0.75rem' }}>Nivel 1: Entrada y Autenticación</span>
                   <span style={{ fontSize: '0.8rem', color: '#1e40af', fontWeight: 600 }}>Ruta Raíz / Acceso Inicial</span>
                 </div>
-                <div style={{ background: '#ffffff', padding: '12px 16px', borderRadius: '6px', border: '1px solid #bfdbfe' }}>
+                <div style={{ background: 'rgba(255,255,255,0.03)', padding: '12px 16px', borderRadius: '6px', border: '1px solid rgba(77,141,247,0.2)' }}>
                   <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                     <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
                       <span className="ms ms-sm" style={{ color: '#2563eb' }}>login</span>
@@ -159,7 +159,7 @@ export default function ProjectNavigation({ project }) {
                   <span style={{ fontSize: '0.8rem', color: '#166534', fontWeight: 600 }}>Estructura de Menú y Dashboard</span>
                 </div>
                 <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(260px, 1fr))', gap: '10px' }}>
-                  <div style={{ background: '#ffffff', padding: '12px', borderRadius: '6px', border: '1px solid #bbf7d0' }}>
+                  <div style={{ background: 'rgba(255,255,255,0.03)', padding: '12px', borderRadius: '6px', border: '1px solid rgba(52,211,153,0.2)' }}>
                     <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
                       <span className="ms ms-sm" style={{ color: '#16a34a' }}>dashboard</span>
                       <div>
@@ -168,7 +168,7 @@ export default function ProjectNavigation({ project }) {
                       </div>
                     </div>
                   </div>
-                  <div style={{ background: '#ffffff', padding: '12px', borderRadius: '6px', border: '1px solid #bbf7d0' }}>
+                  <div style={{ background: 'rgba(255,255,255,0.03)', padding: '12px', borderRadius: '6px', border: '1px solid rgba(52,211,153,0.2)' }}>
                     <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
                       <span className="ms ms-sm" style={{ color: '#16a34a' }}>view_module</span>
                       <div>
@@ -192,7 +192,7 @@ export default function ProjectNavigation({ project }) {
                     { name: 'Gestión de Préstamos / Transacciones', route: '/operaciones', desc: 'Registro y seguimiento de transacciones' },
                     { name: 'Administración de Usuarios', route: '/usuarios', desc: 'Control de cuentas y perfiles' },
                   ]).map((scr, idx) => (
-                    <div key={idx} style={{ background: '#ffffff', padding: '12px', borderRadius: '6px', border: '1px solid #fde047' }}>
+                    <div key={idx} style={{ background: 'rgba(255,255,255,0.03)', padding: '12px', borderRadius: '6px', border: '1px solid rgba(251,191,36,0.2)' }}>
                       <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
                         <span className="ms ms-sm" style={{ color: '#d97706' }}>article</span>
                         <div>
@@ -213,19 +213,19 @@ export default function ProjectNavigation({ project }) {
                   <span style={{ fontSize: '0.8rem', color: '#475569', fontWeight: 600 }}>Diálogos Emergentes & Formularios CRUD</span>
                 </div>
                 <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(260px, 1fr))', gap: '10px' }}>
-                  <div style={{ background: '#ffffff', padding: '10px 14px', borderRadius: '6px', border: '1px solid #cbd5e1' }}>
+                  <div style={{ background: 'rgba(255,255,255,0.03)', padding: '10px 14px', borderRadius: '6px', border: '1px solid var(--outline-variant)' }}>
                     <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
                       <span className="ms ms-xs" style={{ color: '#64748b' }}>add_circle</span>
                       <span style={{ fontSize: '0.8rem', color: '#1e293b', fontWeight: 500 }}>Modal: Nuevo Registro / Alta</span>
                     </div>
                   </div>
-                  <div style={{ background: '#ffffff', padding: '10px 14px', borderRadius: '6px', border: '1px solid #cbd5e1' }}>
+                  <div style={{ background: 'rgba(255,255,255,0.03)', padding: '10px 14px', borderRadius: '6px', border: '1px solid var(--outline-variant)' }}>
                     <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
                       <span className="ms ms-xs" style={{ color: '#64748b' }}>edit_note</span>
                       <span style={{ fontSize: '0.8rem', color: '#1e293b', fontWeight: 500 }}>Modal: Edición / Modificación</span>
                     </div>
                   </div>
-                  <div style={{ background: '#ffffff', padding: '10px 14px', borderRadius: '6px', border: '1px solid #cbd5e1' }}>
+                  <div style={{ background: 'rgba(255,255,255,0.03)', padding: '10px 14px', borderRadius: '6px', border: '1px solid var(--outline-variant)' }}>
                     <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
                       <span className="ms ms-xs" style={{ color: '#64748b' }}>help</span>
                       <span style={{ fontSize: '0.8rem', color: '#1e293b', fontWeight: 500 }}>Diálogo de Confirmación de Baja / Eliminación</span>

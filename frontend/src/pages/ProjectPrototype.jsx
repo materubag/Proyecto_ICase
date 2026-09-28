@@ -212,7 +212,7 @@ export default function ProjectPrototype({ project }) {
                     </p>
                   </div>
 
-                  <div className="info-card" style={{ borderLeft: '4px solid #9333ea' }}>
+                  <div className="info-card" style={{ borderLeft: '4px solid var(--tertiary)' }}>
                     <strong style={{ fontSize: '0.875rem', display: 'flex', alignItems: 'center', gap: '6px' }}>
                       <span className="ms ms-xs">touch_app</span> 4. Interacción & Formularios
                     </strong>

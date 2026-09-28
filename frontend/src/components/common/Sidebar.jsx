@@ -112,8 +112,10 @@ export default function Sidebar({
             width: '8px',
             height: '8px',
             borderRadius: '50%',
-            backgroundColor: '#b42318',
-            display: 'inline-block'
+            backgroundColor: '#f87171',
+            display: 'inline-block',
+            boxShadow: '0 0 8px rgba(248, 113, 113, 0.5)',
+            animation: 'pulse-glow 2s ease-in-out infinite'
           }}
         />
       );
@@ -124,12 +126,13 @@ export default function Sidebar({
         <span
           className="sidebar-status-pill completed"
           style={{
-            fontSize: '0.6875rem',
-            color: 'var(--secondary)',
-            background: 'var(--surface-container)',
-            padding: '0 5px',
+            fontSize: '0.625rem',
+            color: '#34d399',
+            background: 'rgba(52, 211, 153, 0.12)',
+            padding: '1px 6px',
             borderRadius: 'var(--radius-xs)',
-            fontFamily: 'var(--font-mono)'
+            fontFamily: 'var(--font-mono)',
+            fontWeight: 600
           }}
         >
           {status.text ? status.text : '✓'}
@@ -172,7 +175,7 @@ export default function Sidebar({
               {currentProject ? currentProject.name : 'Mis Proyectos'}
             </span>
           </div>
-          <span className="ms ms-xs" style={{ color: 'var(--on-surface-variant)' }}>
+          <span className="ms ms-xs" style={{ color: 'var(--outline)' }}>
             unfold_more
           </span>
         </div>
@@ -212,8 +215,17 @@ export default function Sidebar({
               </div>
             ))
           ) : (
-            <div style={{ padding: '16px 8px', textAlign: 'center' }}>
-              <p style={{ fontSize: '0.75rem', color: 'var(--outline)', margin: 0 }}>
+            <div style={{ padding: '20px 10px', textAlign: 'center' }}>
+              <div style={{
+                width: 40, height: 40, borderRadius: 'var(--radius-md)',
+                background: 'rgba(77, 141, 247, 0.08)',
+                border: '1px solid rgba(77, 141, 247, 0.12)',
+                display: 'flex', alignItems: 'center', justifyContent: 'center',
+                margin: '0 auto 10px'
+              }}>
+                <span className="ms ms-sm" style={{ color: 'var(--primary)' }}>rocket_launch</span>
+              </div>
+              <p style={{ fontSize: '0.75rem', color: 'var(--outline)', margin: 0, lineHeight: 1.5 }}>
                 Selecciona o abre un proyecto para acceder a las herramientas de ingeniería.
               </p>
             </div>
@@ -228,14 +240,15 @@ export default function Sidebar({
           onClick={() => onViewChange('sources')}
           style={{
             margin: '8px 4px',
-            padding: '8px 10px',
+            padding: '10px 12px',
             borderRadius: 'var(--radius-md)',
-            background: 'rgba(41, 82, 217, 0.08)',
-            border: '1px solid rgba(41, 82, 217, 0.2)',
+            background: 'rgba(77, 141, 247, 0.08)',
+            border: '1px solid rgba(77, 141, 247, 0.15)',
             cursor: 'pointer',
             display: 'flex',
             alignItems: 'center',
-            gap: '8px'
+            gap: '10px',
+            transition: 'all 0.2s ease'
           }}
           title="Ver proceso activo"
         >
@@ -243,10 +256,10 @@ export default function Sidebar({
             autorenew
           </span>
           <div style={{ minWidth: 0, flex: 1 }}>
-            <span style={{ fontSize: '0.6875rem', fontWeight: 600, color: 'var(--primary)', display: 'block' }}>
+            <span style={{ fontSize: '0.6875rem', fontWeight: 700, color: 'var(--primary)', display: 'block' }}>
               Procesando fuentes
             </span>
-            <span style={{ fontSize: '0.625rem', color: 'var(--secondary)' }}>
+            <span style={{ fontSize: '0.625rem', color: 'var(--outline)' }}>
               Haz clic para ver la cola
             </span>
           </div>

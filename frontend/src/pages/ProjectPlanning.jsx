@@ -179,7 +179,7 @@ export default function ProjectPlanning({ project }) {
   const pertCode = useMemo(() => {
     let code = `graph LR\n`;
     code += `  %% Estilos para PERT / CPM\n`;
-    code += `  classDef critical fill:#fef2f2,stroke:#dc2626,stroke-width:3px,color:#991b1b,font-weight:bold;\n`;
+    code += `  classDef critical fill:#fef2f2,stroke:#f87171,stroke-width:3px,color:#991b1b,font-weight:bold;\n`;
     code += `  classDef normal fill:#f0fdf4,stroke:#16a34a,stroke-width:1.5px,color:#166534;\n`;
     code += `  classDef startEnd fill:#2563eb,stroke:#1d4ed8,stroke-width:2px,color:#ffffff,font-weight:bold;\n\n`;
 
@@ -284,12 +284,12 @@ export default function ProjectPlanning({ project }) {
             <div className="stat-card-value">{progressPercent}%</div>
             <span className="stat-card-desc">{completedCount} de {tasks.length} completadas</span>
           </div>
-          <div className="stat-card" style={{ borderLeft: '4px solid #dc2626' }}>
+          <div className="stat-card" style={{ borderLeft: '4px solid #f87171' }}>
             <span className="stat-card-label">Duración Ruta Crítica</span>
             <div className="stat-card-value">~{totalDays} días</div>
             <span className="stat-card-desc">Calculada vía PERT/CPM</span>
           </div>
-          <div className="stat-card" style={{ borderLeft: '4px solid #9333ea' }}>
+          <div className="stat-card" style={{ borderLeft: '4px solid var(--tertiary)' }}>
             <span className="stat-card-label">Herramienta Seleccionada</span>
             <div className="stat-card-value" style={{ fontSize: '1rem', marginTop: '6px' }}>GitHub Projects</div>
             <span className="stat-card-desc">Gestión ágil + Repositorio Git</span>
@@ -442,8 +442,8 @@ export default function ProjectPlanning({ project }) {
             />
 
             <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(260px, 1fr))', gap: '12px', marginTop: '16px' }}>
-              <div className="info-card" style={{ borderLeft: '4px solid #dc2626' }}>
-                <strong style={{ color: '#dc2626', display: 'flex', alignItems: 'center', gap: '6px' }}>
+              <div className="info-card" style={{ borderLeft: '4px solid #f87171' }}>
+                <strong style={{ color: '#f87171', display: 'flex', alignItems: 'center', gap: '6px' }}>
                   <span className="ms ms-xs">warning</span> Ruta Crítica (Líneas Dobles / Rojo)
                 </strong>
                 <p style={{ fontSize: '0.75rem', color: 'var(--secondary)', margin: '4px 0 0' }}>
@@ -500,7 +500,7 @@ export default function ProjectPlanning({ project }) {
                       <strong style={{ color: '#16a34a' }}>+ Ventajas:</strong> {tool.pros}
                     </div>
                     <div style={{ fontSize: '0.75rem' }}>
-                      <strong style={{ color: '#dc2626' }}>- Desventajas:</strong> {tool.cons}
+                      <strong style={{ color: '#f87171' }}>- Desventajas:</strong> {tool.cons}
                     </div>
                   </div>
 

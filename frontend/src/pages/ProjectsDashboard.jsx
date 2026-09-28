@@ -88,41 +88,112 @@ export default function ProjectsDashboard({ onOpenProject }) {
     (p.description || '').toLowerCase().includes(search.toLowerCase())
   );
 
-  const statusBadge = (status) => {
+  // Compute global KPI stats
+  const totalReqs = projects.reduce((sum, p) => sum + (p._count?.requirements ?? 0), 0);
+  const totalActors = projects.reduce((sum, p) => sum + (p._count?.actors ?? 0), 0);
+  const inProgressCount = projects.filter(p => p.status === 'IN_PROGRESS').length;
+  const completedCount = projects.filter(p => p.status === 'COMPLETED').length;
+
+  const statusLabel = (status) => {
     switch (status) {
-      case 'IN_PROGRESS': return <span className="badge badge-in-progress">En Progreso</span>;
-      case 'COMPLETED':   return <span className="badge badge-success">Completado</span>;
-      default:            return <span className="badge badge-planning">Planificación</span>;
+      case 'IN_PROGRESS': return { text: 'En Progreso', cls: 'badge-in-progress' };
+      case 'COMPLETED':   return { text: 'Completado', cls: 'badge-success' };
+      default:            return { text: 'Planificación', cls: 'badge-planning' };
     }
   };
 
+  // Calculate a fake "completeness" score for each project
+  function getProjectProgress(proj) {
+    const reqs = proj._count?.requirements ?? 0;
+    const actors = proj._count?.actors ?? 0;
+    const entities = proj._count?.entities ?? 0;
+    const screens = proj._count?.screens ?? 0;
+    let score = 0;
+    if (reqs > 0) score += 30;
+    if (actors > 0) score += 20;
+    if (entities > 0) score += 25;
+    if (screens > 0) score += 25;
+    return Math.min(score, 100);
+  }
+
+  // Clean description: strip PDF dump markers and truncate
+  function cleanDescription(desc) {
+    if (!desc) return 'Sin descripción asignada.';
+    let clean = desc
+      .replace(/\[PÁGINA\s*\d+\]/gi, '')
+      .replace(/---\s*\[SALTO_PAGINA\]\s*---/gi, '')
+      .replace(/\s{2,}/g, ' ')
+      .trim();
+    if (clean.length > 160) clean = clean.substring(0, 160).trim() + '…';
+    return clean || 'Sin descripción asignada.';
+  }
+
   return (
     <div>
-      {/* Dashboard header */}
-      <div style={{ marginBottom: '1.5rem' }}>
-        <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', flexWrap: 'wrap', gap: '1rem' }}>
-          <div>
-            <h1 style={{ fontSize: '1.5rem', fontWeight: 700, letterSpacing: '-0.025em', color: 'var(--on-surface)', marginBottom: '4px' }}>
-              Proyectos
-            </h1>
-            <p style={{ fontSize: '0.8125rem', color: 'var(--secondary)' }}>
-              {projects.length} proyecto{projects.length !== 1 ? 's' : ''} · Ingeniería de Software Asistida
-            </p>
+      {/* ── Welcome Hero / KPI Section ── */}
+      <div className="dashboard-hero">
+        <div className="dashboard-hero-left">
+          <h1 className="dashboard-title">
+            <span className="ms" style={{ fontSize: '28px', marginRight: '10px' }}>engineering</span>
+            Workspace
+          </h1>
+          <p className="dashboard-subtitle">
+            Ingeniería de Software Asistida · ISO 29148
+          </p>
+        </div>
+        <div className="dashboard-hero-actions">
+          <div className="search-bar" style={{ width: '260px' }}>
+            <span className="ms">search</span>
+            <input
+              type="text"
+              placeholder="Buscar proyectos..."
+              value={search}
+              onChange={e => setSearch(e.target.value)}
+            />
           </div>
-          <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
-            <div className="search-bar" style={{ width: '240px' }}>
-              <span className="ms">search</span>
-              <input
-                type="text"
-                placeholder="Buscar proyectos..."
-                value={search}
-                onChange={e => setSearch(e.target.value)}
-              />
-            </div>
-            <button className="btn btn-primary btn-md" onClick={openCreateModal}>
-              <span className="ms ms-sm">add</span>
-              <span>Nuevo proyecto</span>
-            </button>
+          <button className="btn btn-primary btn-md" onClick={openCreateModal}>
+            <span className="ms ms-sm">add</span>
+            <span>Nuevo proyecto</span>
+          </button>
+        </div>
+      </div>
+
+      {/* ── KPI Summary Cards ── */}
+      <div className="kpi-grid">
+        <div className="kpi-card">
+          <div className="kpi-icon-wrap kpi-icon-blue">
+            <span className="ms">folder_special</span>
+          </div>
+          <div className="kpi-info">
+            <span className="kpi-value">{projects.length}</span>
+            <span className="kpi-label">Proyectos</span>
+          </div>
+        </div>
+        <div className="kpi-card">
+          <div className="kpi-icon-wrap kpi-icon-violet">
+            <span className="ms">checklist</span>
+          </div>
+          <div className="kpi-info">
+            <span className="kpi-value">{totalReqs}</span>
+            <span className="kpi-label">Requisitos</span>
+          </div>
+        </div>
+        <div className="kpi-card">
+          <div className="kpi-icon-wrap kpi-icon-emerald">
+            <span className="ms">groups</span>
+          </div>
+          <div className="kpi-info">
+            <span className="kpi-value">{totalActors}</span>
+            <span className="kpi-label">Actores</span>
+          </div>
+        </div>
+        <div className="kpi-card">
+          <div className="kpi-icon-wrap kpi-icon-amber">
+            <span className="ms">trending_up</span>
+          </div>
+          <div className="kpi-info">
+            <span className="kpi-value">{inProgressCount}</span>
+            <span className="kpi-label">En progreso</span>
           </div>
         </div>
       </div>
@@ -135,7 +206,21 @@ export default function ProjectsDashboard({ onOpenProject }) {
         </div>
       )}
 
-      {/* Content */}
+      {/* ── Section heading ── */}
+      <div className="dashboard-section-head">
+        <h2 className="dashboard-section-title">
+          Mis Proyectos
+          <span className="dashboard-count-pill">{filtered.length}</span>
+        </h2>
+        {projects.length > 0 && (
+          <div className="dashboard-legend">
+            <span className="legend-dot legend-dot-blue" /> En progreso ({inProgressCount})
+            <span className="legend-dot legend-dot-green" style={{ marginLeft: 12 }} /> Completados ({completedCount})
+          </div>
+        )}
+      </div>
+
+      {/* ── Content ── */}
       {loading ? (
         <div className="loading-state">
           <div className="loading-dots">
@@ -148,15 +233,15 @@ export default function ProjectsDashboard({ onOpenProject }) {
       ) : filtered.length === 0 ? (
         <div className="empty-state" style={{ border: '1px dashed var(--outline-variant)', borderRadius: 'var(--radius-lg)' }}>
           <div className="empty-state-icon">
-            <span className="ms ms-xl">folder_open</span>
+            <span className="ms ms-xl">rocket_launch</span>
           </div>
           <p className="empty-state-title">
-            {search ? 'Sin resultados' : 'Sin proyectos registrados'}
+            {search ? 'Sin resultados' : 'Comienza tu primer proyecto'}
           </p>
           <p className="empty-state-desc">
             {search
               ? `No se encontraron proyectos para "${search}".`
-              : 'Crea tu primer proyecto de ingeniería de software para comenzar.'}
+              : 'Crea un proyecto de ingeniería de software y deja que la IA te asista en el análisis, diseño y documentación.'}
           </p>
           {!search && (
             <button className="btn btn-primary btn-md" onClick={openCreateModal}>
@@ -167,64 +252,100 @@ export default function ProjectsDashboard({ onOpenProject }) {
         </div>
       ) : (
         <div className="projects-grid">
-          {filtered.map((proj) => (
-            <div
-              key={proj.id}
-              className="project-card"
-              onClick={() => onOpenProject(proj)}
-            >
-              <div>
-                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '8px' }}>
-                  <h3 className="project-card-title">{proj.name}</h3>
-                  {statusBadge(proj.status)}
+          {filtered.map((proj) => {
+            const progress = getProjectProgress(proj);
+            const st = statusLabel(proj.status);
+            return (
+              <div
+                key={proj.id}
+                className="project-card"
+                onClick={() => onOpenProject(proj)}
+              >
+                {/* Progress bar at top of card */}
+                <div className="project-card-progress-bar">
+                  <div
+                    className="project-card-progress-fill"
+                    style={{ width: `${progress}%` }}
+                  />
                 </div>
-                <p className="project-card-desc">
-                  {proj.description || 'Sin descripción asignada.'}
-                </p>
-                <div className="project-card-stats">
-                  <span className="project-card-stat">
-                    <span className="ms ms-xs" style={{ color: 'var(--outline)' }}>checklist</span>
-                    <strong>{proj._count?.requirements ?? 0}</strong> requisitos
-                  </span>
-                  <span className="project-card-stat">
-                    <span className="ms ms-xs" style={{ color: 'var(--outline)' }}>people</span>
-                    <strong>{proj._count?.actors ?? 0}</strong> actores
-                  </span>
-                </div>
-              </div>
 
-              <div className="project-card-meta" onClick={e => e.stopPropagation()}>
-                <span className="project-card-date">
-                  <span className="ms ms-xs">schedule</span>
-                  {new Date(proj.updatedAt).toLocaleDateString('es', { day: '2-digit', month: 'short', year: 'numeric' })}
-                </span>
-                <div className="project-card-actions">
-                  <button
-                    className="btn btn-ghost btn-icon btn-sm"
-                    onClick={(e) => openEditModal(e, proj)}
-                    title="Editar proyecto"
-                  >
-                    <span className="ms ms-sm">edit</span>
-                  </button>
-                  <button
-                    className="btn btn-ghost btn-icon btn-sm"
-                    onClick={() => onOpenProject(proj)}
-                    title="Abrir proyecto"
-                  >
-                    <span className="ms ms-sm">arrow_forward</span>
-                  </button>
-                  <button
-                    className="btn btn-ghost btn-icon btn-sm"
-                    style={{ color: 'var(--error)' }}
-                    onClick={(e) => handleDeleteProject(e, proj.id)}
-                    title="Eliminar proyecto"
-                  >
-                    <span className="ms ms-sm">delete</span>
-                  </button>
+                <div className="project-card-body">
+                  {/* Header row */}
+                  <div className="project-card-header-row">
+                    <div className="project-card-icon-wrap">
+                      <span className="ms">inventory_2</span>
+                    </div>
+                    <div className="project-card-header-info">
+                      <h3 className="project-card-title">{proj.name}</h3>
+                      <span className={`badge ${st.cls}`}>{st.text}</span>
+                    </div>
+                    <span className="project-card-progress-text">{progress}%</span>
+                  </div>
+
+                  {/* Description */}
+                  <p className="project-card-desc">
+                    {cleanDescription(proj.description)}
+                  </p>
+
+                  {/* Stats row */}
+                  <div className="project-card-stats-row">
+                    <div className="project-card-stat-chip">
+                      <span className="ms ms-xs">checklist</span>
+                      <strong>{proj._count?.requirements ?? 0}</strong>
+                      <span>Req.</span>
+                    </div>
+                    <div className="project-card-stat-chip">
+                      <span className="ms ms-xs">people</span>
+                      <strong>{proj._count?.actors ?? 0}</strong>
+                      <span>Actores</span>
+                    </div>
+                    <div className="project-card-stat-chip">
+                      <span className="ms ms-xs">schema</span>
+                      <strong>{proj._count?.entities ?? 0}</strong>
+                      <span>Entid.</span>
+                    </div>
+                    <div className="project-card-stat-chip">
+                      <span className="ms ms-xs">devices</span>
+                      <strong>{proj._count?.screens ?? 0}</strong>
+                      <span>Pant.</span>
+                    </div>
+                  </div>
+                </div>
+
+                {/* Footer */}
+                <div className="project-card-meta" onClick={e => e.stopPropagation()}>
+                  <span className="project-card-date">
+                    <span className="ms ms-xs">schedule</span>
+                    {new Date(proj.updatedAt).toLocaleDateString('es', { day: '2-digit', month: 'short', year: 'numeric' })}
+                  </span>
+                  <div className="project-card-actions">
+                    <button className="btn btn-ghost btn-icon btn-sm" onClick={(e) => openEditModal(e, proj)} title="Editar proyecto">
+                      <span className="ms ms-sm">edit</span>
+                    </button>
+                    <button className="btn btn-ghost btn-icon btn-sm" onClick={() => onOpenProject(proj)} title="Abrir proyecto">
+                      <span className="ms ms-sm">arrow_forward</span>
+                    </button>
+                    <button className="btn btn-ghost btn-icon btn-sm" style={{ color: 'var(--error)' }} onClick={(e) => handleDeleteProject(e, proj.id)} title="Eliminar proyecto">
+                      <span className="ms ms-sm">delete</span>
+                    </button>
+                  </div>
                 </div>
               </div>
+            );
+          })}
+
+          {/* "New Project" ghost card */}
+          <div className="project-card project-card-new" onClick={openCreateModal}>
+            <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', height: '100%', gap: '12px' }}>
+              <div className="kpi-icon-wrap kpi-icon-blue" style={{ width: 48, height: 48 }}>
+                <span className="ms" style={{ fontSize: 22 }}>add</span>
+              </div>
+              <span style={{ fontSize: '0.875rem', fontWeight: 600, color: 'var(--on-surface)' }}>Nuevo Proyecto</span>
+              <span style={{ fontSize: '0.75rem', color: 'var(--outline)', textAlign: 'center', lineHeight: 1.5, maxWidth: 200 }}>
+                Crea un proyecto y comienza el análisis asistido por IA
+              </span>
             </div>
-          ))}
+          </div>
         </div>
       )}
 
