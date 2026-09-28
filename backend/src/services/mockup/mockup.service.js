@@ -190,7 +190,7 @@ class MockupService {
         const response = await fetch(env.N8N_MOCKUP_WEBHOOK, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          signal: AbortSignal.timeout(env.N8N_TIMEOUT || 120000),
+          signal: AbortSignal.timeout(env.N8N_TIMEOUT || 360000),
           body: JSON.stringify(webhookPayload)
         });
 
@@ -219,7 +219,7 @@ class MockupService {
         }
       } catch (err) {
         if (err.name === 'TimeoutError' || err.code === 23 || err.message?.includes('timeout') || err.message?.includes('504')) {
-          const timeoutErr = new Error('Google Stitch / n8n excedió el tiempo límite de espera (Timeout 504). El flujo de Stitch demoró más de lo esperado.');
+          const timeoutErr = new Error('Google Stitch / n8n excedió el tiempo límite de espera (Timeout 504). El flujo de Stitch demoró más de 6 minutos.');
           timeoutErr.statusCode = 504;
           timeoutErr.isTimeout = true;
           throw timeoutErr;

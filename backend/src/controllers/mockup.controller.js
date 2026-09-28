@@ -5,6 +5,10 @@ const prisma = require('../config/prisma');
 class MockupController {
   async generate(req, res, next) {
     try {
+      // Permitir hasta 7 minutos de timeout para flujos extensos de n8n / Google Stitch
+      if (req.setTimeout) req.setTimeout(420000);
+      if (res.setTimeout) res.setTimeout(420000);
+
       const { projectId } = req.params;
       const { prompt, screenIds, mode = 'stitch' } = req.body;
 

@@ -45,7 +45,7 @@ module.exports = {
   // Configuración n8n (Exclusivo para Mockups)
   N8N_BASE_URL: process.env.N8N_BASE_URL || '',
   N8N_MOCKUP_WEBHOOK: process.env.N8N_MOCKUP_WEBHOOK || '',
-  N8N_TIMEOUT: parseInt(process.env.N8N_TIMEOUT || '120000', 10),
+  N8N_TIMEOUT: parseInt(process.env.N8N_TIMEOUT || '360000', 10),
   MOCKUP_MAX_REQUIREMENTS: parseInt(process.env.MOCKUP_MAX_REQUIREMENTS || '12', 10),
 
   // Configuración de Análisis Inteligente de Requisitos

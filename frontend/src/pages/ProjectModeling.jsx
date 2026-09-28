@@ -1,9 +1,15 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import ProjectModel from './ProjectModel';
 import ProjectUseCases from './ProjectUseCases';
 
-export default function ProjectModeling({ project, onProjectUpdated }) {
-  const [activeSubTab, setActiveSubTab] = useState('er'); // 'er' | 'usecases' | 'classes'
+export default function ProjectModeling({ project, onProjectUpdated, initialSubTab = 'er' }) {
+  const [activeSubTab, setActiveSubTab] = useState(initialSubTab);
+
+  useEffect(() => {
+    if (initialSubTab) {
+      setActiveSubTab(initialSubTab);
+    }
+  }, [initialSubTab]);
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', height: '100%', overflow: 'hidden' }}>

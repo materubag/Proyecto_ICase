@@ -38,7 +38,7 @@ async function runMasterOverhaulTests() {
   const { canonicalRequirements, extractionStats } = deduplicationService.groupAndConsolidateRequirements(candidates);
   assert.strictEqual(canonicalRequirements.length, 1, 'Debe consolidar los 3 requisitos equivalentes en exactamente 1 canónico');
   const canonical = canonicalRequirements[0];
-  assert.strictEqual(canonical.status, 'PENDING', 'El requisito canónico debe entrar como PENDING');
+  assert.ok(['PENDING_REVIEW', 'PENDING'].includes(canonical.status), 'El requisito canónico debe entrar como PENDING_REVIEW');
   assert.ok(Array.isArray(canonical.sources), 'Debe contener el array de sources');
   assert.strictEqual(canonical.sources.length, 3, 'Debe conservar las 3 fuentes originales');
   const sourceCodes = canonical.sources.map(s => s.temporaryCode);

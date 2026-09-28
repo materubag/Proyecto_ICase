@@ -281,68 +281,19 @@ class UseCaseService {
    * Genera el diagrama Mermaid de casos de uso para los casos creados.
    */
   async getMermaidDiagram(projectId) {
-    const useCases = await this.getUseCasesByProject(projectId);
-    const actors = await prisma.actor.findMany({ where: { projectId } });
+    let useCases = await this.getUseCasesByProject(projectId);
+    const actors = await prisma.actor.findMany({ where: { projectId, isDeleted: false } });
 
+    // Si no existen casos de uso pero hay requisitos, generar casos automáticamente
     if (useCases.length === 0) {
-      return useCaseGenerator.generate(actors, []);
-    }
-
-    const lines = ['flowchart LR'];
-    const declaredActors = new Set();
-
-    for (const a of actors) {
-      const aId = (a.codeId || a.name).replace(/[^a-zA-Z0-9_]/g, '_').toUpperCase();
-      declaredActors.add(aId);
-      lines.push(`    ${aId}["👤 ${a.name}"]`);
-    }
-
-    const defaultActorId = actors[0] ? (actors[0].codeId || actors[0].name).replace(/[^a-zA-Z0-9_]/g, '_').toUpperCase() : 'ACT_USER';
-    if (!declaredActors.has(defaultActorId)) {
-      lines.push(`    ${defaultActorId}["👤 Usuario"]`);
-      declaredActors.add(defaultActorId);
-    }
-
-    for (const uc of useCases) {
-      const ucNodeId = `UC_${uc.codeId.replace(/[^a-zA-Z0-9_]/g, '_')}`;
-      const title = uc.name.replace(/["\\]/g, '').slice(0, 40);
-      lines.push(`    ${ucNodeId}(["${uc.codeId}: ${title}"])`);
-
-      // Match primary actor by codeId, id, or name
-      const matchedActor = actors.find(a => 
-        a.codeId === uc.primaryActorId ||
-        a.id === uc.primaryActorId ||
-        a.name.toLowerCase() === (uc.primaryActorId || '').toLowerCase()
-      );
-      const pActorNode = matchedActor
-        ? (matchedActor.codeId || matchedActor.name).replace(/[^a-zA-Z0-9_]/g, '_').toUpperCase()
-        : (declaredActors.has(uc.primaryActorId?.replace(/[^a-zA-Z0-9_]/g, '_').toUpperCase()) ? uc.primaryActorId.replace(/[^a-zA-Z0-9_]/g, '_').toUpperCase() : defaultActorId);
-
-      if (declaredActors.has(pActorNode)) {
-        lines.push(`    ${pActorNode} --- ${ucNodeId}`);
-      } else {
-        lines.push(`    ${defaultActorId} --- ${ucNodeId}`);
-      }
-
-      if (Array.isArray(uc.secondaryActorIds)) {
-        for (const sActor of uc.secondaryActorIds) {
-          const matchedSec = actors.find(a => 
-            a.codeId === sActor ||
-            a.id === sActor ||
-            a.name.toLowerCase() === (sActor || '').toLowerCase()
-          );
-          const sId = matchedSec
-            ? (matchedSec.codeId || matchedSec.name).replace(/[^a-zA-Z0-9_]/g, '_').toUpperCase()
-            : sActor.replace(/[^a-zA-Z0-9_]/g, '_').toUpperCase();
-
-          if (declaredActors.has(sId)) {
-            lines.push(`    ${sId} -.-> ${ucNodeId}`);
-          }
-        }
+      try {
+        useCases = await this.generateFundamentalUseCases(projectId);
+      } catch (err) {
+        // Si no hay suficientes requisitos para generar casos, se continúa
       }
     }
 
-    return lines.join('\n');
+    return useCaseGenerator.generate(actors, useCases);
   }
 }
 

@@ -35,24 +35,43 @@ class DiagramContextBuilder {
 
   buildUseCaseContext(project, projectName) {
     const deduplicationService = require('../analysis/deduplicationService');
-    // Only approved actors, deduplicated and canonical
+    // Only approved actors, fallback to all actors if none approved yet
     const approvedActors = (project.actors || []).filter(a => a.reviewStatus === 'APPROVED' || a.status === 'APPROVED');
-    const canonicalActors = deduplicationService.consolidateActors(approvedActors);
+    const sourceActors = approvedActors.length > 0 ? approvedActors : (project.actors || []);
+    const canonicalActors = deduplicationService.consolidateActors(sourceActors);
     const actors = canonicalActors.map(a => ({
+      id: a.id,
+      codeId: a.codeId,
       code: 'ACT_' + toSafeIdentifier(a.codeId || a.name, 'ACT').toUpperCase().slice(0, 15),
       name: a.name.trim(),
       description: toSafeLabel(a.description || '', 140)
     }));
 
-    // Prioritize approved use cases
-    const useCases = (project.useCases || [])
-      .filter(uc => uc.reviewStatus === 'APPROVED' || uc.status === 'APPROVED')
-      .map((uc, i) => ({
+    // Prioritize approved use cases, fallback to all use cases
+    const approvedUseCases = (project.useCases || []).filter(uc => uc.reviewStatus === 'APPROVED' || uc.status === 'APPROVED');
+    const sourceUseCases = approvedUseCases.length > 0 ? approvedUseCases : (project.useCases || []);
+
+    const useCases = sourceUseCases.map((uc, i) => {
+      const matchedActor = (project.actors || []).find(a =>
+        a.id === uc.primaryActorId ||
+        a.codeId === uc.primaryActorId ||
+        a.name.toLowerCase() === (uc.primaryActorId || '').toLowerCase()
+      );
+      const actorName = matchedActor?.name || uc.primaryActorId || (actors[0]?.name || 'Usuario');
+      const actorId = matchedActor?.id || matchedActor?.codeId || uc.primaryActorId || (actors[0]?.id || 'Usuario');
+
+      return {
+        id: uc.id,
+        codeId: uc.codeId || `CU-${String(i + 1).padStart(2, '0')}`,
         code: 'UC_' + toSafeIdentifier(uc.code || uc.codeId || `CU_${i + 1}`, 'UC').toUpperCase(),
         name: uc.name.trim(),
-        actor: uc.actor || 'Usuario',
+        primaryActorId: actorId,
+        actor: actorName,
+        actorIds: uc.actorIds?.length ? uc.actorIds : [actorId],
+        secondaryActorIds: uc.secondaryActorIds || [],
         description: toSafeLabel(uc.description || '', 140)
-      }));
+      };
+    });
 
     // Relevant functional requirements via deduplicationService
     const selectedReqs = deduplicationService.selectRelevantRequirements(project.requirements || [], 'USE_CASE', 25);
@@ -65,7 +84,7 @@ class DiagramContextBuilder {
     return {
       diagramType: 'USE_CASE',
       project: { name: projectName },
-      actors: actors.length > 0 ? actors : [{ code: 'ACT_USER', name: 'Usuario del Sistema', description: 'Operador principal' }],
+      actors: actors.length > 0 ? actors : [{ id: 'ACT_USER', codeId: 'ACT-01', code: 'ACT_USER', name: 'Usuario del Sistema', description: 'Operador principal' }],
       useCases: useCases.length > 0 ? useCases : undefined,
       functionalRequirements: functionalReqs
     };

@@ -468,7 +468,7 @@ export default function ProjectPrototype({
               }}
             >
               <span style={{ fontSize: '0.75rem', color: '#991b1b' }}>
-                El webhook de Google Stitch demoró más de 120s en responder. Puedes reintentar o generar los mockups de inmediato con el motor local:
+                El webhook de Google Stitch demoró más de 6 minutos en responder. Puedes reintentar o generar los mockups de inmediato con el motor local:
               </span>
               <button
                 type="button"

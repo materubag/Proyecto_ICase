@@ -1,5 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { useCasesApi } from '../api/useCases.api';
+import { actorsApi } from '../api/actors.api';
+import { requirementsApi } from '../api/requirements.api';
 import Modal from '../components/common/Modal';
 import DiagramViewport from '../components/common/DiagramViewport';
 import RequirementMultiSelect from '../components/common/RequirementMultiSelect';
@@ -29,11 +31,8 @@ export default function ProjectUseCases({ project, onProjectUpdated }) {
   const [diagramLoading, setDiagramLoading] = useState(false);
   const [diagramError, setDiagramError] = useState(null);
 
-  const actors = project.actors || [];
-
-  useEffect(() => {
-    loadUseCases();
-  }, [project.id]);
+  const [actorsList, setActorsList] = useState(project.actors || []);
+  const [requirementsList, setRequirementsList] = useState(project.requirements || []);
 
   async function loadUseCases() {
     try {
@@ -51,7 +50,29 @@ export default function ProjectUseCases({ project, onProjectUpdated }) {
     }
   }
 
-  const functionalReqs = (project.requirements || []).filter(r => r.type === 'FUNCTIONAL' || !r.type);
+  useEffect(() => {
+    loadUseCases();
+    if (project.actors && project.actors.length > 0) {
+      setActorsList(project.actors);
+    } else if (project.id) {
+      actorsApi.getByProject(project.id).then(res => {
+        const data = res?.data || res || [];
+        if (Array.isArray(data)) setActorsList(data);
+      }).catch(() => {});
+    }
+
+    if (project.requirements && project.requirements.length > 0) {
+      setRequirementsList(project.requirements);
+    } else if (project.id) {
+      requirementsApi.getByProject(project.id).then(res => {
+        const data = res?.data || res || [];
+        if (Array.isArray(data)) setRequirementsList(data);
+      }).catch(() => {});
+    }
+  }, [project.id, project.actors, project.requirements]);
+
+  const actors = actorsList;
+  const functionalReqs = (requirementsList || []).filter(r => r.type === 'FUNCTIONAL' || !r.type);
   const relevantReqsCount = functionalReqs.length;
   const actorsCount = actors.length;
   const estimatedCases = Math.max(1, Math.min(10, Math.ceil(relevantReqsCount / 3)));
@@ -540,6 +561,7 @@ export default function ProjectUseCases({ project, onProjectUpdated }) {
       {/* Edit/Create Modal */}
       {modalOpen && (
         <Modal
+          isOpen={modalOpen}
           title={editingUC ? `Editar Caso de Uso (${codeId})` : 'Nuevo Caso de Uso'}
           onClose={() => setModalOpen(false)}
         >
@@ -585,7 +607,7 @@ export default function ProjectUseCases({ project, onProjectUpdated }) {
 
             <div>
               <RequirementMultiSelect
-                requirements={project.requirements || []}
+                requirements={functionalReqs.length > 0 ? functionalReqs : (project.requirements || [])}
                 selectedDependencies={requirementIds}
                 onChange={setRequirementIds}
                 label="Requisitos Funcionales Asociados"
@@ -632,6 +654,7 @@ export default function ProjectUseCases({ project, onProjectUpdated }) {
       {/* Diagram Modal */}
       {diagramModalOpen && (
         <Modal
+          isOpen={diagramModalOpen}
           title={`Diagrama de Casos de Uso — ${project.name}`}
           onClose={() => setDiagramModalOpen(false)}
           size="xlarge"
@@ -649,6 +672,8 @@ export default function ProjectUseCases({ project, onProjectUpdated }) {
               <DiagramViewport
                 code={diagramCode}
                 title="Casos de Uso del Proyecto"
+                onRegenerate={handleOpenDiagram}
+                isGenerating={diagramLoading}
               />
             )}
           </div>
@@ -657,6 +682,7 @@ export default function ProjectUseCases({ project, onProjectUpdated }) {
       {/* Modal de Validación Previa de Información para Casos de Uso (Req #15) */}
       {preGenModalOpen && (
         <Modal
+          isOpen={preGenModalOpen}
           title="Verificación de Información para Casos de Uso"
           onClose={() => setPreGenModalOpen(false)}
           footer={(

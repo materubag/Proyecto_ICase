@@ -311,7 +311,7 @@ class AnalysisPipeline {
               evidence: need.evidence,
               confidence: need.confidence,
               origin: need.origin,
-              status: need.status,
+              status: (need.status === 'PENDING' || !need.status) ? 'PENDING_REVIEW' : need.status,
               metadata: need.metadata
             }
           });
@@ -336,7 +336,7 @@ class AnalysisPipeline {
               priority: req.priority,
               origin: req.origin,
               confidence: req.confidence,
-              status: req.status,
+              status: (req.status === 'PENDING' || !req.status) ? 'PENDING_REVIEW' : req.status,
               evidence: req.evidence,
               qualityReport: req.qualityReport
             }

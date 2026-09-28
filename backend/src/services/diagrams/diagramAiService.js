@@ -356,13 +356,15 @@ REGLAS CRÍTICAS DE AISLAMIENTO Y DOMINIO:
   generateDeterministicFallback(diagramType, project, context) {
     switch (diagramType) {
       case 'USE_CASE': {
-        const actors = project.actors || [];
+        const actors = (context.actors && context.actors.length > 0) ? context.actors : (project.actors || []);
         const useCases = (context.useCases && context.useCases.length > 0)
           ? context.useCases
           : (context.functionalRequirements || []).map((r, i) => ({
+              codeId: `CU-${String(i + 1).padStart(2, '0')}`,
               code: `CU-${String(i + 1).padStart(2, '0')}`,
               name: r.name,
-              actor: actors[0]?.name || 'Usuario'
+              actor: actors[0]?.name || actors[0]?.codeId || 'Usuario',
+              actorIds: [actors[0]?.id || actors[0]?.codeId || 'Usuario']
             }));
         return useCaseGenerator.generate(actors, useCases);
       }

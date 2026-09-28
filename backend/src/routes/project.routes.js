@@ -78,8 +78,18 @@ router.post('/:projectId/entities/approve-all', async (req, res, next) => {
     });
     await prisma.entityRelationship.updateMany({
       where: { projectId },
-      data: { reviewStatus: 'APPROVED', status: 'APPROVED' }
+      data: { status: 'APPROVED' }
     });
+    const entities = await prisma.entity.findMany({
+      where: { projectId },
+      select: { id: true }
+    });
+    if (entities.length > 0) {
+      await prisma.entityAttribute.updateMany({
+        where: { entityId: { in: entities.map(e => e.id) } },
+        data: { status: 'APPROVED' }
+      });
+    }
     res.json({ success: true, count: updated.count });
   } catch (err) { next(err); }
 });
