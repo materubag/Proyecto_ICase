@@ -1,4 +1,4 @@
-﻿const { id, token, label } = require('./mermaidSyntax');
+const { id, token, label } = require('./mermaidSyntax');
 module.exports = {
   generate(entities = [], relationships = []) {
     const lines = ['erDiagram'];
@@ -6,10 +6,12 @@ module.exports = {
     for (const e of entities) { const key = token(e.name) + '_' + id(e.id || e.name); names.set(e.id || e.name, key); names.set(e.name, key); }
     for (const e of entities) {
       const key = names.get(e.id || e.name);
-      lines.push('    ' + key);
       if (e.attributes?.length) {
         lines.push('    ' + key + ' {');
-        for (const a of e.attributes) lines.push('        ' + token(a.type) + ' ' + token(a.name) + (a.isPk ? ' PK' : ''));
+        for (const a of e.attributes) {
+          const rawType = String(a.type || 'string').split('|')[0].trim();
+          lines.push('        ' + token(rawType) + ' ' + token(a.name) + (a.isPk ? ' PK' : ''));
+        }
         lines.push('    }');
       }
     }

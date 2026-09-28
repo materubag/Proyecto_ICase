@@ -276,8 +276,8 @@ export default function MockupRenderer({ screen }) {
           title={`Prototipo ${screen.name}`}
           src={screen.html ? undefined : screen.htmlUrl}
           srcDoc={screen.html || undefined}
-          sandbox="allow-scripts"
-          style={{ width: '100%', minHeight: '620px', border: 0, background: 'rgba(255,255,255,0.03)' }}
+          sandbox="allow-scripts allow-same-origin allow-forms"
+          style={{ width: '100%', height: 'calc(100vh - 230px)', minHeight: '680px', border: 0, background: '#ffffff', borderRadius: '0 0 8px 8px' }}
         />
       </div>
     );

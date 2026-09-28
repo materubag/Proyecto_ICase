@@ -9,6 +9,31 @@ mermaid.initialize({
   fontFamily: 'Inter, system-ui, sans-serif'
 });
 
+function sanitizeMermaidCode(rawCode) {
+  if (!rawCode || typeof rawCode !== 'string') return '';
+  let clean = rawCode.trim();
+
+  // If erDiagram, fix any union types or invalid symbols in attribute lines
+  if (/^\s*erDiagram/m.test(clean)) {
+    // Replace lines like: "    string|null motivo" -> "    string motivo"
+    clean = clean.replace(/^(\s*)([a-zA-Z0-9_]+)\s*\|[^\s{}]*(\s+[a-zA-Z0-9_]+)/gm, '$1$2$3');
+    // Replace any remaining pipe or invalid types inside entity brackets
+    const lines = clean.split('\n');
+    let insideEntity = false;
+    clean = lines.map(line => {
+      const trimmed = line.trim();
+      if (trimmed.endsWith('{')) insideEntity = true;
+      if (trimmed === '}' || trimmed.startsWith('}')) insideEntity = false;
+      if (insideEntity && line.includes('|')) {
+        return line.replace(/([a-zA-Z0-9_]+)\s*\|[a-zA-Z0-9_]+/g, '$1');
+      }
+      return line;
+    }).join('\n');
+  }
+
+  return clean;
+}
+
 export default function MermaidDiagram({ code, type = 'flowchart', className = '', onValidated }) {
   const validationCallback = useRef(onValidated);
   validationCallback.current = onValidated;
@@ -20,7 +45,8 @@ export default function MermaidDiagram({ code, type = 'flowchart', className = '
     let isMounted = true;
 
     async function renderChart() {
-      if (!code || !code.trim()) {
+      const sanitizedCode = sanitizeMermaidCode(code);
+      if (!sanitizedCode) {
         setSvgContent('');
         return;
       }
@@ -30,8 +56,8 @@ export default function MermaidDiagram({ code, type = 'flowchart', className = '
       try {
         setError(null);
         setSvgContent('');
-        await mermaid.parse(code.trim());
-        const { svg } = await mermaid.render(id, code.trim());
+        await mermaid.parse(sanitizedCode);
+        const { svg } = await mermaid.render(id, sanitizedCode);
         if (isMounted) {
           setSvgContent(svg);
           validationCallback.current?.(true);

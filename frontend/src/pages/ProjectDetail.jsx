@@ -19,7 +19,10 @@ export default function ProjectDetail({
   onProjectUpdated,
   activeTab = 'summary',
   onTabChange,
-  pendingCandidatesCount = 0
+  pendingCandidatesCount = 0,
+  mockupGeneration = null,
+  onStartMockupGeneration = null,
+  onClearMockupFeedback = null
 }) {
   const [isEditing, setIsEditing] = useState(false);
   const [nameValue, setNameValue] = useState(project.name || '');
@@ -156,6 +159,42 @@ export default function ProjectDetail({
         )}
       </div>
 
+      {/* Persistent Mockup Generation Banner across all module views */}
+      {mockupGeneration?.isGenerating && mockupGeneration.projectId === project.id && (
+        <div
+          style={{
+            padding: '8px 20px',
+            background: 'linear-gradient(90deg, rgba(37, 99, 235, 0.1), rgba(99, 102, 241, 0.1))',
+            borderBottom: '1px solid rgba(37, 99, 235, 0.25)',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'space-between',
+            gap: '12px',
+            fontSize: '0.8125rem'
+          }}
+        >
+          <div style={{ display: 'flex', alignItems: 'center', gap: '10px', minWidth: 0, overflow: 'hidden' }}>
+            <span className="ms ms-sm spin" style={{ color: '#2563eb' }}>sync</span>
+            <span style={{ fontWeight: 600, color: 'var(--foreground)' }}>
+              Generando pantallas en Google Stitch ({mockupGeneration.screenCount || ''} seleccionadas)...
+            </span>
+            <span style={{ color: 'var(--muted)', textOverflow: 'ellipsis', overflow: 'hidden', whiteSpace: 'nowrap' }}>
+              Puedes navegar libremente por el proyecto; el proceso continuará activo y se guardará automáticamente al responder.
+            </span>
+          </div>
+          {activeTab !== 'mockups' && activeTab !== 'prototype' && (
+            <button
+              type="button"
+              className="btn btn-outline btn-xs"
+              onClick={() => onTabChange('mockups')}
+              style={{ whiteSpace: 'nowrap', fontSize: '0.75rem', fontWeight: 600 }}
+            >
+              Ver Mockups
+            </button>
+          )}
+        </div>
+      )}
+
       {/* Module Workspace Content */}
       <div style={{ flex: 1, minHeight: 0, overflow: 'hidden', display: 'flex', flexDirection: 'column' }}>
         {activeTab === 'summary' && (
@@ -188,7 +227,13 @@ export default function ProjectDetail({
           <ProjectNavigation project={project} onProjectUpdated={onProjectUpdated} />
         )}
         {(activeTab === 'mockups' || activeTab === 'prototype') && (
-          <ProjectPrototype project={project} onProjectUpdated={onProjectUpdated} />
+          <ProjectPrototype
+            project={project}
+            onProjectUpdated={onProjectUpdated}
+            mockupGeneration={mockupGeneration}
+            onStartGeneration={onStartMockupGeneration}
+            onClearFeedback={onClearMockupFeedback}
+          />
         )}
         {activeTab === 'architecture' && (
           <ProjectArchitecture project={project} onProjectUpdated={onProjectUpdated} />

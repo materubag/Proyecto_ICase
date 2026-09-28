@@ -76,10 +76,12 @@ export default function ProjectsDashboard({ onOpenProject }) {
     e.stopPropagation();
     if (!window.confirm('¿Está seguro de eliminar este proyecto y todos sus datos asociados?')) return;
     try {
+      setProjects(prev => prev.filter(p => p.id !== id));
       await projectsApi.delete(id);
       await loadProjects();
     } catch (err) {
       alert(`Error al eliminar: ${err.message}`);
+      await loadProjects();
     }
   }
 
