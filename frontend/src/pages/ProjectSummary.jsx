@@ -226,24 +226,30 @@ export default function ProjectSummary({ project, onProjectUpdated, onNavigateTo
         {/* Banner de Candidatos Pendientes de Revisión en el Centro de Aprobación */}
         {candidateStats && candidateStats.totalPending > 0 && (
           <div style={{
-            background: 'linear-gradient(135deg, rgba(59, 130, 246, 0.08) 0%, rgba(99, 102, 241, 0.06) 100%)',
-            border: '1px solid rgba(59, 130, 246, 0.3)',
-            borderRadius: '10px',
-            padding: '14px 18px',
+            background: 'linear-gradient(135deg, rgba(77, 141, 247, 0.08) 0%, rgba(167, 139, 250, 0.06) 100%)',
+            border: '1px solid rgba(77, 141, 247, 0.2)',
+            borderRadius: 'var(--radius-lg)',
+            padding: '16px 20px',
             marginBottom: '16px',
             display: 'flex',
             alignItems: 'center',
             justifyContent: 'space-between',
             gap: '16px',
-            boxShadow: '0 2px 8px rgba(59, 130, 246, 0.08)'
+            boxShadow: '0 0 20px rgba(77, 141, 247, 0.06)'
           }}>
-            <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
-              <span className="ms" style={{ color: '#2563eb', fontSize: '24px' }}>rule</span>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '14px' }}>
+              <div style={{
+                width: 40, height: 40, borderRadius: 'var(--radius-md)',
+                background: 'rgba(77, 141, 247, 0.1)', border: '1px solid rgba(77, 141, 247, 0.15)',
+                display: 'flex', alignItems: 'center', justifyContent: 'center'
+              }}>
+                <span className="ms" style={{ color: 'var(--primary)', fontSize: '22px' }}>rule</span>
+              </div>
               <div>
-                <div style={{ fontWeight: 600, fontSize: '0.92rem', color: 'var(--on-surface)' }}>
-                  Centro de Aprobación: <span style={{ color: '#2563eb' }}>{candidateStats.totalPending} elementos pendientes</span>
+                <div style={{ fontWeight: 700, fontSize: '0.92rem', color: 'var(--on-surface)' }}>
+                  Centro de Aprobación: <span style={{ color: 'var(--primary)' }}>{candidateStats.totalPending} elementos pendientes</span>
                 </div>
-                <div style={{ fontSize: '0.8rem', color: 'var(--secondary)' }}>
+                <div style={{ fontSize: '0.8rem', color: 'var(--outline)' }}>
                   Se han extraído requisitos, actores, procesos, pantallas, reglas, tecnologías y arquitectura de tus fuentes listos para ser validados.
                 </div>
               </div>
@@ -379,7 +385,7 @@ export default function ProjectSummary({ project, onProjectUpdated, onNavigateTo
         )}
 
         {/* Centro de Estado del Proyecto (Compacto y Accionable) */}
-        <div style={{ marginBottom: '1.25rem', padding: '16px 20px', borderRadius: 'var(--radius-md)', background: 'var(--surface-container-lowest)', border: '1px solid var(--border-default)', boxShadow: 'var(--shadow-xs)' }}>
+        <div style={{ marginBottom: '1.25rem', padding: '18px 22px', borderRadius: 'var(--radius-lg)', background: 'rgba(255,255,255,0.03)', border: '1px solid var(--border-default)', boxShadow: 'var(--shadow-xs)', backdropFilter: 'blur(8px)' }}>
           <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '12px' }}>
             <span style={{ fontSize: '0.8125rem', fontWeight: 600, color: 'var(--on-surface)', display: 'flex', alignItems: 'center', gap: '6px' }}>
               <span className="ms ms-xs" style={{ color: 'var(--primary)' }}>dashboard</span>
@@ -394,7 +400,7 @@ export default function ProjectSummary({ project, onProjectUpdated, onNavigateTo
 
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(140px, 1fr))', gap: '10px' }}>
             <div
-              style={{ padding: '10px 12px', borderRadius: '6px', background: 'var(--surface-container-low)', cursor: 'pointer' }}
+              style={{ padding: '12px 14px', borderRadius: 'var(--radius-md)', background: 'rgba(255,255,255,0.03)', cursor: 'pointer', border: '1px solid var(--border-default)', transition: 'all 0.2s ease' }}
               onClick={() => onNavigateTo('sources')}
               title="Ver fuentes y entrevistas"
             >
@@ -410,7 +416,7 @@ export default function ProjectSummary({ project, onProjectUpdated, onNavigateTo
               title="Ver estado del análisis"
             >
               <span style={{ fontSize: '0.6875rem', color: 'var(--secondary)', textTransform: 'uppercase', fontWeight: 600 }}>Análisis</span>
-              <strong style={{ display: 'block', fontSize: '1rem', color: reqCount > 0 ? '#157347' : 'var(--outline)', marginTop: '2px' }}>
+              <strong style={{ display: 'block', fontSize: '1rem', color: reqCount > 0 ? '#34d399' : 'var(--outline)', marginTop: '2px' }}>
                 {reqCount > 0 ? '✓ Realizado' : '○ Pendiente'}
               </strong>
             </div>
@@ -421,7 +427,7 @@ export default function ProjectSummary({ project, onProjectUpdated, onNavigateTo
               title="Ver requisitos oficiales"
             >
               <span style={{ fontSize: '0.6875rem', color: 'var(--secondary)', textTransform: 'uppercase', fontWeight: 600 }}>Requisitos</span>
-              <strong style={{ display: 'block', fontSize: '1rem', color: 'var(--primary)', marginTop: '2px' }}>
+              <strong style={{ display: 'block', fontSize: '1rem', color: 'var(--primary)', marginTop: '2px', fontWeight: 800 }}>
                 {reqCount} oficiales
               </strong>
             </div>
@@ -432,7 +438,7 @@ export default function ProjectSummary({ project, onProjectUpdated, onNavigateTo
               title="Ver modelo del sistema"
             >
               <span style={{ fontSize: '0.6875rem', color: 'var(--secondary)', textTransform: 'uppercase', fontWeight: 600 }}>Modelado</span>
-              <strong style={{ display: 'block', fontSize: '1rem', color: entityCount > 0 ? '#157347' : 'var(--outline)', marginTop: '2px' }}>
+              <strong style={{ display: 'block', fontSize: '1rem', color: entityCount > 0 ? '#34d399' : 'var(--outline)', marginTop: '2px' }}>
                 {entityCount > 0 ? '✓ Disponible' : '○ Pendiente'}
               </strong>
             </div>
@@ -443,7 +449,7 @@ export default function ProjectSummary({ project, onProjectUpdated, onNavigateTo
               title="Ver prototipos y pantallas"
             >
               <span style={{ fontSize: '0.6875rem', color: 'var(--secondary)', textTransform: 'uppercase', fontWeight: 600 }}>Mockups</span>
-              <strong style={{ display: 'block', fontSize: '1rem', color: screenCount > 0 ? '#157347' : 'var(--outline)', marginTop: '2px' }}>
+              <strong style={{ display: 'block', fontSize: '1rem', color: screenCount > 0 ? '#34d399' : 'var(--outline)', marginTop: '2px' }}>
                 {screenCount > 0 ? '✓ Disponible' : '○ Pendiente'}
               </strong>
             </div>
@@ -473,9 +479,9 @@ export default function ProjectSummary({ project, onProjectUpdated, onNavigateTo
         <div className="analysis-card">
           <div style={{ display: 'flex', alignItems: 'center', gap: '10px', marginBottom: '12px' }}>
             <div style={{
-              width: 32, height: 32, borderRadius: 'var(--radius-sm)',
-              background: 'var(--surface-container-low)',
-              border: '1px solid var(--outline-variant)',
+              width: 36, height: 36, borderRadius: 'var(--radius-md)',
+              background: 'rgba(77, 141, 247, 0.08)',
+              border: '1px solid rgba(77, 141, 247, 0.12)',
               display: 'flex', alignItems: 'center', justifyContent: 'center',
             }}>
               <span className="ms ms-sm" style={{ color: 'var(--primary)' }}>bolt</span>
@@ -506,7 +512,7 @@ export default function ProjectSummary({ project, onProjectUpdated, onNavigateTo
           </div>
 
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(240px, 1fr))', gap: '10px', marginBottom: '14px' }}>
-            <label style={{ display: 'flex', alignItems: 'center', gap: '10px', padding: '10px 12px', border: '1px dashed var(--outline-variant)', borderRadius: '6px', background: 'var(--surface-container-low)', cursor: 'pointer' }}>
+            <label style={{ display: 'flex', alignItems: 'center', gap: '10px', padding: '12px 14px', border: '1px dashed var(--outline-variant)', borderRadius: 'var(--radius-md)', background: 'rgba(255,255,255,0.02)', cursor: 'pointer', transition: 'all 0.2s ease' }}>
               <span className="ms ms-sm" style={{ color: 'var(--primary)' }}>description</span>
               <span style={{ minWidth: 0, flex: 1 }}><strong style={{ display: 'block', fontSize: '0.8rem' }}>Documentos PDF</strong><small style={{ color: 'var(--secondary)' }}>{pdfFiles.length ? `${pdfFiles.length} seleccionado(s)` : 'Opcional · varios archivos'}</small></span>
               <input
@@ -562,9 +568,9 @@ export default function ProjectSummary({ project, onProjectUpdated, onNavigateTo
           <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '14px', flexWrap: 'wrap', gap: '8px' }}>
             <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
               <div style={{
-                width: 32, height: 32, borderRadius: 'var(--radius-sm)',
-                background: 'var(--surface-container-low)',
-                border: '1px solid var(--outline-variant)',
+                width: 36, height: 36, borderRadius: 'var(--radius-md)',
+                background: 'rgba(77, 141, 247, 0.08)',
+                border: '1px solid rgba(77, 141, 247, 0.12)',
                 display: 'flex', alignItems: 'center', justifyContent: 'center',
               }}>
                 <span className="ms ms-sm" style={{ color: 'var(--primary)' }}>folder_open</span>
@@ -585,7 +591,7 @@ export default function ProjectSummary({ project, onProjectUpdated, onNavigateTo
           </div>
 
           {sources.length === 0 ? (
-            <div style={{ padding: '24px', textAlign: 'center', border: '1px dashed var(--outline-variant)', borderRadius: 'var(--radius-md)', background: 'var(--surface-container-lowest)' }}>
+            <div style={{ padding: '28px', textAlign: 'center', border: '1px dashed var(--outline-variant)', borderRadius: 'var(--radius-md)', background: 'rgba(255,255,255,0.02)' }}>
               <span className="ms ms-lg" style={{ color: 'var(--outline)', display: 'block', marginBottom: '8px' }}>cloud_upload</span>
               <p style={{ fontSize: '0.8125rem', fontWeight: 500, color: 'var(--on-surface)', margin: 0 }}>No hay documentos ni audios subidos aún.</p>
               <p style={{ fontSize: '0.75rem', color: 'var(--secondary)', margin: '4px 0 0' }}>
@@ -593,10 +599,10 @@ export default function ProjectSummary({ project, onProjectUpdated, onNavigateTo
               </p>
             </div>
           ) : (
-            <div style={{ background: 'var(--surface-container-lowest)', borderRadius: 'var(--radius-md)', border: '1px solid var(--outline-variant)', overflowX: 'auto', boxShadow: 'var(--shadow-xs)' }}>
+            <div style={{ background: 'rgba(255,255,255,0.02)', borderRadius: 'var(--radius-md)', border: '1px solid var(--border-default)', overflowX: 'auto', boxShadow: 'var(--shadow-xs)' }}>
               <table style={{ width: '100%', borderCollapse: 'collapse', textAlign: 'left', fontSize: '0.8125rem' }}>
                 <thead>
-                  <tr style={{ background: 'var(--surface-container-low)', borderBottom: '1px solid var(--outline-variant)', color: 'var(--on-surface-variant)' }}>
+                  <tr style={{ background: 'rgba(255,255,255,0.03)', borderBottom: '1px solid var(--border-default)', color: 'var(--secondary)' }}>
                     <th style={{ padding: '8px 12px', width: '50px' }}>Tipo</th>
                     <th style={{ padding: '8px 12px' }}>Nombre del Archivo</th>
                     <th style={{ padding: '8px 12px', width: '90px' }}>Tamaño</th>
@@ -609,9 +615,9 @@ export default function ProjectSummary({ project, onProjectUpdated, onNavigateTo
                     const isAudio = src.type === 'AUDIO' || (src.mimeType && src.mimeType.startsWith('audio'));
                     const sizeStr = src.fileSize ? `${(src.fileSize / 1024).toFixed(1)} KB` : '—';
                     return (
-                      <tr key={src.id} style={{ borderBottom: '1px solid var(--outline-variant)' }}>
+                      <tr key={src.id} style={{ borderBottom: '1px solid var(--border-default)', transition: 'background 0.15s ease' }}>
                         <td style={{ padding: '8px 12px' }}>
-                          <span className="ms ms-sm" style={{ color: isAudio ? '#9333ea' : '#dc2626' }}>
+                          <span className="ms ms-sm" style={{ color: isAudio ? 'var(--tertiary)' : '#f87171' }}>
                             {isAudio ? 'mic' : 'picture_as_pdf'}
                           </span>
                         </td>

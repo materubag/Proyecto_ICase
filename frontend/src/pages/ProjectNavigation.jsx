@@ -299,7 +299,7 @@ export default function ProjectNavigation({ project, onProjectUpdated }) {
                   <span className="badge badge-primary" style={{ fontSize: '0.75rem' }}>Nivel 1: Entrada y Autenticación</span>
                   <span style={{ fontSize: '0.8rem', color: '#1e40af', fontWeight: 600 }}>Ruta Raíz / Acceso Inicial</span>
                 </div>
-                <div style={{ background: '#ffffff', padding: '12px 16px', borderRadius: '6px', border: '1px solid #bfdbfe' }}>
+                <div style={{ background: 'rgba(255,255,255,0.03)', padding: '12px 16px', borderRadius: '6px', border: '1px solid rgba(77,141,247,0.2)' }}>
                   <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                     <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
                       <span className="ms ms-sm" style={{ color: '#2563eb' }}>login</span>
@@ -318,13 +318,81 @@ export default function ProjectNavigation({ project, onProjectUpdated }) {
                   <span className="badge badge-success" style={{ fontSize: '0.75rem' }}>Nivel 2: Módulos del Sistema</span>
                   <span style={{ fontSize: '0.8rem', color: '#15803d', fontWeight: 600 }}>Vistas Funcionales ({screens.length})</span>
                 </div>
-                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(280px, 1fr))', gap: '10px' }}>
-                  {screens.map(s => (
-                    <div key={s.id} style={{ background: '#ffffff', padding: '10px 14px', borderRadius: '6px', border: '1px solid #bbf7d0' }}>
-                      <strong style={{ fontSize: '0.8125rem', color: '#1e293b', display: 'block' }}>{s.name}</strong>
-                      <div style={{ fontSize: '0.72rem', color: '#64748b', marginTop: '2px' }}><code>{s.route || '/vista'}</code></div>
+                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(260px, 1fr))', gap: '10px' }}>
+                  <div style={{ background: 'rgba(255,255,255,0.03)', padding: '12px', borderRadius: '6px', border: '1px solid rgba(52,211,153,0.2)' }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                      <span className="ms ms-sm" style={{ color: '#16a34a' }}>dashboard</span>
+                      <div>
+                        <strong style={{ fontSize: '0.8125rem', color: '#0f172a' }}>Dashboard General</strong>
+                        <div style={{ fontSize: '0.75rem', color: '#64748b' }}>Ruta: <code>/dashboard</code> · Métricas y accesos rápidos</div>
+                      </div>
+                    </div>
+                  </div>
+                  <div style={{ background: 'rgba(255,255,255,0.03)', padding: '12px', borderRadius: '6px', border: '1px solid rgba(52,211,153,0.2)' }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                      <span className="ms ms-sm" style={{ color: '#16a34a' }}>view_module</span>
+                      <div>
+                        <strong style={{ fontSize: '0.8125rem', color: '#0f172a' }}>Módulos Principales</strong>
+                        <div style={{ fontSize: '0.75rem', color: '#64748b' }}>Gestión centralizada del dominio del proyecto</div>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              {/* Level 3 */}
+              <div style={{ border: '1px solid #fde68a', borderRadius: 'var(--radius-md)', background: '#fffbeb', padding: '16px' }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '8px' }}>
+                  <span className="badge badge-warning" style={{ fontSize: '0.75rem' }}>Nivel 3: Pantallas Operativas y Listados</span>
+                  <span style={{ fontSize: '0.8rem', color: '#854d0e', fontWeight: 600 }}>Vistas de Gestión de Datos</span>
+                </div>
+                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(260px, 1fr))', gap: '10px' }}>
+                  {(screens.length > 0 ? screens : [
+                    { name: 'Catálogo de Recursos', route: '/catalogo', desc: 'Listado con filtros y paginación' },
+                    { name: 'Gestión de Préstamos / Transacciones', route: '/operaciones', desc: 'Registro y seguimiento de transacciones' },
+                    { name: 'Administración de Usuarios', route: '/usuarios', desc: 'Control de cuentas y perfiles' },
+                  ]).map((scr, idx) => (
+                    <div key={idx} style={{ background: 'rgba(255,255,255,0.03)', padding: '12px', borderRadius: '6px', border: '1px solid rgba(251,191,36,0.2)' }}>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                        <span className="ms ms-sm" style={{ color: '#d97706' }}>article</span>
+                        <div>
+                          <strong style={{ fontSize: '0.8125rem', color: '#0f172a' }}>{scr.name}</strong>
+                          <div style={{ fontSize: '0.75rem', color: '#64748b' }}>Ruta: <code>{scr.route || '/vista'}</code></div>
+                          {scr.desc && <div style={{ fontSize: '0.7rem', color: '#94a3b8' }}>{scr.desc}</div>}
+                        </div>
+                      </div>
+
                     </div>
                   ))}
+                </div>
+              </div>
+
+
+              {/* Level 4 */}
+              <div style={{ border: '1px solid #e2e8f0', borderRadius: 'var(--radius-md)', background: '#f8fafc', padding: '16px' }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '8px' }}>
+                  <span className="badge badge-outline" style={{ fontSize: '0.75rem' }}>Nivel 4: Modales, Formularios y Acciones</span>
+                  <span style={{ fontSize: '0.8rem', color: '#475569', fontWeight: 600 }}>Diálogos Emergentes & Formularios CRUD</span>
+                </div>
+                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(260px, 1fr))', gap: '10px' }}>
+                  <div style={{ background: 'rgba(255,255,255,0.03)', padding: '10px 14px', borderRadius: '6px', border: '1px solid var(--outline-variant)' }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                      <span className="ms ms-xs" style={{ color: '#64748b' }}>add_circle</span>
+                      <span style={{ fontSize: '0.8rem', color: '#1e293b', fontWeight: 500 }}>Modal: Nuevo Registro / Alta</span>
+                    </div>
+                  </div>
+                  <div style={{ background: 'rgba(255,255,255,0.03)', padding: '10px 14px', borderRadius: '6px', border: '1px solid var(--outline-variant)' }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                      <span className="ms ms-xs" style={{ color: '#64748b' }}>edit_note</span>
+                      <span style={{ fontSize: '0.8rem', color: '#1e293b', fontWeight: 500 }}>Modal: Edición / Modificación</span>
+                    </div>
+                  </div>
+                  <div style={{ background: 'rgba(255,255,255,0.03)', padding: '10px 14px', borderRadius: '6px', border: '1px solid var(--outline-variant)' }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                      <span className="ms ms-xs" style={{ color: '#64748b' }}>help</span>
+                      <span style={{ fontSize: '0.8rem', color: '#1e293b', fontWeight: 500 }}>Diálogo de Confirmación de Baja / Eliminación</span>
+                    </div>
+                  </div>
                 </div>
               </div>
             </div>

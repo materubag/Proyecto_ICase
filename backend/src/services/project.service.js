@@ -3,7 +3,9 @@ const prisma = require('../config/prisma');
 class ProjectService {
   async getAllProjects(filterArchived = true) {
     return await prisma.project.findMany({
+
       where: filterArchived ? { status: { not: 'ARCHIVED' } } : undefined,
+
       orderBy: { updatedAt: 'desc' },
       include: {
         _count: {
@@ -136,9 +138,25 @@ class ProjectService {
       throw error;
     }
 
-    return await prisma.project.update({
-      where: { id },
-      data: { status: 'ARCHIVED' }
+    return await prisma.$transaction(async (tx) => {
+      // 1. Limpiar SourceVersion y Source para evitar referencias cruzadas
+      const sources = await tx.source.findMany({ where: { projectId: id }, select: { id: true } });
+      const sourceIds = sources.map(s => s.id);
+      if (sourceIds.length > 0) {
+        await tx.source.updateMany({ where: { id: { in: sourceIds } }, data: { currentVersionId: null } });
+        await tx.sourceVersion.deleteMany({ where: { sourceId: { in: sourceIds } } });
+      }
+
+      // 2. Desvincular referencias en RequirementCandidate y NeedCandidate
+      await tx.requirementCandidate.updateMany({
+        where: { projectId: id },
+        data: { promotedRequirementId: null, needCandidateId: null }
+      });
+
+      // 3. Eliminar el proyecto físicamente (PostgreSQL cascade borrará todos los elementos hijos asociados)
+      return await tx.project.delete({
+        where: { id }
+      });
     });
   }
 

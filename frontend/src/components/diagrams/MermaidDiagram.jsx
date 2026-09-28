@@ -9,6 +9,7 @@ mermaid.initialize({
   fontFamily: 'Inter, system-ui, sans-serif'
 });
 
+
 /**
  * Client-side emergency sanitization for Mermaid syntax errors (accents, reserved words).
  */
@@ -81,7 +82,8 @@ export default function MermaidDiagram({ code, type = 'flowchart', className = '
     let isMounted = true;
 
     async function renderChart() {
-      if (!code || !code.trim()) {
+      const sanitizedCode = sanitizeMermaidCode(code);
+      if (!sanitizedCode) {
         setSvgContent('');
         setError(null);
         return;
@@ -94,6 +96,7 @@ export default function MermaidDiagram({ code, type = 'flowchart', className = '
         setError(null);
         setSvgContent('');
 
+
         // Attempt 1: Parse original code
         try {
           await mermaid.parse(targetCode);
@@ -105,6 +108,7 @@ export default function MermaidDiagram({ code, type = 'flowchart', className = '
         }
 
         const { svg } = await mermaid.render(id, targetCode);
+
         if (isMounted) {
           setSvgContent(svg);
           setError(null);

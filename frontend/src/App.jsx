@@ -5,12 +5,24 @@ import ProjectsDashboard from './pages/ProjectsDashboard';
 import ProjectDetail from './pages/ProjectDetail';
 import { projectsApi } from './api/projects.api';
 import { candidatesApi } from './api/candidates.api';
+import { mockupApi } from './api/mockup.api';
 
 export default function App() {
   const [currentProject, setCurrentProject] = useState(null);
   const [activeView, setActiveView] = useState('projects');
   const [pendingCandidatesCount, setPendingCandidatesCount] = useState(0);
   const [activeActivity, setActiveActivity] = useState(null);
+
+  // Estado global persistente para la generación de mockups en segundo plano
+  const [mockupGeneration, setMockupGeneration] = useState({
+    isGenerating: false,
+    projectId: null,
+    mode: 'stitch',
+    screenCount: 0,
+    startTime: null,
+    error: null,
+    success: null
+  });
 
   // Load pending candidates count whenever current project changes
   async function refreshProjectStats(projectId) {
@@ -43,9 +55,66 @@ export default function App() {
       const updated = await projectsApi.getById(currentProject.id);
       setCurrentProject(updated);
       refreshProjectStats(updated.id);
+      return updated;
     } catch (err) {
       console.error('Error reloading project:', err);
     }
+  }
+
+  // Iniciar generación persistente de mockups (Google Stitch o Local)
+  async function handleStartMockupGeneration(projectId, prompt, screenIds, mode = 'stitch') {
+    if (mockupGeneration.isGenerating) return;
+
+    setMockupGeneration({
+      isGenerating: true,
+      projectId,
+      mode,
+      screenCount: screenIds.length,
+      startTime: Date.now(),
+      error: null,
+      success: null
+    });
+
+    setActiveActivity({
+      label: mode === 'stitch' ? 'Generando en Google Stitch' : 'Generando mockups locales',
+      progress: `${screenIds.length} pantalla${screenIds.length !== 1 ? 's' : ''}`,
+      targetView: 'mockups'
+    });
+
+    try {
+      const result = await mockupApi.generateMockup(projectId, prompt, screenIds, mode);
+      await reloadCurrentProject();
+
+      setMockupGeneration(prev => ({
+        ...prev,
+        isGenerating: false,
+        error: null,
+        success: mode === 'stitch'
+          ? `¡Se generaron exitosamente ${screenIds.length} pantalla(s) con Google Stitch!`
+          : `¡Se generaron exitosamente ${screenIds.length} pantalla(s) con el motor local!`
+      }));
+
+      return result;
+    } catch (err) {
+      console.error('Error en generación de mockups:', err);
+      const isTimeout = err.message?.includes('504') || err.message?.includes('timeout') || err.message?.includes('tiempo límite');
+      setMockupGeneration(prev => ({
+        ...prev,
+        isGenerating: false,
+        error: {
+          message: err.message || 'No se pudo generar el prototipo.',
+          isTimeout
+        },
+        success: null
+      }));
+      throw err;
+    } finally {
+      setActiveActivity(null);
+    }
+  }
+
+  function handleClearMockupFeedback() {
+    setMockupGeneration(prev => ({ ...prev, error: null, success: null }));
   }
 
   function handleBackToProjects() {
@@ -119,11 +188,11 @@ export default function App() {
           {!currentProject ? (
             <div className="page-scrollable">
               <ProjectsDashboard onOpenProject={handleOpenProject} />
-              <footer className="app-footer" style={{ marginTop: '2.5rem', textAlign: 'center', color: 'var(--outline)', fontSize: '0.75rem' }}>
-                <span className="footer-brand" style={{ fontWeight: 600, color: 'var(--secondary)' }}>ICASE Studio</span>
-                <span style={{ margin: '0 6px' }}>·</span>
+              <footer className="app-footer" style={{ marginTop: '2.5rem', textAlign: 'center' }}>
+                <span className="footer-brand">ICASE Studio</span>
+                <span style={{ margin: '0 6px', color: 'var(--outline)' }}>·</span>
                 <span>Ingeniería de Software Asistida por Computadora</span>
-                <span style={{ margin: '0 6px' }}>·</span>
+                <span style={{ margin: '0 6px', color: 'var(--outline)' }}>·</span>
                 <span>ISO/IEC/IEEE 29148:2018</span>
               </footer>
             </div>
@@ -135,6 +204,9 @@ export default function App() {
               activeTab={activeView}
               onTabChange={setActiveView}
               pendingCandidatesCount={pendingCandidatesCount}
+              mockupGeneration={mockupGeneration}
+              onStartMockupGeneration={handleStartMockupGeneration}
+              onClearMockupFeedback={handleClearMockupFeedback}
             />
           )}
         </div>

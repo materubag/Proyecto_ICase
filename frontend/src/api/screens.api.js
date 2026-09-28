@@ -7,7 +7,11 @@ export const screensApi = {
     method: 'POST',
     body: { screenIds, selected }
   }),
-  generateSelected: (projectId) => request(`/projects/${projectId}/screens/generate-selected`, { method: 'POST' }),
+  generateSelected: (projectId, screenIds = [], mode = 'stitch', prompt = '') =>
+    request(`/projects/${projectId}/screens/generate-selected`, {
+      method: 'POST',
+      body: { screenIds, mode, prompt }
+    }),
   updateStatus: (id, reviewStatus) => request(`/screens/${id}/status`, { method: 'PATCH', body: { reviewStatus } }),
   update: (id, data) => request(`/screens/${id}`, { method: 'PUT', body: data }),
   delete: (id) => request(`/screens/${id}`, { method: 'DELETE' })

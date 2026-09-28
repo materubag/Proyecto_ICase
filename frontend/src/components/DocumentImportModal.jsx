@@ -327,7 +327,7 @@ export default function DocumentImportModal({
               style={{
                 backgroundColor: 'rgba(239, 68, 68, 0.1)',
                 border: '1px solid rgba(239, 68, 68, 0.3)',
-                color: 'var(--danger, #dc2626)',
+                color: 'var(--danger, #f87171)',
                 padding: '0.85rem 1rem',
                 borderRadius: '8px',
                 marginBottom: '1.25rem',

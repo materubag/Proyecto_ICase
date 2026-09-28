@@ -1,4 +1,6 @@
+
 const { id, token, label, normalize, resolveEntityName } = require('./mermaidSyntax');
+
 
 module.exports = {
   generate(entities = [], relationships = []) {
@@ -10,6 +12,7 @@ module.exports = {
     const normalizedMap = new Map(); // NORMALIZE(name) -> entity.name
 
     for (const e of entities) {
+
       const key = token(e.name);
       nameToToken.set(e.name, key);
       if (e.id) nameToToken.set(e.id, key);
@@ -33,6 +36,7 @@ module.exports = {
         // Entidad sin atributos — solo declarar el bloque vacio
         lines.push('    ' + key + ' {');
         lines.push('        string id PK');
+
         lines.push('    }');
       }
     }

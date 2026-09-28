@@ -27,6 +27,17 @@ function sanitizeLabel(text) {
   return String(text).replace(/["\r\n\\]/g, ' ').replace(/\s+/g, ' ').trim();
 }
 
+function sanitizeAttributeType(rawType) {
+  if (!rawType) return 'string';
+  // Split on union types (e.g. "string|null" -> "string")
+  let clean = String(rawType).split('|')[0].trim();
+  // Remove nullability/array/parentheses artifacts
+  clean = clean.replace(/\?/g, '').replace(/[\(\)\[\]"']/g, '').trim();
+  // Strip non-alphanumeric chars
+  clean = clean.replace(/[^a-zA-Z0-9_]/g, '_');
+  return clean.toLowerCase() || 'string';
+}
+
 /**
  * Genera la sintaxis Mermaid de un diagrama Entidad-Relación (erDiagram)
  * a partir de las entidades y relaciones persistidas.
@@ -48,6 +59,7 @@ export function generateERDiagram(entities = [], relationships = []) {
     lines.push(`    ${entName} {`);
     if (ent.attributes && ent.attributes.length > 0) {
       for (const attr of ent.attributes) {
+
         const rawType = stripAccents(attr.type || 'string').toLowerCase();
         let type = 'string';
         if (/^(int|integer|number|entero|id)/.test(rawType)) type = 'int';

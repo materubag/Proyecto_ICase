@@ -576,8 +576,8 @@ export default function ProjectCandidateReview({ project, onNavigateToRequiremen
                 <strong style={{ display: 'block', fontSize: '1.25rem', color: '#b45309' }}>{pendingCount}</strong>
               </div>
               <div style={{ padding: '10px 14px', background: 'rgba(21, 115, 71, 0.05)', borderRadius: '6px', border: '1px solid rgba(21, 115, 71, 0.15)' }}>
-                <span style={{ fontSize: '0.75rem', color: '#157347' }}>Aprobados Oficiales</span>
-                <strong style={{ display: 'block', fontSize: '1.25rem', color: '#157347' }}>{approvedCount}</strong>
+                <span style={{ fontSize: '0.75rem', color: '#34d399' }}>Aprobados Oficiales</span>
+                <strong style={{ display: 'block', fontSize: '1.25rem', color: '#34d399' }}>{approvedCount}</strong>
               </div>
               <div style={{ padding: '10px 14px', background: 'var(--surface-container-low)', borderRadius: '6px' }}>
                 <span style={{ fontSize: '0.75rem', color: 'var(--secondary)' }}>Rechazados</span>
@@ -622,16 +622,16 @@ export default function ProjectCandidateReview({ project, onNavigateToRequiremen
                 : 'rgba(21, 115, 71, 0.08)',
             color:
               message.type === 'error'
-                ? '#b42318'
+                ? '#f87171'
                 : message.type === 'warning'
                 ? '#9a6700'
-                : '#157347',
+                : '#34d399',
             border: `1px solid ${
               message.type === 'error'
-                ? '#b42318'
+                ? '#f87171'
                 : message.type === 'warning'
                 ? '#9a6700'
-                : '#157347'
+                : '#34d399'
             }`
           }}
         >
@@ -728,7 +728,7 @@ export default function ProjectCandidateReview({ project, onNavigateToRequiremen
               className="btn btn-outline btn-sm"
               onClick={handleApproveAllCategory}
               disabled={batchOperating}
-              style={{ display: 'inline-flex', alignItems: 'center', gap: '6px', fontSize: '0.78rem', color: '#157347' }}
+              style={{ display: 'inline-flex', alignItems: 'center', gap: '6px', fontSize: '0.78rem', color: '#34d399' }}
             >
               <CheckCircle2 size={13} />
               <span>Aprobar todo {activeCategory} ({categoryCounts[activeCategory]})</span>
@@ -805,7 +805,7 @@ export default function ProjectCandidateReview({ project, onNavigateToRequiremen
               className="btn btn-outline btn-sm"
               onClick={handleBatchReject}
               disabled={batchOperating}
-              style={{ color: '#b42318' }}
+              style={{ color: '#f87171' }}
             >
               <XCircle size={14} />
               <span>Rechazar selección ({selectedIds.size})</span>
@@ -930,7 +930,7 @@ export default function ProjectCandidateReview({ project, onNavigateToRequiremen
                                 🔴 Conflicto
                               </span>
                             ) : isExplicit ? (
-                              <span className="badge" style={{ fontSize: '0.6875rem', background: 'rgba(21, 115, 71, 0.12)', color: '#157347' }}>
+                              <span className="badge" style={{ fontSize: '0.6875rem', background: 'rgba(21, 115, 71, 0.12)', color: '#34d399' }}>
                                 🟢 Explícito (Regla)
                               </span>
                             ) : (
@@ -948,7 +948,7 @@ export default function ProjectCandidateReview({ project, onNavigateToRequiremen
                               style={{
                                 fontSize: '0.6875rem',
                                 background: c.status === 'APPROVED' ? 'rgba(21, 115, 71, 0.12)' : c.status === 'REJECTED' ? 'rgba(100,100,100,0.1)' : 'rgba(0,0,0,0.06)',
-                                color: c.status === 'APPROVED' ? '#157347' : c.status === 'REJECTED' ? '#666' : 'var(--on-surface)'
+                                color: c.status === 'APPROVED' ? '#34d399' : c.status === 'REJECTED' ? 'var(--outline)' : 'var(--on-surface)'
                               }}
                             >
                               {c.status === 'APPROVED' ? 'Aprobado ✓' : c.status === 'REJECTED' ? 'Rechazado' : 'Por revisar'}
@@ -979,7 +979,7 @@ export default function ProjectCandidateReview({ project, onNavigateToRequiremen
                                     className="btn btn-ghost btn-sm btn-icon"
                                     onClick={() => openRejectModal(c)}
                                     title="Rechazar"
-                                    style={{ color: '#b42318' }}
+                                    style={{ color: '#f87171' }}
                                   >
                                     <XCircle size={14} />
                                   </button>
@@ -1017,7 +1017,7 @@ export default function ProjectCandidateReview({ project, onNavigateToRequiremen
                         padding: cardDensity === 'compact' ? '10px 14px' : '14px 18px',
                         borderRadius: 'var(--radius-md)',
                         border: isConflict
-                          ? '1.5px solid #b42318'
+                          ? '1.5px solid #f87171'
                           : isSelected
                           ? '1.5px solid var(--primary)'
                           : '1px solid var(--border-default)',
@@ -1060,7 +1060,7 @@ export default function ProjectCandidateReview({ project, onNavigateToRequiremen
                                   className="badge"
                                   style={{
                                     background: 'rgba(21, 115, 71, 0.12)',
-                                    color: '#157347',
+                                    color: '#34d399',
                                     fontSize: '0.6875rem'
                                   }}
                                 >
@@ -1084,7 +1084,7 @@ export default function ProjectCandidateReview({ project, onNavigateToRequiremen
                                 style={{
                                   fontSize: '0.6875rem',
                                   background: candidate.status === 'APPROVED' ? 'rgba(21, 115, 71, 0.15)' : candidate.status === 'REJECTED' ? 'rgba(100, 100, 100, 0.15)' : 'rgba(0, 0, 0, 0.06)',
-                                  color: candidate.status === 'APPROVED' ? '#157347' : candidate.status === 'REJECTED' ? '#666' : 'var(--on-surface)'
+                                  color: candidate.status === 'APPROVED' ? '#34d399' : candidate.status === 'REJECTED' ? 'var(--outline)' : 'var(--on-surface)'
                                 }}
                               >
                                 {candidate.status === 'APPROVED' ? 'Aprobado ✓' : candidate.status === 'REJECTED' ? 'Rechazado' : 'Por revisar'}
@@ -1124,7 +1124,7 @@ export default function ProjectCandidateReview({ project, onNavigateToRequiremen
                                   background: 'rgba(180, 35, 24, 0.08)',
                                   border: '1px solid rgba(180, 35, 24, 0.3)',
                                   fontSize: '0.75rem',
-                                  color: '#b42318'
+                                  color: '#f87171'
                                 }}
                               >
                                 <strong>⚠ INFORMACIÓN EN CONFLICTO:</strong> Existe contradicción con información de otra fuente.
@@ -1170,7 +1170,7 @@ export default function ProjectCandidateReview({ project, onNavigateToRequiremen
                                 className="btn btn-ghost btn-sm"
                                 onClick={() => openRejectModal(candidate)}
                                 title="Rechazar"
-                                style={{ fontSize: '0.75rem', color: '#b42318' }}
+                                style={{ fontSize: '0.75rem', color: '#f87171' }}
                               >
                                 <XCircle size={14} style={{ marginRight: '4px' }} />
                                 <span>Rechazar</span>
@@ -1327,7 +1327,7 @@ export default function ProjectCandidateReview({ project, onNavigateToRequiremen
             onClick={(e) => e.stopPropagation()}
           >
             <div style={{ padding: '16px 20px', borderBottom: '1px solid var(--border-default)', background: 'var(--surface-container-low)' }}>
-              <h3 style={{ margin: 0, fontSize: '1rem', fontWeight: 600, color: '#b42318' }}>
+              <h3 style={{ margin: 0, fontSize: '1rem', fontWeight: 600, color: '#f87171' }}>
                 Rechazar Candidato ({rejectingCandidate.temporaryCode})
               </h3>
             </div>
@@ -1357,7 +1357,7 @@ export default function ProjectCandidateReview({ project, onNavigateToRequiremen
                   type="button"
                   className="btn btn-sm"
                   onClick={handleConfirmReject}
-                  style={{ background: '#b42318', color: '#fff', border: 'none' }}
+                  style={{ background: '#f87171', color: '#fff', border: 'none' }}
                 >
                   Confirmar Rechazo
                 </button>
