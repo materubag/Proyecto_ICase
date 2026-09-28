@@ -46,15 +46,39 @@ class EntityDetector {
     const attrRegex = new RegExp(`(?:${lowerName}s?)[^.\\n]*?\\s+con\\s+([a-záéíóúñ,\\s]+?)(?:\\.|\\n|;|y\\s+[a-záéíóúñ]+)`, 'i');
     const match = text.match(attrRegex);
     if (match) {
-      const rawAttrs = match[1].split(/,|y\s+/).map(a => a.trim()).filter(a => a.length >= 3 && a.length <= 25);
+      const rawAttrs = match[1]
+        .split(/,|y\s+/)
+        .map(a => a.trim())
+        .filter(a => {
+          if (a.length < 2 || a.length > 25) return false;
+          // Discard prepositional sentences or generic quality descriptions
+          if (/\b(?:de\s+la|de\s+los|en\s+el|por|para|claridad|atencion|calidad|satisfaccion)\b/i.test(a)) return false;
+          return true;
+        });
+
+      let hasPk = false;
       rawAttrs.forEach((attrName, idx) => {
+        const isPkCandidate = /^(?:c[oó]digo|id|identificador)$/i.test(attrName) || /^(?:id_|c[oó]digo_)/i.test(attrName);
+        const isPk = isPkCandidate && !hasPk;
+        if (isPk) hasPk = true;
+
         attributes.push({
           id: `ATTR-${idx + 1}`,
           name: attrName,
           type: this.inferAttrType(attrName),
-          isPk: idx === 0 && /c[oó]digo|id/i.test(attrName)
+          isPk
         });
       });
+
+      // If no explicit PK, ensure canonical PK exists
+      if (!hasPk) {
+        attributes.unshift({
+          id: 'ATTR-PK',
+          name: `id_${entityName.toLowerCase().replace(/[^a-z0-9]/g, '')}`,
+          type: 'String',
+          isPk: true
+        });
+      }
     }
 
     return attributes;

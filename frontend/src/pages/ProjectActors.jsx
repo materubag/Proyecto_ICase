@@ -1,6 +1,8 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { actorsApi } from '../api/actors.api';
+import { diagramsApi } from '../api/diagrams.api';
 import Modal from '../components/common/Modal';
+import DiagramViewport from '../components/common/DiagramViewport';
 
 export default function ProjectActors({ project, onProjectUpdated }) {
   const actors = project.actors || [];
@@ -12,6 +14,16 @@ export default function ProjectActors({ project, onProjectUpdated }) {
   const [name, setName] = useState('');
   const [description, setDescription] = useState('');
   const [saving, setSaving] = useState(false);
+
+  // View mode and Diagram states
+  const [viewMode, setViewMode] = useState('list'); // 'list' | 'diagram'
+  const [diagramCode, setDiagramCode] = useState('');
+  const [diagramLoading, setDiagramLoading] = useState(false);
+  const [diagramGenerating, setDiagramGenerating] = useState(false);
+  const [diagramError, setDiagramError] = useState(null);
+  const [diagramStatus, setDiagramStatus] = useState('idle'); // 'idle' | 'insufficient' | 'ready' | 'error'
+  const [missingDetails, setMissingDetails] = useState([]);
+  const [isOutdated, setIsOutdated] = useState(false);
 
   const filtered = actors.filter(a =>
     !search ||
@@ -39,7 +51,12 @@ export default function ProjectActors({ project, onProjectUpdated }) {
     if (!name.trim()) return;
     try {
       setSaving(true);
-      const payload = { codeId: codeId.trim() || undefined, name: name.trim(), description: description.trim() };
+      const payload = {
+        codeId: codeId.trim() || undefined,
+        name: name.trim(),
+        description: description.trim(),
+        reviewStatus: editingActor ? (editingActor.reviewStatus || 'APPROVED') : 'APPROVED'
+      };
       if (editingActor) {
         await actorsApi.update(editingActor.id, payload);
       } else {
@@ -49,6 +66,33 @@ export default function ProjectActors({ project, onProjectUpdated }) {
       await onProjectUpdated();
     } catch (err) {
       alert(`Error: ${err.message}`);
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  async function handleUpdateActorStatus(id, newStatus) {
+    try {
+      await actorsApi.updateStatus(id, newStatus);
+      if (selected?.id === id) {
+        setSelected({ ...selected, reviewStatus: newStatus });
+      }
+      if (onProjectUpdated) await onProjectUpdated();
+    } catch (err) {
+      alert(`Error al actualizar estado del actor: ${err.message}`);
+    }
+  }
+
+  async function handleApproveAllActors() {
+    try {
+      setSaving(true);
+      const pendingActors = actors.filter(a => a.reviewStatus !== 'APPROVED');
+      for (const a of pendingActors) {
+        await actorsApi.updateStatus(a.id, 'APPROVED');
+      }
+      if (onProjectUpdated) await onProjectUpdated();
+    } catch (err) {
+      alert(`Error al aprobar actores: ${err.message}`);
     } finally {
       setSaving(false);
     }
@@ -66,41 +110,265 @@ export default function ProjectActors({ project, onProjectUpdated }) {
     }
   }
 
+  async function handleOpenUseCaseDiagramFlow() {
+    setViewMode('diagram');
+    setDiagramError(null);
+    setDiagramLoading(true);
+    try {
+      // 1. Check availability
+      const avail = await diagramsApi.getAvailability(project.id);
+      const ucCheck = avail?.diagrams?.USE_CASE;
+
+      // 2. Check if already generated
+      const diagData = await diagramsApi.getDiagram(project.id, 'USE_CASE');
+      const storedCode = diagData?.code || diagData?.mermaidCode || diagData?.artifact?.mermaidCode;
+      if (storedCode) {
+        setDiagramCode(storedCode);
+        setIsOutdated(!!diagData.isOutdated);
+        setDiagramStatus('ready');
+        setDiagramLoading(false);
+        return;
+      }
+
+      // If not yet generated, check availability
+      if (ucCheck?.status === 'INSUFFICIENT') {
+        setMissingDetails(ucCheck.missing || ['Se requieren actores y requisitos funcionales']);
+        setDiagramStatus('insufficient');
+        setDiagramLoading(false);
+        return;
+      }
+
+      // Auto-generate if sufficient or partial
+      await handleGenerateUseCase(false);
+    } catch (err) {
+      console.error('Error opening use case flow:', err);
+      setDiagramError(err.message || 'Error al verificar disponibilidad');
+      setDiagramStatus('error');
+    } finally {
+      setDiagramLoading(false);
+    }
+  }
+
+  async function handleGenerateUseCase(force = false) {
+    setViewMode('diagram');
+    setDiagramGenerating(true);
+    setDiagramError(null);
+    try {
+      const isForce = typeof force === 'object' ? Boolean(force.force) : Boolean(force);
+      const res = await diagramsApi.generateDiagram(project.id, 'USE_CASE', isForce);
+      if (res.alreadyExists && !isForce) {
+        const diagData = await diagramsApi.getDiagram(project.id, 'USE_CASE');
+        const code = diagData?.code || diagData?.mermaidCode || diagData?.artifact?.mermaidCode || '';
+        setDiagramCode(code);
+        setIsOutdated(false);
+        setDiagramStatus('ready');
+      } else {
+        const code = res?.code || res?.mermaidCode || res?.diagram?.mermaidCode || res?.artifact?.mermaidCode || '';
+        setDiagramCode(code);
+        setIsOutdated(false);
+        setDiagramStatus('ready');
+      }
+      if (onProjectUpdated) await onProjectUpdated();
+    } catch (err) {
+      console.error('Generation error:', err);
+      setDiagramError(err.message || 'Error al generar diagrama con Gemini');
+      setDiagramStatus('error');
+    } finally {
+      setDiagramGenerating(false);
+    }
+  }
+
   // Count requirements per actor
   const requirements = project.requirements || [];
   const reqCountForActor = (actorCodeId) =>
     requirements.filter(r => (r.actorIds || []).includes(actorCodeId)).length;
+
+  const pendingActorsCount = actors.filter(a => a.reviewStatus !== 'APPROVED').length;
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', height: '100%', overflow: 'hidden' }}>
       {/* Command bar */}
       <div className="full-page-header">
         <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
-          <h2 className="page-title">Actores del Sistema</h2>
+          <h2 className="page-title">
+            {viewMode === 'diagram' ? 'Diagrama de Casos de Uso y Actores' : 'Actores del Sistema'}
+          </h2>
           <div className="vdivider" />
-          <span style={{ fontSize: '0.8125rem', color: 'var(--secondary)' }}>
-            {actors.length} actor{actors.length !== 1 ? 'es' : ''} registrado{actors.length !== 1 ? 's' : ''}
-          </span>
+          {viewMode === 'diagram' ? (
+            <span style={{ fontSize: '0.8125rem', color: 'var(--secondary)' }}>
+              Diagrama interactivo generado a partir de actores canónicos y requisitos funcionales
+            </span>
+          ) : (
+            <>
+              <span style={{ fontSize: '0.8125rem', color: 'var(--secondary)' }}>
+                {actors.length} actor{actors.length !== 1 ? 'es' : ''} registrado{actors.length !== 1 ? 's' : ''}
+              </span>
+              {pendingActorsCount > 0 && (
+                <span className="badge badge-warning" style={{ fontSize: '0.75rem' }}>
+                  {pendingActorsCount} pendiente{pendingActorsCount !== 1 ? 's' : ''} de aprobación
+                </span>
+              )}
+            </>
+          )}
         </div>
+
         <div className="page-actions">
-          <div className="search-bar" style={{ width: '240px' }}>
-            <span className="ms">search</span>
-            <input type="text" placeholder="Buscar actores..." value={search} onChange={e => setSearch(e.target.value)} />
+          {viewMode === 'list' && (
+            <div className="search-bar" style={{ width: '200px' }}>
+              <span className="ms">search</span>
+              <input type="text" placeholder="Buscar actores..." value={search} onChange={e => setSearch(e.target.value)} />
+            </div>
+          )}
+
+          {viewMode === 'list' && pendingActorsCount > 0 && (
+            <button
+              className="btn btn-outline btn-sm"
+              onClick={handleApproveAllActors}
+              style={{ color: '#15803d', borderColor: '#86efac', background: '#f0fdf4' }}
+              title="Aprobar todos los actores para habilitar la generación de casos de uso"
+            >
+              <span className="ms ms-xs">done_all</span>
+              <span>Aprobar todos ({pendingActorsCount})</span>
+            </button>
+          )}
+
+          <div className="view-toggle">
+            <button
+              className={`view-toggle-btn ${viewMode === 'list' ? 'active' : ''}`}
+              onClick={() => setViewMode('list')}
+              title="Ver lista y detalle de actores"
+            >
+              <span className="ms ms-xs">people</span>
+              <span>Actores</span>
+            </button>
+            <button
+              className={`view-toggle-btn ${viewMode === 'diagram' ? 'active' : ''}`}
+              onClick={handleOpenUseCaseDiagramFlow}
+              title="Ver diagrama de casos de uso"
+            >
+              <span className="ms ms-xs">account_tree</span>
+              <span>Diagrama</span>
+            </button>
           </div>
-          <button className="btn btn-primary btn-sm" onClick={openNewModal}>
-            <span className="ms ms-sm">person_add</span>
-            <span>Registrar actor</span>
+
+          {viewMode === 'list' ? (
+            <button
+              className="btn btn-outline btn-sm"
+              onClick={handleOpenUseCaseDiagramFlow}
+              disabled={diagramLoading || diagramGenerating}
+              title="Ver diagrama de casos de uso en este espacio"
+            >
+              <span className="ms ms-xs">visibility</span>
+              <span>Ver diagrama</span>
+            </button>
+          ) : (
+            <button
+              className="btn btn-outline btn-sm"
+              onClick={() => setViewMode('list')}
+              title="Volver a la lista de actores"
+            >
+              <span className="ms ms-xs">arrow_back</span>
+              <span>Ver actores</span>
+            </button>
+          )}
+
+          <button
+            className="btn btn-outline btn-sm"
+            onClick={() => handleGenerateUseCase(true)}
+            disabled={diagramLoading || diagramGenerating}
+            title="Regenerar el diagrama de casos de uso con IA"
+          >
+            <span className={`ms ms-xs ${diagramGenerating ? 'spin' : ''}`}>
+              {diagramGenerating ? 'autorenew' : 'auto_awesome'}
+            </span>
+            <span>{diagramGenerating ? 'Regenerando...' : 'Regenerar diagrama'}</span>
           </button>
+
+          {viewMode === 'list' && (
+            <button className="btn btn-primary btn-sm" onClick={openNewModal}>
+              <span className="ms ms-sm">person_add</span>
+              <span>Registrar actor</span>
+            </button>
+          )}
         </div>
       </div>
 
-      {/* Split view */}
-      <div className="split-view">
+      {viewMode === 'diagram' ? (
+        <div style={{ flex: 1, minHeight: 0, display: 'flex', flexDirection: 'column', background: 'var(--surface)' }}>
+          {diagramLoading || diagramGenerating ? (
+            <div style={{ flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', padding: '48px 16px' }}>
+              <span className="ms ms-xl spin" style={{ color: 'var(--primary)', fontSize: '40px' }}>autorenew</span>
+              <h4 style={{ margin: '16px 0 8px', fontSize: '1rem', fontWeight: 600 }}>
+                {diagramGenerating ? 'Generando diagrama de casos de uso con Gemini...' : 'Cargando información del diagrama...'}
+              </h4>
+              <p style={{ color: 'var(--secondary)', fontSize: '0.8125rem' }}>
+                Preparando contexto estructurado de actores y requisitos funcionales...
+              </p>
+            </div>
+          ) : diagramStatus === 'insufficient' ? (
+            <div style={{ padding: '24px' }}>
+              <div className="alert alert-warning" style={{ display: 'flex', flexDirection: 'column', gap: '10px', maxWidth: '600px', margin: '0 auto' }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '8px', fontWeight: 600 }}>
+                  <span className="ms">warning</span>
+                  <span>No se puede generar el diagrama de casos de uso</span>
+                </div>
+                <p style={{ margin: 0, fontSize: '0.875rem' }}>Falta información esencial en el proyecto:</p>
+                <ul style={{ margin: '0 0 0 16px', padding: 0, fontSize: '0.8125rem' }}>
+                  {missingDetails.map((m, idx) => (
+                    <li key={idx} style={{ marginTop: '4px' }}>{m}</li>
+                  ))}
+                </ul>
+                <div style={{ marginTop: '12px' }}>
+                  <button className="btn btn-outline btn-sm" onClick={() => setViewMode('list')}>
+                    <span className="ms ms-xs">arrow_back</span>
+                    <span>Volver a Actores</span>
+                  </button>
+                </div>
+              </div>
+            </div>
+          ) : diagramStatus === 'error' ? (
+            <div style={{ padding: '24px' }}>
+              <div className="alert alert-error" style={{ display: 'flex', flexDirection: 'column', gap: '10px', maxWidth: '600px', margin: '0 auto' }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '8px', fontWeight: 600 }}>
+                  <span className="ms">error</span>
+                  <span>Error al generar el diagrama</span>
+                </div>
+                <p style={{ margin: 0, fontSize: '0.875rem' }}>{diagramError}</p>
+                <div style={{ display: 'flex', gap: '8px', marginTop: '12px' }}>
+                  <button className="btn btn-primary btn-sm" onClick={() => handleGenerateUseCase(true)}>
+                    <span className="ms ms-xs">refresh</span>
+                    <span>Reintentar generación</span>
+                  </button>
+                  <button className="btn btn-outline btn-sm" onClick={() => setViewMode('list')}>
+                    <span>Volver a Actores</span>
+                  </button>
+                </div>
+              </div>
+            </div>
+          ) : (
+            <div style={{ flex: 1, minHeight: 0, display: 'flex', flexDirection: 'column' }}>
+              <DiagramViewport
+                code={diagramCode}
+                type="flowchart"
+                title="Casos de Uso — Vista del Sistema"
+                minHeight="100%"
+                isOutdated={isOutdated}
+                onRegenerate={() => handleGenerateUseCase(true)}
+                canGenerate={true}
+                isGenerating={diagramGenerating}
+              />
+            </div>
+          )}
+        </div>
+      ) : (
+        /* Split view */
+        <div className="split-view">
         {/* LEFT: table */}
         <section className="split-left">
-          <div className="table-header-bar" style={{ gridTemplateColumns: '80px 1fr 80px 80px' }}>
+          <div className="table-header-bar" style={{ gridTemplateColumns: '80px 1fr 90px 80px 80px' }}>
             <div className="table-col-label">ID</div>
             <div className="table-col-label">Actor</div>
+            <div className="table-col-label">Estado</div>
             <div className="table-col-label">Requisitos</div>
             <div className="table-col-label">Acciones</div>
           </div>
@@ -123,7 +391,7 @@ export default function ProjectActors({ project, onProjectUpdated }) {
               <div
                 key={actor.id}
                 className={`table-row ${selected?.id === actor.id ? 'selected' : ''}`}
-                style={{ gridTemplateColumns: '80px 1fr 80px 80px' }}
+                style={{ gridTemplateColumns: '80px 1fr 90px 80px 80px' }}
                 onClick={() => setSelected(actor)}
               >
                 <div>
@@ -142,6 +410,13 @@ export default function ProjectActors({ project, onProjectUpdated }) {
                     <p style={{ fontSize: '0.75rem', color: 'var(--secondary)', marginTop: '1px', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
                       {actor.description}
                     </p>
+                  )}
+                </div>
+                <div>
+                  {actor.reviewStatus === 'APPROVED' ? (
+                    <span className="badge badge-success" style={{ fontSize: '0.6875rem' }}>Aprobado</span>
+                  ) : (
+                    <span className="badge badge-warning" style={{ fontSize: '0.6875rem' }}>Pendiente</span>
                   )}
                 </div>
                 <div>
@@ -175,8 +450,22 @@ export default function ProjectActors({ project, onProjectUpdated }) {
                   <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
                     <span className="code-tag code-tag-primary">{selected.codeId || 'ACT'}</span>
                     <span className="badge badge-neutral">Actor</span>
+                    {selected.reviewStatus === 'APPROVED' ? (
+                      <span className="badge badge-success">Aprobado</span>
+                    ) : (
+                      <span className="badge badge-warning">Pendiente</span>
+                    )}
                   </div>
                   <div style={{ display: 'flex', gap: '6px' }}>
+                    {selected.reviewStatus === 'APPROVED' ? (
+                      <button className="btn btn-outline btn-sm" onClick={() => handleUpdateActorStatus(selected.id, 'PENDING')} title="Marcar como pendiente">
+                        <span className="ms ms-xs">undo</span><span>Desaprobar</span>
+                      </button>
+                    ) : (
+                      <button className="btn btn-primary btn-sm" onClick={() => handleUpdateActorStatus(selected.id, 'APPROVED')} title="Aprobar actor para diagramas">
+                        <span className="ms ms-xs">check_circle</span><span>Aprobar</span>
+                      </button>
+                    )}
                     <button className="btn btn-outline btn-sm" onClick={(e) => openEditModal(selected, e)}>
                       <span className="ms ms-sm">edit</span><span>Editar</span>
                     </button>
@@ -266,8 +555,9 @@ export default function ProjectActors({ project, onProjectUpdated }) {
           )}
         </aside>
       </div>
+    )}
 
-      {/* Modal */}
+      {/* Modal Actor */}
       <Modal
         isOpen={modalOpen}
         onClose={() => setModalOpen(false)}

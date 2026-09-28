@@ -334,15 +334,34 @@ class CandidateService {
 
       switch (kind) {
         case 'ACTOR': {
-          promotedItem = await tx.actor.create({
-            data: {
-              projectId,
-              name,
-              description: content?.description || `Actor ${name}`,
-              status: 'APPROVED',
-              reviewStatus: 'APPROVED'
-            }
-          });
+          const deduplicationService = require('./deduplicationService');
+          const canonicalKey = deduplicationService.getActorCanonicalKey(name);
+          const existingActors = await tx.actor.findMany({ where: { projectId, isDeleted: false } });
+          const match = existingActors.find(a => deduplicationService.getActorCanonicalKey(a.name) === canonicalKey);
+          if (match) {
+            promotedItem = await tx.actor.update({
+              where: { id: match.id },
+              data: {
+                reviewStatus: 'APPROVED',
+                status: 'APPROVED',
+                description: match.description && content?.description && !match.description.includes(content.description)
+                  ? `${match.description} · ${content.description}`.slice(0, 500)
+                  : (match.description || content?.description || `Actor ${name}`)
+              }
+            });
+          } else {
+            const count = existingActors.length + 1;
+            promotedItem = await tx.actor.create({
+              data: {
+                projectId,
+                codeId: `ACT-${String(count).padStart(2, '0')}`,
+                name: deduplicationService.getPreferredActorDisplayName(name, canonicalKey),
+                description: content?.description || `Actor ${name}`,
+                status: 'APPROVED',
+                reviewStatus: 'APPROVED'
+              }
+            });
+          }
           break;
         }
         case 'BUSINESS_RULE': {
@@ -419,12 +438,14 @@ class CandidateService {
           break;
         }
         case 'SCREEN': {
+          const screenRoute = content?.route ||
+            '/' + name.toLowerCase().replace(/\s+/g, '-').replace(/[^a-z0-9\-]/g, '');
           promotedItem = await tx.screen.create({
             data: {
               projectId,
               name,
               description: content?.description || name,
-              type: content?.screenType || 'STANDARD',
+              route: screenRoute,
               status: 'APPROVED',
               reviewStatus: 'APPROVED'
             }
