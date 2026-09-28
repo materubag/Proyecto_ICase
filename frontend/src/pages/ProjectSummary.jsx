@@ -6,6 +6,8 @@ import { sourcesApi } from '../api/sources.api';
 import { candidatesApi } from '../api/candidates.api';
 import DocumentImportModal from '../components/DocumentImportModal';
 import AnalysisCompletionModal from '../components/sources/AnalysisCompletionModal';
+import DiagramGenerationModal from '../components/diagrams/DiagramGenerationModal';
+import { diagramsApi } from '../api/diagrams.api';
 
 export default function ProjectSummary({ project, onProjectUpdated, onNavigateTo }) {
   const [engineeringStats, setEngineeringStats] = useState(null);
@@ -13,6 +15,8 @@ export default function ProjectSummary({ project, onProjectUpdated, onNavigateTo
   const [loadingSources, setLoadingSources] = useState(false);
   const [candidateStats, setCandidateStats] = useState(null);
   const [completionModalData, setCompletionModalData] = useState(null);
+  const [diagramAvailability, setDiagramAvailability] = useState(null);
+  const [isDiagramModalOpen, setIsDiagramModalOpen] = useState(false);
 
   async function loadSources() {
     try {
@@ -35,10 +39,20 @@ export default function ProjectSummary({ project, onProjectUpdated, onNavigateTo
     }
   }
 
+  async function loadDiagramAvailability() {
+    try {
+      const data = await diagramsApi.getAvailability(project.id);
+      setDiagramAvailability(data);
+    } catch (err) {
+      console.error('Error loading diagram availability:', err);
+    }
+  }
+
   useEffect(() => {
     engineering(project.id).then(setEngineeringStats).catch(() => setEngineeringStats(null));
     loadSources();
     loadCandidateStats();
+    loadDiagramAvailability();
   }, [project.id, project.updatedAt]);
 
   const [description, setDescription] = useState(
@@ -249,6 +263,111 @@ export default function ProjectSummary({ project, onProjectUpdated, onNavigateTo
               <span className="ms ms-xs">arrow_forward</span>
             </button>
           </div>
+        )}
+
+        {/* Sección Visual: Diagramas Mermaid */}
+        <div
+          className="panel"
+          style={{
+            padding: '16px 20px',
+            borderRadius: '10px',
+            border: '1px solid var(--border-default)',
+            marginBottom: '18px',
+            background: 'var(--surface-container-lowest)',
+            boxShadow: 'var(--shadow-xs)'
+          }}
+        >
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', flexWrap: 'wrap', gap: '14px', marginBottom: '12px' }}>
+            <div>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '8px', color: 'var(--primary)', fontWeight: 600, fontSize: '0.9375rem' }}>
+                <span className="ms ms-sm">auto_fix_high</span>
+                <span>Diagramas del Sistema</span>
+              </div>
+              <p style={{ margin: '3px 0 0', fontSize: '0.8125rem', color: 'var(--secondary)' }}>
+                Genera los modelos visuales del proyecto a partir de la información estructurada analizada.
+              </p>
+            </div>
+
+            <button
+              type="button"
+              className="btn btn-primary btn-sm"
+              onClick={() => setIsDiagramModalOpen(true)}
+              style={{ display: 'flex', alignItems: 'center', gap: '6px' }}
+            >
+              <span className="ms ms-xs">auto_fix_high</span>
+              <span>Generar diagramas</span>
+            </button>
+          </div>
+
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: '10px' }}>
+            {[
+              { key: 'USE_CASE', label: 'Casos de uso', icon: 'account_tree', tab: 'usecases' },
+              { key: 'ER', label: 'Entidad-Relación', icon: 'table_chart', tab: 'modeling' },
+              { key: 'CLASS', label: 'Clases (POO)', icon: 'schema', tab: 'modeling' },
+              { key: 'FLOWCHART', label: 'Diagrama de Flujo', icon: 'alt_route', tab: 'navigation' },
+              { key: 'NAVIGATION', label: 'Árbol de Navegación', icon: 'account_tree', tab: 'navigation' },
+              { key: 'ARCHITECTURE', label: 'Arquitectura', icon: 'layers', tab: 'architecture' }
+            ].map(diag => {
+              const info = diagramAvailability?.diagrams?.[diag.key];
+              const isGen = info?.isGenerated;
+              const isOutdated = info?.isOutdated;
+              const canGen = info?.canGenerate;
+
+              return (
+                <div
+                  key={diag.key}
+                  style={{
+                    padding: '10px 14px',
+                    borderRadius: '8px',
+                    background: 'var(--surface-container-low)',
+                    border: '1px solid var(--border-default)',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'space-between',
+                    gap: '10px',
+                    cursor: 'pointer',
+                    transition: 'border-color 0.15s ease'
+                  }}
+                  onClick={() => onNavigateTo && onNavigateTo(diag.tab)}
+                  title={`Ir a vista de ${diag.label}`}
+                >
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '8px', minWidth: 0 }}>
+                    <span className="ms ms-xs" style={{ color: 'var(--primary)' }}>{diag.icon}</span>
+                    <span style={{ fontSize: '0.8125rem', fontWeight: 500, color: 'var(--on-surface)' }}>{diag.label}</span>
+                  </div>
+
+                  <div>
+                    {isGen ? (
+                      <span style={{ color: isOutdated ? '#b45309' : '#157347', fontSize: '0.78rem', fontWeight: 600 }}>
+                        {isOutdated ? '● Desactualizado' : '✓ Generado'}
+                      </span>
+                    ) : canGen ? (
+                      <span style={{ color: 'var(--primary)', fontSize: '0.72rem' }}>
+                        ◌ Disponible
+                      </span>
+                    ) : (
+                      <span style={{ color: 'var(--outline)', fontSize: '0.72rem' }}>
+                        ○ Incompleto
+                      </span>
+                    )}
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        </div>
+
+        {/* Modal para Generación Múltiple de Diagramas */}
+        {isDiagramModalOpen && (
+          <DiagramGenerationModal
+            projectId={project.id}
+            isOpen={isDiagramModalOpen}
+            onClose={() => setIsDiagramModalOpen(false)}
+            onGenerated={() => {
+              loadDiagramAvailability();
+              if (onProjectUpdated) onProjectUpdated();
+            }}
+          />
         )}
 
         {/* Status message */}

@@ -356,14 +356,28 @@ class CandidateConsolidator {
       }
     }
 
+    // Consolidación de candidatos redundantes ANTES de la inserción y revisión
+    const deduplicationService = require('./deduplicationService');
+    const { canonicalRequirements, extractionStats } = deduplicationService.groupAndConsolidateRequirements(
+      requirementCandidates,
+      existingCandidates
+    );
+
+    // Re-evaluar calidad ISO 29148 sobre los candidatos canónicos consolidados
+    canonicalRequirements.forEach(cand => {
+      cand.qualityReport = requirementQualityService.evaluate(cand);
+    });
+
     return {
       needCandidates,
-      requirementCandidates,
+      requirementCandidates: canonicalRequirements,
       summary: {
-        total: requirementCandidates.length,
+        total: canonicalRequirements.length,
+        originalExtracted: requirementCandidates.length,
+        duplicatesGrouped: extractionStats.duplicatesGrouped,
         explicit: explicitRequirements.length,
-        inferred: requirementCandidates.length - explicitRequirements.length,
-        duplicates: duplicateCount,
+        inferred: canonicalRequirements.length - explicitRequirements.length,
+        duplicates: extractionStats.duplicatesGrouped,
         conflicts: conflictCount
       }
     };
@@ -392,16 +406,32 @@ class CandidateConsolidator {
     sourceVersionId,
     sourceName = 'Documento'
   }) {
+    const deduplicationService = require('./deduplicationService');
     const crypto = require('crypto');
     const modelCandidates = [];
     const seenFingerprints = new Set();
 
     const addCandidate = (item) => {
-      const normalizedName = this.normalizeForComparison(item.name || item.title || '');
+      let normalizedName = this.normalizeForComparison(item.name || item.title || '');
+      if (item.kind === 'ACTOR') {
+        const canonicalKey = deduplicationService.getActorCanonicalKey(item.name);
+        normalizedName = canonicalKey;
+        item.name = deduplicationService.getPreferredActorDisplayName(item.name, canonicalKey);
+      }
       const rawKey = `${item.kind}:${normalizedName}`;
       const fingerprint = crypto.createHash('sha256').update(rawKey).digest('hex');
 
-      if (seenFingerprints.has(fingerprint)) return;
+      if (seenFingerprints.has(fingerprint)) {
+        const existing = modelCandidates.find(mc => mc.fingerprint === fingerprint);
+        if (existing && item.kind === 'ACTOR') {
+          if (!existing.content.aliases) existing.content.aliases = [existing.name];
+          if (!existing.content.aliases.includes(item.name)) existing.content.aliases.push(item.name);
+          if (item.content?.description && !existing.content.description?.includes(item.content.description)) {
+            existing.content.description = `${existing.content.description} · ${item.content.description}`.slice(0, 500);
+          }
+        }
+        return;
+      }
       seenFingerprints.add(fingerprint);
 
       modelCandidates.push({

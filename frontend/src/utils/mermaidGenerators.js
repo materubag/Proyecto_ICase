@@ -3,13 +3,28 @@
  * (Sin consumir tokens de IA, generación 100% determinística y local)
  */
 
-function sanitizeId(str) {
-  if (!str) return 'NODE';
+function stripAccents(str) {
+  if (!str) return '';
   return str
     .normalize('NFD')
-    .replace(/[\u0300-\u036f]/g, '')
+    .replace(/[\u0300-\u036f]/g, '');
+}
+
+function sanitizeId(str, prefix = 'NODE') {
+  if (!str) return `${prefix}_ITEM`;
+  const clean = stripAccents(String(str))
     .replace(/[^a-zA-Z0-9_]/g, '_')
+    .replace(/_+/g, '_')
+    .replace(/^_+|_+$/g, '')
     .toUpperCase();
+
+  if (!clean || clean === 'END') return `${prefix}_${clean || 'ITEM'}`;
+  return clean;
+}
+
+function sanitizeLabel(text) {
+  if (!text) return '';
+  return String(text).replace(/["\r\n\\]/g, ' ').replace(/\s+/g, ' ').trim();
 }
 
 function sanitizeAttributeType(rawType) {
@@ -26,28 +41,33 @@ function sanitizeAttributeType(rawType) {
 /**
  * Genera la sintaxis Mermaid de un diagrama Entidad-Relación (erDiagram)
  * a partir de las entidades y relaciones persistidas.
- * @param {Array} entities
- * @param {Array} relationships
- * @returns {string} Código Mermaid erDiagram
  */
 export function generateERDiagram(entities = [], relationships = []) {
   if (!entities || entities.length === 0) {
     return `erDiagram
+    direction TB
     SISTEMA {
         string estado "Sin entidades registradas"
     }`;
   }
 
-  let lines = ['erDiagram'];
+  let lines = ['erDiagram', '    direction TB'];
 
   // 1. Declaración de entidades y atributos
   for (const ent of entities) {
-    const entName = sanitizeId(ent.name);
+    const entName = sanitizeId(ent.name, 'ENT');
     lines.push(`    ${entName} {`);
     if (ent.attributes && ent.attributes.length > 0) {
       for (const attr of ent.attributes) {
-        const type = sanitizeAttributeType(attr.type);
-        const attrName = (attr.name || 'campo').replace(/[^a-zA-Z0-9_]/g, '_') || 'campo';
+
+        const rawType = stripAccents(attr.type || 'string').toLowerCase();
+        let type = 'string';
+        if (/^(int|integer|number|entero|id)/.test(rawType)) type = 'int';
+        else if (/^(float|double|decimal|precio|costo)/.test(rawType)) type = 'float';
+        else if (/^(bool|boolean)/.test(rawType)) type = 'boolean';
+        else if (/^(date|datetime|fecha)/.test(rawType)) type = 'date';
+
+        const attrName = stripAccents(attr.name || 'campo').replace(/[^a-zA-Z0-9_]/g, '_').toLowerCase();
         const pk = attr.isPk ? 'PK' : (attr.isFk ? 'FK' : '');
         lines.push(`        ${type} ${attrName} ${pk}`.trimEnd());
       }
@@ -60,14 +80,15 @@ export function generateERDiagram(entities = [], relationships = []) {
   // 2. Declaración de relaciones
   if (relationships && relationships.length > 0) {
     for (const rel of relationships) {
-      const source = sanitizeId(rel.source);
-      const target = sanitizeId(rel.target);
-      const label = rel.description ? rel.description.split(' ')[0].replace(/[^a-zA-Z0-9_]/g, '') || 'relaciona' : 'relaciona';
+      const source = sanitizeId(rel.source, 'ENT');
+      const target = sanitizeId(rel.target, 'ENT');
+      const label = sanitizeLabel(rel.description || 'relaciona').slice(0, 60);
 
       let connector = '||--o{';
       if (rel.cardinality === '1:1') connector = '||--||';
       else if (rel.cardinality === 'N:M' || rel.cardinality === 'M:N') connector = '}o--o{';
       else if (rel.cardinality === '0:1' || rel.cardinality === '1:0') connector = '|o--||';
+      else if (rel.cardinality === 'N:1' || rel.cardinality === 'M:1') connector = '}o--||';
 
       lines.push(`    ${source} ${connector} ${target} : "${label}"`);
     }
@@ -77,112 +98,149 @@ export function generateERDiagram(entities = [], relationships = []) {
 }
 
 /**
- * Genera el diagrama de flujo Mermaid para el árbol de navegación (flowchart TD)
- * @param {Array} navigation
- * @param {Array} screens
- * @returns {string} Código Mermaid flowchart TD
+ * Genera el Árbol de Navegación (flowchart TD con jerarquía padre -> hijo).
+ * Representa la estructura jerárquica de la aplicación, NO un flujo operativo.
  */
-export function generateNavigationDiagram(navigation = [], screens = []) {
-  if ((!navigation || navigation.length === 0) && (!screens || screens.length === 0)) {
-    return `flowchart TD
-    INICIO["Inicio del Sistema"]`;
-  }
-
+export function generateNavigationDiagram(navigation = [], screens = [], projectName = 'Sistema') {
   let lines = ['flowchart TD'];
-  const declaredNodes = new Set();
+  const rootId = 'APP_ROOT';
+  lines.push(`    ${rootId}["🌐 ${sanitizeLabel(projectName)}"]`);
 
-  // 1. Declarar nodos con sus etiquetas humanas
-  if (screens && screens.length > 0) {
-    for (const scr of screens) {
-      const id = sanitizeId(scr.name);
-      declaredNodes.add(id);
-      const label = scr.name.replace(/["\\]/g, '');
-      const route = scr.route ? ` (${scr.route})` : '';
-      lines.push(`    ${id}["${label}${route}"]`);
+  if (!screens || screens.length === 0) {
+    lines.push(`    ${rootId} --> MOD_AUTH["Portal de Acceso"]`);
+    lines.push(`    ${rootId} --> MOD_DASH["Panel Principal"]`);
+    lines.push(`    MOD_AUTH --> SCR_LOGIN["Inicio de Sesión\\n/login"]`);
+    lines.push(`    MOD_DASH --> SCR_DASH["Dashboard\\n/dashboard"]`);
+    return lines.join('\n');
+  }
+
+  // Module buckets
+  const authScreens = [];
+  const dashboardScreens = [];
+  const otherScreens = [];
+
+  for (const scr of screens) {
+    const safeId = 'SCR_' + sanitizeId(scr.name).slice(0, 25);
+    const label = sanitizeLabel(scr.name);
+    const route = scr.route ? `\\n${sanitizeLabel(scr.route)}` : '';
+    const item = { safeId, label: `${label}${route}`, raw: scr.name.toLowerCase() };
+
+    if (item.raw.includes('login') || item.raw.includes('acceso') || item.raw.includes('autentica')) {
+      authScreens.push(item);
+    } else if (item.raw.includes('dashboard') || item.raw.includes('indicador') || item.raw.includes('resumen')) {
+      dashboardScreens.push(item);
+    } else {
+      otherScreens.push(item);
     }
   }
 
-  // 2. Conexiones entre pantallas
-  if (navigation && navigation.length > 0) {
-    for (const nav of navigation) {
-      const fromId = sanitizeId(nav.from);
-      const toId = sanitizeId(nav.to);
-
-      if (!declaredNodes.has(fromId)) {
-        lines.push(`    ${fromId}["${nav.from.replace(/["\\]/g, '')}"]`);
-        declaredNodes.add(fromId);
-      }
-      if (!declaredNodes.has(toId)) {
-        lines.push(`    ${toId}["${nav.to.replace(/["\\]/g, '')}"]`);
-        declaredNodes.add(toId);
-      }
-
-      if (nav.action) {
-        lines.push(`    ${fromId} -->|"${nav.action.replace(/["\\]/g, '')}"| ${toId}`);
-      } else {
-        lines.push(`    ${fromId} --> ${toId}`);
-      }
-    }
-  } else if (screens && screens.length > 1) {
-    // Si no hay navegación explícita, enlazar secuencialmente las pantallas
-    for (let i = 0; i < screens.length - 1; i++) {
-      const fromId = sanitizeId(screens[i].name);
-      const toId = sanitizeId(screens[i + 1].name);
-      lines.push(`    ${fromId} --> ${toId}`);
-    }
+  if (authScreens.length > 0) {
+    lines.push(`    ${rootId} --> MOD_AUTH["Portal de Acceso"]`);
+    authScreens.forEach(s => lines.push(`    MOD_AUTH --> ${s.safeId}["${s.label}"]`));
   }
+
+  let mainHub = rootId;
+  if (dashboardScreens.length > 0) {
+    const dash = dashboardScreens[0];
+    lines.push(`    ${rootId} --> ${dash.safeId}["${dash.label}"]`);
+    mainHub = dash.safeId;
+    dashboardScreens.slice(1).forEach(s => lines.push(`    ${dash.safeId} --> ${s.safeId}["${s.label}"]`));
+  }
+
+  otherScreens.forEach(s => {
+    lines.push(`    ${mainHub} --> ${s.safeId}["${s.label}"]`);
+  });
 
   return lines.join('\n');
 }
 
 /**
+ * Genera el Diagrama de Flujo de Procesos (flowchart TD con decisiones y ramas).
+ * Representa el flujo operativo: Inicio -> Actividades -> Decisión -> Ramas -> Fin.
+ */
+export function generateFlowchartDiagram(requirements = [], useCases = [], projectName = 'Sistema') {
+  let lines = ['flowchart TD'];
+  lines.push(`    START(["Inicio: ${sanitizeLabel(projectName)}"])`);
+
+  const steps = (useCases && useCases.length > 0)
+    ? useCases.map((u, i) => ({ id: `STEP_${i + 1}`, label: sanitizeLabel(u.name) }))
+    : requirements.slice(0, 7).map((r, i) => ({ id: `STEP_${i + 1}`, label: sanitizeLabel(r.name) }));
+
+  if (steps.length === 0) {
+    lines.push(`    START --> STEP1["1. Registrar datos de entrada"]`);
+    lines.push(`    STEP1 --> DEC1{"¿Validación conforme?"}`);
+    lines.push(`    DEC1 -->|Sí| STEP2["2. Procesar y guardar en base de datos"]`);
+    lines.push(`    DEC1 -->|No| ERR["Notificar error de validación"]`);
+    lines.push(`    ERR --> STEP1`);
+    lines.push(`    STEP2 --> FIN(["Fin del Proceso"])`);
+    return lines.join('\n');
+  }
+
+  let prev = 'START';
+  steps.forEach((s, idx) => {
+    lines.push(`    ${prev} --> ${s.id}["${idx + 1}. ${s.label}"]`);
+    prev = s.id;
+
+    // Insert decision at midpoint
+    if (idx === Math.floor(steps.length / 2)) {
+      const decId = `DEC_${idx + 1}`;
+      lines.push(`    ${s.id} --> ${decId}{"¿Cumple reglas de negocio?"}`);
+      lines.push(`    ${decId} -->|No| ERR_${idx + 1}["Rechazar / Solicitar corrección"]`);
+      lines.push(`    ERR_${idx + 1} --> ${s.id}`);
+
+      if (idx + 1 < steps.length) {
+        lines.push(`    ${decId} -->|Sí| ${steps[idx + 1].id}`);
+        // Advance prev to the next step
+        prev = steps[idx + 1].id;
+      } else {
+        prev = decId;
+      }
+    }
+  });
+
+  lines.push(`    ${prev} --> FIN(["Fin del Proceso"])`);
+  return lines.join('\n');
+}
+
+/**
  * Genera el diagrama de arquitectura Mermaid (flowchart LR o TB)
- * @param {Object} architecture
- * @returns {string} Código Mermaid flowchart
  */
 export function generateArchitectureDiagram(architecture) {
   if (!architecture) {
-    return `flowchart LR
-    FRONT["Frontend (React SPA)"] --> BACK["Backend (Express API)"]
-    BACK --> DB[("Base de Datos (PostgreSQL)")]`;
+    return `flowchart TB
+    subgraph PRESENTATION ["1. Capa de Presentación"]
+        FRONT["Frontend (React SPA)"]
+    end
+    subgraph DOMAIN ["2. Capa de Negocio"]
+        BACK["Backend (Node.js Express API)"]
+    end
+    subgraph DATA ["3. Capa de Datos"]
+        DB[("PostgreSQL 16")]
+    end
+    FRONT -->|HTTPS / REST API| BACK
+    BACK -->|TCP / Prisma ORM| DB`;
   }
 
-  let lines = ['flowchart LR'];
+  let lines = ['flowchart TB'];
 
-  const fe = (architecture.frontend || 'React SPA').replace(/["\\]/g, '');
-  const be = (architecture.backend || 'Node.js Express API').replace(/["\\]/g, '');
-  const db = (architecture.database || 'PostgreSQL DB').replace(/["\\]/g, '');
+  const fe = sanitizeLabel(architecture.frontend || 'React SPA');
+  const be = sanitizeLabel(architecture.backend || 'Node.js Express API');
+  const db = sanitizeLabel(architecture.database || 'PostgreSQL 16');
 
-  lines.push(`    subgraph CapaFrontend ["Capa de Presentación"]`);
+  lines.push(`    subgraph PRESENTATION ["1. Capa de Presentación (Frontend)"]`);
   lines.push(`        FRONT["${fe}"]`);
   lines.push(`    end`);
 
-  lines.push(`    subgraph CapaBackend ["Capa de Aplicación y Dominio"]`);
+  lines.push(`    subgraph DOMAIN ["2. Capa de Negocio y Dominio (Backend)"]`);
   lines.push(`        BACK["${be}"]`);
   lines.push(`    end`);
 
-  lines.push(`    subgraph CapaDatos ["Capa de Persistencia"]`);
+  lines.push(`    subgraph DATA ["3. Capa de Datos e Infraestructura"]`);
   lines.push(`        DB[("${db}")]`);
   lines.push(`    end`);
 
-  lines.push(`    FRONT -->|HTTP REST / JSON| BACK`);
-  lines.push(`    BACK -->|TCP / SQL| DB`);
-
-  // Conexiones personalizadas si existen en el modelo
-  if (architecture.components && architecture.components.length > 0) {
-    for (const comp of architecture.components) {
-      const compId = sanitizeId(comp.name);
-      const compName = comp.name.replace(/["\\]/g, '');
-      const layer = comp.layer || 'Application';
-      if (layer === 'Presentation') {
-        lines.push(`    FRONT -.-> ${compId}["${compName}"]`);
-      } else if (layer === 'Persistence') {
-        lines.push(`    DB -.-> ${compId}["${compName}"]`);
-      } else {
-        lines.push(`    BACK -.-> ${compId}["${compName}"]`);
-      }
-    }
-  }
+  lines.push(`    FRONT -->|HTTPS / REST API| BACK`);
+  lines.push(`    BACK -->|TCP / Prisma ORM| DB`);
 
   return lines.join('\n');
 }

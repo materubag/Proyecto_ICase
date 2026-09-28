@@ -31,6 +31,8 @@ enum RequirementPriority {
 enum RequirementStatus {
   PENDING
   APPROVED
+  NEEDS_REVIEW
+  REJECTED
   IMPLEMENTED
   DISCARDED
   REMOVED
@@ -290,6 +292,7 @@ model Requirement {
   preconditions  String?             @db.Text // ISO/IEC/IEEE 29148:2018
   postconditions String?             @db.Text // ISO/IEC/IEEE 29148:2018
   qualityReport  Json?
+  sources        Json?               // Traceability of original candidates, references and provenance
   revision       Int                 @default(1)
   isDeleted      Boolean             @default(false)
   createdAt      DateTime            @default(now())
@@ -312,8 +315,9 @@ model Actor {
   name           String
   description    String?  @db.Text
   status         String   @default("PENDING_REVIEW")
-  reviewStatus   String   @default("PENDING") // PENDING, APPROVED, DISCARDED
+  reviewStatus   String   @default("PENDING") // PENDING, APPROVED, DISCARDED, NEEDS_REVIEW, REJECTED
   requirementIds String[] @default([])
+  aliases        String[] @default([])
   evidence       Json?
   revision       Int      @default(1)
   isDeleted      Boolean  @default(false)
@@ -344,10 +348,11 @@ model UseCase {
   altFlows          Json?    // Array of alternatives
   relations         Json?
   evidence          Json?
+  sources           Json?    // Provenance / candidate traces
   requirementIds    String[] @default([])
   revision          Int      @default(1)
   status            String   @default("PENDING_REVIEW")
-  reviewStatus      String   @default("PENDING") // PENDING, APPROVED, DISCARDED
+  reviewStatus      String   @default("PENDING") // PENDING, APPROVED, DISCARDED, NEEDS_REVIEW, REJECTED
   isDeleted         Boolean  @default(false)
   createdAt         DateTime @default(now())
   updatedAt         DateTime @updatedAt

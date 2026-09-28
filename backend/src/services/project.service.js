@@ -1,11 +1,11 @@
 const prisma = require('../config/prisma');
 
 class ProjectService {
-  async getAllProjects() {
+  async getAllProjects(filterArchived = true) {
     return await prisma.project.findMany({
-      where: {
-        status: { not: 'ARCHIVED' }
-      },
+
+      where: filterArchived ? { status: { not: 'ARCHIVED' } } : undefined,
+
       orderBy: { updatedAt: 'desc' },
       include: {
         _count: {
@@ -20,8 +20,8 @@ class ProjectService {
     });
   }
 
-  async getProjectById(id) {
-    return await prisma.project.findUnique({
+  async getProjectById(id, allowArchived = false) {
+    const project = await prisma.project.findUnique({
       where: { id },
       include: {
         requirements: {
@@ -71,6 +71,12 @@ class ProjectService {
         }
       }
     });
+
+    if (!project || (!allowArchived && project.status === 'ARCHIVED')) {
+      return null;
+    }
+
+    return project;
   }
 
   async createProject(data) {
@@ -151,6 +157,20 @@ class ProjectService {
       return await tx.project.delete({
         where: { id }
       });
+    });
+  }
+
+  async restoreProject(id) {
+    const existing = await prisma.project.findUnique({ where: { id } });
+    if (!existing) {
+      const error = new Error(`Project with ID ${id} not found`);
+      error.statusCode = 404;
+      throw error;
+    }
+
+    return await prisma.project.update({
+      where: { id },
+      data: { status: 'PLANNING' }
     });
   }
 }

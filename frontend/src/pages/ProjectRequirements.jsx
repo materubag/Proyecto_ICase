@@ -6,6 +6,8 @@ import { historyApi } from '../api/history.api';
 import Modal from '../components/common/Modal';
 import ProjectCandidateReview from './ProjectCandidateReview';
 import ProjectActors from './ProjectActors';
+import ActorMultiSelect from '../components/common/ActorMultiSelect';
+import RequirementMultiSelect from '../components/common/RequirementMultiSelect';
 
 const PRIORITY_DOT = {
   HIGH:   'high',
@@ -27,6 +29,45 @@ export default function ProjectRequirements({ project, onProjectUpdated, initial
   const [changeError, setChangeError] = useState('');
   const requirements = project.requirements || [];
   const actorsMap = new Map((project.actors || []).map(a => [a.codeId || a.id, a.name]));
+
+  // Segregated Metrics (Requirement #3: Clear separation of Canonical vs Extraction Traceability)
+  const auditMetrics = React.useMemo(() => {
+    const total = requirements.length;
+    const rf = requirements.filter(r => r.type === 'FUNCTIONAL' || !r.type).length;
+    const rnf = requirements.filter(r => r.type === 'NON_FUNCTIONAL').length;
+    const approved = requirements.filter(r => r.status === 'APPROVED').length;
+    const pending = requirements.filter(r => r.status === 'PENDING').length;
+    const needsReview = requirements.filter(r => r.status === 'NEEDS_REVIEW' || r.status === 'IN_REVIEW').length;
+    const rejected = requirements.filter(r => r.status === 'REJECTED' || r.status === 'DISCARDED').length;
+
+    // Traceability of consolidated candidates
+    let originalCandidateCount = 0;
+    let consolidatedGroupsCount = 0;
+    for (const r of requirements) {
+      if (Array.isArray(r.sources) && r.sources.length > 0) {
+        originalCandidateCount += r.sources.length;
+        if (r.sources.length > 1) {
+          consolidatedGroupsCount++;
+        }
+      } else {
+        originalCandidateCount += 1;
+      }
+    }
+    const consolidatedRedundancies = Math.max(0, originalCandidateCount - total);
+
+    return {
+      total,
+      rf,
+      rnf,
+      approved,
+      pending,
+      needsReview,
+      rejected,
+      originalCandidateCount,
+      consolidatedGroupsCount,
+      consolidatedRedundancies
+    };
+  }, [requirements]);
 
   const [viewMode, setViewMode] = useState('uta_table'); // 'uta_table' | 'split'
   const [selected, setSelected] = useState(requirements[0] || null);
@@ -70,8 +111,8 @@ export default function ProjectRequirements({ project, onProjectUpdated, initial
   const [type, setType] = useState('FUNCTIONAL');
   const [priority, setPriority] = useState('MEDIUM');
   const [status, setStatus] = useState('PENDING');
-  const [actorIdsStr, setActorIdsStr] = useState('');
-  const [dependenciesStr, setDependenciesStr] = useState('');
+  const [actorIds, setActorIds] = useState([]);
+  const [dependencies, setDependencies] = useState([]);
   const [preconditions, setPreconditions] = useState('');
   const [postconditions, setPostconditions] = useState('');
   const [savingReq, setSavingReq] = useState(false);
@@ -97,7 +138,7 @@ export default function ProjectRequirements({ project, onProjectUpdated, initial
     setCode(`RF-${n < 10 ? '0' + n : n}`);
     setName(''); setDescription('');
     setType('FUNCTIONAL'); setPriority('MEDIUM'); setStatus('PENDING');
-    setActorIdsStr(''); setDependenciesStr('');
+    setActorIds([]); setDependencies([]);
     setPreconditions('El usuario debe estar autenticado con rol y permisos correspondientes.');
     setPostconditions('El sistema actualiza el registro en la base de datos y refleja los cambios.');
     setReqModalOpen(true);
@@ -108,8 +149,8 @@ export default function ProjectRequirements({ project, onProjectUpdated, initial
     setEditingReq(req);
     setCode(req.code); setName(req.name); setDescription(req.description);
     setType(req.type); setPriority(req.priority); setStatus(req.status);
-    setActorIdsStr((req.actorIds || []).join(', '));
-    setDependenciesStr((req.dependencies || []).join(', '));
+    setActorIds(Array.isArray(req.actorIds) ? req.actorIds : []);
+    setDependencies(Array.isArray(req.dependencies) ? req.dependencies : []);
     setPreconditions(req.qualityReport?.preconditions || req.preconditions || 'El usuario debe estar autenticado con rol y permisos correspondientes.');
     setPostconditions(req.qualityReport?.postconditions || req.postconditions || 'El sistema actualiza el registro en la base de datos y refleja los cambios.');
     setReqModalOpen(true);
@@ -122,8 +163,8 @@ export default function ProjectRequirements({ project, onProjectUpdated, initial
       setSavingReq(true);
       const payload = {
         code, name, description, type, priority, status,
-        actorIds: actorIdsStr.split(',').map(s => s.trim()).filter(Boolean),
-        dependencies: dependenciesStr.split(',').map(s => s.trim()).filter(Boolean),
+        actorIds: Array.isArray(actorIds) ? actorIds : [],
+        dependencies: Array.isArray(dependencies) ? dependencies : [],
         qualityReport: {
           ...(editingReq?.qualityReport || {}),
           preconditions,
@@ -206,7 +247,7 @@ export default function ProjectRequirements({ project, onProjectUpdated, initial
       )}
 
       {reqSubTab === 'actors' && (
-        <div className="page-scrollable" style={{ flex: 1, minHeight: 0, overflowY: 'auto', padding: '20px 24px' }}>
+        <div style={{ flex: 1, minHeight: 0, display: 'flex', flexDirection: 'column' }}>
           <ProjectActors
             project={project}
             onProjectUpdated={onProjectUpdated}
@@ -267,6 +308,69 @@ export default function ProjectRequirements({ project, onProjectUpdated, initial
         <div className="page-scrollable" style={{ padding: '24px', flex: 1, overflowY: 'auto' }}>
 
 
+
+          {/* Audit Metrics Banner: Segregated Canonical vs Extraction Traceability (Requirements #1, #2, #3) */}
+          <div style={{
+            background: 'var(--surface-container-low, #f8fafc)',
+            border: '1px solid var(--outline-variant, #e2e8f0)',
+            borderRadius: '8px',
+            padding: '12px 16px',
+            marginBottom: '16px',
+            display: 'flex',
+            flexDirection: 'column',
+            gap: '8px'
+          }}>
+            <div style={{ display: 'flex', flexWrap: 'wrap', alignItems: 'center', justifyContent: 'space-between', gap: '12px' }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                <span className="ms" style={{ color: 'var(--primary)' }}>fact_check</span>
+                <div>
+                  <strong style={{ fontSize: '0.8125rem', color: 'var(--on-surface)' }}>Requisitos Canónicos ({auditMetrics.total}):</strong>
+                  <span style={{ fontSize: '0.8125rem', color: 'var(--secondary)', marginLeft: '6px' }}>
+                    {auditMetrics.rf} Funcionales • {auditMetrics.rnf} No Funcionales
+                  </span>
+                </div>
+              </div>
+              <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap' }}>
+                <span className="badge badge-success" style={{ fontSize: '0.75rem' }}>
+                  {auditMetrics.approved} Aprobados
+                </span>
+                <span className="badge badge-warning" style={{ fontSize: '0.75rem' }}>
+                  {auditMetrics.pending} Pendientes de revisión
+                </span>
+                {auditMetrics.needsReview > 0 && (
+                  <span className="badge" style={{ fontSize: '0.75rem', background: '#fef3c7', color: '#92400e', border: '1px solid #fde68a' }}>
+                    {auditMetrics.needsReview} Requieren revisión
+                  </span>
+                )}
+                {auditMetrics.rejected > 0 && (
+                  <span className="badge badge-error" style={{ fontSize: '0.75rem' }}>
+                    {auditMetrics.rejected} Rechazados
+                  </span>
+                )}
+              </div>
+            </div>
+
+            {/* Traceability sub-banner */}
+            <div style={{
+              display: 'flex',
+              flexWrap: 'wrap',
+              alignItems: 'center',
+              justifyContent: 'space-between',
+              paddingTop: '6px',
+              borderTop: '1px dashed var(--outline-variant, #e2e8f0)',
+              fontSize: '0.75rem',
+              color: 'var(--secondary)'
+            }}>
+              <div>
+                <span>🔍 Trazabilidad de Extracción: </span>
+                <strong>{auditMetrics.originalCandidateCount}</strong> candidatos originales analizados
+              </div>
+              <div style={{ display: 'flex', gap: '12px' }}>
+                <span>Agrupaciones consolidadas: <strong>{auditMetrics.consolidatedGroupsCount}</strong></span>
+                <span>Duplicados pre-aprobación unificados: <strong>{auditMetrics.consolidatedRedundancies}</strong></span>
+              </div>
+            </div>
+          </div>
 
           {/* Controls inside UTA view */}
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '14px', flexWrap: 'wrap', gap: '10px' }}>
@@ -641,21 +745,48 @@ export default function ProjectRequirements({ project, onProjectUpdated, initial
               <select className="form-control" value={status} onChange={e => setStatus(e.target.value)}>
                 <option value="PENDING">Pendiente</option>
                 <option value="APPROVED">Aprobado</option>
+                <option value="NEEDS_REVIEW">Requiere Revisión</option>
+                <option value="REJECTED">Rechazado</option>
                 <option value="IMPLEMENTED">Implementado</option>
                 <option value="DISCARDED">Descartado</option>
               </select>
             </div>
           </div>
           <div className="grid-2">
-            <div className="form-group">
-              <label className="form-label">Actores (separados por coma)</label>
-              <input type="text" className="form-control" placeholder="ACT-01, ACT-02" value={actorIdsStr} onChange={e => setActorIdsStr(e.target.value)} />
-            </div>
-            <div className="form-group">
-              <label className="form-label">Dependencias (códigos)</label>
-              <input type="text" className="form-control" placeholder="RF-01, RF-02" value={dependenciesStr} onChange={e => setDependenciesStr(e.target.value)} />
-            </div>
+            <ActorMultiSelect
+              projectActors={project.actors || []}
+              selectedActorIds={actorIds}
+              onChange={setActorIds}
+            />
+            <RequirementMultiSelect
+              requirements={requirements}
+              selectedDependencies={dependencies}
+              onChange={setDependencies}
+              currentRequirementCode={code}
+            />
           </div>
+
+          {editingReq?.sources && Array.isArray(editingReq.sources) && editingReq.sources.length > 1 && (
+            <div style={{
+              background: 'var(--surface-container-low)',
+              border: '1px solid var(--outline-variant)',
+              borderRadius: '8px',
+              padding: '12px',
+              marginTop: '4px'
+            }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '6px', fontWeight: 600, fontSize: '0.8125rem', color: 'var(--primary)', marginBottom: '8px' }}>
+                <span className="ms ms-xs">merge_type</span>
+                <span>Candidatos Originales Consolidados ({editingReq.sources.length})</span>
+              </div>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '6px', maxHeight: '130px', overflowY: 'auto' }}>
+                {editingReq.sources.map((s, idx) => (
+                  <div key={idx} style={{ fontSize: '0.75rem', color: 'var(--on-surface-variant)', background: 'var(--surface-container-lowest)', padding: '6px 8px', borderRadius: '4px', border: '1px solid var(--outline-variant)' }}>
+                    <strong>{s.temporaryCode || s.candidateId || `Fuente ${idx + 1}`}:</strong> {s.statement || s.originalStatement}
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
           <div className="grid-2">
             <div className="form-group">
               <label className="form-label">Precondiciones (Tabla 1 UTA)</label>

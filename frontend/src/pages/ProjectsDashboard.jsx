@@ -76,6 +76,9 @@ export default function ProjectsDashboard({ onOpenProject }) {
     e.stopPropagation();
     if (!window.confirm('¿Está seguro de eliminar este proyecto y todos sus datos asociados?')) return;
     try {
+
+      // Optimistic instant removal from UI
+
       setProjects(prev => prev.filter(p => p.id !== id));
       await projectsApi.delete(id);
       await loadProjects();
@@ -86,8 +89,10 @@ export default function ProjectsDashboard({ onOpenProject }) {
   }
 
   const filtered = projects.filter(p =>
-    !search || p.name.toLowerCase().includes(search.toLowerCase()) ||
-    (p.description || '').toLowerCase().includes(search.toLowerCase())
+    p.status !== 'ARCHIVED' && (
+      !search || p.name.toLowerCase().includes(search.toLowerCase()) ||
+      (p.description || '').toLowerCase().includes(search.toLowerCase())
+    )
   );
 
   // Compute global KPI stats

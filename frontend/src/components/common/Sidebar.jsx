@@ -72,8 +72,24 @@ export default function Sidebar({
     }
 
     if (item.id === 'modeling') {
+      if (activeActivity?.type === 'generating_modeling' || activeActivity?.type?.includes('diagram')) {
+        return { type: 'processing', tooltip: 'Generando diagramas...' };
+      }
       const hasEntities = (currentProject.entities?.length || 0) > 0;
       if (hasEntities) return { type: 'completed' };
+      return null;
+    }
+
+    if (item.id === 'navigation') {
+      const hasScreens = (currentProject.screens?.length || 0) > 0;
+      const hasNodes = (currentProject.navigationNodes?.length || 0) > 0;
+      if (hasScreens || hasNodes) return { type: 'completed' };
+      return null;
+    }
+
+    if (item.id === 'architecture') {
+      const hasArch = (currentProject.architectures?.length || 0) > 0;
+      if (hasArch) return { type: 'completed' };
       return null;
     }
 
@@ -118,6 +134,25 @@ export default function Sidebar({
             animation: 'pulse-glow 2s ease-in-out infinite'
           }}
         />
+      );
+    }
+
+    if (status.type === 'error') {
+      return (
+        <span
+          className="sidebar-status-pill error"
+          title={status.tooltip || 'Error'}
+          style={{
+            fontSize: '0.6875rem',
+            color: '#ffffff',
+            background: '#b42318',
+            padding: '0 5px',
+            borderRadius: 'var(--radius-xs)',
+            fontWeight: 700
+          }}
+        >
+          !
+        </span>
       );
     }
 
