@@ -2,8 +2,8 @@ import React, { useState } from 'react';
 import ProjectModel from './ProjectModel';
 import ProjectUseCases from './ProjectUseCases';
 
-export default function ProjectModeling({ project }) {
-  const [activeSubTab, setActiveSubTab] = useState('er'); // 'er' | 'usecases'
+export default function ProjectModeling({ project, onProjectUpdated }) {
+  const [activeSubTab, setActiveSubTab] = useState('er'); // 'er' | 'usecases' | 'classes'
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', height: '100%', overflow: 'hidden' }}>
@@ -13,10 +13,10 @@ export default function ProjectModeling({ project }) {
           <div>
             <h2 className="page-title" style={{ fontSize: '1.125rem', display: 'flex', alignItems: 'center', gap: '8px' }}>
               <span className="ms ms-sm" style={{ color: 'var(--primary)' }}>schema</span>
-              Modelado del Sistema (Entidad-Relación y Casos de Uso)
+              Modelado del Sistema (E/R, Casos de Uso y Clases UML)
             </h2>
             <span style={{ fontSize: '0.75rem', color: 'var(--secondary)' }}>
-              Diagrama E/R de base de datos y Casos de Uso de los 4 Procesos Fundamentales del negocio
+              Modelos estructurados del sistema derivados directamente de los requisitos y entidades
             </span>
           </div>
         </div>
@@ -34,15 +34,42 @@ export default function ProjectModeling({ project }) {
             onClick={() => setActiveSubTab('usecases')}
           >
             <span className="ms ms-xs">account_tree</span>
-            <span>Casos de Uso (4 Procesos)</span>
+            <span>Casos de Uso</span>
+          </button>
+          <button
+            className={`view-toggle-btn ${activeSubTab === 'classes' ? 'active' : ''}`}
+            onClick={() => setActiveSubTab('classes')}
+          >
+            <span className="ms ms-xs">schema</span>
+            <span>Diagrama de Clases (UML)</span>
           </button>
         </div>
       </div>
 
       {/* Sub-view content */}
       <div style={{ flex: 1, overflow: 'hidden', display: 'flex', flexDirection: 'column' }}>
-        {activeSubTab === 'er' && <ProjectModel project={project} />}
-        {activeSubTab === 'usecases' && <ProjectUseCases project={project} />}
+        {activeSubTab === 'er' && (
+          <ProjectModel
+            project={project}
+            onProjectUpdated={onProjectUpdated}
+            initialTab="er"
+            hideInternalTabs={true}
+          />
+        )}
+        {activeSubTab === 'usecases' && (
+          <ProjectUseCases
+            project={project}
+            onProjectUpdated={onProjectUpdated}
+          />
+        )}
+        {activeSubTab === 'classes' && (
+          <ProjectModel
+            project={project}
+            onProjectUpdated={onProjectUpdated}
+            initialTab="classes"
+            hideInternalTabs={true}
+          />
+        )}
       </div>
     </div>
   );

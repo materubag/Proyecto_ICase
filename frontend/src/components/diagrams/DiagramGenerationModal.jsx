@@ -10,17 +10,22 @@ const DIAGRAM_METADATA = {
   ER: {
     label: 'Diagrama Entidad-Relación',
     icon: 'table_chart',
-    description: 'Entidades detectadas, claves primarias, atributos y cardinalidades de base de datos.'
+    description: 'Entidades detectadas, claves primarias, atributos normalizados y cardinalidades de base de datos.'
   },
   CLASS: {
     label: 'Diagrama de Clases',
     icon: 'schema',
     description: 'Estructuras POO, atributos tipados, métodos y relaciones de herencia o asociación.'
   },
+  FLOWCHART: {
+    label: 'Diagrama de Flujo',
+    icon: 'alt_route',
+    description: 'Flujo secuencial de procesos operativos: inicio, pasos de procesamiento, decisiones con bifurcación y fin.'
+  },
   NAVIGATION: {
     label: 'Árbol de Navegación',
-    icon: 'fork_right',
-    description: 'Jerarquía de pantallas, mapa del sitio y transiciones del usuario entre vistas.'
+    icon: 'account_tree',
+    description: 'Estructura jerárquica de la aplicación (padre → hijo), mapa del sitio y vistas de detalle.'
   },
   ARCHITECTURE: {
     label: 'Diagrama de Arquitectura',
@@ -37,7 +42,7 @@ export default function DiagramGenerationModal({ projectId, isOpen, onClose, onG
   const [generationStep, setGenerationStep] = useState('');
   const [results, setResults] = useState(null);
   const [error, setError] = useState(null);
-  const [forceRegenerate, setForceRegenerate] = useState(false);
+  const [forceRegenerate, setForceRegenerate] = useState(true);
 
   useEffect(() => {
     if (isOpen && projectId) {

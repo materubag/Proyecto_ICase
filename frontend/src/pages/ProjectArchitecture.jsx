@@ -22,9 +22,12 @@ export default function ProjectArchitecture({ project, onProjectUpdated }) {
         diagramsApi.getDiagram(project.id, 'ARCHITECTURE')
       ]);
 
-      if (res.status === 'fulfilled' && res.value?.artifact?.mermaidCode) {
-        setStoredArchDiagram(res.value.artifact.mermaidCode);
-        setIsOutdated(!!res.value.isOutdated);
+      if (res.status === 'fulfilled') {
+        const code = res.value?.code || res.value?.mermaidCode || res.value?.artifact?.mermaidCode;
+        if (code) {
+          setStoredArchDiagram(code);
+          setIsOutdated(!!res.value.isOutdated);
+        }
       }
       if (avail.status === 'fulfilled') {
         const d = avail.value?.diagrams?.ARCHITECTURE;
@@ -38,16 +41,18 @@ export default function ProjectArchitecture({ project, onProjectUpdated }) {
   async function handleGenerateArch(force = false) {
     try {
       setGeneratingArch(true);
+      const isForce = typeof force === 'object' ? Boolean(force.force) : Boolean(force);
       const avail = await diagramsApi.getAvailability(project.id);
       const archCheck = avail?.diagrams?.ARCHITECTURE;
-      if (archCheck?.status === 'INSUFFICIENT' && !force) {
+      if (archCheck?.status === 'INSUFFICIENT' && !isForce) {
         alert(`Información arquitectónica insuficiente:\n• ${archCheck.missing?.join('\n• ')}`);
         return;
       }
 
-      const res = await diagramsApi.generateDiagram(project.id, 'ARCHITECTURE', { force });
-      if (res.diagram?.mermaidCode) {
-        setStoredArchDiagram(res.diagram.mermaidCode);
+      const res = await diagramsApi.generateDiagram(project.id, 'ARCHITECTURE', isForce);
+      const code = res?.code || res?.mermaidCode || res?.diagram?.mermaidCode || res?.artifact?.mermaidCode;
+      if (code) {
+        setStoredArchDiagram(code);
         setIsOutdated(false);
       }
       if (onProjectUpdated) await onProjectUpdated();
@@ -62,89 +67,67 @@ export default function ProjectArchitecture({ project, onProjectUpdated }) {
     ? project.architectures[0]
     : null;
 
-  // Software Architecture Diagram (Clean Architecture 3-tier)
+  // Software Architecture Diagram (Logical layers of the analyzed project)
   const softwareArchCode = useMemo(() => {
     if (architecture?.softwareDiagram) return architecture.softwareDiagram;
-    let code = `graph TD\n`;
-    code += `  %% Estilos para Arquitectura de Software\n`;
-    code += `  classDef presentation fill:#eff6ff,stroke:#2563eb,stroke-width:2px,color:#1e3a8a,font-weight:bold;\n`;
-    code += `  classDef domain fill:#f0fdf4,stroke:#16a34a,stroke-width:2px,color:#14532d,font-weight:bold;\n`;
-    code += `  classDef data fill:#fef3c7,stroke:#d97706,stroke-width:2px,color:#78350f,font-weight:bold;\n\n`;
+    const fe = architecture?.frontend || 'Capa de Presentación (Interfaz de Usuario)';
+    const be = architecture?.backend || 'Capa de Negocio y Lógica de Aplicación';
+    const db = architecture?.database || 'Capa de Persistencia y Base de Datos';
 
-    code += `  subgraph PRESENTATION["1. CAPA DE PRESENTACIÓN (FRONTEND)"]\n`;
-    code += `    UI_COMP["Componentes React SPA"]:::presentation\n`;
-    code += `    UI_ROUTER["Enrutador & Vistas"]:::presentation\n`;
-    code += `    UI_STATE["Gestores de Estado / Hooks"]:::presentation\n`;
+    let code = `flowchart TD\n`;
+    code += `  subgraph PRESENTATION ["1. CAPA DE PRESENTACIÓN"]\n`;
+    code += `    UI_COMP["${fe}"]\n`;
+    code += `    ROUTER["Enrutador & Vistas del Sistema"]\n`;
     code += `  end\n\n`;
 
-    code += `  subgraph DOMAIN["2. CAPA DE NEGOCIO & DOMINIO (BACKEND)"]\n`;
-    code += `    SVC_CORE["Controladores REST & Middleware"]:::domain\n`;
-    code += `    SVC_RULES["Servicios de Negocio & Reglas ISO"]:::domain\n`;
-    code += `    SVC_PIPELINE["Pipeline de Análisis & Normalización"]:::domain\n`;
+    code += `  subgraph DOMAIN ["2. CAPA DE NEGOCIO Y DOMINIO"]\n`;
+    code += `    SVC_CORE["${be}"]\n`;
+    code += `    SVC_RULES["Reglas de Negocio del Sistema"]\n`;
     code += `  end\n\n`;
 
-    code += `  subgraph DATA["3. CAPA DE DATOS & INFRAESTRUCTURA"]\n`;
-    code += `    ORM_PRISMA["Prisma ORM (Data Access Layer)"]:::data\n`;
-    code += `    DB_POSTGRES["PostgreSQL Relacional (ACID)"]:::data\n`;
-    code += `    EXT_AI["Proveedores de IA & Automatización (n8n/LLM)"]:::data\n`;
+    code += `  subgraph DATA ["3. CAPA DE DATOS Y PERSISTENCIA"]\n`;
+    code += `    DB_STORE[("${db}")]\n`;
     code += `  end\n\n`;
 
-    code += `  UI_COMP --> UI_ROUTER\n`;
-    code += `  UI_ROUTER -->|Peticiones HTTP/REST| SVC_CORE\n`;
+    code += `  UI_COMP --> ROUTER\n`;
+    code += `  ROUTER -->|Peticiones / Vistas| SVC_CORE\n`;
     code += `  SVC_CORE --> SVC_RULES\n`;
-    code += `  SVC_RULES --> SVC_PIPELINE\n`;
-    code += `  SVC_RULES --> ORM_PRISMA\n`;
-    code += `  SVC_PIPELINE --> EXT_AI\n`;
-    code += `  ORM_PRISMA -->|Consultas SQL Seguras| DB_POSTGRES\n`;
+    code += `  SVC_RULES -->|Consultas y Persistencia| DB_STORE\n`;
 
     return code;
-  }, []);
+  }, [architecture]);
 
-  // System Architecture Diagram (Physical Infrastructure & Deployment)
+  // System Architecture Diagram (Physical deployment of the analyzed project)
   const systemArchCode = useMemo(() => {
     if (architecture?.deploymentDiagram) return architecture.deploymentDiagram;
-    let code = `graph TB\n`;
-    code += `  %% Estilos para Arquitectura del Sistema\n`;
-    code += `  classDef client fill:#f1f5f9,stroke:#475569,stroke-width:2px,color:#0f172a,font-weight:bold;\n`;
-    code += `  classDef docker fill:#e0f2fe,stroke:#0284c7,stroke-width:2px,color:#0369a1,font-weight:bold;\n`;
-    code += `  classDef service fill:#ffffff,stroke:#2563eb,stroke-width:1.5px,color:#1e3a8a;\n`;
-    code += `  classDef db fill:#ecfdf5,stroke:#059669,stroke-width:2px,color:#065f46;\n`;
-    code += `  classDef ext fill:#faf5ff,stroke:#9333ea,stroke-width:1.5px,color:#581c87;\n\n`;
+    const fe = architecture?.frontend || 'Frontend Web';
+    const be = architecture?.backend || 'Servidor de Aplicación';
+    const db = architecture?.database || 'Servidor de Base de Datos';
 
-    code += `  CLIENT["🌐 Navegador Web del Usuario<br/>(Desktop / Móvil)"]:::client\n\n`;
+    let code = `flowchart TB\n`;
+    code += `  CLIENT["🌐 Dispositivo del Usuario (Navegador Web / Móvil)"]\n\n`;
 
-    code += `  subgraph DOCKER_COMPOSE["ENTORNO DE CONTENEDORES DOCKER"]\n`;
-    code += `    NGINX["Servidor Nginx (Frontend)<br/>Puerto :3001"]:::service\n`;
-    code += `    NODE_API["API REST Node.js / Express<br/>Puerto :8080"]:::service\n`;
-    code += `    POSTGRES_DB[("Base de Datos PostgreSQL 16<br/>Puerto :5433")]:::db\n`;
-    code += `    WHISPER_SVC["Servicio Faster-Whisper Local<br/>Puerto :8001 (CPU int8)"]:::service\n`;
-    code += `    OLLAMA["Motor Ollama (LLM Local Opcional)<br/>Puerto :11434"]:::ext\n`;
+    code += `  subgraph SERVER ["Infraestructura del Sistema Analizado"]\n`;
+    code += `    WEB_SRV["Servidor Web (${fe})"]\n`;
+    code += `    APP_SRV["Servidor Backend (${be})"]\n`;
+    code += `    DB_SRV[("Almacén de Datos (${db})")]\n`;
     code += `  end\n\n`;
 
-    code += `  subgraph EXTERNAL["SERVICIOS EXTERNOS & IA"]\n`;
-    code += `    GEMINI_API["Google Gemini API<br/>(gemini-3.1-flash-lite)"]:::ext\n`;
-    code += `    N8N_ENGINE["Servidor n8n Workflow<br/>(Generación de Mockups)"]:::ext\n`;
-    code += `  end\n\n`;
-
-    code += `  CLIENT -->|"HTTP / SPA :3001"| NGINX\n`;
-    code += `  CLIENT -->|"API REST / JSON :8080"| NODE_API\n`;
-    code += `  NODE_API -->|"TCP / Prisma Client"| POSTGRES_DB\n`;
-    code += `  NODE_API -->|"HTTP / Transcripción Local"| WHISPER_SVC\n`;
-    code += `  NODE_API -->|"HTTPS / Análisis Semántico"| GEMINI_API\n`;
-    code += `  NODE_API -.->|"HTTP / LLM Local"| OLLAMA\n`;
-    code += `  NODE_API -.->|"Webhooks HTTP Mockups"| N8N_ENGINE\n`;
+    code += `  CLIENT -->|Acceso HTTP / HTTPS| WEB_SRV\n`;
+    code += `  WEB_SRV -->|Comunicación Interna / API| APP_SRV\n`;
+    code += `  APP_SRV -->|Transacciones SQL / Driver| DB_SRV\n`;
 
     return code;
-  }, []);
+  }, [architecture]);
 
   const effectiveSoftwareArchCode = storedArchDiagram || softwareArchCode;
   const activeDiagramCode = archType === 'software' ? effectiveSoftwareArchCode : systemArchCode;
 
   const specItems = [
     { label: 'Estilo de Arquitectura', value: architecture?.style || 'Clean Architecture en 3 Capas', icon: 'layers' },
-    { label: 'Frontend', value: architecture?.frontend || 'React 18 + Vite SPA', icon: 'web' },
-    { label: 'Backend', value: architecture?.backend || 'Node.js + Express REST API', icon: 'dns' },
-    { label: 'Base de Datos', value: architecture?.database || 'PostgreSQL 16 + Prisma ORM', icon: 'storage' },
+    { label: 'Frontend', value: architecture?.frontend || 'Capa de Presentación / Cliente Web', icon: 'web' },
+    { label: 'Backend', value: architecture?.backend || 'Capa de Negocio / Servicios API', icon: 'dns' },
+    { label: 'Base de Datos', value: architecture?.database || 'Capa de Persistencia / Almacenamiento', icon: 'storage' },
   ];
 
   return (
@@ -225,10 +208,10 @@ export default function ProjectArchitecture({ project, onProjectUpdated }) {
         <div style={{ display: 'flex', alignItems: 'center', gap: '8px', padding: '8px 14px', background: 'var(--surface-container-low)', borderRadius: 'var(--radius-sm)', border: '1px solid var(--border-default)', marginBottom: '16px', fontSize: '0.8125rem' }}>
           <span className="ms ms-sm" style={{ color: 'var(--primary)' }}>layers</span>
           <span style={{ color: 'var(--on-surface)' }}>
-            <strong>{archType === 'software' ? 'Arquitectura de Software:' : 'Arquitectura del Sistema & Despliegue:'}</strong>{' '}
+            <strong>{archType === 'software' ? 'Arquitectura de Software:' : 'Arquitectura del Sistema:'}</strong>{' '}
             {archType === 'software'
-              ? 'Presentación React SPA ➔ Negocio & ISO 29148 ➔ Datos Prisma & PostgreSQL'
-              : 'Orquestación de Contenedores Docker (Nginx, Node/Express, PostgreSQL, Whisper, Ollama/Gemini)'}
+              ? 'Organización lógica de los componentes del sistema.'
+              : 'Infraestructura, nodos y comunicación donde se ejecuta el sistema.'}
           </span>
         </div>
 
@@ -252,6 +235,7 @@ export default function ProjectArchitecture({ project, onProjectUpdated }) {
             isOutdated={archType === 'software' ? isOutdated : false}
             onRegenerate={archType === 'software' ? () => handleGenerateArch(true) : undefined}
             canGenerate={archType === 'software'}
+            isGenerating={generatingArch}
           />
         )}
       </div>

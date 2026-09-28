@@ -298,7 +298,8 @@ export default function ProjectSummary({ project, onProjectUpdated, onNavigateTo
               { key: 'USE_CASE', label: 'Casos de uso', icon: 'account_tree', tab: 'usecases' },
               { key: 'ER', label: 'Entidad-Relación', icon: 'table_chart', tab: 'modeling' },
               { key: 'CLASS', label: 'Clases (POO)', icon: 'schema', tab: 'modeling' },
-              { key: 'NAVIGATION', label: 'Navegación', icon: 'fork_right', tab: 'navigation' },
+              { key: 'FLOWCHART', label: 'Diagrama de Flujo', icon: 'alt_route', tab: 'navigation' },
+              { key: 'NAVIGATION', label: 'Árbol de Navegación', icon: 'account_tree', tab: 'navigation' },
               { key: 'ARCHITECTURE', label: 'Arquitectura', icon: 'layers', tab: 'architecture' }
             ].map(diag => {
               const info = diagramAvailability?.diagrams?.[diag.key];

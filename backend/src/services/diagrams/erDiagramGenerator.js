@@ -1,4 +1,4 @@
-﻿const { id, token, label, normalize, resolveEntityName } = require('./mermaidSyntax');
+const { id, token, label, normalize, resolveEntityName } = require('./mermaidSyntax');
 
 module.exports = {
   generate(entities = [], relationships = []) {
@@ -22,10 +22,11 @@ module.exports = {
       if (e.attributes && e.attributes.length > 0) {
         lines.push('    ' + key + ' {');
         for (const a of e.attributes) {
-          const attrType = token(a.type || 'string').replace('T_', '');
-          const attrName = token(a.name).replace('T_', '');
+          const rawName = a.name || 'attr';
+          const cleanName = rawName.normalize("NFD").replace(/[\u0300-\u036f]/g, "").replace(/[^a-zA-Z0-9_]/g, '_').toLowerCase() || 'campo';
+          const attrType = token(a.type || 'string').replace(/^T_/, '').toLowerCase() || 'string';
           const pkTag = a.isPk ? ' PK' : (a.isUk ? ' UK' : (a.isFk ? ' FK' : ''));
-          lines.push('        ' + attrType + ' ' + attrName + pkTag);
+          lines.push('        ' + attrType + ' ' + cleanName + pkTag);
         }
         lines.push('    }');
       } else {

@@ -121,120 +121,153 @@ class UseCaseService {
   }
 
   /**
-   * Genera automáticamente los 4 Procesos Fundamentales para el proyecto.
+   * Genera casos de uso consolidados a partir de los requisitos funcionales del proyecto,
+   * agrupando operaciones relacionadas (ej. CRUD sobre la misma entidad) y vinculando
+   * cada caso de uso con su actor canónico correspondiente y requisitos fuente.
    */
   async generateFundamentalUseCases(projectId) {
     const project = await prisma.project.findUnique({
       where: { id: projectId },
       include: {
-        requirements: { where: { type: 'FUNCTIONAL' } },
-        actors: true
+        requirements: { where: { isDeleted: false } },
+        actors: { where: { isDeleted: false } }
       }
     });
 
     if (!project) throw new Error('Proyecto no encontrado');
 
     const actors = project.actors || [];
-    const reqs = project.requirements || [];
-    const mainActor = actors[0] ? (actors[0].codeId || actors[0].name) : 'Usuario';
-    const adminActor = actors.find(a => a.name.toLowerCase().includes('admin'))?.codeId || mainActor;
+    const allReqs = project.requirements || [];
+    const fnReqs = allReqs.filter(r => r.type === 'FUNCTIONAL' || !r.type);
 
-    // Eliminar casos de uso previos si se solicita regeneración
+    if (fnReqs.length === 0) {
+      throw new Error('No hay requisitos funcionales disponibles para generar casos de uso');
+    }
+
+    // Mapeo de actores por ID y canonicalName
+    const actorById = new Map();
+    const actorByCode = new Map();
+    for (const a of actors) {
+      if (a.id) actorById.set(a.id, a);
+      if (a.codeId) actorByCode.set(a.codeId, a);
+    }
+
+    // Helper para identificar el actor principal de un requisito
+    const findActorForReq = (req) => {
+      if (Array.isArray(req.actorIds) && req.actorIds.length > 0) {
+        for (const actRef of req.actorIds) {
+          const found = actorByCode.get(actRef) || actorById.get(actRef);
+          if (found) return found;
+        }
+      }
+      // Inferir por mención en nombre o descripción
+      const text = `${req.name} ${req.description || ''}`.toLowerCase();
+      for (const a of actors) {
+        const aName = a.name.toLowerCase();
+        if (text.includes(aName)) return a;
+      }
+      return actors[0] || null;
+    };
+
+    // Diccionario de entidades / tópicos para agrupar requisitos en casos de uso
+    const extractTopic = (title) => {
+      const lower = title.toLowerCase()
+        .normalize('NFD').replace(/[\u0300-\u036f]/g, '') // Quitar tildes
+        .replace(/^(el|la|los|las|un|una)\s+/i, '')
+        .replace(/^(sistema\s+(debe|puede)\s+(permitir\s+)?)/i, '');
+
+      const keywords = [
+        { topic: 'Vehículos', match: /(vehiculo|auto|coche|automovil|matricula|placa)/i, verb: 'Gestionar' },
+        { topic: 'Citas y Reservas', match: /(cita|reserva|agenda|horario|calendario)/i, verb: 'Gestionar' },
+        { topic: 'Diagnósticos e Inspecciones', match: /(diagnostico|inspeccion|falla|revision)/i, verb: 'Registrar' },
+        { topic: 'Órdenes de Trabajo y Reparaciones', match: /(orden|trabajo|reparacion|mantenimiento|servicio)/i, verb: 'Gestionar' },
+        { topic: 'Repuestos e Inventario', match: /(repuesto|inventario|stock|pieza|material|proveedor)/i, verb: 'Gestionar' },
+        { topic: 'Facturación y Cobros', match: /(factura|pago|cobro|precio|cotizacion|costo|presupuesto)/i, verb: 'Gestionar' },
+        { topic: 'Clientes', match: /(cliente|propietario|titular)/i, verb: 'Gestionar' },
+        { topic: 'Usuarios y Seguridad', match: /(usuario|autentic|login|sesion|rol|perfil|permiso|acceso)/i, verb: 'Gestionar' },
+        { topic: 'Reportes e Indicadores', match: /(reporte|informe|estadistica|indicador|metrica|dashboard)/i, verb: 'Consultar' },
+        { topic: 'Notificaciones y Alertas', match: /(notific|alerta|mensaje|aviso|correo|sms)/i, verb: 'Enviar' }
+      ];
+
+      for (const k of keywords) {
+        if (k.match.test(lower)) {
+          return { topic: k.topic, defaultVerb: k.verb };
+        }
+      }
+
+      // Si no coincide con un topic conocido, usar las 2 palabras clave principales del nombre
+      const words = lower.split(/\s+/).filter(w => w.length > 3 && !['sistema', 'debe', 'puede', 'permitir', 'para', 'como'].includes(w));
+      const fallbackTopic = words.slice(0, 2).map(w => w.charAt(0).toUpperCase() + w.slice(1)).join(' ') || 'Operaciones Generales';
+      return { topic: fallbackTopic, defaultVerb: 'Gestionar' };
+    };
+
+    // Agrupar requisitos por Topic + Actor
+    const clusters = new Map();
+    for (const req of fnReqs) {
+      const { topic, defaultVerb } = extractTopic(req.name);
+      const actor = findActorForReq(req);
+      const actorKey = actor ? (actor.codeId || actor.name) : 'GENERAL';
+      const clusterKey = `${topic}__${actorKey}`;
+
+      if (!clusters.has(clusterKey)) {
+        clusters.set(clusterKey, {
+          topic,
+          defaultVerb,
+          actor,
+          requirements: []
+        });
+      }
+      clusters.get(clusterKey).requirements.push(req);
+    }
+
+    // Conservar use cases existentes si tenían status APPROVED o personalizar si se regenera
+    const existingUseCases = await prisma.useCase.findMany({ where: { projectId } });
+    const approvedMap = new Map();
+    for (const euc of existingUseCases) {
+      if (euc.reviewStatus === 'APPROVED') {
+        approvedMap.set(euc.name.toLowerCase().trim(), true);
+      }
+    }
+
     await prisma.useCase.deleteMany({ where: { projectId } });
 
-    // Definir los 4 Procesos Fundamentales solicitados
-    const fundamentalProcesses = [
-      {
-        codeId: 'CU-01',
-        processType: 'AUTH_ACCESS',
-        name: 'Autenticación, Gestión de Perfiles y Control de Acceso',
-        description: 'Permite a los usuarios y administradores autenticarse de forma segura, gestionar sus credenciales de acceso y validar los permisos de rol correspondientes.',
-        primaryActorId: mainActor,
-        secondaryActorIds: [adminActor].filter(a => a !== mainActor),
-        preconditions: 'El usuario debe poseer una cuenta activa y credenciales registradas.',
-        postconditions: 'El sistema emite una sesión autenticada con token de autorización activo.',
-        mainFlow: [
-          { step: 1, action: 'El usuario ingresa credenciales en el formulario de inicio.' },
-          { step: 2, action: 'El sistema valida las credenciales contra la base de datos.' },
-          { step: 3, action: 'El sistema carga el perfil y redirige al panel correspondiente.' }
-        ],
-        altFlows: [
-          { step: '2a', action: 'Credenciales inválidas: el sistema alerta el error y bloquea tras 5 intentos fallidos.' }
-        ],
-        requirementIds: reqs.filter(r => r.name.toLowerCase().includes('autentic') || r.name.toLowerCase().includes('login') || r.name.toLowerCase().includes('perfil') || r.code === 'RF-01').map(r => r.code)
-      },
-      {
-        codeId: 'CU-02',
-        processType: 'CORE_OPERATION',
-        name: 'Gestión y Operación Central del Dominio de Negocio',
-        description: `Ejecución de los flujos de trabajo principales del sistema (${project.name}): registro, actualización, validación de reglas de negocio y transacciones operativas.`,
-        primaryActorId: mainActor,
-        secondaryActorIds: [],
-        preconditions: 'Sesión activa con permisos operativos asignados.',
-        postconditions: 'La entidad u operación de negocio queda registrada con persistencia transaccional.',
-        mainFlow: [
-          { step: 1, action: 'El actor inicia la transacción operativa principal.' },
-          { step: 2, action: 'El sistema valida la integridad de los datos de entrada según reglas de negocio.' },
-          { step: 3, action: 'El sistema persiste la transacción y emite confirmación de éxito.' }
-        ],
-        altFlows: [
-          { step: '2a', action: 'Datos incompletos o fuera de rango: el sistema resalta los campos con error.' }
-        ],
-        requirementIds: reqs.slice(1, 4).map(r => r.code)
-      },
-      {
-        codeId: 'CU-03',
-        processType: 'REPORT_QUERY',
-        name: 'Consultas Avanzadas, Búsquedas y Generación de Reportes',
-        description: 'Capacidad de realizar filtros multicriterio, consulta de historiales, exportación de métricas y visualización de resúmenes consolidados.',
-        primaryActorId: adminActor,
-        secondaryActorIds: [mainActor].filter(a => a !== adminActor),
-        preconditions: 'Existen registros previos en el almacén de datos del sistema.',
-        postconditions: 'El sistema genera la vista o reporte con los datos consolidados solicitados.',
-        mainFlow: [
-          { step: 1, action: 'El usuario define los parámetros y filtros de consulta.' },
-          { step: 2, action: 'El sistema procesa la consulta indexada en la base de datos.' },
-          { step: 3, action: 'El sistema renderiza el informe y habilita la exportación.' }
-        ],
-        altFlows: [],
-        requirementIds: reqs.filter(r => r.name.toLowerCase().includes('report') || r.name.toLowerCase().includes('consult') || r.name.toLowerCase().includes('historial')).map(r => r.code)
-      },
-      {
-        codeId: 'CU-04',
-        processType: 'NOTIFICATION_AUDIT',
-        name: 'Notificaciones, Alertas y Auditoría de Trazabilidad',
-        description: 'Supervisión de eventos clave, registro de logs de auditoría, avisos automáticos a los interesados y seguimiento de cambios de estado.',
-        primaryActorId: adminActor,
-        secondaryActorIds: [],
-        preconditions: 'Ocurrencia de un evento crítico, cambio de estado o vencimiento de plazo en el sistema.',
-        postconditions: 'Se registra la entrada de auditoría inmutable y se despacha la alerta correspondiente.',
-        mainFlow: [
-          { step: 1, action: 'El sistema detecta el evento o trigger de auditoría.' },
-          { step: 2, action: 'Se almacena el log con sello de tiempo, usuario y detalles de la acción.' },
-          { step: 3, action: 'Se notifica al actor interesado a través del canal establecido.' }
-        ],
-        altFlows: [],
-        requirementIds: reqs.filter(r => r.name.toLowerCase().includes('notif') || r.name.toLowerCase().includes('alert') || r.name.toLowerCase().includes('audit')).map(r => r.code)
-      }
-    ];
-
     const createdList = [];
-    for (const p of fundamentalProcesses) {
+    let ucCounter = 1;
+
+    for (const [, cluster] of clusters) {
+      const codeId = `UC-${String(ucCounter).padStart(2, '0')}`;
+      ucCounter++;
+
+      const reqCodes = cluster.requirements.map(r => r.code || `RF-${r.id}`).filter(Boolean);
+      const primaryActorCode = cluster.actor ? (cluster.actor.codeId || cluster.actor.name) : 'Usuario';
+      const actorName = cluster.actor ? cluster.actor.name : 'Usuario';
+      const ucName = `${cluster.defaultVerb} ${cluster.topic}`;
+
+      const reqNames = cluster.requirements.map(r => r.name).slice(0, 3).join(', ');
+      const description = `Permite al rol ${actorName} llevar a cabo la funcionalidad de ${cluster.topic.toLowerCase()}. Abarca operaciones: ${reqNames}.`;
+
+      const isPreviouslyApproved = approvedMap.has(ucName.toLowerCase().trim());
+
       const created = await prisma.useCase.create({
         data: {
           projectId,
-          codeId: p.codeId,
-          name: p.name,
-          processType: p.processType,
-          description: p.description,
-          primaryActorId: p.primaryActorId,
-          secondaryActorIds: p.secondaryActorIds,
-          preconditions: p.preconditions,
-          postconditions: p.postconditions,
-          mainFlow: p.mainFlow,
-          altFlows: p.altFlows,
-          requirementIds: p.requirementIds,
-          reviewStatus: 'APPROVED',
+          codeId,
+          name: ucName,
+          processType: 'CORE_OPERATION',
+          description,
+          primaryActorId: primaryActorCode,
+          secondaryActorIds: [],
+          preconditions: `El actor ${actorName} debe tener acceso y permisos en el módulo correspondiente.`,
+          postconditions: `Las transacciones de ${cluster.topic.toLowerCase()} quedan registradas de manera consistente.`,
+          mainFlow: cluster.requirements.slice(0, 4).map((r, idx) => ({
+            step: idx + 1,
+            action: `${actorName} ejecuta: ${r.name}`
+          })),
+          altFlows: [
+            { step: '1a', action: 'Datos incompletos o inválidos: el sistema alerta el error antes de persistir.' }
+          ],
+          requirementIds: reqCodes,
+          reviewStatus: isPreviouslyApproved ? 'APPROVED' : 'PENDING',
           isDeleted: false
         }
       });
@@ -275,16 +308,33 @@ class UseCaseService {
       const title = uc.name.replace(/["\\]/g, '').slice(0, 40);
       lines.push(`    ${ucNodeId}(["${uc.codeId}: ${title}"])`);
 
-      const pActor = uc.primaryActorId ? uc.primaryActorId.replace(/[^a-zA-Z0-9_]/g, '_').toUpperCase() : defaultActorId;
-      if (declaredActors.has(pActor)) {
-        lines.push(`    ${pActor} --- ${ucNodeId}`);
+      // Match primary actor by codeId, id, or name
+      const matchedActor = actors.find(a => 
+        a.codeId === uc.primaryActorId ||
+        a.id === uc.primaryActorId ||
+        a.name.toLowerCase() === (uc.primaryActorId || '').toLowerCase()
+      );
+      const pActorNode = matchedActor
+        ? (matchedActor.codeId || matchedActor.name).replace(/[^a-zA-Z0-9_]/g, '_').toUpperCase()
+        : (declaredActors.has(uc.primaryActorId?.replace(/[^a-zA-Z0-9_]/g, '_').toUpperCase()) ? uc.primaryActorId.replace(/[^a-zA-Z0-9_]/g, '_').toUpperCase() : defaultActorId);
+
+      if (declaredActors.has(pActorNode)) {
+        lines.push(`    ${pActorNode} --- ${ucNodeId}`);
       } else {
         lines.push(`    ${defaultActorId} --- ${ucNodeId}`);
       }
 
       if (Array.isArray(uc.secondaryActorIds)) {
         for (const sActor of uc.secondaryActorIds) {
-          const sId = sActor.replace(/[^a-zA-Z0-9_]/g, '_').toUpperCase();
+          const matchedSec = actors.find(a => 
+            a.codeId === sActor ||
+            a.id === sActor ||
+            a.name.toLowerCase() === (sActor || '').toLowerCase()
+          );
+          const sId = matchedSec
+            ? (matchedSec.codeId || matchedSec.name).replace(/[^a-zA-Z0-9_]/g, '_').toUpperCase()
+            : sActor.replace(/[^a-zA-Z0-9_]/g, '_').toUpperCase();
+
           if (declaredActors.has(sId)) {
             lines.push(`    ${sId} -.-> ${ucNodeId}`);
           }

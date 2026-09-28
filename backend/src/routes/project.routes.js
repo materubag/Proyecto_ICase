@@ -33,6 +33,7 @@ router.get('/:id', (req, res, next) => projectController.getById(req, res, next)
 router.post('/', (req, res, next) => projectController.create(req, res, next));
 router.put('/:id', (req, res, next) => projectController.update(req, res, next));
 router.delete('/:id', (req, res, next) => projectController.delete(req, res, next));
+router.post('/:id/restore', (req, res, next) => projectController.restore(req, res, next));
 
 // Nested Project Requirements
 router.get('/:projectId/requirements', (req, res, next) => requirementController.getByProject(req, res, next));
@@ -133,5 +134,8 @@ router.post('/:projectId/mockup', (req, res, next) => mockupController.generate(
 router.get('/:projectId/diagrams/availability', (req, res, next) => diagramController.getAvailability(req, res, next));
 router.get('/:projectId/diagrams/:type', (req, res, next) => diagramController.getDiagram(req, res, next));
 router.post('/:projectId/diagrams/generate', (req, res, next) => diagramController.generate(req, res, next));
+router.post('/:projectId/diagrams/:type/validate', (req, res, next) => diagramController.validate(req, res, next));
+router.put('/:projectId/diagrams/:type', (req, res, next) => diagramController.updateDiagram(req, res, next));
+router.post('/:projectId/diagrams/cross-validate', (req, res, next) => diagramController.crossValidate(req, res, next));
 
 module.exports = router;

@@ -1,132 +1,91 @@
-﻿const { label, normalize } = require('./mermaidSyntax');
-
 /**
- * Genera el diagrama de navegacion (flowchart TD) a partir de:
- * - nodes: NavigationNode[] { id, name, from, to, action, platform, parentId, route }
- * - screens: Screen[] { id, name, route, codeId }
- *
- * Logica:
- * 1. Declarar nodos a partir de las PANTALLAS aprobadas.
- * 2. Construir conexiones a partir de navigationNodes (from -> to).
- * 3. Marcar nodos aislados (sin ninguna conexion).
- * 4. Siempre usar flowchart TD (top-down).
+ * Navigation Tree Generator (Árbol de Navegación)
+ * Models the hierarchical parent-child structure of the application:
+ * Root (Sistema) -> Main Modules / Portals -> Screens -> Detail / Sub-screens.
+ * Does NOT model operational process flows (that belongs in Diagrama de Flujo).
  */
+
+const { toSafeIdentifier, toSafeLabel } = require('./mermaidNormalizer');
+
 module.exports = {
-  generate(nodes = [], screens = []) {
+  /**
+   * Generates a hierarchical navigation tree (flowchart TD).
+   * @param {Array} screens - Array of Screen models { id, name, route, purpose, parentId }
+   * @param {string} projectName - Name of the project
+   */
+  generate(screens = [], projectName = 'Sistema de Información') {
     const lines = ['flowchart TD'];
 
-    // --- Indexar pantallas ---
-    // Mapa: nombre normalizado -> { safeId, displayLabel }
-    const screenMap = new Map();  // normalizedName -> { safeId, displayName }
-    const allSafeIds = new Map(); // safeId -> true (para detectar duplicados)
+    const rootId = 'APP_ROOT';
+    const safeProjectName = toSafeLabel(projectName, 40) || 'Sistema';
+    lines.push(`  ${rootId}["🌐 ${safeProjectName}"]`);
 
-    const makeSafeId = (name) =>
-      'SCR_' + String(name || '')
-        .normalize('NFD').replace(/[\u0300-\u036f]/g, '')
-        .replace(/[^a-zA-Z0-9]/g, '_')
-        .toUpperCase()
-        .slice(0, 40);
-
-    // Priorizar screens aprobadas sobre navigationNodes como fuente de nodos
-    const declaredScreens = screens.length > 0 ? screens : [];
-
-    for (const s of declaredScreens) {
-      const safeId = makeSafeId(s.name);
-      const route = s.route ? ` (${s.route})` : '';
-      const displayLabel = label(s.name) + route;
-      screenMap.set(normalize(s.name), { safeId, displayLabel, name: s.name });
-      allSafeIds.set(safeId, false); // false = aislado por ahora
+    if (!screens || screens.length === 0) {
+      lines.push(`  ${rootId} --> MOD_AUTH["Módulo de Autenticación"]`);
+      lines.push(`  ${rootId} --> MOD_MAIN["Módulo Principal"]`);
+      lines.push(`  MOD_AUTH --> SCR_LOGIN["Inicio de Sesión\\n/login"]`);
+      lines.push(`  MOD_MAIN --> SCR_DASH["Panel Principal / Dashboard\\n/dashboard"]`);
+      return lines.join('\n');
     }
 
-    // Si no hay screens, usar los nombres unicos de from/to en navigationNodes
-    if (declaredScreens.length === 0) {
-      const allNames = new Set();
-      for (const n of nodes) {
-        if (n.from) allNames.add(n.from);
-        if (n.to) allNames.add(n.to);
-        if (n.name) allNames.add(n.name);
+    // Clean and normalize screens
+    const normalizedScreens = screens.map((s, idx) => {
+      const safeId = 'SCR_' + toSafeIdentifier(s.name, `screen_${idx + 1}`).toUpperCase().slice(0, 30);
+      const name = toSafeLabel(s.name, 50);
+      const route = s.route ? `\\n${toSafeLabel(s.route, 30)}` : '';
+      return {
+        id: s.id,
+        safeId,
+        name,
+        route,
+        label: `${name}${route}`,
+        parentId: s.parentId,
+        rawName: s.name.toLowerCase()
+      };
+    });
+
+    // Grouping by modules/functional areas
+    const authScreens = [];
+    const dashboardScreens = [];
+    const domainScreens = [];
+
+    normalizedScreens.forEach(s => {
+      if (s.rawName.includes('login') || s.rawName.includes('autentica') || s.rawName.includes('registro') || s.rawName.includes('acceso')) {
+        authScreens.push(s);
+      } else if (s.rawName.includes('dashboard') || s.rawName.includes('indicador') || s.rawName.includes('resumen') || s.rawName.includes('inicio')) {
+        dashboardScreens.push(s);
+      } else {
+        domainScreens.push(s);
       }
-      for (const name of allNames) {
-        const safeId = makeSafeId(name);
-        const displayLabel = label(name);
-        screenMap.set(normalize(name), { safeId, displayLabel, name });
-        allSafeIds.set(safeId, false);
-      }
+    });
+
+    // 1. Auth Branch (Portal de Acceso)
+    if (authScreens.length > 0) {
+      const authModId = 'MOD_AUTH';
+      lines.push(`  ${rootId} --> ${authModId}["Portal de Acceso"]`);
+      authScreens.forEach(s => {
+        lines.push(`  ${authModId} --> ${s.safeId}["${s.label}"]`);
+      });
     }
 
-    // --- Resolver nombre -> safeId (con tolerancia singular/plural) ---
-    const resolveName = (rawName) => {
-      if (!rawName) return null;
-      const key = normalize(rawName);
-      if (screenMap.has(key)) return screenMap.get(key).safeId;
-      // Intento sin 'S' final
-      if (key.endsWith('S') && screenMap.has(key.slice(0, -1)))
-        return screenMap.get(key.slice(0, -1)).safeId;
-      // Intento con 'S'
-      if (screenMap.has(key + 'S'))
-        return screenMap.get(key + 'S').safeId;
-      return null;
-    };
-
-    // --- Emitir declaracion de nodos ---
-    for (const [, { safeId, displayLabel }] of screenMap) {
-      lines.push('    ' + safeId + '["' + displayLabel + '"]');
+    // 2. Main Workspace / Dashboard
+    let mainHubId = rootId;
+    if (dashboardScreens.length > 0) {
+      const dash = dashboardScreens[0];
+      lines.push(`  ${rootId} --> ${dash.safeId}["${dash.label}"]`);
+      mainHubId = dash.safeId;
+      // Any extra dashboard screens
+      dashboardScreens.slice(1).forEach(s => {
+        lines.push(`  ${dash.safeId} --> ${s.safeId}["${s.label}"]`);
+      });
     }
 
-    // --- Emitir conexiones desde navigationNodes ---
-    const addedEdges = new Set();
-    let connectionCount = 0;
-
-    for (const n of nodes) {
-      // Conexion from -> to
-      if (n.from && n.to) {
-        const fromId = resolveName(n.from);
-        const toId = resolveName(n.to);
-        if (fromId && toId && fromId !== toId) {
-          const edgeKey = fromId + '->' + toId;
-          if (!addedEdges.has(edgeKey)) {
-            addedEdges.add(edgeKey);
-            const actionLabel = n.action ? label(n.action) : '';
-            if (actionLabel) {
-              lines.push('    ' + fromId + ' -->|"' + actionLabel + '"| ' + toId);
-            } else {
-              lines.push('    ' + fromId + ' --> ' + toId);
-            }
-            // Marcar ambos como conectados
-            allSafeIds.set(fromId, true);
-            allSafeIds.set(toId, true);
-            connectionCount++;
-          }
-        }
-      }
-      // Conexion parentId -> this (si el nodo tiene parentId y nombre)
-      if (n.parentId && n.name) {
-        const parentId = resolveName(n.parentId) || resolveName(n.from);
-        const childId = resolveName(n.name) || resolveName(n.to);
-        if (parentId && childId && parentId !== childId) {
-          const edgeKey = parentId + '->' + childId;
-          if (!addedEdges.has(edgeKey)) {
-            addedEdges.add(edgeKey);
-            lines.push('    ' + parentId + ' --> ' + childId);
-            allSafeIds.set(parentId, true);
-            allSafeIds.set(childId, true);
-            connectionCount++;
-          }
-        }
-      }
-    }
-
-    // --- Agregar estilos para nodos aislados ---
-    const isolatedNodes = [...allSafeIds.entries()]
-      .filter(([, connected]) => !connected)
-      .map(([safeId]) => safeId);
-
-    if (isolatedNodes.length > 0) {
-      lines.push('');
-      lines.push('    %% Pantallas sin relaciones de navegacion detectadas: ' + isolatedNodes.length);
-      for (const iso of isolatedNodes) {
-        lines.push('    style ' + iso + ' fill:#f0f0f0,stroke:#aaa,stroke-dasharray:4');
-      }
+    // 3. Domain Modules and Screens
+    // Group remaining domain screens by logical cluster or connect them hierarchically
+    if (domainScreens.length > 0) {
+      domainScreens.forEach(s => {
+        lines.push(`  ${mainHubId} --> ${s.safeId}["${s.label}"]`);
+      });
     }
 
     return lines.join('\n');

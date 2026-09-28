@@ -2,94 +2,85 @@ const { id, label } = require('./mermaidSyntax');
 
 /**
  * Generador determinista de diagramas de Arquitectura de Software y Despliegue del Sistema.
+ * REGLA FUNDAMENTAL: Debe modelar EXCLUSIVAMENTE el sistema analizado (targetProjectId),
+ * sin contaminar jamás el diagrama con la infraestructura o herramientas de ICASE Studio
+ * (Ollama, Whisper, Gemini, n8n, puertos internos de Docker de ICASE).
  */
 
 class ArchitectureGenerator {
   /**
    * Genera el diagrama de Arquitectura de Software (Capas lógicas y componentes).
    */
-  generateSoftwareArchitecture(architecture = {}, components = []) {
-    const style = architecture.style || 'Clean Architecture / 3 Capas';
+  generateSoftwareArchitecture(architecture = {}, technologies = {}) {
     const lines = ['flowchart TD'];
 
-    lines.push(`    subgraph PRESENTATION ["Capas de Presentación"]`);
-    lines.push(`        UI["Interfaz de Usuario (SPA / Vistas React)"]`);
-    lines.push(`        CONTROLLERS["Controladores REST API / Routers"]`);
+    const feTech = architecture.frontend || (technologies.frontend) || 'Interfaz Web / Vistas del Sistema';
+    const beTech = architecture.backend || (technologies.backend) || 'Servicios de Negocio / API REST';
+    const dbTech = architecture.database || (technologies.database) || 'Base de Datos Relacional';
+
+    lines.push(`    subgraph PRESENTATION ["1. Capa de Presentación (Frontend)"]`);
+    lines.push(`        UI["${label(feTech)}"]`);
+    lines.push(`        ROUTER["Enrutamiento y Control de Navegación"]`);
     lines.push(`    end`);
 
-    lines.push(`    subgraph APPLICATION ["Capa de Lógica y Aplicación"]`);
-    lines.push(`        AUTH_SRV["Servicio de Autenticación y Autorización"]`);
-    lines.push(`        CORE_SRV["Servicio de Reglas de Negocio / Casos de Uso"]`);
-    lines.push(`        ORCHESTRATOR["Orquestador de Procesos"]`);
+    lines.push(`    subgraph DOMAIN ["2. Capa de Negocio y Dominio (Backend)"]`);
+    lines.push(`        API["${label(beTech)}"]`);
+    lines.push(`        RULES["Lógica de Negocio y Reglas Operativas"]`);
     lines.push(`    end`);
 
-    lines.push(`    subgraph DOMAIN ["Capa de Dominio y Modelos"]`);
-    lines.push(`        ENTITIES["Entidades del Dominio / Validadores"]`);
-    lines.push(`        CONTRACTS["Interfaces y Contratos de Servicio"]`);
+    lines.push(`    subgraph DATA ["3. Capa de Persistencia y Datos"]`);
+    lines.push(`        DB[("${label(dbTech)}")]`);
     lines.push(`    end`);
 
-    lines.push(`    subgraph INFRASTRUCTURE ["Capa de Datos e Infraestructura"]`);
-    lines.push(`        ORM["Prisma ORM / Mapeador Relacional"]`);
-    lines.push(`        N8N_ADAPTER["Adaptador Webhooks n8n (Audio/Flujos)"]`);
-    lines.push(`        AI_ADAPTER["Proveedor de IA (gpt-5.4-nano / LLM)"]`);
-    lines.push(`    end`);
-
-    lines.push(`    UI -->|Peticiones HTTP JSON| CONTROLLERS`);
-    lines.push(`    CONTROLLERS -->|Invoca| CORE_SRV`);
-    lines.push(`    CONTROLLERS -->|Valida| AUTH_SRV`);
-    lines.push(`    CORE_SRV -->|Aplica reglas| ENTITIES`);
-    lines.push(`    CORE_SRV -->|Persistencia| ORM`);
-    lines.push(`    CORE_SRV -->|Automatización| N8N_ADAPTER`);
-    lines.push(`    ORCHESTRATOR -->|Consultas semánticas| AI_ADAPTER`);
+    lines.push(`    UI -->|Peticiones HTTP / Vistas| ROUTER`);
+    lines.push(`    ROUTER -->|Solicitudes JSON / REST| API`);
+    lines.push(`    API -->|Ejecuta operaciones| RULES`);
+    lines.push(`    RULES -->|Consultas y Persistencia| DB`);
 
     return lines.join('\n');
   }
 
   /**
    * Genera el diagrama de Arquitectura del Sistema / Despliegue Físico.
+   * Representa los nodos de ejecución reales del proyecto analizado.
    */
-  generateDeploymentArchitecture(technologies = {}) {
+  generateDeploymentArchitecture(architecture = {}, technologies = {}) {
     const lines = ['flowchart TB'];
 
-    lines.push(`    subgraph CLIENTS ["Dispositivos Clientes"]`);
-    lines.push(`        BROWSER["🖥️ Navegador Web / Mobile Client (HTTPS)"]`);
+    const feTech = architecture.frontend || 'Frontend Web';
+    const beTech = architecture.backend || 'Servidor de Aplicaciones';
+    const dbTech = architecture.database || 'Servidor de Base de Datos';
+    const isDocker = /docker/i.test(architecture.deployment || '') || /docker/i.test(JSON.stringify(technologies || ''));
+
+    lines.push(`    subgraph CLIENT_LAYER ["Nodos Clientes (Dispositivos)"]`);
+    lines.push(`        CLIENT["🖥️ Navegador Web / Dispositivo del Usuario"]`);
     lines.push(`    end`);
 
-    lines.push(`    subgraph DOCKER_HOST ["Servidor de Contenedores Docker (ICASE Infraestructura)"]`);
-    lines.push(`        subgraph FRONTEND_CONTAINER ["Contenedor Frontend (icase_frontend)"]`);
-    lines.push(`            NGINX["Servidor Nginx (Puerto 3001:80)"]`);
-    lines.push(`            STATIC_FILES["Bundle React / Vite SPA"]`);
-    lines.push(`        end`);
-
-    lines.push(`        subgraph BACKEND_CONTAINER ["Contenedor Backend (icase_backend)"]`);
-    lines.push(`            NODE["Node.js 20 Express API (Puerto 8080)"]`);
-            lines.push(`            PRISMA["Prisma Client Engine"]`);
-    lines.push(`        end`);
-
-    lines.push(`        subgraph DB_CONTAINER ["Contenedor Base de Datos (icase_postgres)"]`);
-    lines.push(`            PG["PostgreSQL 16 Alpine (Puerto 5433:5432)"]`);
-    lines.push(`            VOLUME[("Volumen postgres_data")]`);
-    lines.push(`        end`);
-
-    lines.push(`        subgraph OLLAMA_CONTAINER ["Contenedor LLM Local (icase_ollama)"]`);
-    lines.push(`            OLLAMA["Motor Ollama LLM (Puerto 11434)"]`);
-    lines.push(`        end`);
-    lines.push(`    end`);
-
-    lines.push(`    subgraph EXTERNAL_SERVICES ["Servicios Externos / Integración"]`);
-    lines.push(`        N8N["⚡ Plataforma n8n (Webhooks de Audio y Procesos)"]`);
-    lines.push(`        OPENAI["🤖 OpenAI API (gpt-5.4-nano / gpt-4o)"]`);
-    lines.push(`    end`);
-
-    lines.push(`    BROWSER -->|HTTP 3001| NGINX`);
-    lines.push(`    NGINX -.-> STATIC_FILES`);
-    lines.push(`    BROWSER -->|REST API 8080| NODE`);
-    lines.push(`    NODE --> PRISMA`);
-    lines.push(`    PRISMA -->|TCP 5432 / SQL| PG`);
-    lines.push(`    PG --- VOLUME`);
-    lines.push(`    NODE -.->|HTTP 11434| OLLAMA`);
-    lines.push(`    NODE -->|Webhooks HTTP/JSON| N8N`);
-    lines.push(`    NODE -->|HTTPS Tokens Optimizados| OPENAI`);
+    if (isDocker) {
+      lines.push(`    subgraph HOST ["Servidor de Alojamiento (Entorno Contenerizado)"]`);
+      lines.push(`        subgraph FE_BOX ["Contenedor Web"]`);
+      lines.push(`            APP_FE["${label(feTech)}"]`);
+      lines.push(`        end`);
+      lines.push(`        subgraph BE_BOX ["Contenedor de Backend / Servicios"]`);
+      lines.push(`            APP_BE["${label(beTech)}"]`);
+      lines.push(`        end`);
+      lines.push(`        subgraph DB_BOX ["Contenedor de Base de Datos"]`);
+      lines.push(`            APP_DB[("${label(dbTech)}")]`);
+      lines.push(`        end`);
+      lines.push(`    end`);
+      lines.push(`    CLIENT -->|HTTPS / Web| APP_FE`);
+      lines.push(`    APP_FE -->|REST API / TCP| APP_BE`);
+      lines.push(`    APP_BE -->|Conexión SQL / Driver| APP_DB`);
+    } else {
+      lines.push(`    subgraph SERVER_LAYER ["Servidor del Sistema"]`);
+      lines.push(`        WEB_SRV["Servidor Web: ${label(feTech)}"]`);
+      lines.push(`        APP_SRV["Servidor de Aplicación: ${label(beTech)}"]`);
+      lines.push(`        DB_SRV[("Almacenamiento: ${label(dbTech)}")]`);
+      lines.push(`    end`);
+      lines.push(`    CLIENT -->|Acceso HTTP / HTTPS| WEB_SRV`);
+      lines.push(`    WEB_SRV -->|Comunicación Interna / API| APP_SRV`);
+      lines.push(`    APP_SRV -->|Consultas y Transacciones| DB_SRV`);
+    }
 
     return lines.join('\n');
   }
@@ -98,20 +89,73 @@ class ArchitectureGenerator {
    * Método de generación con soporte a componentes y compatibilidad.
    */
   generate(architecture = {}, technologies = {}) {
-    if (architecture.components || architecture.connections) {
+    if (architecture.components && architecture.components.length > 0) {
       const lines = ['flowchart TD'];
-      const components = architecture.components || [];
-      const names = new Set(components.map(c => c.name));
-      for (const c of components) lines.push('    ' + id(c.name) + '["' + label(c.name) + (c.layer ? ' ' + label(c.layer) : '') + '"]');
-      for (const r of architecture.connections || []) {
-        if (names.has(r.from) && names.has(r.to) && r.evidence) lines.push('    ' + id(r.from) + ' -->|"' + label(r.type || '') + '"| ' + id(r.to));
+      const layers = {};
+      const noLayer = [];
+
+      for (const c of architecture.components) {
+        const rawLayer = (c.layer || '').toUpperCase().trim();
+        let groupKey = 'OTHER';
+        if (rawLayer.includes('PRESENT') || rawLayer.includes('UI') || rawLayer.includes('VIEW')) {
+          groupKey = 'PRESENTATION';
+        } else if (rawLayer.includes('APP') || rawLayer.includes('LOGIC') || rawLayer.includes('DOMAIN') || rawLayer.includes('CORE') || rawLayer.includes('SERVICE')) {
+          groupKey = 'DOMAIN';
+        } else if (rawLayer.includes('DATA') || rawLayer.includes('PERSIST') || rawLayer.includes('DB') || rawLayer.includes('INFRA')) {
+          groupKey = 'DATA';
+        }
+
+        if (c.layer) {
+          if (!layers[groupKey]) layers[groupKey] = [];
+          layers[groupKey].push(c);
+        } else {
+          noLayer.push(c);
+        }
       }
+
+      // Order layers logically: PRESENTATION -> DOMAIN -> DATA -> OTHER
+      const layerOrder = ['PRESENTATION', 'DOMAIN', 'DATA', 'OTHER'];
+      for (const key of layerOrder) {
+        if (layers[key] && layers[key].length > 0) {
+          lines.push(`    subgraph ${key} ["Capa de ${key === 'PRESENTATION' ? 'Presentación' : key === 'DOMAIN' ? 'Dominio / Aplicación' : key === 'DATA' ? 'Persistencia y Datos' : 'Servicios'}"]`);
+          for (const c of layers[key]) {
+            lines.push(`        ${id(c.name)}["${label(c.name)}"]`);
+          }
+          lines.push(`    end`);
+        }
+      }
+
+      for (const c of noLayer) {
+        lines.push(`    ${id(c.name)}["${label(c.name)}"]`);
+      }
+
+      const names = new Set(architecture.components.map(c => c.name));
+      for (const r of architecture.connections || []) {
+        if (names.has(r.from) && names.has(r.to)) {
+          lines.push(`    ${id(r.from)} -->|"${label(r.type || '')}"| ${id(r.to)}`);
+        }
+      }
+
+      // Sequential layer connection if no explicit connections
+      if ((!architecture.connections || architecture.connections.length === 0) && layerOrder.length > 1) {
+        const activeGroups = layerOrder.filter(k => layers[k] && layers[k].length > 0);
+        for (let i = 0; i < activeGroups.length - 1; i++) {
+          const fromNode = layers[activeGroups[i]][0];
+          const toNode = layers[activeGroups[i+1]][0];
+          if (fromNode && toNode) {
+            lines.push(`    ${id(fromNode.name)} --> ${id(toNode.name)}`);
+          }
+        }
+      }
+
       return lines.join('\n');
     }
-    if (architecture.style) {
-      return this.generateSoftwareArchitecture(architecture);
+
+    if (architecture.kind === 'SYSTEM_ARCHITECTURE' || architecture.type === 'ARCHITECTURE_SYSTEM') {
+      return this.generateDeploymentArchitecture(architecture, technologies);
     }
-    return 'flowchart TD';
+
+    return this.generateSoftwareArchitecture(architecture, technologies);
   }
 }
 

@@ -15,8 +15,8 @@ export default function ProjectActors({ project, onProjectUpdated }) {
   const [description, setDescription] = useState('');
   const [saving, setSaving] = useState(false);
 
-  // Diagram states
-  const [diagramModalOpen, setDiagramModalOpen] = useState(false);
+  // View mode and Diagram states
+  const [viewMode, setViewMode] = useState('list'); // 'list' | 'diagram'
   const [diagramCode, setDiagramCode] = useState('');
   const [diagramLoading, setDiagramLoading] = useState(false);
   const [diagramGenerating, setDiagramGenerating] = useState(false);
@@ -111,7 +111,7 @@ export default function ProjectActors({ project, onProjectUpdated }) {
   }
 
   async function handleOpenUseCaseDiagramFlow() {
-    setDiagramModalOpen(true);
+    setViewMode('diagram');
     setDiagramError(null);
     setDiagramLoading(true);
     try {
@@ -121,8 +121,9 @@ export default function ProjectActors({ project, onProjectUpdated }) {
 
       // 2. Check if already generated
       const diagData = await diagramsApi.getDiagram(project.id, 'USE_CASE');
-      if (diagData?.artifact?.mermaidCode) {
-        setDiagramCode(diagData.artifact.mermaidCode);
+      const storedCode = diagData?.code || diagData?.mermaidCode || diagData?.artifact?.mermaidCode;
+      if (storedCode) {
+        setDiagramCode(storedCode);
         setIsOutdated(!!diagData.isOutdated);
         setDiagramStatus('ready');
         setDiagramLoading(false);
@@ -149,17 +150,21 @@ export default function ProjectActors({ project, onProjectUpdated }) {
   }
 
   async function handleGenerateUseCase(force = false) {
+    setViewMode('diagram');
     setDiagramGenerating(true);
     setDiagramError(null);
     try {
-      const res = await diagramsApi.generateDiagram(project.id, 'USE_CASE', { force });
-      if (res.alreadyExists && !force) {
+      const isForce = typeof force === 'object' ? Boolean(force.force) : Boolean(force);
+      const res = await diagramsApi.generateDiagram(project.id, 'USE_CASE', isForce);
+      if (res.alreadyExists && !isForce) {
         const diagData = await diagramsApi.getDiagram(project.id, 'USE_CASE');
-        setDiagramCode(diagData?.artifact?.mermaidCode || '');
+        const code = diagData?.code || diagData?.mermaidCode || diagData?.artifact?.mermaidCode || '';
+        setDiagramCode(code);
         setIsOutdated(false);
         setDiagramStatus('ready');
       } else {
-        setDiagramCode(res.diagram?.mermaidCode || res.mermaidCode || '');
+        const code = res?.code || res?.mermaidCode || res?.diagram?.mermaidCode || res?.artifact?.mermaidCode || '';
+        setDiagramCode(code);
         setIsOutdated(false);
         setDiagramStatus('ready');
       }
@@ -185,24 +190,37 @@ export default function ProjectActors({ project, onProjectUpdated }) {
       {/* Command bar */}
       <div className="full-page-header">
         <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
-          <h2 className="page-title">Actores del Sistema</h2>
+          <h2 className="page-title">
+            {viewMode === 'diagram' ? 'Diagrama de Casos de Uso y Actores' : 'Actores del Sistema'}
+          </h2>
           <div className="vdivider" />
-          <span style={{ fontSize: '0.8125rem', color: 'var(--secondary)' }}>
-            {actors.length} actor{actors.length !== 1 ? 'es' : ''} registrado{actors.length !== 1 ? 's' : ''}
-          </span>
-          {pendingActorsCount > 0 && (
-            <span className="badge badge-warning" style={{ fontSize: '0.75rem' }}>
-              {pendingActorsCount} pendiente{pendingActorsCount !== 1 ? 's' : ''} de aprobación
+          {viewMode === 'diagram' ? (
+            <span style={{ fontSize: '0.8125rem', color: 'var(--secondary)' }}>
+              Diagrama interactivo generado a partir de actores canónicos y requisitos funcionales
             </span>
+          ) : (
+            <>
+              <span style={{ fontSize: '0.8125rem', color: 'var(--secondary)' }}>
+                {actors.length} actor{actors.length !== 1 ? 'es' : ''} registrado{actors.length !== 1 ? 's' : ''}
+              </span>
+              {pendingActorsCount > 0 && (
+                <span className="badge badge-warning" style={{ fontSize: '0.75rem' }}>
+                  {pendingActorsCount} pendiente{pendingActorsCount !== 1 ? 's' : ''} de aprobación
+                </span>
+              )}
+            </>
           )}
         </div>
-        <div className="page-actions">
-          <div className="search-bar" style={{ width: '220px' }}>
-            <span className="ms">search</span>
-            <input type="text" placeholder="Buscar actores..." value={search} onChange={e => setSearch(e.target.value)} />
-          </div>
 
-          {pendingActorsCount > 0 && (
+        <div className="page-actions">
+          {viewMode === 'list' && (
+            <div className="search-bar" style={{ width: '200px' }}>
+              <span className="ms">search</span>
+              <input type="text" placeholder="Buscar actores..." value={search} onChange={e => setSearch(e.target.value)} />
+            </div>
+          )}
+
+          {viewMode === 'list' && pendingActorsCount > 0 && (
             <button
               className="btn btn-outline btn-sm"
               onClick={handleApproveAllActors}
@@ -214,23 +232,137 @@ export default function ProjectActors({ project, onProjectUpdated }) {
             </button>
           )}
 
+          <div className="view-toggle">
+            <button
+              className={`view-toggle-btn ${viewMode === 'list' ? 'active' : ''}`}
+              onClick={() => setViewMode('list')}
+              title="Ver lista y detalle de actores"
+            >
+              <span className="ms ms-xs">people</span>
+              <span>Actores</span>
+            </button>
+            <button
+              className={`view-toggle-btn ${viewMode === 'diagram' ? 'active' : ''}`}
+              onClick={handleOpenUseCaseDiagramFlow}
+              title="Ver diagrama de casos de uso"
+            >
+              <span className="ms ms-xs">account_tree</span>
+              <span>Diagrama</span>
+            </button>
+          </div>
+
+          {viewMode === 'list' ? (
+            <button
+              className="btn btn-outline btn-sm"
+              onClick={handleOpenUseCaseDiagramFlow}
+              disabled={diagramLoading || diagramGenerating}
+              title="Ver diagrama de casos de uso en este espacio"
+            >
+              <span className="ms ms-xs">visibility</span>
+              <span>Ver diagrama</span>
+            </button>
+          ) : (
+            <button
+              className="btn btn-outline btn-sm"
+              onClick={() => setViewMode('list')}
+              title="Volver a la lista de actores"
+            >
+              <span className="ms ms-xs">arrow_back</span>
+              <span>Ver actores</span>
+            </button>
+          )}
+
           <button
             className="btn btn-outline btn-sm"
-            onClick={handleOpenUseCaseDiagramFlow}
-            title="Generar diagrama de casos de uso a partir de actores y requisitos aprobados"
+            onClick={() => handleGenerateUseCase(true)}
+            disabled={diagramLoading || diagramGenerating}
+            title="Regenerar el diagrama de casos de uso con IA"
           >
-            <span className="ms ms-sm">account_tree</span>
-            <span>Generar casos de uso</span>
+            <span className={`ms ms-xs ${diagramGenerating ? 'spin' : ''}`}>
+              {diagramGenerating ? 'autorenew' : 'auto_awesome'}
+            </span>
+            <span>{diagramGenerating ? 'Regenerando...' : 'Regenerar diagrama'}</span>
           </button>
-          <button className="btn btn-primary btn-sm" onClick={openNewModal}>
-            <span className="ms ms-sm">person_add</span>
-            <span>Registrar actor</span>
-          </button>
+
+          {viewMode === 'list' && (
+            <button className="btn btn-primary btn-sm" onClick={openNewModal}>
+              <span className="ms ms-sm">person_add</span>
+              <span>Registrar actor</span>
+            </button>
+          )}
         </div>
       </div>
 
-      {/* Split view */}
-      <div className="split-view">
+      {viewMode === 'diagram' ? (
+        <div style={{ flex: 1, minHeight: 0, display: 'flex', flexDirection: 'column', background: 'var(--surface)' }}>
+          {diagramLoading || diagramGenerating ? (
+            <div style={{ flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', padding: '48px 16px' }}>
+              <span className="ms ms-xl spin" style={{ color: 'var(--primary)', fontSize: '40px' }}>autorenew</span>
+              <h4 style={{ margin: '16px 0 8px', fontSize: '1rem', fontWeight: 600 }}>
+                {diagramGenerating ? 'Generando diagrama de casos de uso con Gemini...' : 'Cargando información del diagrama...'}
+              </h4>
+              <p style={{ color: 'var(--secondary)', fontSize: '0.8125rem' }}>
+                Preparando contexto estructurado de actores y requisitos funcionales...
+              </p>
+            </div>
+          ) : diagramStatus === 'insufficient' ? (
+            <div style={{ padding: '24px' }}>
+              <div className="alert alert-warning" style={{ display: 'flex', flexDirection: 'column', gap: '10px', maxWidth: '600px', margin: '0 auto' }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '8px', fontWeight: 600 }}>
+                  <span className="ms">warning</span>
+                  <span>No se puede generar el diagrama de casos de uso</span>
+                </div>
+                <p style={{ margin: 0, fontSize: '0.875rem' }}>Falta información esencial en el proyecto:</p>
+                <ul style={{ margin: '0 0 0 16px', padding: 0, fontSize: '0.8125rem' }}>
+                  {missingDetails.map((m, idx) => (
+                    <li key={idx} style={{ marginTop: '4px' }}>{m}</li>
+                  ))}
+                </ul>
+                <div style={{ marginTop: '12px' }}>
+                  <button className="btn btn-outline btn-sm" onClick={() => setViewMode('list')}>
+                    <span className="ms ms-xs">arrow_back</span>
+                    <span>Volver a Actores</span>
+                  </button>
+                </div>
+              </div>
+            </div>
+          ) : diagramStatus === 'error' ? (
+            <div style={{ padding: '24px' }}>
+              <div className="alert alert-error" style={{ display: 'flex', flexDirection: 'column', gap: '10px', maxWidth: '600px', margin: '0 auto' }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '8px', fontWeight: 600 }}>
+                  <span className="ms">error</span>
+                  <span>Error al generar el diagrama</span>
+                </div>
+                <p style={{ margin: 0, fontSize: '0.875rem' }}>{diagramError}</p>
+                <div style={{ display: 'flex', gap: '8px', marginTop: '12px' }}>
+                  <button className="btn btn-primary btn-sm" onClick={() => handleGenerateUseCase(true)}>
+                    <span className="ms ms-xs">refresh</span>
+                    <span>Reintentar generación</span>
+                  </button>
+                  <button className="btn btn-outline btn-sm" onClick={() => setViewMode('list')}>
+                    <span>Volver a Actores</span>
+                  </button>
+                </div>
+              </div>
+            </div>
+          ) : (
+            <div style={{ flex: 1, minHeight: 0, display: 'flex', flexDirection: 'column' }}>
+              <DiagramViewport
+                code={diagramCode}
+                type="flowchart"
+                title="Casos de Uso — Vista del Sistema"
+                minHeight="100%"
+                isOutdated={isOutdated}
+                onRegenerate={() => handleGenerateUseCase(true)}
+                canGenerate={true}
+                isGenerating={diagramGenerating}
+              />
+            </div>
+          )}
+        </div>
+      ) : (
+        /* Split view */
+        <div className="split-view">
         {/* LEFT: table */}
         <section className="split-left">
           <div className="table-header-bar" style={{ gridTemplateColumns: '80px 1fr 90px 80px 80px' }}>
@@ -423,8 +555,9 @@ export default function ProjectActors({ project, onProjectUpdated }) {
           )}
         </aside>
       </div>
+    )}
 
-      {/* Modal */}
+      {/* Modal Actor */}
       <Modal
         isOpen={modalOpen}
         onClose={() => setModalOpen(false)}
@@ -454,79 +587,6 @@ export default function ProjectActors({ project, onProjectUpdated }) {
             <textarea className="form-control" rows={3} placeholder="Describa el rol y las responsabilidades del actor..." value={description} onChange={e => setDescription(e.target.value)} />
           </div>
         </form>
-      </Modal>
-
-      {/* Modal Diagrama de Casos de Uso */}
-      <Modal
-        isOpen={diagramModalOpen}
-        onClose={() => setDiagramModalOpen(false)}
-        title="Diagrama de Casos de Uso (UML)"
-        maxWidth="1100px"
-        footer={(
-          <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '8px', width: '100%' }}>
-            <button className="btn btn-outline btn-md" onClick={() => setDiagramModalOpen(false)}>
-              Cerrar
-            </button>
-          </div>
-        )}
-      >
-        {diagramLoading || diagramGenerating ? (
-          <div style={{ textAlign: 'center', padding: '48px 16px' }}>
-            <span className="ms ms-xl spin" style={{ color: 'var(--primary)', fontSize: '40px' }}>autorenew</span>
-            <h4 style={{ margin: '16px 0 8px', fontSize: '1rem', fontWeight: 600 }}>
-              {diagramGenerating ? 'Generando diagrama de casos de uso con Gemini...' : 'Cargando información del diagrama...'}
-            </h4>
-            <p style={{ color: 'var(--secondary)', fontSize: '0.8125rem' }}>
-              Preparando contexto estructurado de actores y requisitos funcionales...
-            </p>
-          </div>
-        ) : diagramStatus === 'insufficient' ? (
-          <div style={{ padding: '24px 16px' }}>
-            <div className="alert alert-warning" style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
-              <div style={{ display: 'flex', alignItems: 'center', gap: '8px', fontWeight: 600 }}>
-                <span className="ms">warning</span>
-                <span>No se puede generar el diagrama de casos de uso</span>
-              </div>
-              <p style={{ margin: 0, fontSize: '0.875rem' }}>Falta información esencial en el proyecto:</p>
-              <ul style={{ margin: '0 0 0 16px', padding: 0, fontSize: '0.8125rem' }}>
-                {missingDetails.map((m, idx) => (
-                  <li key={idx} style={{ marginTop: '4px' }}>{m}</li>
-                ))}
-              </ul>
-              <p style={{ margin: '8px 0 0', fontSize: '0.75rem', color: 'var(--secondary)' }}>
-                Agrega o aprueba actores y requisitos antes de solicitar la generación.
-              </p>
-            </div>
-          </div>
-        ) : diagramStatus === 'error' ? (
-          <div style={{ padding: '24px 16px' }}>
-            <div className="alert alert-error" style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
-              <div style={{ display: 'flex', alignItems: 'center', gap: '8px', fontWeight: 600 }}>
-                <span className="ms">error</span>
-                <span>Error al generar el diagrama</span>
-              </div>
-              <p style={{ margin: 0, fontSize: '0.875rem' }}>{diagramError}</p>
-              <div style={{ marginTop: '12px' }}>
-                <button className="btn btn-primary btn-sm" onClick={() => handleGenerateUseCase(true)}>
-                  <span className="ms ms-xs">refresh</span>
-                  <span>Reintentar generación</span>
-                </button>
-              </div>
-            </div>
-          </div>
-        ) : (
-          <div style={{ minHeight: '520px' }}>
-            <DiagramViewport
-              code={diagramCode}
-              type="flowchart"
-              title="Casos de Uso — Vista del Sistema"
-              minHeight="500px"
-              isOutdated={isOutdated}
-              onRegenerate={() => handleGenerateUseCase(true)}
-              canGenerate={true}
-            />
-          </div>
-        )}
       </Modal>
     </div>
   );

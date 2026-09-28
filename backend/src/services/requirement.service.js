@@ -3,6 +3,13 @@ const versionHistoryService = require('./versionHistory.service');
 
 class RequirementService {
   async getRequirementsByProject(projectId) {
+    try {
+      const projectConsolidationService = require('./analysis/projectConsolidationService');
+      await projectConsolidationService.consolidateProject(projectId);
+    } catch (e) {
+      console.warn('[RequirementService] Warning during project consolidation:', e.message);
+    }
+
     return await prisma.requirement.findMany({
       where: { projectId, isDeleted: false },
       orderBy: { code: 'asc' }
@@ -67,6 +74,16 @@ class RequirementService {
     const oldCode = existing.code;
     const newCode = code ? code.trim().toUpperCase() : oldCode;
 
+    // Regla: Si se edita un requisito aprobado, pasa a NEEDS_REVIEW si no se especifica estado explícito
+    let nextStatus = status !== undefined ? status : existing.status;
+    if (existing.status === 'APPROVED' && status === undefined) {
+      const nameChanged = name !== undefined && name.trim() !== existing.name;
+      const descChanged = description !== undefined && description.trim() !== existing.description;
+      if (nameChanged || descChanged) {
+        nextStatus = 'NEEDS_REVIEW';
+      }
+    }
+
     const updated = await prisma.requirement.update({
       where: { id },
       data: {
@@ -75,13 +92,22 @@ class RequirementService {
         ...(description !== undefined && { description: description.trim() }),
         ...(type !== undefined && { type }),
         ...(priority !== undefined && { priority }),
-        ...(status !== undefined && { status }),
+        status: nextStatus,
         ...(actorIds !== undefined && { actorIds: Array.isArray(actorIds) ? actorIds : [] }),
         ...(dependencies !== undefined && { dependencies: Array.isArray(dependencies) ? dependencies : [] }),
         ...(preconditions !== undefined && { preconditions: preconditions ? preconditions.trim() : null }),
         ...(postconditions !== undefined && { postconditions: postconditions ? postconditions.trim() : null })
       }
     });
+
+    await versionHistoryService.recordSnapshot(
+      existing.projectId,
+      'REQUIREMENT',
+      id,
+      'UPDATED',
+      updated,
+      `Modificación de requisito ${updated.code}: ${updated.name} (Estado: ${nextStatus})`
+    );
 
     if (oldCode !== newCode) {
       // Cascada de actualización de código en otros requerimientos
@@ -125,7 +151,7 @@ class RequirementService {
   }
 
   async updateStatus(id, status) {
-    const validStatuses = ['PENDING', 'APPROVED', 'DISCARDED', 'IMPLEMENTED'];
+    const validStatuses = ['PENDING', 'APPROVED', 'NEEDS_REVIEW', 'REJECTED', 'DISCARDED', 'IMPLEMENTED'];
     if (!validStatuses.includes(status)) {
       const err = new Error(`Estado '${status}' no válido`);
       err.statusCode = 400;

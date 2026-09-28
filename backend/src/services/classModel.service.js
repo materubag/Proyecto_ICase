@@ -98,56 +98,44 @@ class ClassModelService {
 
     const classesToCreate = [];
 
-    // 1. Clases de Entidades de Dominio
+    // 1. Clases de Entidades de Dominio documentadas en el proyecto
     for (const ent of project.entities) {
-      const className = ent.name.replace(/[^a-zA-Z0-9_]/g, '');
-      const attrs = (ent.attributes || []).map(a => ({
-        name: a.name,
-        type: a.type || 'String',
-        visibility: '+'
-      }));
+      const cleanClassName = ent.name.normalize("NFD").replace(/[\u0300-\u036f]/g, "").replace(/[^a-zA-Z0-9_]/g, ' ').trim();
+      const pascalName = cleanClassName.split(/\s+/).map(w => w.charAt(0).toUpperCase() + w.slice(1).toLowerCase()).join('') || 'Entidad';
 
-      // Métodos estándar POO del dominio
-      const methods = [
-        { name: `getId`, returnType: 'String', visibility: '+' },
-        { name: `validarReglas`, returnType: 'Boolean', visibility: '+' },
-        { name: `toDTO`, returnType: 'Object', visibility: '+' }
-      ];
+      const attrs = (ent.attributes || []).map(a => {
+        const rawName = a.name || 'attr';
+        const cleanName = rawName.normalize("NFD").replace(/[\u0300-\u036f]/g, "").replace(/[^a-zA-Z0-9_]/g, ' ').trim();
+        const camelName = cleanName.split(/\s+/).map((word, idx) => idx === 0 ? word.toLowerCase() : word.charAt(0).toUpperCase() + word.slice(1).toLowerCase()).join('') || 'attr';
+        return {
+          name: camelName,
+          displayName: rawName,
+          type: a.type || 'String',
+          visibility: '+'
+        };
+      });
 
-      // Relaciones de esta entidad
-      const related = project.relationships.filter(r => r.source === ent.name || r.target === ent.name);
+      // Métodos del dominio (estrictamente vacíos si no hay evidencia documental de operaciones POO)
+      const methods = [];
+
+      // Relaciones dirigidas de esta entidad (solo donde es source, para evitar aristas bidireccionales arbitrarias)
+      const related = project.relationships.filter(r => r.source === ent.name);
       const rels = related.map(r => ({
-        targetClass: r.source === ent.name ? r.target : r.source,
-        type: r.cardinality?.includes('N') ? 'aggregation' : 'association',
+        targetClass: r.target,
+        type: 'association',
+        label: r.description || '',
         cardinality: r.cardinality || '1..*'
       }));
 
       classesToCreate.push({
-        codeId: ent.codeId || `CLS-${ent.name.toUpperCase()}`,
-        name: className,
+        codeId: ent.codeId || `CLS-${pascalName.toUpperCase()}`,
+        name: pascalName,
         description: `Clase de Entidad del Dominio: ${ent.description || ent.name}`,
         attributes: attrs,
         methods,
         relationships: rels
       });
     }
-
-    // 2. Clases de Servicio y Controlador del Sistema
-    classesToCreate.push({
-      codeId: 'CLS-AUTH-SRV',
-      name: 'AuthenticationService',
-      description: 'Servicio de seguridad, validación de tokens y sesiones',
-      attributes: [
-        { name: 'jwtSecret', type: 'String', visibility: '-' },
-        { name: 'sessionTimeout', type: 'Int', visibility: '-' }
-      ],
-      methods: [
-        { name: 'login', returnType: 'AuthResponse', visibility: '+' },
-        { name: 'validateToken', returnType: 'Boolean', visibility: '+' },
-        { name: 'logout', returnType: 'void', visibility: '+' }
-      ],
-      relationships: []
-    });
 
     const result = [];
     for (const c of classesToCreate) {
@@ -194,7 +182,8 @@ class ClassModelService {
       const attrs = Array.isArray(cls.attributes) ? cls.attributes : [];
       for (const a of attrs) {
         const vis = a.visibility || '+';
-        lines.push(`        ${vis}${a.type || 'String'} ${a.name}`);
+        const cleanAttrName = (a.name || 'attr').normalize("NFD").replace(/[\u0300-\u036f]/g, "").replace(/[^a-zA-Z0-9_]/g, '');
+        lines.push(`        ${vis}${a.type || 'String'} ${cleanAttrName}`);
       }
 
       const methods = Array.isArray(cls.methods) ? cls.methods : [];
@@ -206,21 +195,28 @@ class ClassModelService {
       lines.push(`    }`);
     }
 
-    // Renderizar relaciones
+    // Renderizar relaciones dirigidas sin duplicados ni aristas bidireccionales arbitrarias
+    const seenEdges = new Set();
     for (const cls of classes) {
       const source = cls.name.replace(/[^a-zA-Z0-9_]/g, '');
       const rels = Array.isArray(cls.relationships) ? cls.relationships : [];
       for (const r of rels) {
         const target = (r.targetClass || '').replace(/[^a-zA-Z0-9_]/g, '');
         if (target && renderedNames.has(target) && source !== target) {
+          const edgeKey = `${source}->${target}`;
+          const reverseKey = `${target}->${source}`;
+          if (seenEdges.has(edgeKey) || seenEdges.has(reverseKey)) continue;
+          seenEdges.add(edgeKey);
+
+          const lbl = r.label ? ` : "${r.label}"` : '';
           if (r.type === 'aggregation') {
-            lines.push(`    ${source} o-- ${target} : agrega`);
+            lines.push(`    ${source} o-- ${target}${lbl}`);
           } else if (r.type === 'composition') {
-            lines.push(`    ${source} *-- ${target} : compone`);
+            lines.push(`    ${source} *-- ${target}${lbl}`);
           } else if (r.type === 'inheritance') {
-            lines.push(`    ${source} --|> ${target} : hereda`);
+            lines.push(`    ${target} <|-- ${source}${lbl}`);
           } else {
-            lines.push(`    ${source} --> ${target} : asocia`);
+            lines.push(`    ${source} --> ${target}${lbl}`);
           }
         }
       }

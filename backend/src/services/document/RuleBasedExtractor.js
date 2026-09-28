@@ -307,7 +307,8 @@ class RuleBasedExtractor {
       }
     }
 
-    return actors;
+    const deduplicationService = require('../analysis/deduplicationService');
+    return deduplicationService.consolidateActors(actors);
   }
 
   /**

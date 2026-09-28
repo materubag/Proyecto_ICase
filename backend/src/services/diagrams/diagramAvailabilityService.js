@@ -167,7 +167,21 @@ class DiagramAvailabilityService {
 
     const classOutdated = checkIsOutdated(classArtifact.generatedAt, [...approvedClasses, ...approvedEntities]);
 
-    // 4. NAVIGATION (Árbol de navegación)
+    // 4. FLOWCHART (Diagrama de Flujo de Procesos)
+    const flowchartArtifact = getArtifactInfo('FLOWCHART');
+    let flowStatus = 'INSUFFICIENT';
+    const flowMissing = [];
+    if (totalApprovedFunctional === 0 && (project.useCases || []).length === 0) {
+      flowMissing.push('Se requieren requisitos funcionales o casos de uso aprobados para generar el flujo de procesos');
+    } else if (totalApprovedFunctional >= 2 || (project.useCases || []).length >= 2) {
+      flowStatus = 'SUFFICIENT';
+    } else {
+      flowStatus = 'PARTIAL';
+      flowMissing.push('Información limitada para construir un flujo completo con múltiples decisiones');
+    }
+    const flowOutdated = checkIsOutdated(flowchartArtifact.generatedAt, [...approvedReqs, ...(project.useCases || [])]);
+
+    // 5. NAVIGATION (Árbol de navegación)
     const navArtifact = getArtifactInfo('NAVIGATION');
     const approvedScreens = screens.filter(s => s.reviewStatus === 'APPROVED' || s.status === 'APPROVED' || (!s.reviewStatus && !s.status));
     const screensCount = approvedScreens.length;
@@ -179,16 +193,16 @@ class DiagramAvailabilityService {
       navMissing.push('No se identificaron pantallas o módulos suficientes para generar el árbol de navegación');
     } else if (screensCount === 0 && navNodesCount === 0) {
       navMissing.push('Las pantallas detectadas deben ser aprobadas antes de generar el árbol');
-    } else if (screensCount >= 3 || navNodesCount >= 3) {
+    } else if (screensCount >= 2 || navNodesCount >= 2) {
       navStatus = 'SUFFICIENT';
     } else {
       navStatus = 'PARTIAL';
-      navMissing.push(`Solo se detectaron ${screensCount || navNodesCount} vistas / transiciones aprobadas`);
+      navMissing.push(`Solo se detectaron ${screensCount || navNodesCount} vistas aprobadas`);
     }
 
     const navOutdated = checkIsOutdated(navArtifact.generatedAt, [...approvedScreens, ...navigationNodes]);
 
-    // 5. ARCHITECTURE (Arquitectura)
+    // 6. ARCHITECTURE (Arquitectura)
     const archArtifact = getArtifactInfo('ARCHITECTURE');
     const arch = architectures[0];
     const techCount = technologies.length;
@@ -257,12 +271,25 @@ class DiagramAvailabilityService {
           isOutdated: classOutdated,
           technicalError: classArtifact.technicalError
         },
+        FLOWCHART: {
+          key: 'FLOWCHART',
+          title: 'Diagrama de Flujo',
+          status: flowStatus,
+          canGenerate: flowStatus !== 'INSUFFICIENT',
+          summary: `${totalApprovedFunctional} requisitos / procesos operativos`,
+          missing: flowMissing,
+          metrics: { functionalRequirements: totalApprovedFunctional },
+          isGenerated: flowchartArtifact.isGenerated,
+          generatedAt: flowchartArtifact.generatedAt,
+          isOutdated: flowOutdated,
+          technicalError: flowchartArtifact.technicalError
+        },
         NAVIGATION: {
           key: 'NAVIGATION',
           title: 'Árbol de Navegación',
           status: navStatus,
           canGenerate: navStatus !== 'INSUFFICIENT',
-          summary: `${screensCount || navNodesCount} pantallas / módulos detectados`,
+          summary: `${screensCount || navNodesCount} pantallas en jerarquía`,
           missing: navMissing,
           metrics: { screens: screensCount, nodes: navNodesCount },
           isGenerated: navArtifact.isGenerated,

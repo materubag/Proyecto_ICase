@@ -319,36 +319,81 @@ class AIService {
       await tx.navigationNode.deleteMany({ where: { projectId, reviewStatus: { not: 'APPROVED' } } });
       await tx.architecture.deleteMany({ where: { projectId, reviewStatus: { not: 'APPROVED' } } });
 
-function cleanUtf8(str) {
-  if (!str || typeof str !== 'string') return str;
-  return str.normalize('NFC').trim();
-}
+      const deduplicationService = require('../analysis/deduplicationService');
 
-      // Guardar Actores (sin sobrescribir existentes aprobados)
+      function cleanUtf8(str) {
+        if (!str || typeof str !== 'string') return str;
+        return str.normalize('NFC').trim();
+      }
+
+      // Guardar Actores Canónicos (evitando duplicados mediante canonicalKey y aliases)
       if (rawResult.actors && rawResult.actors.length > 0) {
+        const existingActors = await tx.actor.findMany({ where: { projectId, isDeleted: false } });
+
         for (const actor of rawResult.actors) {
-          const actorName = cleanUtf8(actor.name);
-          const existingActor = await tx.actor.findFirst({ where: { projectId, name: actorName } });
-          if (!existingActor) {
-            await tx.actor.create({
+          const rawActorName = cleanUtf8(actor.name);
+          if (!rawActorName) continue;
+
+          const canonicalKey = deduplicationService.getActorCanonicalKey(rawActorName);
+          const displayName = deduplicationService.getPreferredActorDisplayName(rawActorName, canonicalKey);
+
+          const match = existingActors.find(a =>
+            deduplicationService.getActorCanonicalKey(a.name) === canonicalKey ||
+            (a.aliases && a.aliases.includes(rawActorName))
+          );
+
+          if (match) {
+            const nextAliases = Array.from(new Set([...(match.aliases || []), rawActorName, displayName]));
+            const nextDesc = match.description && actor.description && !match.description.includes(actor.description)
+              ? `${match.description} · ${cleanUtf8(actor.description)}`.slice(0, 500)
+              : (match.description || cleanUtf8(actor.description));
+
+            await tx.actor.update({
+              where: { id: match.id },
               data: {
-                projectId,
-                codeId: actor.id || null,
-                name: actorName,
-                description: actor.description ? cleanUtf8(actor.description) : null
+                aliases: nextAliases,
+                description: nextDesc,
+                name: displayName
               }
             });
+          } else {
+            const count = existingActors.length + 1;
+            const code = actor.id || `ACT-${String(count).padStart(2, '0')}`;
+            const created = await tx.actor.create({
+              data: {
+                projectId,
+                codeId: code,
+                name: displayName,
+                description: actor.description ? cleanUtf8(actor.description) : null,
+                aliases: [rawActorName, displayName],
+                status: 'PENDING_REVIEW',
+                reviewStatus: 'PENDING'
+              }
+            });
+            existingActors.push(created);
           }
         }
       }
 
-      // Guardar Requisitos ISO/IEC/IEEE 29148:2018 (respetando los ya aprobados)
+      // Guardar Requisitos Canónicos (Deduplicación y consolidación PREVIA)
       if (rawResult.requirements && rawResult.requirements.length > 0) {
-        for (const req of rawResult.requirements) {
+        const existingApproved = await tx.requirement.findMany({
+          where: { projectId, status: 'APPROVED', isDeleted: false }
+        });
+
+        const { canonicalRequirements } = deduplicationService.groupAndConsolidateRequirements(
+          rawResult.requirements,
+          existingApproved
+        );
+
+        for (const req of canonicalRequirements) {
           const code = req.code.trim().toUpperCase();
-          const existingApproved = await tx.requirement.findFirst({ where: { projectId, code, status: 'APPROVED' } });
-          if (existingApproved) {
-            // No sobrescribir requisitos oficiales aprobados por el usuario
+
+          // Verificar si ya existe aprobado por código o semántica
+          const existingApprovedMatch = existingApproved.find(ea =>
+            ea.code === code || deduplicationService.isSemanticEquivalent(ea, req)
+          );
+          if (existingApprovedMatch) {
             continue;
           }
 
@@ -357,7 +402,7 @@ function cleanUtf8(str) {
               projectId,
               code,
               name: cleanUtf8(req.name),
-              description: req.description ? cleanUtf8(req.description) : '',
+              description: req.description ? cleanUtf8(req.description) : cleanUtf8(req.statement || req.name),
               type: (req.type === 'NON_FUNCTIONAL' || req.type === 'NO_FUNCIONAL' || req.type === 'RNF' || code.startsWith('RNF'))
                 ? 'NON_FUNCTIONAL'
                 : 'FUNCTIONAL',
@@ -369,6 +414,7 @@ function cleanUtf8(str) {
               status: 'PENDING',
               actorIds: req.actorIds || [],
               dependencies: req.dependencies || [],
+              sources: req.sources || [],
               preconditions: req.preconditions ? cleanUtf8(req.preconditions) : ((req.type === 'NON_FUNCTIONAL' || req.type === 'NO_FUNCIONAL' || code.startsWith('RNF')) ? 'Entorno operativo y conectividad estándar' : 'Usuario con sesión activa y permisos correspondientes'),
               postconditions: req.postconditions ? cleanUtf8(req.postconditions) : ((req.type === 'NON_FUNCTIONAL' || req.type === 'NO_FUNCIONAL' || code.startsWith('RNF')) ? 'Métricas de calidad y estabilidad verificadas' : 'Estado del sistema actualizado y transacción persistida con éxito')
             }
