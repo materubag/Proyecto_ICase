@@ -1,231 +1,202 @@
 import React, { useState } from 'react';
-import { ArrowLeft, Sparkles, CheckSquare, Users, Database, Layout, GitFork, Cpu, Edit3, Save } from 'lucide-react';
 import { projectsApi } from '../api/projects.api';
 
 import ProjectSummary from './ProjectSummary';
+import ProjectSources from './ProjectSources';
 import ProjectRequirements from './ProjectRequirements';
-import ProjectActors from './ProjectActors';
-import ProjectModel from './ProjectModel';
-import ProjectPrototype from './ProjectPrototype';
+import ProjectPlanning from './ProjectPlanning';
+import ProjectModeling from './ProjectModeling';
 import ProjectNavigation from './ProjectNavigation';
+import ProjectPrototype from './ProjectPrototype';
 import ProjectArchitecture from './ProjectArchitecture';
+import ProjectToolsTeam from './ProjectToolsTeam';
+import ProjectEngineering from './ProjectEngineering';
 
 export default function ProjectDetail({
   project,
   onBack,
   onProjectUpdated,
   activeTab = 'summary',
-  onTabChange
+  onTabChange,
+  pendingCandidatesCount = 0
 }) {
-  const [isEditingProject, setIsEditingProject] = useState(false);
+  const [isEditing, setIsEditing] = useState(false);
   const [nameValue, setNameValue] = useState(project.name || '');
   const [descValue, setDescValue] = useState(project.description || '');
-  const [savingProject, setSavingProject] = useState(false);
+  const [saving, setSaving] = useState(false);
 
-  async function handleSaveProject() {
-    if (!nameValue.trim()) {
-      alert('El nombre del proyecto no puede estar vacío.');
-      return;
-    }
+  async function handleSave() {
+    if (!nameValue.trim()) return;
     try {
-      setSavingProject(true);
+      setSaving(true);
       await projectsApi.update(project.id, {
         name: nameValue.trim(),
         description: descValue.trim(),
         systemDescription: descValue.trim()
       });
-      setIsEditingProject(false);
+      setIsEditing(false);
       await onProjectUpdated();
     } catch (err) {
-      alert(`Error al actualizar el proyecto: ${err.message}`);
+      alert(`Error: ${err.message}`);
     } finally {
-      setSavingProject(false);
+      setSaving(false);
     }
   }
 
-  return (
-    <div>
-      {/* Back Button and Project Header */}
-      <div style={{ marginBottom: '1.5rem' }}>
-        <button
-          className="btn btn-secondary btn-sm"
-          onClick={onBack}
-          style={{ marginBottom: '1rem' }}
-        >
-          <ArrowLeft size={14} />
-          <span>Volver a Proyectos</span>
-        </button>
+  const statusBadge = () => {
+    switch (project.status) {
+      case 'IN_PROGRESS':
+        return <span className="badge badge-in-progress">En Progreso</span>;
+      case 'COMPLETED':
+        return <span className="badge badge-success">Completado</span>;
+      default:
+        return <span className="badge badge-planning">Planificación</span>;
+    }
+  };
 
-        <div className="card">
-          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', flexWrap: 'wrap', gap: '0.75rem' }}>
-            {isEditingProject ? (
-              <div style={{ width: '100%', maxWidth: '750px', display: 'flex', flexDirection: 'column', gap: '0.75rem' }}>
-                <div className="form-group" style={{ marginBottom: 0 }}>
-                  <label className="form-label" style={{ fontWeight: 600 }}>Nombre del Proyecto *</label>
-                  <input
-                    type="text"
-                    className="form-control"
-                    value={nameValue}
-                    onChange={(e) => setNameValue(e.target.value)}
-                    placeholder="Nombre del proyecto"
-                    style={{ fontSize: '1.1rem', fontWeight: 600 }}
-                  />
-                </div>
-                <div className="form-group" style={{ marginBottom: 0 }}>
-                  <label className="form-label" style={{ fontWeight: 600 }}>Descripción del Proyecto</label>
-                  <textarea
-                    className="form-control"
-                    value={descValue}
-                    onChange={(e) => setDescValue(e.target.value)}
-                    placeholder="Descripción o propósito del sistema"
-                    style={{ minHeight: '90px' }}
-                  />
-                </div>
-                <div style={{ display: 'flex', gap: '0.5rem', marginTop: '0.25rem' }}>
-                  <button
-                    className="btn btn-primary btn-sm"
-                    onClick={handleSaveProject}
-                    disabled={savingProject || !nameValue.trim()}
-                  >
-                    <Save size={14} />
-                    <span>{savingProject ? 'Guardando...' : 'Guardar Cambios'}</span>
-                  </button>
-                  <button
-                    className="btn btn-secondary btn-sm"
-                    onClick={() => setIsEditingProject(false)}
-                    disabled={savingProject}
-                  >
-                    Cancelar
-                  </button>
-                </div>
+  return (
+    <div className="full-page" style={{ display: 'flex', flexDirection: 'column', height: '100%', overflow: 'hidden' }}>
+      {/* Workspace Sub-header: project context & quick actions (without duplicate tab navigation) */}
+      <div className="page-subheader">
+        <div className="page-subheader-row">
+          <div style={{ display: 'flex', alignItems: 'center', gap: '10px', minWidth: 0, flexWrap: 'wrap' }}>
+            {isEditing ? (
+              <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap' }}>
+                <input
+                  type="text"
+                  className="form-control"
+                  value={nameValue}
+                  onChange={(e) => setNameValue(e.target.value)}
+                  style={{ width: '280px', height: '32px', padding: '0 8px', fontWeight: 600 }}
+                  autoFocus
+                />
+                <button
+                  type="button"
+                  className="btn btn-primary btn-sm"
+                  onClick={handleSave}
+                  disabled={saving || !nameValue.trim()}
+                >
+                  {saving ? 'Guardando...' : 'Guardar'}
+                </button>
+                <button
+                  type="button"
+                  className="btn btn-outline btn-sm"
+                  onClick={() => setIsEditing(false)}
+                  disabled={saving}
+                >
+                  Cancelar
+                </button>
               </div>
             ) : (
-              <div>
-                <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', flexWrap: 'wrap' }}>
-                  <h1 style={{ fontSize: '1.4rem', fontWeight: 600, color: 'var(--text-main)' }}>
-                    {project.name}
-                  </h1>
-                  <span className="badge badge-in-progress">{project.status}</span>
-                  <button
-                    className="btn btn-secondary btn-sm"
-                    onClick={() => {
-                      setNameValue(project.name || '');
-                      setDescValue(project.description || '');
-                      setIsEditingProject(true);
-                    }}
-                    title="Editar nombre y descripción del proyecto"
-                  >
-                    <Edit3 size={13} />
-                    <span>Editar Proyecto</span>
-                  </button>
-                </div>
+              <>
+                <h1 className="page-title" style={{ margin: 0 }}>{project.name}</h1>
+                {statusBadge()}
+                <button
+                  type="button"
+                  className="btn btn-ghost btn-icon btn-sm"
+                  onClick={() => {
+                    setNameValue(project.name);
+                    setDescValue(project.description || '');
+                    setIsEditing(true);
+                  }}
+                  title="Editar nombre y descripción"
+                  aria-label="Editar proyecto"
+                >
+                  <span className="ms ms-sm">edit</span>
+                </button>
+              </>
+            )}
+          </div>
 
-                <div style={{ marginTop: '0.5rem', color: 'var(--text-muted)', fontSize: '0.875rem', maxWidth: '850px' }}>
-                  {project.description || 'Sin descripción asignada.'}
-                </div>
-              </div>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '10px', flexShrink: 0 }}>
+            {/* Attention banner if pending candidates exist */}
+            {pendingCandidatesCount > 0 && activeTab !== 'requirements' && (
+              <button
+                type="button"
+                className="btn btn-outline btn-sm"
+                onClick={() => onTabChange('requirements')}
+                style={{
+                  color: '#b42318',
+                  borderColor: 'rgba(180, 35, 24, 0.3)',
+                  background: 'rgba(180, 35, 24, 0.05)',
+                  fontSize: '0.75rem'
+                }}
+                title="Ir a revisión de candidatos ISO 29148"
+              >
+                <span className="ms ms-xs">rate_review</span>
+                <span>{pendingCandidatesCount} candidatos por revisar</span>
+              </button>
             )}
 
-            <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>
-              Actualizado: {new Date(project.updatedAt).toLocaleDateString()}
-            </div>
+            <span style={{ fontSize: '0.75rem', color: 'var(--outline)' }}>
+              Actualizado: {new Date(project.updatedAt).toLocaleDateString('es', { day: '2-digit', month: 'short', year: 'numeric' })}
+            </span>
+            <button
+              type="button"
+              className="btn btn-ghost btn-sm"
+              onClick={onBack}
+              title="Volver a lista de proyectos"
+            >
+              <span className="ms ms-sm">arrow_back</span>
+              <span>Proyectos</span>
+            </button>
           </div>
         </div>
-      </div>
 
-      {/* Tabs Navigation */}
-      <div className="tab-nav">
-        <button
-          className={`tab-button ${activeTab === 'summary' ? 'active' : ''}`}
-          onClick={() => onTabChange('summary')}
-        >
-          <Sparkles size={16} />
-          <span>Resumen</span>
-        </button>
-        <button
-          className={`tab-button ${activeTab === 'requirements' ? 'active' : ''}`}
-          onClick={() => onTabChange('requirements')}
-        >
-          <CheckSquare size={16} />
-          <span>Requisitos ({project.requirements?.length ?? 0})</span>
-        </button>
-        <button
-          className={`tab-button ${activeTab === 'actors' ? 'active' : ''}`}
-          onClick={() => onTabChange('actors')}
-        >
-          <Users size={16} />
-          <span>Actores ({project.actors?.length ?? 0})</span>
-        </button>
-        <button
-          className={`tab-button ${activeTab === 'model' ? 'active' : ''}`}
-          onClick={() => onTabChange('model')}
-        >
-          <Database size={16} />
-          <span>Modelo ({project.entities?.length ?? 0})</span>
-        </button>
-        <button
-          className={`tab-button ${activeTab === 'prototype' ? 'active' : ''}`}
-          onClick={() => onTabChange('prototype')}
-        >
-          <Layout size={16} />
-          <span>Prototipo ({project.screens?.length ?? 0})</span>
-        </button>
-        <button
-          className={`tab-button ${activeTab === 'navigation' ? 'active' : ''}`}
-          onClick={() => onTabChange('navigation')}
-        >
-          <GitFork size={16} />
-          <span>Navegación</span>
-        </button>
-        <button
-          className={`tab-button ${activeTab === 'architecture' ? 'active' : ''}`}
-          onClick={() => onTabChange('architecture')}
-        >
-          <Cpu size={16} />
-          <span>Arquitectura</span>
-        </button>
-      </div>
-
-      {/* Active Tab View */}
-      <div>
-        {activeTab === 'summary' && (
-          <ProjectSummary
-            project={project}
-            onProjectUpdated={onProjectUpdated}
-            onNavigateTo={onTabChange}
+        {/* Inline description editor if editing */}
+        {isEditing && (
+          <textarea
+            className="form-control"
+            value={descValue}
+            onChange={(e) => setDescValue(e.target.value)}
+            placeholder="Descripción del proyecto..."
+            style={{ minHeight: '60px', marginTop: '6px' }}
           />
         )}
-        {activeTab === 'requirements' && (
+      </div>
+
+      {/* Module Workspace Content */}
+      <div style={{ flex: 1, minHeight: 0, overflow: 'hidden', display: 'flex', flexDirection: 'column' }}>
+        {activeTab === 'summary' && (
+          <ProjectSummary project={project} onProjectUpdated={onProjectUpdated} onNavigateTo={onTabChange} />
+        )}
+        {(activeTab === 'requirements' || activeTab === 'candidates' || activeTab === 'actors') && (
           <ProjectRequirements
             project={project}
             onProjectUpdated={onProjectUpdated}
+            initialSubTab={activeTab === 'candidates' ? 'candidates' : activeTab === 'actors' ? 'actors' : 'candidates'}
           />
         )}
-        {activeTab === 'actors' && (
-          <ProjectActors
+        {activeTab === 'sources' && (
+          <ProjectSources
             project={project}
-            onProjectUpdated={onProjectUpdated}
+            onNavigateToReview={() => onTabChange('requirements')}
+            onNavigateToSummary={() => onTabChange('summary')}
           />
         )}
-        {activeTab === 'model' && (
-          <ProjectModel
-            project={project}
-          />
+        {activeTab === 'planning' && (
+          <ProjectPlanning project={project} />
         )}
-        {activeTab === 'prototype' && (
-          <ProjectPrototype
+        {(activeTab === 'modeling' || activeTab === 'diagrams' || activeTab === 'model' || activeTab === 'usecases') && (
+          <ProjectModeling
             project={project}
+            initialSubTab={activeTab === 'usecases' ? 'usecases' : 'er'}
           />
         )}
         {activeTab === 'navigation' && (
-          <ProjectNavigation
-            project={project}
-          />
+          <ProjectNavigation project={project} onProjectUpdated={onProjectUpdated} />
+        )}
+        {(activeTab === 'mockups' || activeTab === 'prototype') && (
+          <ProjectPrototype project={project} onProjectUpdated={onProjectUpdated} />
         )}
         {activeTab === 'architecture' && (
-          <ProjectArchitecture
-            project={project}
-          />
+          <ProjectArchitecture project={project} onProjectUpdated={onProjectUpdated} />
+        )}
+        {activeTab === 'tools_team' && (
+          <ProjectToolsTeam project={project} onNavigateTo={onTabChange} />
+        )}
+        {['traceability', 'changes', 'versions', 'chat'].includes(activeTab) && (
+          <ProjectEngineering project={project} view={activeTab} onProjectUpdated={onProjectUpdated} />
         )}
       </div>
     </div>

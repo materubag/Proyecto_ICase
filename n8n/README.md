@@ -1,4 +1,4 @@
-# Integración con n8n (Fase 2) - ICASE Automation
+# Integración con n8n - ICASE Automation
 
 Este directorio documenta la arquitectura y los flujos de integración previstos entre la plataforma **ICASE** y **n8n Workflow Automation**.
 
@@ -96,7 +96,37 @@ El flujo de n8n debe retornar obligatoriamente un objeto JSON con la clave `scre
 
 ---
 
-## 5. Activación en Docker Compose
+## 5. Workflow Stitch conectado al webhook
+
+El workflow de Stitch debe comenzar con un nodo **Webhook** configurado como `POST`, por ejemplo:
+
+```text
+POST /webhook/icase-mockup
+```
+
+El nodo Webhook entrega a los nodos Code/HTTP el payload enviado por ICASE. El flujo puede conservar los nodos `create_project`, `get_project`, `generate_screen_from_text`, `list_screens`, descarga HTML y normalización, pero debe terminar con **Respond to Webhook**. No debe terminar en `Convert to File`, porque ese nodo genera un binario local y no devuelve una respuesta HTTP al backend.
+
+El último nodo Code debe devolver este formato para que el backend pueda mostrarlo:
+
+```json
+{
+  "screens": [
+    {
+      "id": "screen-1",
+      "name": "Inicio de sesión",
+      "route": "/login",
+      "html": "<!doctype html><html>...</html>",
+      "htmlUrl": "https://..."
+    }
+  ]
+}
+```
+
+En `Respond to Webhook`, selecciona `Respond With: JSON` y responde con el resultado del nodo Code. Si se conserva `htmlUrl` en vez de descargar el contenido, el backend intentará descargarlo antes de entregarlo al frontend.
+
+El backend envía `projectId`, `projectName`, `description`, `systemDescription`, `requirements` y `prompt`, así que el primer nodo Code puede construir el prompt de Stitch con `$json.body`.
+
+## 6. Activación en Docker Compose
 
 Para ejecutar n8n en el entorno local junto a ICASE:
 
@@ -106,4 +136,11 @@ Para ejecutar n8n en el entorno local junto a ICASE:
    ```bash
    N8N_MOCKUP_WEBHOOK=http://n8n:5678/webhook/mockup-generator
    ```
-4. Reiniciar el backend para que tome la nueva variable.
+4. Definir la URL de producción del webhook en `.env` y reiniciar el backend para que tome la nueva variable.
+
+```env
+N8N_MOCKUP_WEBHOOK=https://tu-n8n.example.com/webhook/icase-mockup
+N8N_TIMEOUT=120000
+```
+
+El botón **Generar con n8n** de la pestaña **Prototipo** llama al backend. El navegador nunca debe llamar directamente a Stitch ni contener `X-Goog-Api-Key`; esa clave debe quedar únicamente en las credenciales de n8n y debe rotarse si la clave incluida en un workflow real fue expuesta.

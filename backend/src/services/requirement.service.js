@@ -1,9 +1,10 @@
 const prisma = require('../config/prisma');
+const versionHistoryService = require('./versionHistory.service');
 
 class RequirementService {
   async getRequirementsByProject(projectId) {
     return await prisma.requirement.findMany({
-      where: { projectId },
+      where: { projectId, isDeleted: false },
       orderBy: { code: 'asc' }
     });
   }
@@ -16,14 +17,14 @@ class RequirementService {
       throw error;
     }
 
-    const { code, name, description, type, priority, status, actorIds, dependencies } = data;
+    const { code, name, description, type, priority, status, actorIds, dependencies, preconditions, postconditions } = data;
     if (!code || !name || !description) {
       const error = new Error('Código, nombre y descripción son campos obligatorios');
       error.statusCode = 400;
       throw error;
     }
 
-    return await prisma.requirement.create({
+    const created = await prisma.requirement.create({
       data: {
         projectId,
         code: code.trim().toUpperCase(),
@@ -33,9 +34,23 @@ class RequirementService {
         priority: priority || 'MEDIUM',
         status: status || 'PENDING',
         actorIds: Array.isArray(actorIds) ? actorIds : [],
-        dependencies: Array.isArray(dependencies) ? dependencies : []
+        dependencies: Array.isArray(dependencies) ? dependencies : [],
+        preconditions: preconditions ? preconditions.trim() : null,
+        postconditions: postconditions ? postconditions.trim() : null,
+        isDeleted: false
       }
     });
+
+    await versionHistoryService.recordSnapshot(
+      projectId,
+      'REQUIREMENT',
+      created.id,
+      'CREATED',
+      created,
+      `Creación de requisito ${created.code}: ${created.name}`
+    );
+
+    return created;
   }
 
   async updateRequirement(id, data) {
@@ -46,22 +61,86 @@ class RequirementService {
       throw error;
     }
 
-    const { code, name, description, type, priority, status, actorIds, dependencies } = data;
-    return await prisma.requirement.update({
+    const { code, name, description, type, priority, status, actorIds, dependencies, preconditions, postconditions } = data;
+    
+    // Si cambia el código, actualizar en cascada referencias en otros requisitos, casos de uso y pantallas
+    const oldCode = existing.code;
+    const newCode = code ? code.trim().toUpperCase() : oldCode;
+
+    const updated = await prisma.requirement.update({
       where: { id },
       data: {
-        ...(code !== undefined && { code: code.trim().toUpperCase() }),
+        ...(code !== undefined && { code: newCode }),
         ...(name !== undefined && { name: name.trim() }),
         ...(description !== undefined && { description: description.trim() }),
         ...(type !== undefined && { type }),
         ...(priority !== undefined && { priority }),
         ...(status !== undefined && { status }),
         ...(actorIds !== undefined && { actorIds: Array.isArray(actorIds) ? actorIds : [] }),
-        ...(dependencies !== undefined && { dependencies: Array.isArray(dependencies) ? dependencies : [] })
+        ...(dependencies !== undefined && { dependencies: Array.isArray(dependencies) ? dependencies : [] }),
+        ...(preconditions !== undefined && { preconditions: preconditions ? preconditions.trim() : null }),
+        ...(postconditions !== undefined && { postconditions: postconditions ? postconditions.trim() : null })
       }
+    });
+
+    if (oldCode !== newCode) {
+      // Cascada de actualización de código en otros requerimientos
+      const allReqs = await prisma.requirement.findMany({
+        where: { projectId: existing.projectId, dependencies: { has: oldCode } }
+      });
+      for (const r of allReqs) {
+        const nextDeps = r.dependencies.map(d => d === oldCode ? newCode : d);
+        await prisma.requirement.update({
+          where: { id: r.id },
+          data: { dependencies: nextDeps }
+        });
+      }
+
+      // Cascada en Casos de Uso
+      const allUC = await prisma.useCase.findMany({
+        where: { projectId: existing.projectId, requirementIds: { has: oldCode } }
+      });
+      for (const uc of allUC) {
+        const nextReqIds = uc.requirementIds.map(d => d === oldCode ? newCode : d);
+        await prisma.useCase.update({
+          where: { id: uc.id },
+          data: { requirementIds: nextReqIds }
+        });
+      }
+
+      // Cascada en Pantallas
+      const allScreens = await prisma.screen.findMany({
+        where: { projectId: existing.projectId, requirementIds: { has: oldCode } }
+      });
+      for (const sc of allScreens) {
+        const nextReqIds = sc.requirementIds.map(d => d === oldCode ? newCode : d);
+        await prisma.screen.update({
+          where: { id: sc.id },
+          data: { requirementIds: nextReqIds }
+        });
+      }
+    }
+
+    return updated;
+  }
+
+  async updateStatus(id, status) {
+    const validStatuses = ['PENDING', 'APPROVED', 'DISCARDED', 'IMPLEMENTED'];
+    if (!validStatuses.includes(status)) {
+      const err = new Error(`Estado '${status}' no válido`);
+      err.statusCode = 400;
+      throw err;
+    }
+
+    return await prisma.requirement.update({
+      where: { id },
+      data: { status }
     });
   }
 
+  /**
+   * Eliminación con eliminación/actualización en cascada y guardado en historial recuperable.
+   */
   async deleteRequirement(id) {
     const existing = await prisma.requirement.findUnique({ where: { id } });
     if (!existing) {
@@ -70,9 +149,69 @@ class RequirementService {
       throw error;
     }
 
-    return await prisma.requirement.delete({
+    const { projectId, code } = existing;
+
+    // 1. Guardar Snapshot para recuperación
+    await versionHistoryService.recordSnapshot(
+      projectId,
+      'REQUIREMENT',
+      id,
+      'DELETED',
+      existing,
+      `Eliminación en cascada del requisito ${code}: ${existing.name}`
+    );
+
+    const cascadedEffects = {
+      otherRequirementsUpdated: 0,
+      useCasesUpdated: 0,
+      screensUpdated: 0
+    };
+
+    // 2. Cascada: remover de dependencias de otros requisitos
+    const reqsWithDep = await prisma.requirement.findMany({
+      where: { projectId, dependencies: { has: code } }
+    });
+    for (const r of reqsWithDep) {
+      await prisma.requirement.update({
+        where: { id: r.id },
+        data: { dependencies: r.dependencies.filter(d => d !== code) }
+      });
+      cascadedEffects.otherRequirementsUpdated++;
+    }
+
+    // 3. Cascada: remover de Casos de Uso
+    const ucsWithReq = await prisma.useCase.findMany({
+      where: { projectId, requirementIds: { has: code } }
+    });
+    for (const uc of ucsWithReq) {
+      await prisma.useCase.update({
+        where: { id: uc.id },
+        data: { requirementIds: uc.requirementIds.filter(r => r !== code) }
+      });
+      cascadedEffects.useCasesUpdated++;
+    }
+
+    // 4. Cascada: remover de Pantallas/Mockups
+    const screensWithReq = await prisma.screen.findMany({
+      where: { projectId, requirementIds: { has: code } }
+    });
+    for (const sc of screensWithReq) {
+      await prisma.screen.update({
+        where: { id: sc.id },
+        data: { requirementIds: sc.requirementIds.filter(r => r !== code) }
+      });
+      cascadedEffects.screensUpdated++;
+    }
+
+    // 5. Eliminar el requisito
+    await prisma.requirement.delete({
       where: { id }
     });
+
+    return {
+      deletedRequirement: existing,
+      cascadedEffects
+    };
   }
 }
 

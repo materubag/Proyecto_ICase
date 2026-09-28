@@ -4,7 +4,7 @@ const sectionDetector = require('./SectionDetector');
 const ruleBasedExtractor = require('./RuleBasedExtractor');
 const { buildAIContext, buildDocumentPrompt } = require('./documentPrompt');
 const { createAIProvider } = require('../ai/AIService');
-const { validateAIResponse } = require('../ai/ai.contract.validator');
+const { validateAIResponse, normalizeAIResponse } = require('../ai/ai.contract.validator');
 const env = require('../../config/env');
 
 class DocumentAnalyzer {
@@ -401,12 +401,13 @@ class DocumentAnalyzer {
 
     try {
       const orchestratorResult = await analysisOrchestrator.process(extractionData, docName, { providerOverride: providerName });
-      const validation = validateAIResponse(orchestratorResult);
+      const normalizedResult = normalizeAIResponse(orchestratorResult);
+      const validation = validateAIResponse(normalizedResult);
       if (!validation.isValid) {
         console.warn('[DocumentAnalyzer] Validación canónica no superada:', validation.error, 'Aplicando fallback.');
         return this.buildDeterministicMetamodel(extractionData, `Validación: ${validation.error}`);
       }
-      return orchestratorResult;
+      return normalizedResult;
     } catch (err) {
       console.warn(`[DocumentAnalyzer] Error en orchestrator (${err.message}). Activando fallback determinista.`);
       return this.buildDeterministicMetamodel(extractionData, `Error: ${err.message}`);

@@ -4,6 +4,7 @@ const env = require('../../config/env');
 class OpenAIProvider extends AIProvider {
   /**
    * Structure prepared for OpenAI chat completions API with JSON Mode.
+   * Optimized for ISO/IEC/IEEE 29148:2018 and minimum token consumption.
    * @param {Object} input - { projectId, name, description, context }
    */
   async analyzeProject(input) {
@@ -11,31 +12,79 @@ class OpenAIProvider extends AIProvider {
       throw new Error('El proveedor OpenAI no está configurado (OPENAI_API_KEY no definida en el archivo .env).');
     }
 
-    const model = env.OPENAI_MODEL || 'gpt-4o';
+    const model = env.OPENAI_MODEL || 'gpt-5.4-nano';
     const endpoint = 'https://api.openai.com/v1/chat/completions';
 
-    const systemPrompt = `Eres un arquitecto de software experto en metodologías ICASE. 
-Analiza la especificación de sistema y responde ÚNICAMENTE con un JSON válido estructurado con los campos: project, actors, requirements, entities, relationships, screens, navigation, architecture.`;
+    // Prompt hiper-optimizado en tokens bajo ISO/IEC/IEEE 29148:2018
+    const systemPrompt = `Eres un arquitecto de software ICASE. Analiza la especificación bajo la norma ISO/IEC/IEEE 29148:2018.
+Genera un JSON conciso con las siguientes claves:
+{
+  "project": { "name": string, "description": string },
+  "actors": [{ "id": "ACT-01", "name": string, "description": string }],
+  "requirements": [
+    {
+      "code": "RF-01" o "RNF-01",
+      "name": string,
+      "description": "El sistema debe... (sintaxis ISO 29148, medible y verificable)",
+      "type": "FUNCTIONAL" | "NON_FUNCTIONAL",
+      "priority": "HIGH" | "MEDIUM" | "LOW",
+      "actorIds": ["ACT-01"],
+      "dependencies": ["RF-01"],
+      "preconditions": string,
+      "postconditions": string
+    }
+  ],
+  "entities": [{ "id": "ENT-01", "name": string, "attributes": [{ "name": string, "type": string }] }],
+  "relationships": [{ "source": string, "target": string, "cardinality": "1:N" | "1:1" | "N:M" }],
+  "screens": [{ "id": "SCR-01", "name": string, "route": "/ruta", "purpose": string, "requirementIds": ["RF-01"], "actorIds": ["ACT-01"] }],
+  "navigation": [{ "from": "NombrePantallaOrigen", "to": "NombrePantallaDestino", "action": string }],
+  "architecture": { "style": string, "frontend": string, "backend": string, "database": string }
+}
+Reglas:
+- Requisitos atómicos, verificables, sin ambigüedades.
+- DEBES incluir obligatoriamente tanto Requisitos Funcionales (códigos "RF-01", "RF-02"... con type "FUNCTIONAL") como Requisitos No Funcionales (códigos "RNF-01", "RNF-02"... con type "NON_FUNCTIONAL", cubriendo áreas como rendimiento, seguridad, disponibilidad, respaldo e integridad).
+- Toda pantalla mencionada en "navigation" ('from' y 'to') DEBE estar declarada en el arreglo "screens" y su valor DEBE ser el campo "name" exacto de la pantalla (ej: "Inicio de Sesión", "Panel Principal", "Catálogo"). No uses rutas "/..." en "from" ni en "to".
+- No agregues texto fuera del JSON.`;
 
-    try {
-      const response = await fetch(endpoint, {
+    // Compactar descripción para no desperdiciar tokens
+    const cleanDescription = (input.description || '')
+      .replace(/\r\n/g, '\n')
+      .replace(/[ \t]+/g, ' ')
+      .slice(0, 8000); // Límite de seguridad de tokens
+
+    const userMessage = `Proyecto: ${input.name}\nEspecificación:\n${cleanDescription}`;
+
+    async function sendRequest(modelName) {
+      return await fetch(endpoint, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
           'Authorization': `Bearer ${env.OPENAI_API_KEY}`
         },
         body: JSON.stringify({
-          model,
+          model: modelName,
           response_format: { type: 'json_object' },
           messages: [
             { role: 'system', content: systemPrompt },
-            { role: 'user', content: `Nombre: ${input.name}\nDescripción: ${input.description}` }
-          ]
+            { role: 'user', content: input.customPrompt || userMessage }
+          ],
+          temperature: 0.2
         })
       });
+    }
+
+    try {
+      let response = await sendRequest(model);
+
+      // Si el modelo específico (e.g. gpt-5.4-nano) no está disponible en la cuenta, fallback inmediato a gpt-4o-mini
+      if (!response.ok && (response.status === 404 || response.status === 400)) {
+        console.warn(`[OpenAIProvider] Modelo ${model} no disponible (HTTP ${response.status}). Reintentando con gpt-4o-mini...`);
+        response = await sendRequest('gpt-4o-mini');
+      }
 
       if (!response.ok) {
-        throw new Error(`OpenAI API respondió con código de estado HTTP ${response.status}`);
+        const errBody = await response.text();
+        throw new Error(`OpenAI API respondió con HTTP ${response.status}: ${errBody}`);
       }
 
       const resJson = await response.json();
@@ -46,7 +95,6 @@ Analiza la especificación de sistema y responde ÚNICAMENTE con un JSON válido
     }
   }
 
-  // Alias para compatibilidad
   async analyze(description, context = {}) {
     return this.analyzeProject({
       name: context.name,

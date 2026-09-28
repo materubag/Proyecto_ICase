@@ -52,6 +52,19 @@ class ProjectService {
             components: true
           },
           orderBy: { createdAt: 'desc' }
+        },
+        useCases: {
+          orderBy: { codeId: 'asc' }
+        },
+        classModels: {
+          orderBy: { name: 'asc' }
+        },
+        files: {
+          orderBy: { createdAt: 'desc' }
+        },
+        versions: {
+          orderBy: { createdAt: 'desc' },
+          take: 50
         }
       }
     });
@@ -104,6 +117,10 @@ class ProjectService {
     });
   }
 
+  async replaceProjectScreens() {
+    throw Object.assign(new Error('Las pantallas generadas requieren revisi?n como ArtifactVersion. Usa el servicio de mockups versionados.'), { code: 'IMPACT_CONFIRMATION_REQUIRED', statusCode: 409 });
+  }
+
   async deleteProject(id) {
     const existing = await prisma.project.findUnique({ where: { id } });
     if (!existing) {
@@ -112,8 +129,9 @@ class ProjectService {
       throw error;
     }
 
-    return await prisma.project.delete({
-      where: { id }
+    return await prisma.project.update({
+      where: { id },
+      data: { status: 'ARCHIVED' }
     });
   }
 }

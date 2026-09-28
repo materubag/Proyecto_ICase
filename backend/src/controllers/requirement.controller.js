@@ -40,13 +40,28 @@ class RequirementController {
     }
   }
 
+  async updateStatus(req, res, next) {
+    try {
+      const { id } = req.params;
+      const { status } = req.body;
+      const updated = await requirementService.updateStatus(id, status);
+      res.status(200).json({
+        success: true,
+        data: updated
+      });
+    } catch (error) {
+      next(error);
+    }
+  }
+
   async delete(req, res, next) {
     try {
       const { id } = req.params;
-      await requirementService.deleteRequirement(id);
+      const result = await requirementService.deleteRequirement(id);
       res.status(200).json({
         success: true,
-        data: { message: `Requirement ${id} successfully deleted` }
+        data: result,
+        message: `Requirement ${id} successfully deleted`
       });
     } catch (error) {
       next(error);

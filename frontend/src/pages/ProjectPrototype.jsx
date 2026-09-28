@@ -1,11 +1,15 @@
-import React, { useState, useEffect } from 'react';
-import { Layout, Monitor, Code } from 'lucide-react';
+import React, { useState, useEffect, useMemo } from 'react';
 import MockupRenderer from '../components/mockup-renderer/MockupRenderer';
+import DiagramViewport from '../components/common/DiagramViewport';
+import { mockupApi } from '../api/mockup.api';
 
 export default function ProjectPrototype({ project }) {
-  const screens = project.screens || [];
+  const [generatedScreens, setGeneratedScreens] = useState([]);
+  const [isGenerating, setIsGenerating] = useState(false);
+  const [generationError, setGenerationError] = useState(null);
+  const screens = generatedScreens.length > 0 ? generatedScreens : (project.screens || []);
   const [selectedScreenId, setSelectedScreenId] = useState(screens[0]?.id || null);
-  const [showJson, setShowJson] = useState(false);
+  const [viewMode, setViewMode] = useState('render'); // 'render' | 'sketch' | 'structure' | 'relations' | 'html'
 
   useEffect(() => {
     if (screens.length > 0 && (!selectedScreenId || !screens.some(s => s.id === selectedScreenId))) {
@@ -13,75 +17,260 @@ export default function ProjectPrototype({ project }) {
     }
   }, [screens]);
 
-  const currentScreen = screens.find((s) => s.id === selectedScreenId) || screens[0];
+  async function handleGenerateMockup() {
+    if (isGenerating) return;
+    try {
+      setIsGenerating(true);
+      setGenerationError(null);
+      const result = await mockupApi.generateMockup(
+        project.id,
+        `Generar un prototipo visual para: ${project.systemDescription || project.description || project.name}`
+      );
+      const nextScreens = result?.screens || result?.data?.screens || [];
+      if (nextScreens.length === 0) throw new Error('El backend no devolvió pantallas para mostrar.');
+      setGeneratedScreens(nextScreens);
+      setSelectedScreenId(nextScreens[0]?.id || null);
+    } catch (error) {
+      setGenerationError(error.message || 'No se pudo generar el prototipo.');
+    } finally {
+      setIsGenerating(false);
+    }
+  }
+
+  const currentScreen = screens.find(s => s.id === selectedScreenId) || screens[0];
+
+  // Generate Mermaid diagram for screen relations / navigation tree
+  const screenRelationsDiagram = useMemo(() => {
+    let code = `graph TD\n`;
+    code += `  %% Estilos para el Mapa de Navegación\n`;
+    code += `  classDef home fill:#2563eb,stroke:#1d4ed8,stroke-width:2px,color:#ffffff,font-weight:bold;\n`;
+    code += `  classDef screen fill:#f8fafc,stroke:#0284c7,stroke-width:1.5px,color:#0f172a;\n`;
+    code += `  classDef modal fill:#fef3c7,stroke:#d97706,stroke-width:1.5px,color:#78350f;\n\n`;
+
+    if (screens.length === 0) {
+      return `graph TD\n  NODATA["Sin pantallas en el prototipo"]`;
+    }
+
+    const root = screens[0];
+    code += `  ROOT["<b>🏠 ${root.name}</b><br/>${root.route || '/'}"]:::home\n`;
+
+    screens.slice(1).forEach((scr, idx) => {
+      const scrId = `SCR_${idx + 1}`;
+      code += `  ${scrId}["<b>📄 ${scr.name}</b><br/>${scr.route || '/vista'}"]:::screen\n`;
+      code += `  ROOT -->|Navegación / Menú| ${scrId}\n`;
+    });
+
+    return code;
+  }, [screens]);
 
   return (
-    <div>
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1.25rem', flexWrap: 'wrap', gap: '0.75rem' }}>
-        <div>
-          <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-            <Layout size={18} color="var(--primary)" />
-            <h2 style={{ fontSize: '1.125rem', fontWeight: 600 }}>Prototipado Declarativo (Mockups)</h2>
+    <div style={{ display: 'flex', flexDirection: 'column', height: '100%', overflow: 'hidden' }}>
+      {/* Command bar */}
+      <div className="full-page-header">
+        <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+          <div>
+            <h2 className="page-title" style={{ fontSize: '1.125rem' }}>
+              Prototipos de la Aplicación (Sketch & Mockup)
+            </h2>
+            <span style={{ fontSize: '0.75rem', color: 'var(--secondary)' }}>
+              {screens.length} pantalla{screens.length !== 1 ? 's' : ''} · Visualización, relaciones entre pantallas y estructura de organización
+            </span>
           </div>
         </div>
 
-        <div style={{ display: 'flex', gap: '0.5rem' }}>
-          <button
-            className="btn btn-secondary btn-sm"
-            onClick={() => setShowJson(!showJson)}
-          >
-            <Code size={14} />
-            <span>{showJson ? 'Ver Render de Pantalla' : 'Ver Estructura de Componentes'}</span>
+        <div className="page-actions">
+          {screens.length > 0 && (
+            <div className="view-toggle">
+              <button
+                className={`view-toggle-btn ${viewMode === 'render' ? 'active' : ''}`}
+                onClick={() => setViewMode('render')}
+                title="Mockup interactivo en alta fidelidad"
+              >
+                <span className="ms ms-xs">palette</span><span>Mockup</span>
+              </button>
+              <button
+                className={`view-toggle-btn ${viewMode === 'sketch' ? 'active' : ''}`}
+                onClick={() => setViewMode('sketch')}
+                title="Sketch / Wireframe en baja fidelidad"
+              >
+                <span className="ms ms-xs">draw</span><span>Sketch</span>
+              </button>
+              <button
+                className={`view-toggle-btn ${viewMode === 'structure' ? 'active' : ''}`}
+                onClick={() => setViewMode('structure')}
+                title="Estructura de organización de la información de la vista"
+              >
+                <span className="ms ms-xs">view_quilt</span><span>Estructura de Información</span>
+              </button>
+              <button
+                className={`view-toggle-btn ${viewMode === 'relations' ? 'active' : ''}`}
+                onClick={() => setViewMode('relations')}
+                title="Relaciones entre pantallas y árbol de navegación"
+              >
+                <span className="ms ms-xs">account_tree</span><span>Relaciones</span>
+              </button>
+              <button
+                className={`view-toggle-btn ${viewMode === 'html' ? 'active' : ''}`}
+                onClick={() => setViewMode('html')}
+              >
+                <span className="ms ms-xs">code</span><span>HTML</span>
+              </button>
+            </div>
+          )}
+
+          <button className="btn btn-primary btn-sm" onClick={handleGenerateMockup} disabled={isGenerating}>
+            {isGenerating ? (
+              <><span className="ms ms-sm spin">autorenew</span><span>Generando...</span></>
+            ) : (
+              <><span className="ms ms-sm">auto_awesome</span><span>Generar con n8n</span></>
+            )}
           </button>
         </div>
       </div>
 
+      {/* Error */}
+      {generationError && (
+        <div className="alert alert-danger" style={{ margin: '12px 24px 0' }}>
+          <span className="ms ms-sm">error_outline</span>
+          <span>{generationError}</span>
+        </div>
+      )}
+
       {screens.length === 0 ? (
-        <div className="card" style={{ textAlign: 'center', padding: '3rem' }}>
-          <p style={{ color: 'var(--text-muted)' }}>
-            No hay pantallas registradas aún. Ejecute el análisis en la pestaña <strong>Resumen</strong> para generarlas.
-          </p>
+        <div className="page-scrollable">
+          <div className="empty-state" style={{ border: '1px dashed var(--outline-variant)', borderRadius: 'var(--radius-lg)' }}>
+            <div className="empty-state-icon"><span className="ms ms-xl">devices</span></div>
+            <p className="empty-state-title">Sin pantallas generadas</p>
+            <p className="empty-state-desc">
+              Ejecuta el análisis IA en la pestaña Resumen o usa el botón "Generar con n8n" para crear los mockups.
+            </p>
+            <button className="btn btn-primary btn-sm" onClick={handleGenerateMockup} disabled={isGenerating}>
+              <span className="ms ms-sm">auto_awesome</span>
+              <span>{isGenerating ? 'Generando...' : 'Generar prototipo'}</span>
+            </button>
+          </div>
         </div>
       ) : (
         <>
-          {/* Selector de Pantallas */}
-          <div style={{ display: 'flex', gap: '0.5rem', marginBottom: '1.25rem', overflowX: 'auto', paddingBottom: '0.25rem' }}>
-            {screens.map((screen) => (
-              <button
-                key={screen.id}
-                className={`btn btn-sm ${selectedScreenId === screen.id ? 'btn-primary' : 'btn-secondary'}`}
-                onClick={() => setSelectedScreenId(screen.id)}
-              >
-                <Monitor size={13} />
-                <span>{screen.name}</span>
-                <span style={{ fontSize: '0.7rem', opacity: 0.8, marginLeft: '4px' }}>({screen.route})</span>
-              </button>
-            ))}
-          </div>
-
-          {showJson ? (
-            <div className="card">
-              <h3 style={{ fontSize: '0.9rem', fontWeight: 600, marginBottom: '0.5rem' }}>
-                Definición Declarativa de la Pantalla: {currentScreen?.name}
-              </h3>
-              <pre style={{
-                backgroundColor: '#0f172a',
-                color: '#a7f3d0',
-                padding: '1.25rem',
-                borderRadius: 'var(--radius-sm)',
-                fontSize: '0.8rem',
-                fontFamily: 'var(--font-mono)',
-                maxHeight: '450px',
-                overflowY: 'auto'
-              }}>
-                {JSON.stringify(currentScreen || {}, null, 2)}
-              </pre>
-            </div>
-          ) : (
-            <div>
-              <MockupRenderer screen={currentScreen} />
+          {/* Screen selector tabs */}
+          {viewMode !== 'relations' && (
+            <div className="screen-selector">
+              {screens.map(screen => (
+                <button
+                  key={screen.id}
+                  className={`screen-tab ${selectedScreenId === screen.id ? 'active' : ''}`}
+                  onClick={() => setSelectedScreenId(screen.id)}
+                >
+                  <span className="ms ms-xs">monitor</span>
+                  <span>{screen.name}</span>
+                  {screen.route && (
+                    <span style={{ fontSize: '0.6875rem', opacity: 0.7 }}>{screen.route}</span>
+                  )}
+                </button>
+              ))}
             </div>
           )}
+
+          {/* Content */}
+          <div className="page-scrollable" style={{ padding: '20px 24px' }}>
+            {viewMode === 'structure' ? (
+              <div>
+                <div style={{ marginBottom: '16px' }}>
+                  <h3 style={{ fontSize: '1rem', fontWeight: 600, color: 'var(--on-surface)', margin: 0 }}>
+                    Estructura de Organización de la Información — {currentScreen?.name}
+                  </h3>
+                  <p style={{ fontSize: '0.8125rem', color: 'var(--secondary)', margin: '2px 0 0' }}>
+                    Explicación de la arquitectura de información, zonas visuales y jerarquía de componentes de esta vista.
+                  </p>
+                </div>
+
+                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))', gap: '14px', marginBottom: '20px' }}>
+                  <div className="info-card" style={{ borderLeft: '4px solid var(--primary)' }}>
+                    <strong style={{ fontSize: '0.875rem', display: 'flex', alignItems: 'center', gap: '6px' }}>
+                      <span className="ms ms-xs">web</span> 1. Cabecera (Header)
+                    </strong>
+                    <p style={{ fontSize: '0.8125rem', color: 'var(--secondary)', margin: '6px 0 0', lineHeight: 1.4 }}>
+                      Identidad institucional, logo del sistema, título de la pantalla activa ({currentScreen?.name}), buscador global y panel de usuario con avatar y rol.
+                    </p>
+                  </div>
+
+                  <div className="info-card" style={{ borderLeft: '4px solid #0284c7' }}>
+                    <strong style={{ fontSize: '0.875rem', display: 'flex', alignItems: 'center', gap: '6px' }}>
+                      <span className="ms ms-xs">menu</span> 2. Navegación (Sidebar / Menú)
+                    </strong>
+                    <p style={{ fontSize: '0.8125rem', color: 'var(--secondary)', margin: '6px 0 0', lineHeight: 1.4 }}>
+                      Árbol de navegación con enlaces a las vistas principales ({screens.map(s => s.name).join(', ')}), badges de notificación y botón de repliegue.
+                    </p>
+                  </div>
+
+                  <div className="info-card" style={{ borderLeft: '4px solid #16a34a' }}>
+                    <strong style={{ fontSize: '0.875rem', display: 'flex', alignItems: 'center', gap: '6px' }}>
+                      <span className="ms ms-xs">dashboard</span> 3. Área Central de Trabajo
+                    </strong>
+                    <p style={{ fontSize: '0.8125rem', color: 'var(--secondary)', margin: '6px 0 0', lineHeight: 1.4 }}>
+                      Muestra los datos primarios de la pantalla: tablas de datos, tarjetas de indicadores (KPIs), filtros dinámicos y estados de carga.
+                    </p>
+                  </div>
+
+                  <div className="info-card" style={{ borderLeft: '4px solid #9333ea' }}>
+                    <strong style={{ fontSize: '0.875rem', display: 'flex', alignItems: 'center', gap: '6px' }}>
+                      <span className="ms ms-xs">touch_app</span> 4. Interacción & Formularios
+                    </strong>
+                    <p style={{ fontSize: '0.8125rem', color: 'var(--secondary)', margin: '6px 0 0', lineHeight: 1.4 }}>
+                      Formularios con validaciones en tiempo real, modales de confirmación, botones de acción primaria ("Guardar", "Registrar") y avisos de estado.
+                    </p>
+                  </div>
+                </div>
+
+                {/* Live Preview with wireframe overlay */}
+                <div style={{ background: 'var(--surface-container-lowest)', padding: '16px', borderRadius: 'var(--radius-md)', border: '1px solid var(--outline-variant)' }}>
+                  <span style={{ fontSize: '0.75rem', color: 'var(--secondary)', textTransform: 'uppercase', fontWeight: 600, display: 'block', marginBottom: '8px' }}>
+                    Previsualización de la Pantalla:
+                  </span>
+                  <MockupRenderer screen={currentScreen} />
+                </div>
+              </div>
+            ) : viewMode === 'relations' ? (
+              <div>
+                <div style={{ marginBottom: '16px' }}>
+                  <h3 style={{ fontSize: '1rem', fontWeight: 600, color: 'var(--on-surface)', margin: 0 }}>
+                    Relación entre Pantallas y Árbol de Navegación
+                  </h3>
+                  <p style={{ fontSize: '0.8125rem', color: 'var(--secondary)', margin: '2px 0 0' }}>
+                    Diagrama que muestra cómo los usuarios navegan y transitan entre cada una de las vistas del sistema.
+                  </p>
+                </div>
+
+                <DiagramViewport
+                  code={screenRelationsDiagram}
+                  type="flowchart"
+                  title="Relación entre Pantallas y Rutas"
+                  minHeight="500px"
+                />
+              </div>
+            ) : viewMode === 'sketch' ? (
+              <div>
+                <div className="alert alert-info" style={{ marginBottom: '14px', fontSize: '0.75rem' }}>
+                  <span className="ms ms-xs">draw</span>
+                  <span><strong>Modo Sketch / Wireframe:</strong> Renderizado de baja fidelidad en escala de grises para validar la distribución de bloques sin distracción de color.</span>
+                </div>
+                <div style={{ filter: 'grayscale(1) contrast(1.15)', border: '2px dashed #94a3b8', borderRadius: '8px', padding: '10px', background: '#fafafa' }}>
+                  <MockupRenderer screen={currentScreen} />
+                </div>
+              </div>
+            ) : viewMode === 'html' ? (
+              <div>
+                <p className="detail-section-label" style={{ marginBottom: '8px' }}>
+                  HTML — {currentScreen?.name}
+                </p>
+                <pre className="code-viewer" style={{ background: '#f8fafc', color: 'var(--on-surface)' }}>
+                  {currentScreen?.html || 'Esta pantalla no contiene HTML.'}
+                </pre>
+              </div>
+            ) : (
+              <MockupRenderer screen={currentScreen} />
+            )}
+          </div>
         </>
       )}
     </div>
