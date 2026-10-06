@@ -85,7 +85,8 @@ class DocumentController {
       const analysisInput = documentAnalyzer.buildAnalysisInput(extractionData);
       const structuredResult = await documentAnalyzer.analyzeWithAI(
         analysisInput,
-        req.body?.providerOverride
+        req.body?.providerOverride || req.body?.provider,
+        req.body?.modelOverride || req.body?.model
       );
 
       return res.status(200).json({
@@ -135,7 +136,11 @@ class DocumentController {
       }
 
       // 3. Persistencia transaccional sin duplicados
-      await AIService.persistProjectAnalysis(projectId, analysisData);
+      if (analysisData.extractionVersion) {
+        await AIService.persistDocumentExtraction(projectId, analysisData);
+      } else {
+        await AIService.persistProjectAnalysis(projectId, analysisData);
+      }
 
       // 4. Actualizar descripción del proyecto si viene sugerida
       if (analysisData.project?.description) {

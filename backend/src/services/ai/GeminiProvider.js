@@ -2,6 +2,24 @@ const AIProvider = require('./AIProvider');
 const env = require('../../config/env');
 
 class GeminiProvider extends AIProvider {
+  async extractDocumentBatch(input, options = {}) {
+    const model = options.model || env.GEMINI_MODEL || this.model;
+    if (!this.apiKey) throw new Error('Gemini no configurado');
+    await this.throttle();
+    const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(model)}:generateContent`, {
+      method: 'POST', signal: AbortSignal.timeout(90000), headers: { 'Content-Type': 'application/json', 'x-goog-api-key': this.apiKey },
+      body: JSON.stringify({ systemInstruction: { parts: [{ text: options.prompt || require('../analysis/extractionContract').prompt }] },
+        contents: [{ parts: [{ text: JSON.stringify(input) }] }],
+        generationConfig: { responseMimeType: 'application/json', maxOutputTokens: 8192, temperature: 0 } })
+    });
+    if (!response.ok) throw new Error(`Gemini HTTP ${response.status}; modelo solicitado: ${model}`);
+    const result = await response.json();
+    const candidate = result.candidates?.[0];
+    if (candidate?.finishReason !== 'STOP') throw Object.assign(new Error(`Gemini respuesta incompleta: ${candidate?.finishReason}`), { usage: result.usageMetadata });
+    const text = (candidate.content?.parts || []).filter(p => !p.thought).map(p => p.text || '').join('');
+    try { return { data: JSON.parse(text), usage: result.usageMetadata, model }; }
+    catch (error) { error.usage = result.usageMetadata; throw error; }
+  }
   constructor() {
     super();
     this.model = env.GEMINI_MODEL || 'gemini-3.1-flash-lite';

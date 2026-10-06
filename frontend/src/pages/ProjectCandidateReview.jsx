@@ -98,7 +98,7 @@ export default function ProjectCandidateReview({ project, onNavigateToRequiremen
         candidatesApi.getStats(project.id)
       ]);
 
-      setCandidates(list || []);
+      setCandidates((list || []).filter(c => c.kind === 'ACTOR' || (c.kind === 'REQUIREMENT' && ['FUNCTIONAL', 'NON_FUNCTIONAL'].includes(c.type))));
       setStats(statsData);
       setSelectedIds(new Set());
     } catch (err) {
@@ -354,18 +354,8 @@ export default function ProjectCandidateReview({ project, onNavigateToRequiremen
   const categoryTabs = [
     { id: 'ALL', label: 'Todos', icon: <Layers size={13} />, count: categoryCounts.ALL },
     { id: 'REQUISITOS', label: 'Requisitos', icon: <FileText size={13} />, count: categoryCounts.REQUISITOS },
-    { id: 'ACTORES', label: 'Actores', icon: <Users size={13} />, count: categoryCounts.ACTORES },
-    { id: 'PROCESOS', label: 'Procesos', icon: <GitBranch size={13} />, count: categoryCounts.PROCESOS },
-    { id: 'REGLAS DE NEGOCIO', label: 'Reglas de Negocio', icon: <Shield size={13} />, count: categoryCounts['REGLAS DE NEGOCIO'] },
-    { id: 'TECNOLOGÍAS', label: 'Tecnologías', icon: <Cpu size={13} />, count: categoryCounts.TECNOLOGÍAS },
-    { id: 'ARQUITECTURA', label: 'Arquitectura', icon: <Building size={13} />, count: categoryCounts.ARQUITECTURA },
-    { id: 'ENTIDADES', label: 'Entidades & Datos', icon: <Database size={13} />, count: categoryCounts.ENTIDADES },
-    { id: 'PANTALLAS', label: 'Pantallas / Vistas', icon: <Layout size={13} />, count: categoryCounts.PANTALLAS },
-    { id: 'FECHAS', label: 'Fechas & Hitos', icon: <Calendar size={13} />, count: categoryCounts.FECHAS },
-    { id: 'RESTRICCIONES', label: 'Restricciones / Supuestos', icon: <AlertCircle size={13} />, count: categoryCounts.RESTRICCIONES },
-    { id: 'OBJETIVOS Y ALCANCE', label: 'Objetivos & Alcance', icon: <Layers size={13} />, count: categoryCounts['OBJETIVOS Y ALCANCE'] },
-    { id: 'CONFLICTS', label: 'Conflictos', icon: <AlertTriangle size={13} />, count: categoryCounts.CONFLICTS }
-  ].filter(tab => tab.id === 'ALL' || tab.count > 0 || tab.id === activeCategory);
+    { id: 'ACTORES', label: 'Actores', icon: <Users size={13} />, count: categoryCounts.ACTORES }
+  ];
 
   const renderPaginationBar = () => {
     if (totalItems === 0) return null;

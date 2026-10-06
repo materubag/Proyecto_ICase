@@ -33,3 +33,13 @@ Thumbs.db
 test-results/
 playwright-report/
 
+
+# Local document extraction cache (contains source evidence)
+backend/.cache/
+
+# Project documentation
+/docs/
+
+# Tests
+/backend/tests/
+/frontend/tests/

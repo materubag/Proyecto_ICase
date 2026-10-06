@@ -76,6 +76,7 @@ REGLAS CRÍTICAS DE CALIDAD Y SEMÁNTICA (CUMPLIMIENTO ESTRICTO):
      }
    - Si una entidad existe en el contexto, DEBE tener sus atributos y su clave primaria definidos.
 
+Declara un bloque de atributos para CADA entidad usada en relaciones. Comprueba que nombres de extremos coincidan exactamente. Respeta direccion y cardinalidades de las claves foraneas: si USUARIO tiene id_rol, la relacion es ROL ||--o{ USUARIO. No inventes atributos sin respaldo del contexto.
 4. CLAVES PRIMARIAS (PK) TÉCNICAS:
    - Toda entidad persistente DEBE tener una PK razonable: 'int id PK' o 'string codigo PK'.
    - PROHIBIDO usar frases o textos descriptivos como PK (PROHIBIDO: 'string claridad_la_falla PK', 'string descripcion PK').
@@ -158,7 +159,7 @@ REGLAS CRÍTICAS DE CALIDAD Y SEMÁNTICA (CUMPLIMIENTO ESTRICTO):
    - NUNCA generes una clase sin miembros:
      class Cita {
      }
-   - Cada clase debe incluir sus atributos y sus métodos del dominio correspondientes.
+   - Incluye atributos respaldados; metodos solo con responsabilidad sustentada. No obligues metodos en objetos de datos.
 
 4. ATRIBUTOS VÁLIDOS PARA CÓDIGO:
    - Convención camelCase estricta sin espacios ni tildes:
@@ -179,7 +180,11 @@ REGLAS CRÍTICAS DE CALIDAD Y SEMÁNTICA (CUMPLIMIENTO ESTRICTO):
    - PROHIBICIÓN ESTRICTA DE MÉTODOS GENÉRICOS DE RELLENO (PROHIBIDO: getId, setId, toDTO, validate, save, validarReglas). No inventes métodos abstractos.
 
 6. RED COHERENTE DE RELACIONES:
-   - No dejes una única relación aislada; conecta todas las clases principales del dominio.
+   - Herencia solo con especializacion documentada; acceso y roles no justifican herencia.
+   - Multiplicidades inferidas son propuestas, no reglas confirmadas. Permite cotizaciones pendientes sin orden.
+   - ConsumoRepuesto conecta orden y Producto con cantidad; no conecta orden al inventario global.
+   - Consultas devuelven tipos concretos; void solo para operaciones sin retorno. Parametros tipados.
+   - No inventes relaciones para conectar clases. Una clase aislada requiere revision.
    - Relaciones UML permitidas:
      Asociación: ClaseA "1" --> "0..*" ClaseB : "asociacion"
      Composición: ClaseA *-- ClaseB : "compone"
@@ -357,12 +362,12 @@ REGLAS CRÍTICAS DE AISLAMIENTO Y DOMINIO:
     switch (diagramType) {
       case 'USE_CASE': {
         const actors = project.actors || [];
-        const useCases = (context.useCases && context.useCases.length > 0)
-          ? context.useCases
+        const useCases = (project.useCases && project.useCases.length > 0)
+          ? project.useCases
           : (context.functionalRequirements || []).map((r, i) => ({
               code: `CU-${String(i + 1).padStart(2, '0')}`,
               name: r.name,
-              actor: actors[0]?.name || 'Usuario'
+              id: r.id, actorIds: r.actorIds || []
             }));
         return useCaseGenerator.generate(actors, useCases);
       }
@@ -406,7 +411,7 @@ REGLAS CRÍTICAS DE AISLAMIENTO Y DOMINIO:
       case 'FLOWCHART':
         return flowchartGenerator.generate(context.steps || project.requirements || [], project.useCases || [], project.name);
       case 'NAVIGATION':
-        return navigationGenerator.generate(project.screens || [], project.name);
+        return require('./navigationTree').generate((project.navigationNodes||[]).length?project.navigationNodes:project.screens||[], project.name);
       case 'ARCHITECTURE':
         return architectureGenerator.generate(project.architectures?.[0] || {
           components: (project.technologies || []).map(t => ({ name: t.name, layer: t.category }))
@@ -420,6 +425,7 @@ REGLAS CRÍTICAS DE AISLAMIENTO Y DOMINIO:
    * Generates a single diagram with Gemini, deterministic normalization, validation and repair.
    */
   async generateDiagram(projectId, diagramType, options = {}) {
+    if(diagramType==='USE_CASE')await prisma.$transaction(tx=>require('../analysis/actorIdentity').refresh(tx,projectId));
     const force = typeof options.force === 'object' ? Boolean(options.force?.force) : Boolean(options.force);
 
     // 1. Check availability
@@ -441,7 +447,7 @@ REGLAS CRÍTICAS DE AISLAMIENTO Y DOMINIO:
     }
 
     // Check if already generated and valid
-    if (diagCheck.isGenerated && !force && !diagCheck.isOutdated) {
+    if (diagramType !== 'USE_CASE' && diagCheck.isGenerated && !force && !diagCheck.isOutdated) {
       const existingCode = diagCheck.mermaidCode || diagCheck.renderedContent;
       const existingValidation = mermaidValidator.validate(existingCode, diagramType);
       if (existingValidation.isValid) {
@@ -488,6 +494,7 @@ REGLAS CRÍTICAS DE AISLAMIENTO Y DOMINIO:
       }
     });
 
+    if(diagramType==='ARCHITECTURE') project.sources=await prisma.source.findMany({where:{projectId},include:{currentVersion:true}});
     const structuredContext = diagramContextBuilder.buildContext(diagramType, project);
     const systemPrompt = this.getSystemInstructions(diagramType);
     const constraintBlock = this.buildConstraintBlock(diagramType, structuredContext);
@@ -500,7 +507,44 @@ REGLAS CRÍTICAS DE AISLAMIENTO Y DOMINIO:
 
     const isMock = env.AI_PROVIDER === 'mock' || (!env.GEMINI_API_KEY && !this.gemini.apiKey);
 
-    if (isMock) {
+    if(diagramType==='ARCHITECTURE') {
+      const proposal=require('./architectureProposal').generate(project);
+      mermaidCode=proposal.code;structuredContext.architectureProposal=proposal;structuredContext.flowWarning=proposal.warning;
+      usedProvider='LOCAL_PROPOSAL';repairMethod='REQUIREMENTS_BASED_PROPOSAL';
+    }else if(['ER','CLASS','NAVIGATION','FLOWCHART'].includes(diagramType)&&['openai','gemini'].includes(env.AI_PROVIDER)){
+      const extraction=require('../analysis/documentExtraction');
+      const config=extraction.configuration();
+      const modelInstructions=diagramType==='ER'?'Compatible con Mermaid 10: no incluyas direction dentro de erDiagram. Cuando no haya entidades aprobadas, deriva un modelo PROPUESTO exclusivamente de las capacidades de persistencia documentadas en los requisitos. Las claves tecnicas son decisiones de modelado propuestas.':'Genera classDiagram compatible con Mermaid 10. Si no hay clases ni entidades aprobadas, deriva un modelo de dominio PROPUESTO desde los requisitos funcionales y casos de uso. Incluye atributos y operaciones del negocio justificados. No copies automaticamente el modelo relacional ni conviertas actores en clases sin identidad persistente documentada. No inventes servicios tecnicos, metodos genericos ni herencia sin respaldo. Usa firmas de metodos sencillas sin tipos complejos.';
+      let instructions=diagramType==='NAVIGATION'?'Genera flowchart TD compatible con Mermaid 10. Representa un ARBOL con una sola raiz del proyecto, modulos y pantallas justificadas por los requisitos. Cada nodo salvo la raiz tiene exactamente un padre, sin ciclos ni nodos desconectados. No dibujes pasos de procesos ni flujos operativos. Conserva parentId y rutas documentadas cuando existan. Si faltan pantallas, los modulos y rutas son una propuesta de diseño, no permisos confirmados. No asignes accesos a roles ni inventes capacidades. Usa etiquetas sencillas sin sintaxis HTML.':modelInstructions;
+      if(diagramType==='CLASS') instructions += '\nRevisa TODOS los requisitos funcionales del contexto. Modela conceptos persistentes, objetos de valor y detalles de operaciones respaldados; no resumas procesos distintos en clases genericas. Atributos con visibilidad y tipos; operaciones con parametros tipados y retornos concretos. No obligues metodos en objetos de datos. Incluye detalles, autorizaciones parciales, asignaciones, movimientos y registros cuando esten documentados. No conviertas RNF en clases por defecto. Marca multiplicidades inferidas y restricciones con notas. Justifica cobertura y omisiones, sin cantidad de clases objetivo.';
+      let format=diagramType==='NAVIGATION'?'Devuelve exclusivamente JSON {"nodes":[{"id":"identificador unico","name":"nombre","parentId":null,"route":null}]}. parentId referencia otro nodo o es null para modulos principales. No devuelvas Mermaid.':'Devuelve JSON {"mermaidCode":"codigo Mermaid completo"}.';
+      if(diagramType==='FLOWCHART'){
+        instructions='Representa procesos de negocio PROPUESTOS desde los requisitos. No encadenes procesos independientes arbitrariamente ni representes menus de navegacion. Cada proceso tiene inicio y fin; procesos separados tienen inicios separados. Solo decisiones con condiciones respaldadas por requisitos. No inventes validaciones, notificaciones ni permisos. Cada paso y decision cita los IDs de requisitos que lo justifican. Se permiten bucles documentados con salida.';
+        instructions += ' No generes una orden o ejecucion cuando la autorizacion es pendiente o rechazada. Representa aprobacion parcial usando solo items autorizados si esta documentada. No conviertas funciones de menu en flujo ni des por obligatorio consumo de recursos opcionales. Declara una cobertura coherente del proceso seleccionado y no omitas decisiones de autorizacion descritas en requisitos.';
+        format='Devuelve exclusivamente JSON {"nodes":[{"id":"id unico","label":"accion o condicion","type":"start|end|process|decision","requirementIds":["UUID exacto"]}],"edges":[{"source":"id","target":"id","label":"condicion de rama o vacio"}]}. Cada decision tiene al menos dos ramas etiquetadas. Todos los pasos tienen camino desde un inicio a un fin. No devuelvas Mermaid.';
+      }
+      let response;
+      try {
+        response=await extraction.createProvider(config.provider).extractDocumentBatch(structuredContext,{model:config.model,prompt:instructions+'\n'+format+' No modifiques requisitos ni actores ni inventes permisos.'});
+      } catch(error) {
+        if(/HTTP (503|429)/.test(error.message)) throw Object.assign(new Error('El proveedor de IA no esta disponible temporalmente o alcanzo su limite. El diagrama guardado se conserva. No se realizaron reintentos automaticos.'),{statusCode:503,code:'AI_TEMPORARILY_UNAVAILABLE'});
+        throw error;
+      }
+      if(diagramType==='FLOWCHART'){
+        try{response.data.mermaidCode=require('./processFlow').generate(response.data,structuredContext.steps);}catch(error){
+          const repaired=await extraction.createProvider(config.provider).extractDocumentBatch({...structuredContext,previousProposal:response.data,validationError:error.message},{model:config.model,prompt:instructions+'\n'+format+' Corrige la propuesta anterior generando una version simplificada de los procesos documentados. En esta reparacion solo usa type start, process y end; NO uses decision ni interrogaciones. Omite bifurcaciones incompletas; no inventes ramas para completarlas. Mantiene acciones documentadas, referencias de requisitos y caminos de inicio a fin. Separa procesos independientes.'});
+          try{response.data=repaired.data;response.data.mermaidCode=require('./processFlow').generate(response.data,structuredContext.steps);}catch(repairError){
+            const flow=require('./processFlow');response.data=flow.independent(structuredContext.steps);response.data.mermaidCode=flow.generate(response.data,structuredContext.steps);structuredContext.flowWarning='La IA no pudo justificar un flujo conectado completo. Se muestran operaciones independientes respaldadas por requisitos, sin inferir su secuencia.';
+          }
+        }structuredContext.proposedFlow={nodes:response.data.nodes,edges:response.data.edges};
+      }
+      if(diagramType==='NAVIGATION'){
+        if(!Array.isArray(response.data?.nodes))throw Object.assign(new Error('Jerarquia de navegacion invalida'),{statusCode:502});
+        response.data.mermaidCode=require('./navigationTree').generate(response.data.nodes,project.name);structuredContext.proposedNavigationNodes=response.data.nodes;
+      }
+      if(typeof response.data?.mermaidCode!=='string')throw Object.assign(new Error('La IA no devolvió un diagrama válido. Vuelve a generar.'),{statusCode:502});
+      mermaidCode=this.cleanMermaidCode(response.data.mermaidCode);usedProvider=config.provider.toUpperCase();
+    }else if (isMock || diagramType === 'USE_CASE') {
       console.log(`[DiagramAiService] Generando ${diagramType} con generador determinista (modo mock)...`);
       mermaidCode = this.generateDeterministicFallback(diagramType, project, structuredContext);
       usedProvider = 'MOCK_DETERMINISTIC';
@@ -541,6 +585,8 @@ REGLAS CRÍTICAS DE AISLAMIENTO Y DOMINIO:
 
     // Run semantic validation
     const validation = this.validateDiagram(diagramType, mermaidCode);
+    if(diagramType==='ER'&&(!validation.isValid||!validation.stats?.entitiesCount))throw Object.assign(new Error('No se pudo generar un diagrama E/R válido: '+(validation.errors||[]).join('; ')),{statusCode:422,code:'INVALID_ER_DIAGRAM'});
+    if(diagramType==='CLASS'&&(!validation.isValid||!validation.stats?.classesCount))throw Object.assign(new Error('No se pudo generar un diagrama UML válido: '+(validation.errors||[]).join('; ')),{statusCode:422,code:'INVALID_CLASS_DIAGRAM'});
 
     // Persist into Artifact and ArtifactVersion with structured content for traceability
     const persisted = await this.persistDiagramArtifact(
@@ -567,6 +613,7 @@ REGLAS CRÍTICAS DE AISLAMIENTO Y DOMINIO:
       diagram: { mermaidCode },
       artifact: { mermaidCode },
       provider: usedProvider,
+      warning: structuredContext.flowWarning||null,
       repairMethod,
       validation,
       generatedAt: persisted.createdAt || new Date().toISOString(),
@@ -724,6 +771,7 @@ REGLAS CRÍTICAS DE AISLAMIENTO Y DOMINIO:
       generatedAt: latestVersion?.createdAt || null,
       isOutdated: diagCheck?.isOutdated || false,
       technicalError: latestVersion?.technicalError || null,
+      architectureProposal: latestVersion?.structuredContent?.context?.architectureProposal || latestVersion?.structuredContent?.architectureProposal || null,
       availability: diagCheck
     };
   }

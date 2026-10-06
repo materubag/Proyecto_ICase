@@ -109,6 +109,14 @@ class DiagramSemanticValidator {
       rels.push({ source, target, card, label });
     }
 
+    // Mermaid permits entities introduced only by relationships.
+    for (const rel of rels) for (const name of [rel.source, rel.target]) {
+      if (!entities.has(name)) {
+        entities.set(name, {name, attributes:[], hasPk:false, isEmpty:true, implicit:true});
+        warnings.push('Entidad '+name+' mencionada en relaciones sin atributos ni PK definidos; completar el modelo.');
+      }
+    }
+
     // 3. Check for isolated entities
     const connectedEntities = new Set();
     rels.forEach(r => {
@@ -231,7 +239,7 @@ class DiagramSemanticValidator {
     }
 
     // Check standalone class declarations: e.g. "class Cita" without block
-    const standaloneClassRegex = /^\s*class\s+([A-Za-z0-9_]+)(?!\s*\{)/gm;
+    const standaloneClassRegex = /^[ \t]*class[ \t]+([A-Za-z0-9_]+)[ \t]*$/gm;
     while ((match = standaloneClassRegex.exec(clean)) !== null) {
       const cName = match[1].trim();
       if (!classes.has(cName)) {

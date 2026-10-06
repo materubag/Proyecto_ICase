@@ -38,6 +38,7 @@ export default function ProjectModel({ project, onProjectUpdated, initialTab = '
   // ER Diagram states
   const [erStoredCode, setErStoredCode] = useState('');
   const [generatingER, setGeneratingER] = useState(false);
+  const [generationError, setGenerationError] = useState('');
   const [erIsOutdated, setErIsOutdated] = useState(false);
 
   // Edit Class Modal (Governance)
@@ -163,6 +164,7 @@ export default function ProjectModel({ project, onProjectUpdated, initialTab = '
   async function handleGenerateER(force = false) {
     try {
       setGeneratingER(true);
+      setGenerationError('');
       const isForce = typeof force === 'object' ? Boolean(force.force) : Boolean(force);
       const res = await diagramsApi.generateDiagram(project.id, 'ER', isForce);
       const newCode = res?.code || res?.mermaidCode || res?.diagram?.mermaidCode || res?.artifact?.mermaidCode;
@@ -177,7 +179,7 @@ export default function ProjectModel({ project, onProjectUpdated, initialTab = '
       }
       if (onProjectUpdated) await onProjectUpdated();
     } catch (err) {
-      alert(`Error al generar diagrama E/R: ${err.message}`);
+      setGenerationError(err.message);
     } finally {
       setGeneratingER(false);
     }
@@ -186,6 +188,7 @@ export default function ProjectModel({ project, onProjectUpdated, initialTab = '
   async function handleGenerateClassDiagram(force = true) {
     try {
       setGeneratingClasses(true);
+      setGenerationError('');
       const isForce = typeof force === 'object' ? Boolean(force.force) : Boolean(force);
       const res = await diagramsApi.generateDiagram(project.id, 'CLASS', isForce);
       const newCode = res?.code || res?.mermaidCode || res?.diagram?.mermaidCode || res?.artifact?.mermaidCode;
@@ -201,7 +204,7 @@ export default function ProjectModel({ project, onProjectUpdated, initialTab = '
       await loadClasses();
       if (onProjectUpdated) await onProjectUpdated();
     } catch (err) {
-      alert(`Error al generar diagrama de clases: ${err.message}`);
+      setGenerationError(err.message);
     } finally {
       setGeneratingClasses(false);
     }
@@ -329,13 +332,13 @@ export default function ProjectModel({ project, onProjectUpdated, initialTab = '
           <div className="vdivider" />
           <div style={{ display: 'flex', gap: '12px' }}>
             <span style={{ fontSize: '0.8125rem', color: 'var(--secondary)' }}>
-              <strong style={{ color: 'var(--on-surface)', fontWeight: 600 }}>{entities.length}</strong> entidades
+              <strong style={{ color: 'var(--on-surface)', fontWeight: 600 }}>{erValidation?.stats?.entitiesCount ?? entities.length}</strong> entidades
             </span>
             <span style={{ fontSize: '0.8125rem', color: 'var(--secondary)' }}>
-              <strong style={{ color: 'var(--on-surface)', fontWeight: 600 }}>{relationships.length}</strong> relaciones
+              <strong style={{ color: 'var(--on-surface)', fontWeight: 600 }}>{currentValidation?.stats?.relationshipsCount ?? relationships.length}</strong> relaciones
             </span>
             <span style={{ fontSize: '0.8125rem', color: 'var(--secondary)' }}>
-              <strong style={{ color: 'var(--on-surface)', fontWeight: 600 }}>{classes.length}</strong> clases
+              <strong style={{ color: 'var(--on-surface)', fontWeight: 600 }}>{classValidation?.stats?.classesCount ?? classes.length}</strong> clases
             </span>
           </div>
         </div>
@@ -486,6 +489,7 @@ export default function ProjectModel({ project, onProjectUpdated, initialTab = '
         </div>
       </div>
 
+      {generationError && <div role="alert" style={{padding:'12px 24px',background:'#fef2f2',color:'#991b1b'}}>{generationError}<button className="btn btn-ghost btn-sm" onClick={()=>setGenerationError('')}>Cerrar</button></div>}
       {/* Main Content Area */}
       <div className="page-scrollable" style={{ padding: '20px 24px', flex: 1, overflowY: 'auto' }}>
 
@@ -509,7 +513,7 @@ export default function ProjectModel({ project, onProjectUpdated, initialTab = '
                   {currentValidation.isValid ? 'check_circle' : 'cancel'}
                 </span>
                 <strong style={{ fontSize: '0.875rem', color: currentValidation.isValid ? '#15803d' : '#b91c1c' }}>
-                  {currentValidation.isValid ? '✓ Mermaid válido' : '✕ Mermaid inválido'}
+                  {currentValidation.isValid ? 'Codigo valido; diseno pendiente de revision' : 'Codigo invalido'}
                 </strong>
               </div>
 

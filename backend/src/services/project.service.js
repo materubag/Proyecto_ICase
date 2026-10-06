@@ -8,7 +8,7 @@ class ProjectService {
       include: {
         _count: {
           select: {
-            requirements: true,
+            requirements: { where: { isDeleted:false, status:{not:'REMOVED'} } },
             actors: true,
             entities: true,
             screens: true
@@ -23,6 +23,7 @@ class ProjectService {
       where: { id },
       include: {
         requirements: {
+          where: { isDeleted:false, status:{not:'REMOVED'} },
           orderBy: { code: 'asc' }
         },
         actors: {
@@ -113,7 +114,7 @@ class ProjectService {
         ...(status !== undefined && { status })
       },
       include: {
-        requirements: true,
+        requirements: { where: { isDeleted:false, status:{not:'REMOVED'} } },
         actors: true,
         entities: { include: { attributes: true } },
         relationships: true,

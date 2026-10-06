@@ -1,9 +1,26 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import MockupRenderer from '../components/mockup-renderer/MockupRenderer';
 import DiagramViewport from '../components/common/DiagramViewport';
+import Modal from '../components/common/Modal';
+import { screenOptions } from '../utils/mockupScreenOptions';
+import { engineering } from '../api/engineering.api';
+import { projectsApi } from '../api/projects.api';
 import { mockupApi } from '../api/mockup.api';
 
-export default function ProjectPrototype({ project }) {
+export default function ProjectPrototype({ project, onProjectUpdated }) {
+  const [selectorOpen,setSelectorOpen]=useState(!(project.screens||[]).length);
+  const [detailsScreen,setDetailsScreen]=useState(null);
+  const [loadingMockups,setLoadingMockups]=useState(true);
+  const [localNodes,setLocalNodes]=useState(null);
+  const availableScreens=screenOptions({...project,navigationNodes:localNodes || project.navigationNodes});
+  const [selectedNodeIds,setSelectedNodeIds]=useState([]);
+  useEffect(()=>{setGeneratedScreens([]);setSelectedNodeIdReset();setLocalNodes(null);},[project.id]);
+  useEffect(()=>{
+    let active=true;setLoadingMockups(true);
+    mockupApi.list(project.id).then(result=>{if(!active)return;const stored=result.screens||[];setGeneratedScreens(stored);if(stored.length)setSelectorOpen(false);}).catch(error=>{if(active)setGenerationError('No se pudieron cargar los mockups guardados: '+error.message);}).finally(()=>{if(active)setLoadingMockups(false);});
+    return ()=>{active=false;};
+  },[project.id]);
+  function setSelectedNodeIdReset(){setSelectedNodeIds([]);setSelectedScreenId(null);}
   const [generatedScreens, setGeneratedScreens] = useState([]);
   const [isGenerating, setIsGenerating] = useState(false);
   const [generationError, setGenerationError] = useState(null);
@@ -19,17 +36,32 @@ export default function ProjectPrototype({ project }) {
 
   async function handleGenerateMockup() {
     if (isGenerating) return;
+    if(!selectedNodeIds.length){setGenerationError('Selecciona las pantallas que quieres generar.');return;}
     try {
       setIsGenerating(true);
       setGenerationError(null);
+      const selected=availableScreens.filter(n=>selectedNodeIds.includes(n.id));
+      const ids=[];
+      for(const node of selected){
+        if(!node.proposed){ids.push(node.id);continue;}
+        const candidate=await engineering(project.id,'/models',{kind:'NavigationNode',name:node.name,content:{name:node.name,route:node.route,platform:node.platform,parentId:null,actorIds:[],useCaseIds:[]},requirementIds:node.requirementIds});
+        const promoted=await engineering(project.id,'/models/'+candidate.id,{status:'APPROVED'},'PATCH');
+        ids.push(promoted.promotedId);
+      }
+      const updated=await projectsApi.getById(project.id);
+      setLocalNodes(updated.navigationNodes||[]);setSelectedNodeIds(ids);
+      await onProjectUpdated?.();
       const result = await mockupApi.generateMockup(
         project.id,
-        `Generar un prototipo visual para: ${project.systemDescription || project.description || project.name}`
+        `Generar un prototipo visual para: ${project.systemDescription || project.description || project.name}`,
+        ids
       );
       const nextScreens = result?.screens || result?.data?.screens || [];
       if (nextScreens.length === 0) throw new Error('El backend no devolvió pantallas para mostrar.');
-      setGeneratedScreens(nextScreens);
-      setSelectedScreenId(nextScreens[0]?.id || null);
+      const normalized=nextScreens.map((screen,index)=>({...screen,id:screen.id || availableScreens.find(n=>n.route===screen.route||n.name===screen.name)?.id || 'generated-'+index}));
+      setGeneratedScreens(previous=>[...previous.filter(old=>!normalized.some(n=>n.route===old.route||n.id===old.id)),...normalized]);
+      setSelectedScreenId(normalized[0]?.id || null);
+      setSelectorOpen(false);
     } catch (error) {
       setGenerationError(error.message || 'No se pudo generar el prototipo.');
     } finally {
@@ -118,7 +150,7 @@ export default function ProjectPrototype({ project }) {
             </div>
           )}
 
-          <button className="btn btn-primary btn-sm" onClick={handleGenerateMockup} disabled={isGenerating}>
+          <button className="btn btn-primary btn-sm" onClick={handleGenerateMockup} disabled={isGenerating || !selectedNodeIds.length}>
             {isGenerating ? (
               <><span className="ms ms-sm spin">autorenew</span><span>Generando...</span></>
             ) : (
@@ -128,6 +160,25 @@ export default function ProjectPrototype({ project }) {
         </div>
       </div>
 
+      <section style={{flexShrink:0,padding:'16px 24px',borderBottom:'1px solid var(--border-default)'}}>
+        <div style={{display:'flex',alignItems:'center',justifyContent:'space-between',gap:12}}>
+          <div><strong>Pantallas a generar</strong><span style={{marginLeft:12,fontSize:13,color:'var(--secondary)'}}>{selectedNodeIds.length} seleccionadas</span></div>
+          <button type="button" className="btn btn-outline btn-sm" aria-expanded={selectorOpen} onClick={()=>setSelectorOpen(value=>!value)}>{selectorOpen?'Ocultar selector':'Seleccionar pantallas'}</button>
+        </div>
+        {selectorOpen && <>
+        {availableScreens.length ? <>
+          <p>Selecciona solo las pantallas que necesitas. Se enviaran {selectedNodeIds.length} al generador.</p>
+          <div style={{display:'grid',gridTemplateColumns:'repeat(auto-fit,minmax(250px,1fr))',gap:8,maxHeight:220,overflowY:'auto'}}>{availableScreens.map(node=><div key={node.id} style={{display:'flex',alignItems:'center',gap:10,padding:'10px 12px',border:selectedNodeIds.includes(node.id)?'1px solid var(--primary)':'1px solid var(--border-default)',borderRadius:8,background:'var(--surface-container-lowest)'}}>
+            <label style={{display:'flex',alignItems:'center',gap:8,flex:1,minWidth:0,cursor:'pointer'}}><input type="checkbox" disabled={isGenerating} checked={selectedNodeIds.includes(node.id)} onChange={event=>setSelectedNodeIds(ids=>event.target.checked?[...ids,node.id]:ids.filter(id=>id!==node.id))}/><span style={{fontSize:13,fontWeight:600}}>{node.name}</span></label>
+            <button type="button" className="btn btn-ghost btn-sm" onClick={()=>setDetailsScreen(node)}>Ver detalles</button>
+          </div>)}</div>
+        </> : <p>No hay pantallas aprobadas con ruta y requisitos vinculados. No hay requisitos funcionales aprobados para proponer pantallas.</p>}
+        </>}
+      </section>
+      <Modal isOpen={!!detailsScreen} onClose={()=>setDetailsScreen(null)} title={detailsScreen?.name||'Pantalla'}>
+        <p>{detailsScreen?.description}</p><small>{detailsScreen?.route}</small>
+        <h4>Funcionalidades</h4><ul>{detailsScreen?.functionalities.map(item=><li key={item.id}><strong>{item.code}</strong>: {item.text}</li>)}</ul>
+      </Modal>
       {/* Error */}
       {generationError && (
         <div className="alert alert-danger" style={{ margin: '12px 24px 0' }}>
@@ -136,13 +187,13 @@ export default function ProjectPrototype({ project }) {
         </div>
       )}
 
-      {screens.length === 0 ? (
+      {loadingMockups ? <div className="page-scrollable">Cargando mockups guardados...</div> : screens.length === 0 ? (
         <div className="page-scrollable">
           <div className="empty-state" style={{ border: '1px dashed var(--outline-variant)', borderRadius: 'var(--radius-lg)' }}>
             <div className="empty-state-icon"><span className="ms ms-xl">devices</span></div>
             <p className="empty-state-title">Sin pantallas generadas</p>
             <p className="empty-state-desc">
-              Ejecuta el análisis IA en la pestaña Resumen o usa el botón "Generar con n8n" para crear los mockups.
+              Selecciona las pantallas de la lista superior y pulsa Generar con n8n.
             </p>
             <button className="btn btn-primary btn-sm" onClick={handleGenerateMockup} disabled={isGenerating}>
               <span className="ms ms-sm">auto_awesome</span>
@@ -154,7 +205,7 @@ export default function ProjectPrototype({ project }) {
         <>
           {/* Screen selector tabs */}
           {viewMode !== 'relations' && (
-            <div className="screen-selector">
+            <div className="screen-selector" style={{flexShrink:0}}>
               {screens.map(screen => (
                 <button
                   key={screen.id}
@@ -172,7 +223,7 @@ export default function ProjectPrototype({ project }) {
           )}
 
           {/* Content */}
-          <div className="page-scrollable" style={{ padding: '20px 24px' }}>
+          <div className="page-scrollable" style={{ padding: '20px 24px', flex:1, minHeight:0 }}>
             {viewMode === 'structure' ? (
               <div>
                 <div style={{ marginBottom: '16px' }}>

@@ -147,6 +147,8 @@ class CandidateConsolidator {
    */
   convertNeedToRequirementCandidate(need, temporaryCode) {
     if (!need || !need.description) return null;
+    if (require('./statementClassifier').classify(need.description, need) === 'OBJECTIVE') return null;
+    if (!need.type && require('./statementClassifier').classify(need.description,need) === 'UNKNOWN') return null;
 
     // 1. Limpieza de viñetas, guiones y numeraciones iniciales
     let cleanText = need.description
@@ -211,6 +213,8 @@ class CandidateConsolidator {
       status: 'PENDING_REVIEW',
       evidence: {
         text: need.evidence || need.description,
+        section: need.section || need.metadata?.section || null,
+        context: need.context || need.metadata || null,
         type: 'SEMANTIC_INFERENCE'
       }
     };
@@ -240,6 +244,7 @@ class CandidateConsolidator {
     sourceVersionId,
     sourceSegmentId = null
   }) {
+    const objectives = [];
     const needCandidates = [];
     const requirementCandidates = [];
 
@@ -253,6 +258,7 @@ class CandidateConsolidator {
     for (const explicit of explicitRequirements) {
       const code = explicit.code || `CRF-${String(rfCounter++).padStart(2, '0')}`;
       const statement = explicit.description || explicit.name || '';
+      if (require('./statementClassifier').classify(statement, explicit) === 'OBJECTIVE') { objectives.push({kind:'OBJECTIVE',statement,evidence:explicit.evidence || explicit.sourceText || statement,section:explicit.section,sourceId,sourceVersionId}); continue; }
       const type = explicit.type === 'NON_FUNCTIONAL' ? 'NON_FUNCTIONAL' : 'FUNCTIONAL';
 
       const rel = this.detectRelationship({ statement }, existingCandidates);
@@ -292,6 +298,7 @@ class CandidateConsolidator {
       const needs = semResult.needs || [];
 
       for (const need of needs) {
+        if (require('./statementClassifier').classify(need.description, need) === 'OBJECTIVE') { objectives.push({kind:'OBJECTIVE',statement:need.description,evidence:need.evidence || need.description,section:need.section,sourceId,sourceVersionId}); continue; }
         const needObj = {
           projectId,
           sourceId,
@@ -369,6 +376,7 @@ class CandidateConsolidator {
     });
 
     return {
+      objectives,
       needCandidates,
       requirementCandidates: canonicalRequirements,
       summary: {

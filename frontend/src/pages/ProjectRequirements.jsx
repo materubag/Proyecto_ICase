@@ -27,8 +27,8 @@ export default function ProjectRequirements({ project, onProjectUpdated, initial
 
   const [pendingChange, setPendingChange] = useState(null);
   const [changeError, setChangeError] = useState('');
-  const requirements = project.requirements || [];
-  const actorsMap = new Map((project.actors || []).map(a => [a.codeId || a.id, a.name]));
+  const requirements = (project.requirements || []).filter(r=>!r.isDeleted&&r.status!=='REMOVED');
+  const actorsMap = new Map((project.actors || []).map(a => [a.id, a.name]));
 
   // Segregated Metrics (Requirement #3: Clear separation of Canonical vs Extraction Traceability)
   const auditMetrics = React.useMemo(() => {
@@ -403,7 +403,7 @@ export default function ProjectRequirements({ project, onProjectUpdated, initial
                 {filtered.map((req, idx) => {
                   const pre = req.qualityReport?.preconditions || req.preconditions || 'El usuario debe estar autenticado con rol y permisos correspondientes.';
                   const post = req.qualityReport?.postconditions || req.postconditions || 'El sistema actualiza el registro en la base de datos y refleja los cambios.';
-                  const actors = (req.actorIds || []).map(id => actorsMap.get(id) || id).join(', ') || 'Usuario del sistema';
+                  const actors = (req.actorIds || []).map(id => actorsMap.get(id) || id).join(', ') || 'Sin actor asignado';
                   const deps = (req.dependencies || []).join(', ') || 'Ninguna';
 
                   return (
@@ -754,8 +754,8 @@ export default function ProjectRequirements({ project, onProjectUpdated, initial
           </div>
           <div className="grid-2">
             <ActorMultiSelect
-              projectActors={project.actors || []}
-              selectedActorIds={actorIds}
+              actors={project.actors || []}
+              selectedIds={actorIds}
               onChange={setActorIds}
             />
             <RequirementMultiSelect

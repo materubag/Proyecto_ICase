@@ -1,6 +1,13 @@
 const prisma = require('../config/prisma');
 const versionHistoryService = require('./versionHistory.service');
 
+
+async function validateActors(projectId, refs) {
+  const actors = await prisma.actor.findMany({where:{projectId,isDeleted:false}});
+  const unknown = refs.filter(ref => !actors.some(a => a.id === ref));
+  if (unknown.length) { const error = new Error('Use IDs persistidos de actores: ' + unknown.join(', ')); error.statusCode=422; throw error; }
+}
+
 class RequirementService {
   async getRequirementsByProject(projectId) {
     try {
@@ -11,7 +18,7 @@ class RequirementService {
     }
 
     return await prisma.requirement.findMany({
-      where: { projectId, isDeleted: false },
+      where: { projectId, isDeleted: false, status: {not:'REMOVED'} },
       orderBy: { code: 'asc' }
     });
   }
@@ -24,6 +31,7 @@ class RequirementService {
       throw error;
     }
 
+    await validateActors(projectId, data.actorIds || []);
     const { code, name, description, type, priority, status, actorIds, dependencies, preconditions, postconditions } = data;
     if (!code || !name || !description) {
       const error = new Error('Código, nombre y descripción son campos obligatorios');
@@ -68,6 +76,7 @@ class RequirementService {
       throw error;
     }
 
+    await validateActors(existing.projectId, data.actorIds || []);
     const { code, name, description, type, priority, status, actorIds, dependencies, preconditions, postconditions } = data;
     
     // Si cambia el código, actualizar en cascada referencias en otros requisitos, casos de uso y pantallas

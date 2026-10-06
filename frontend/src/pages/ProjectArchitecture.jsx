@@ -7,8 +7,11 @@ export default function ProjectArchitecture({ project, onProjectUpdated }) {
   const [archType, setArchType] = useState('software'); // 'software' | 'system'
   const [showCode, setShowCode] = useState(false);
 
+  const [storedSystemDiagram,setStoredSystemDiagram]=useState('');
   const [storedArchDiagram, setStoredArchDiagram] = useState('');
   const [isOutdated, setIsOutdated] = useState(false);
+  const [documentedStack,setDocumentedStack]=useState([]);
+  const [archError,setArchError]=useState('');
   const [generatingArch, setGeneratingArch] = useState(false);
 
   useEffect(() => {
@@ -23,6 +26,8 @@ export default function ProjectArchitecture({ project, onProjectUpdated }) {
       ]);
 
       if (res.status === 'fulfilled') {
+        setDocumentedStack(res.value?.architectureProposal?.documentedTechnologies||[]);
+        setStoredSystemDiagram(res.value?.architectureProposal?.systemCode||'');
         const code = res.value?.code || res.value?.mermaidCode || res.value?.artifact?.mermaidCode;
         if (code) {
           setStoredArchDiagram(code);
@@ -40,12 +45,12 @@ export default function ProjectArchitecture({ project, onProjectUpdated }) {
 
   async function handleGenerateArch(force = false) {
     try {
-      setGeneratingArch(true);
+      setGeneratingArch(true);setArchError('');
       const isForce = typeof force === 'object' ? Boolean(force.force) : Boolean(force);
       const avail = await diagramsApi.getAvailability(project.id);
       const archCheck = avail?.diagrams?.ARCHITECTURE;
       if (archCheck?.status === 'INSUFFICIENT' && !isForce) {
-        alert(`Información arquitectónica insuficiente:\n• ${archCheck.missing?.join('\n• ')}`);
+        setArchError((archCheck.missing||[]).join('; '));
         return;
       }
 
@@ -54,10 +59,11 @@ export default function ProjectArchitecture({ project, onProjectUpdated }) {
       if (code) {
         setStoredArchDiagram(code);
         setIsOutdated(false);
+        await loadArchDiagram();
       }
       if (onProjectUpdated) await onProjectUpdated();
     } catch (err) {
-      alert(`Error al generar arquitectura: ${err.message}`);
+      setArchError(err.message);
     } finally {
       setGeneratingArch(false);
     }
@@ -70,9 +76,9 @@ export default function ProjectArchitecture({ project, onProjectUpdated }) {
   // Software Architecture Diagram (Logical layers of the analyzed project)
   const softwareArchCode = useMemo(() => {
     if (architecture?.softwareDiagram) return architecture.softwareDiagram;
-    const fe = architecture?.frontend || 'Capa de Presentación (Interfaz de Usuario)';
-    const be = architecture?.backend || 'Capa de Negocio y Lógica de Aplicación';
-    const db = architecture?.database || 'Capa de Persistencia y Base de Datos';
+    const fe = architecture?.frontend || documentedStack.filter(t=>t.category==='frontend').map(t=>t.name).join(' + ') || 'Capa de Presentación (Interfaz de Usuario)';
+    const be = architecture?.backend || documentedStack.filter(t=>t.category==='backend').map(t=>t.name).join(' + ') || 'Capa de Negocio y Lógica de Aplicación';
+    const db = architecture?.database || documentedStack.filter(t=>t.category==='database').map(t=>t.name).join(' + ') || 'Capa de Persistencia y Base de Datos';
 
     let code = `flowchart TD\n`;
     code += `  subgraph PRESENTATION ["1. CAPA DE PRESENTACIÓN"]\n`;
@@ -95,14 +101,14 @@ export default function ProjectArchitecture({ project, onProjectUpdated }) {
     code += `  SVC_RULES -->|Consultas y Persistencia| DB_STORE\n`;
 
     return code;
-  }, [architecture]);
+  }, [architecture, documentedStack]);
 
   // System Architecture Diagram (Physical deployment of the analyzed project)
   const systemArchCode = useMemo(() => {
     if (architecture?.deploymentDiagram) return architecture.deploymentDiagram;
-    const fe = architecture?.frontend || 'Frontend Web';
-    const be = architecture?.backend || 'Servidor de Aplicación';
-    const db = architecture?.database || 'Servidor de Base de Datos';
+    const fe = architecture?.frontend || documentedStack.filter(t=>t.category==='frontend').map(t=>t.name).join(' + ') || 'Frontend por confirmar';
+    const be = architecture?.backend || documentedStack.filter(t=>t.category==='backend').map(t=>t.name).join(' + ') || 'Servidor de Aplicación';
+    const db = architecture?.database || documentedStack.filter(t=>t.category==='database').map(t=>t.name).join(' + ') || 'Base de datos por confirmar';
 
     let code = `flowchart TB\n`;
     code += `  CLIENT["🌐 Dispositivo del Usuario (Navegador Web / Móvil)"]\n\n`;
@@ -121,10 +127,10 @@ export default function ProjectArchitecture({ project, onProjectUpdated }) {
   }, [architecture]);
 
   const effectiveSoftwareArchCode = storedArchDiagram || softwareArchCode;
-  const activeDiagramCode = archType === 'software' ? effectiveSoftwareArchCode : systemArchCode;
+  const activeDiagramCode = archType === 'software' ? effectiveSoftwareArchCode : (storedSystemDiagram || systemArchCode);
 
   const specItems = [
-    { label: 'Estilo de Arquitectura', value: architecture?.style || 'Clean Architecture en 3 Capas', icon: 'layers' },
+    { label: 'Estilo de Arquitectura', value: architecture?.style || 'Arquitectura propuesta por confirmar', icon: 'layers' },
     { label: 'Frontend', value: architecture?.frontend || 'Capa de Presentación / Cliente Web', icon: 'web' },
     { label: 'Backend', value: architecture?.backend || 'Capa de Negocio / Servicios API', icon: 'dns' },
     { label: 'Base de Datos', value: architecture?.database || 'Capa de Persistencia / Almacenamiento', icon: 'storage' },
@@ -132,6 +138,7 @@ export default function ProjectArchitecture({ project, onProjectUpdated }) {
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', height: '100%', overflow: 'hidden' }}>
+      {archError && <div role="alert" className="alert alert-danger">{archError}</div>}
       {/* Header */}
       <div className="full-page-header" style={{ borderBottom: '1px solid var(--outline-variant)', background: 'var(--surface)' }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: '14px' }}>
@@ -147,7 +154,7 @@ export default function ProjectArchitecture({ project, onProjectUpdated }) {
         </div>
 
         <div className="page-actions">
-          {archType === 'software' && (
+          {(
             <button
               className="btn btn-outline btn-sm"
               onClick={() => handleGenerateArch(true)}
@@ -233,8 +240,8 @@ export default function ProjectArchitecture({ project, onProjectUpdated }) {
             title={archType === 'software' ? 'Arquitectura de Software (Clean Architecture)' : 'Arquitectura del Sistema (Despliegue Docker)'}
             minHeight="520px"
             isOutdated={archType === 'software' ? isOutdated : false}
-            onRegenerate={archType === 'software' ? () => handleGenerateArch(true) : undefined}
-            canGenerate={archType === 'software'}
+            onRegenerate={() => handleGenerateArch(true)}
+            canGenerate={true}
             isGenerating={generatingArch}
           />
         )}

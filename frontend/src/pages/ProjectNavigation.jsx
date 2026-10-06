@@ -24,6 +24,7 @@ export default function ProjectNavigation({ project, onProjectUpdated }) {
   const [storedFlowDiagram, setStoredFlowDiagram] = useState('');
   const [isFlowOutdated, setIsFlowOutdated] = useState(false);
   const [generatingFlow, setGeneratingFlow] = useState(false);
+  const [flowNotice,setFlowNotice]=useState('');
 
   useEffect(() => {
     loadDiagrams();
@@ -86,6 +87,7 @@ export default function ProjectNavigation({ project, onProjectUpdated }) {
       setGeneratingFlow(true);
       const isForce = typeof force === 'object' ? Boolean(force.force) : Boolean(force);
       const res = await diagramsApi.generateDiagram(project.id, 'FLOWCHART', isForce);
+      setFlowNotice(res.warning||'');
       const code = res?.code || res?.mermaidCode || res?.diagram?.mermaidCode || res?.artifact?.mermaidCode;
       if (code) {
         setStoredFlowDiagram(code);
@@ -99,8 +101,8 @@ export default function ProjectNavigation({ project, onProjectUpdated }) {
     }
   }
 
-  const effectiveNavCode = storedNavDiagram || localNavCode;
-  const effectiveFlowCode = storedFlowDiagram || localFlowCode;
+  const effectiveNavCode = storedNavDiagram || ((navigationNodes.length||screens.length)?localNavCode:'');
+  const effectiveFlowCode = storedFlowDiagram || '';
 
   // Transitions for technical matrix
   const transitions = useMemo(() => {
@@ -254,6 +256,7 @@ export default function ProjectNavigation({ project, onProjectUpdated }) {
           </div>
         )}
 
+        {flowNotice&&<p role="status" style={{padding:'12px'}}>{flowNotice}</p>}
         {/* SUBTAB 2: DIAGRAMA DE FLUJO */}
         {activeTab === 'flow' && (
           <div>

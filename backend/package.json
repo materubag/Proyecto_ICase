@@ -4,7 +4,9 @@
   "description": "Backend API for ICASE (Integrated Computer-Aided Software Engineering) Tool",
   "main": "src/server.js",
   "scripts": {
-    "test": "node --test tests/engineering.test.js tests/audio.test.js tests/pipeline.test.js tests/fase3.test.js tests/gemini_multipdf_whisper.test.js",
+    "test": "node --require ./tests/fixtures/offline.cjs --test tests/document_extraction.test.js tests/requirement_flow.test.js tests/engineering.test.js tests/audio.test.js tests/pipeline.test.js tests/fase3.test.js tests/gemini_multipdf_whisper.test.js tests/actor_identity.test.js tests/objective_classification.test.js tests/analysis_jobs.test.js",
+    "test:extraction": "node --require ./tests/fixtures/offline.cjs --test tests/document_extraction.test.js tests/requirement_flow.test.js",
+    "test:requirements:integration": "node tests/requirement_flow.integration.js",
     "test:integration": "node tests/engineering.integration.js",
     "start": "node src/server.js",
     "dev": "nodemon src/server.js",

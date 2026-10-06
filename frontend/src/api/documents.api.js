@@ -18,10 +18,12 @@ export const documentsApi = {
    * Ejecuta el análisis estructurado de IA/Ollama
    * @param {File|Object} fileOrData
    */
-  analyze: (fileOrData) => {
+  analyze: (fileOrData, options = {}) => {
     if (fileOrData instanceof File) {
       const formData = new FormData();
       formData.append('file', fileOrData);
+      if (options.providerOverride) formData.append('providerOverride', options.providerOverride);
+      if (options.modelOverride) formData.append('modelOverride', options.modelOverride);
       return request('/documents/analyze', {
         method: 'POST',
         body: formData
@@ -29,7 +31,7 @@ export const documentsApi = {
     }
     return request('/documents/analyze', {
       method: 'POST',
-      body: { extractionData: fileOrData }
+      body: { extractionData: fileOrData, ...options }
     });
   },
 

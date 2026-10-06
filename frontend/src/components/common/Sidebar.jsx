@@ -27,13 +27,6 @@ const NAV_GROUPS = [
     ]
   },
   {
-    title: 'PROYECTO',
-    items: [
-      { id: 'planning', icon: 'calendar_month', label: 'Planificación' },
-      { id: 'tools_team', icon: 'groups', label: 'Equipo & Herramientas' },
-    ]
-  },
-  {
     title: 'ASISTENCIA',
     items: [
       { id: 'chat', icon: 'chat', label: 'Chat IA' },

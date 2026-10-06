@@ -55,135 +55,57 @@ class RuleBasedExtractor {
    * RF-01, RF01, RF 01, Requisito funcional RF-01, etc.
    */
   extractFunctionalRequirements(text, sections = []) {
-    if (!text) return [];
-
-    const lines = text.split('\n');
-    const reqs = [];
-    const seenCodes = new Set();
-
-    // Regex flexible para capturar RF:
-    // "RF-01", "RF01", "RF 01", "RF-1", "Requisito funcional RF-01", "Código RF-01", etc.
-    const rfRegex = /^(?:(?:Requisito\s+funcional|Requisitos\s+funcionales|C[oó]digo)\s+)?\b(RF)[\s\-_–]?([0-9]{1,3})\b[\s\t:.\-]+(.+)$/i;
-
-    for (let i = 0; i < lines.length; i++) {
-      const line = lines[i].trim();
-      const match = line.match(rfRegex);
-
-      if (match) {
-        const num = parseInt(match[2], 10);
-        const code = `RF-${String(num).padStart(2, '0')}`;
-
-        // Ignorar encabezados de rango como "RF-01 A RF-12"
-        if (/A\s+R(?:N)?F-?[0-9]+/i.test(match[3])) {
-          continue;
-        }
-
-        if (seenCodes.has(code)) {
-          continue;
-        }
-
-        let name = match[3].trim();
-        let j = i + 1;
-
-        // Capturar líneas siguientes que formen parte de la misma descripción
-        while (j < lines.length) {
-          const nextLine = lines[j].trim();
-          if (!nextLine) break;
-          // Romper si empieza otro requisito, sección, o tabla
-          if (/^(?:(?:R(?:N)?F|RN)[\s\-_]?[0-9]|[0-9]+\.|PERFILES|CALIDAD|CRITERIO|La autorización|Módulo|Capa|Tipo|•)/i.test(nextLine)) {
-            break;
-          }
-          name += ' ' + nextLine;
-          j++;
-        }
-
-        // Limpiar subencabezados pegados
-        const subheaderIdx = name.search(/\s+(?:TRAZABILIDAD TÉCNICA|CRITERIO DE RENDIMIENTO|RESULTADO ESPERADO)/i);
-        let description = '';
-        if (subheaderIdx !== -1) {
-          description = name.slice(subheaderIdx).trim();
-          name = name.slice(0, subheaderIdx).trim();
-        }
-
-        // Determinar sección de origen
-        const sectionOrigin = this.findSectionForOffset(lines.slice(0, i).join('\n').length, sections);
-
-        seenCodes.add(code);
-        reqs.push({
-          id: code,
-          code,
-          name: name.trim(),
-          text: name.trim(),
-          description: description || name.trim(),
-          type: 'FUNCTIONAL',
-          priority: 'HIGH',
-          source: 'pdf',
-          section: sectionOrigin,
-          sourceText: line
-        });
-      }
+    const classifier=require('../analysis/statementClassifier');
+    const out=this.extractCodedRequirements(text, sections, 'RF', 'FUNCTIONAL').filter(r=>classifier.classify(r.text,r)!=='OBJECTIVE');
+    const add=(statement,start,end,section)=>{if(out.some(r=>start>=r.start&&start<r.end))return;out.push({name:statement,text:statement,description:statement,type:'FUNCTIONAL',source:'explicit',extractionMethod:'LOCAL',sourceText:text.substring(start,end),section,start,end});};
+    for(const m of text.matchAll(/(?:El sistema|La aplicaci[o\u00f3]n|La plataforma)\s+(?:debe(?:r[a\u00e1])?|permitir[a\u00e1]|permite|podr[a\u00e1])\s+[^.\n]+[.]?/gi)) {
+      if(classifier.objectives(text,sections).some(o=>m.index>=o.start&&m.index<o.end))continue;
+      add(m[0],m.index,m.index+m[0].length,this.findSectionForOffset(m.index,sections));
     }
-
-    return reqs;
+    for(const section of sections.filter(s=>/requisitos?\s+funcionales|tabla de rf/i.test(s.title||'')))for(const m of text.substring(section.start,section.end).matchAll(/^[ \t|]*(?:registrar|consultar|modificar|eliminar|exportar|importar|generar|almacenar)\s+[^\n|]+/gmi)) {
+      const start=section.start+m.index;add(m[0].trim(),start,start+m[0].length,section.title);
+    }
+    return out;
   }
 
-  /**
-   * Extrae requisitos no funcionales con patrones flexibles:
-   * RNF-01, RNF01, RNF 01, Requisito no funcional RNF-01, etc.
-   */
   extractNonFunctionalRequirements(text, sections = []) {
-    if (!text) return [];
+    return this.extractCodedRequirements(text, sections, 'RNF', 'NON_FUNCTIONAL');
+  }
 
-    const lines = text.split('\n');
-    const reqs = [];
-    const seenCodes = new Set();
-
-    const rnfRegex = /^(?:(?:Requisito\s+no\s+funcional|Requisitos\s+no\s+funcionales|C[oó]digo)\s+)?\b(RNF)[\s\-_–]?([0-9]{1,3})\b[\s\t:.\-]+(.+)$/i;
-
-    for (let i = 0; i < lines.length; i++) {
-      const line = lines[i].trim();
-      const match = line.match(rnfRegex);
-
-      if (match) {
-        const num = parseInt(match[2], 10);
-        const code = `RNF-${String(num).padStart(2, '0')}`;
-
-        if (/A\s+RNF-?[0-9]+/i.test(match[3]) || seenCodes.has(code)) {
-          continue;
-        }
-
-        let name = match[3].trim();
-        let j = i + 1;
-
-        while (j < lines.length) {
-          const nextLine = lines[j].trim();
-          if (!nextLine) break;
-          if (/^(?:(?:R(?:N)?F|RN)[\s\-_]?[0-9]|[0-9]+\.|PERFILES|CALIDAD|CRITERIO|La autorización|Módulo|Capa|Tipo|•)/i.test(nextLine)) {
-            break;
-          }
-          name += ' ' + nextLine;
-          j++;
-        }
-
-        const sectionOrigin = this.findSectionForOffset(lines.slice(0, i).join('\n').length, sections);
-
-        seenCodes.add(code);
-        reqs.push({
-          id: code,
-          code,
-          name: name.trim(),
-          text: name.trim(),
-          description: name.trim(),
-          type: 'NON_FUNCTIONAL',
-          priority: 'MEDIUM',
-          source: 'pdf',
-          section: sectionOrigin,
-          sourceText: line
-        });
+  extractCodedRequirements(text = '', sections = [], prefix, type) {
+    const rows = [...text.matchAll(/[^\n]*(?:\n|$)/g)].filter(m => m[0]);
+    const pattern = /^[ \t|]*(?:(?:Requisitos?\s+(?:no\s+)?funcionales?|Código)\s+)?((RNF|RF)[ \t_–-]*([0-9]+))\b[ \t:|.–-]*(.*)$/i;
+    const out = [];
+    for (let i = 0; i < rows.length; i++) {
+      const first = rows[i][0].replace(/\r?\n$/, '');
+      const m = first.match(pattern);
+      if (!m || m[2].toUpperCase() !== prefix || /^(?:(?:A|AL|HASTA|TO)\s+)?R(?:N)?F[ -]*\d+\s*$/i.test(m[4])) continue;
+      let description = m[4].replace(/\|\s*$/, '').trim();
+      let end = rows[i].index + first.length;
+      let started = Boolean(description);
+      for (let j = i + 1; j < rows.length; j++) {
+        const next = rows[j][0].replace(/\r?\n$/, '');
+        const clean = next.trim();
+        if (/^\[PÁGINA|SALTO_PAGINA|^NEXORA\b|^[•*]|^\d+(?:\.\d+)*\.?\s+[A-ZÁÉÍÓÚÑ]|^[A-ZÁÉÍÓÚÑ][A-ZÁÉÍÓÚÑ \t·-]{5,}$/.test(clean) || pattern.test(next)) break;
+        if (!clean) { if (started) break; else continue; }
+        // A complete sentence followed by another paragraph is a separate finding.
+        // Explicit conditional continuations stay attached (e.g. "solo si...", "con...").
+        if (started && /[.;]$/.test(description) && !/^(?:si\b|cuando\b|siempre\b|solo\b|únicamente\b|bajo\b|con\b|sin\b|excepto\b|y\b|o\b|también\b|además\b|asimismo\b|el sistema\b|la aplicación\b|debe(?:rá)?\b)/i.test(clean) && !/^[ \t]+\S/.test(next)) break;
+        description += (description ? '\n' : '') + clean;
+        started = true; end = rows[j].index + next.length;
       }
+      if (!description) continue;
+      const start = rows[i].index + first.indexOf(m[1]);
+      const code = `${prefix}-${String(Number(m[3])).padStart(2, '0')}`;
+      const sourceText = text.substring(start, end);
+      const name = description.replace(/\s+/g, ' ').trim();
+      const pages = [...text.substring(0, start).matchAll(/\[PÁGINA\s+(\d+)\]/gi)];
+      out.push({ id: code, code, originalCode: m[1], name, text: name, description: name, type,
+        source: 'explicit', extractionMethod: 'LOCAL', section: this.findSectionForOffset(start, sections),
+        sourceText, start, end, page: pages.length ? Number(pages.at(-1)[1]) : null });
     }
-
-    return reqs;
+    // Same code with different text is not silently discarded.
+    return out;
   }
 
   /**
@@ -512,13 +434,13 @@ class RuleBasedExtractor {
 
     for (const sec of sections) {
       if (/PROBLEMA\s+PRINCIPAL/i.test(sec.title)) {
-        context.problemPrincipal = sec.content.slice(0, 500);
+        context.problemPrincipal = sec.content;
       } else if (/SITUACI[OÓ]N\s+ACTUAL/i.test(sec.title)) {
-        context.situacionActual = sec.content.slice(0, 500);
+        context.situacionActual = sec.content;
       } else if (/OBJETIVOS?/i.test(sec.title)) {
-        context.objetivos = sec.content.slice(0, 600);
+        context.objetivos = sec.content;
       } else if (/ALCANCE/i.test(sec.title)) {
-        context.alcance = sec.content.slice(0, 500);
+        context.alcance = sec.content;
       }
     }
 

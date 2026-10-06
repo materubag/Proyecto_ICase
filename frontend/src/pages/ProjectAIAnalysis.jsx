@@ -1,15 +1,15 @@
 import React, { useState } from 'react';
 import { Sparkles, Play, Code, CheckCircle, Database, Layout, GitFork, ArrowDownToLine } from 'lucide-react';
 import { aiApi } from '../api/ai.api';
-import { requirementsApi } from '../api/requirements.api';
-import { actorsApi } from '../api/actors.api';
+import { documentsApi } from '../api/documents.api';
 import { projectsApi } from '../api/projects.api';
 
 export default function ProjectAIAnalysis({ project, onProjectUpdated, onNavigateTo }) {
   const [description, setDescription] = useState(
     project.systemDescription || project.description || ''
   );
-  const [provider, setProvider] = useState('mock');
+  const [provider, setProvider] = useState('gemini');
+  const [model, setModel] = useState('');
   const [analyzing, setAnalyzing] = useState(false);
   const [analysisResult, setAnalysisResult] = useState(null);
   const [importing, setImporting] = useState(false);
@@ -30,7 +30,7 @@ export default function ProjectAIAnalysis({ project, onProjectUpdated, onNavigat
       // Save updated description to project
       await projectsApi.update(project.id, { systemDescription: description });
 
-      const result = await aiApi.analyzeProject(project.id, description, provider);
+      const result = await aiApi.analyzeProject(project.id, description, provider, model.trim() || undefined);
       setAnalysisResult(result);
     } catch (err) {
       setError(err.message || 'Error al ejecutar el análisis con IA.');
@@ -44,36 +44,7 @@ export default function ProjectAIAnalysis({ project, onProjectUpdated, onNavigat
 
     try {
       setImporting(true);
-      const existingReqCodes = new Set((project.requirements || []).map(r => r.code));
-      const existingActorNames = new Set((project.actors || []).map(a => a.name.toLowerCase()));
-
-      // Import requirements
-      if (analysisResult.requirements && Array.isArray(analysisResult.requirements)) {
-        for (const req of analysisResult.requirements) {
-          if (!existingReqCodes.has(req.code)) {
-            await requirementsApi.create(project.id, {
-              code: req.code,
-              name: req.name,
-              description: req.description,
-              type: req.type === 'NO_FUNCIONAL' ? 'NON_FUNCTIONAL' : 'FUNCTIONAL',
-              priority: req.priority === 'ALTA' ? 'HIGH' : req.priority === 'BAJA' ? 'LOW' : 'MEDIUM',
-              status: 'PENDING'
-            });
-          }
-        }
-      }
-
-      // Import actors
-      if (analysisResult.actors && Array.isArray(analysisResult.actors)) {
-        for (const act of analysisResult.actors) {
-          if (!existingActorNames.has(act.name.toLowerCase())) {
-            await actorsApi.create(project.id, {
-              name: act.name,
-              description: act.description
-            });
-          }
-        }
-      }
+      await documentsApi.importAnalysis(project.id, analysisResult);
 
       setImportSuccess(true);
       onProjectUpdated();
@@ -116,12 +87,11 @@ export default function ProjectAIAnalysis({ project, onProjectUpdated, onNavigat
               value={provider}
               onChange={(e) => setProvider(e.target.value)}
             >
-              <option value="mock">MockAIProvider (Simulado - Activo)</option>
-              <option value="gemini" disabled>Gemini Pro (Fase 2)</option>
-              <option value="ollama" disabled>Ollama Local (Fase 2)</option>
-              <option value="openai" disabled>OpenAI GPT-4o (Fase 2)</option>
-              <option value="n8n" disabled>n8n Webhook (Fase 2)</option>
+              <option value="gemini">Gemini</option>
+              <option value="openai">OpenAI</option>
             </select>
+            <input className="form-control" aria-label="Modelo de IA" placeholder="Modelo configurado por defecto"
+              value={model} onChange={e => setModel(e.target.value)} />
           </div>
 
           <button
@@ -158,7 +128,7 @@ export default function ProjectAIAnalysis({ project, onProjectUpdated, onNavigat
                   Estructura Canónica Generada
                 </h3>
                 <p style={{ fontSize: '0.8125rem', color: 'var(--text-muted)' }}>
-                  Proveedor: {analysisResult.meta?.provider} • Generado: {new Date(analysisResult.meta?.analyzedAt).toLocaleTimeString()}
+                  Proveedor: {analysisResult.metrics?.provider} • Generado: {analysisResult.partial ? 'Análisis parcial; revisar lotes pendientes' : 'Análisis completado'}
                 </p>
               </div>
 

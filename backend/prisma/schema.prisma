@@ -248,6 +248,7 @@ model RequirementCandidate {
   sourceVersionId       String?
   sourceSegmentId       String?
   needCandidateId       String?
+  canonicalKey          String?
   temporaryCode         String // E.g. "CRF-01", "CRNF-02"
   title                 String
   statement             String              @db.Text
@@ -261,7 +262,7 @@ model RequirementCandidate {
   rejectionReason       String?             @db.Text
   evidence              Json?
   qualityReport         Json? // ISO/IEC/IEEE 29148:2018 validation details
-  promotedRequirementId String?             @unique
+  promotedRequirementId String?
   createdAt             DateTime            @default(now())
   updatedAt             DateTime            @updatedAt
 
@@ -273,6 +274,8 @@ model RequirementCandidate {
   promotedRequirement Requirement?   @relation("PromotedRequirement", fields: [promotedRequirementId], references: [id], onDelete: SetNull)
 
   @@index([projectId, status])
+  @@unique([projectId, canonicalKey])
+  @@index([promotedRequirementId])
   @@index([projectId, temporaryCode])
   @@index([sourceId])
   @@map("requirement_candidates")
@@ -281,6 +284,7 @@ model RequirementCandidate {
 model Requirement {
   id             String              @id @default(uuid())
   projectId      String
+  canonicalKey   String?
   code           String              // E.g. "RF-01", "RNF-02"
   name           String
   description    String              @db.Text
@@ -300,10 +304,11 @@ model Requirement {
 
   // Relations
   project         Project               @relation(fields: [projectId], references: [id], onDelete: Cascade)
-  candidateOrigin RequirementCandidate? @relation("PromotedRequirement")
+  candidateOrigins RequirementCandidate[] @relation("PromotedRequirement")
   versions        RequirementVersion[]
 
   @@unique([projectId, code])
+  @@unique([projectId, canonicalKey])
   @@index([projectId, status])
   @@map("requirements")
 }

@@ -126,7 +126,7 @@ export default function ProjectUseCases({ project, onProjectUpdated }) {
     setCodeId(`UC-${String(n).padStart(2, '0')}`);
     setName('');
     setDescription('');
-    setPrimaryActorId(actors[0]?.codeId || actors[0]?.name || '');
+    setPrimaryActorId('');
     setRequirementIds([]);
     setReviewStatus('PENDING');
     setModalOpen(true);
@@ -540,6 +540,7 @@ export default function ProjectUseCases({ project, onProjectUpdated }) {
       {/* Edit/Create Modal */}
       {modalOpen && (
         <Modal
+          isOpen={true}
           title={editingUC ? `Editar Caso de Uso (${codeId})` : 'Nuevo Caso de Uso'}
           onClose={() => setModalOpen(false)}
         >
@@ -575,8 +576,9 @@ export default function ProjectUseCases({ project, onProjectUpdated }) {
                 value={primaryActorId}
                 onChange={e => setPrimaryActorId(e.target.value)}
               >
+                <option value="">Pendiente de asignar</option>
                 {actors.map(a => (
-                  <option key={a.id} value={a.codeId || a.name}>
+                  <option key={a.id} value={a.id}>
                     {a.name} ({a.codeId || 'ACT'})
                   </option>
                 ))}
@@ -586,8 +588,8 @@ export default function ProjectUseCases({ project, onProjectUpdated }) {
             <div>
               <RequirementMultiSelect
                 requirements={project.requirements || []}
-                selectedDependencies={requirementIds}
-                onChange={setRequirementIds}
+                selectedCodes={requirementIds.map(id=>(project.requirements||[]).find(r=>r.id===id)?.code||id)}
+                onChange={codes=>setRequirementIds(codes.map(code=>(project.requirements||[]).find(r=>r.code===code)?.id).filter(Boolean))}
                 label="Requisitos Funcionales Asociados"
                 placeholder="Buscar y asociar requisitos al caso de uso..."
               />
@@ -632,6 +634,7 @@ export default function ProjectUseCases({ project, onProjectUpdated }) {
       {/* Diagram Modal */}
       {diagramModalOpen && (
         <Modal
+          isOpen={true}
           title={`Diagrama de Casos de Uso — ${project.name}`}
           onClose={() => setDiagramModalOpen(false)}
           size="xlarge"
@@ -657,6 +660,7 @@ export default function ProjectUseCases({ project, onProjectUpdated }) {
       {/* Modal de Validación Previa de Información para Casos de Uso (Req #15) */}
       {preGenModalOpen && (
         <Modal
+          isOpen={true}
           title="Verificación de Información para Casos de Uso"
           onClose={() => setPreGenModalOpen(false)}
           footer={(

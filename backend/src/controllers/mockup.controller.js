@@ -1,6 +1,8 @@
 const projectService = require('../services/project.service');
 
 class MockupController {
+  async list(req,res,next){try{const data=await require('../services/engineering/mockup-artifact.service').list(req.params.projectId);res.json({success:true,data});}catch(error){next(error);}}
+
   async generate(req, res, next) {
     try {
       const { projectId } = req.params;
@@ -14,7 +16,7 @@ class MockupController {
         });
       }
 
-      const mockupData = await require('../services/engineering/mockup-artifact.service').generate(projectId, prompt, req.body.artifactId);
+      const mockupData = await require('../services/engineering/mockup-artifact.service').generate(projectId, prompt, req.body.artifactId, req.body.navigationNodeIds);
       const screens = mockupData.screens;
 
       res.status(200).json({

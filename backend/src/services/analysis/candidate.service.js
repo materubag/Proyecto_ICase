@@ -21,11 +21,13 @@ class CandidateService {
     const status = filters.status || 'PENDING_REVIEW';
     const kind = (filters.kind || filters.category || 'ALL').toUpperCase();
 
-    const reqWhere = { projectId };
+    const reqWhere = { projectId, type: { in: ['FUNCTIONAL', 'NON_FUNCTIONAL'] } };
+    if (kind === 'FUNCTIONAL' || kind === 'NON_FUNCTIONAL') reqWhere.type = kind;
     if (status !== 'ALL') reqWhere.status = status;
     if (filters.type && ['FUNCTIONAL', 'NON_FUNCTIONAL'].includes(filters.type)) reqWhere.type = filters.type;
     if (filters.origin) reqWhere.origin = filters.origin;
-    if (filters.sourceId) reqWhere.sourceId = filters.sourceId;
+    if (filters.sourceId) reqWhere.OR = [{ sourceId: filters.sourceId },
+      { evidence: { path: ['segments'], array_contains: [{ sourceId: filters.sourceId }] } }];
 
     let reqList = [];
     if (kind === 'ALL' || kind === 'REQUIREMENT' || kind === 'REQUISITOS' || kind === 'FUNCTIONAL' || kind === 'NON_FUNCTIONAL') {
@@ -53,7 +55,7 @@ class CandidateService {
         category: c.category,
         priority: c.priority,
         origin: c.origin,
-        confidence: c.confidence ?? 1.0,
+        confidence: c.confidence,
         status: c.status,
         rejectionReason: c.rejectionReason,
         evidence: c.evidence,
@@ -79,13 +81,14 @@ class CandidateService {
 
     // Consultar ModelCandidates (Actores, Procesos, Reglas, Tecnologías, Arquitectura, Entidades, etc.)
     let modelList = [];
-    const modelWhere = { projectId };
+    const modelWhere = { projectId, kind: 'ACTOR' };
     if (status !== 'ALL') modelWhere.status = status;
     if (kind !== 'ALL' && kind !== 'REQUIREMENT' && kind !== 'REQUISITOS') {
       modelWhere.kind = kind;
     }
 
-    if (kind !== 'REQUIREMENT' && kind !== 'REQUISITOS') {
+    if (kind === 'ALL' || kind === 'ACTOR' || kind === 'ACTORES') {
+      modelWhere.kind = 'ACTOR';
       const models = await prisma.modelCandidate.findMany({
         where: modelWhere,
         orderBy: [{ status: 'asc' }, { kind: 'asc' }, { createdAt: 'desc' }]
@@ -217,7 +220,8 @@ class CandidateService {
           priority,
           type,
           category,
-          qualityReport
+          qualityReport,
+          canonicalKey: require('./requirementIdentity').keyFor({ type, statement })
         },
         include: { source: true, sourceVersion: true }
       });
@@ -262,58 +266,15 @@ class CandidateService {
     });
 
     if (reqCandidate) {
-      if (reqCandidate.status === 'APPROVED' && reqCandidate.promotedRequirementId) {
-        const existingReq = await prisma.requirement.findUnique({ where: { id: reqCandidate.promotedRequirementId } });
-        return { candidate: reqCandidate, promotedItem: existingReq, kind: 'REQUIREMENT' };
-      }
 
       if (['CONFLICT', 'UPDATE'].includes(reqCandidate.evidence?.relationship?.relation) && reqCandidate.evidence?.relationship?.requirementId) {
         throw Object.assign(new Error('Este candidato propone un cambio a un requisito existente. Revísalo en Cambios.'), { code: 'IMPACT_CONFIRMATION_REQUIRED', statusCode: 409 });
       }
 
-      return require('../engineering/domain').transaction(async (tx) => {
-        const prefix = reqCandidate.type === 'NON_FUNCTIONAL' ? 'RNF' : 'RF';
-        const existingReqs = await tx.requirement.findMany({
-          where: { projectId: reqCandidate.projectId, code: { startsWith: prefix } },
-          select: { code: true }
-        });
+      return prisma.$transaction(async (tx) => {
+        return require('./extractionStore').promote(tx, reqCandidate);
+      }, { timeout: 20000 });
 
-        let maxNum = 0;
-        existingReqs.forEach(r => {
-          const match = r.code.match(/-(?:0)?(\d+)$/);
-          if (match) {
-            const num = parseInt(match[1], 10);
-            if (num > maxNum) maxNum = num;
-          }
-        });
-        const nextCode = `${prefix}-${String(maxNum + 1).padStart(2, '0')}`;
-
-        const requirement = await tx.requirement.create({
-          data: {
-            projectId: reqCandidate.projectId,
-            code: nextCode,
-            name: reqCandidate.title,
-            description: reqCandidate.statement,
-            type: reqCandidate.type === 'NON_FUNCTIONAL' ? 'NON_FUNCTIONAL' : 'FUNCTIONAL',
-            priority: reqCandidate.priority,
-            status: 'APPROVED',
-            qualityReport: reqCandidate.qualityReport || requirementQualityService.evaluate(reqCandidate)
-          }
-        });
-
-        const domain = require('../engineering/domain');
-        await require('../engineering/change.service').remember(tx, requirement);
-        for (const [kind, value] of [['Source', reqCandidate.sourceId], ['SourceVersion', reqCandidate.sourceVersionId], ['AudioSegment', reqCandidate.sourceSegmentId]]) {
-          if (value) await domain.link(tx, reqCandidate.projectId, kind, value, 'Requirement', requirement.id, 'EVIDENCE');
-        }
-
-        const updated = await tx.requirementCandidate.update({
-          where: { id },
-          data: { status: 'APPROVED', promotedRequirementId: requirement.id }
-        });
-
-        return { candidate: updated, requirement, promotedItem: requirement, kind: 'REQUIREMENT' };
-      });
     }
 
     // 2. Revisar si es ModelCandidate (Actores, Reglas, Procesos, etc.)
@@ -325,6 +286,7 @@ class CandidateService {
     }
 
     if (modelCandidate.status === 'APPROVED') {
+      if(modelCandidate.kind==='ACTOR')await prisma.$transaction(tx=>require('./actorIdentity').refresh(tx,modelCandidate.projectId));
       return { candidate: modelCandidate, kind: modelCandidate.kind, message: 'Ya aprobado previamente.' };
     }
 
@@ -335,6 +297,8 @@ class CandidateService {
       switch (kind) {
         case 'ACTOR': {
           const deduplicationService = require('./deduplicationService');
+          const classification=require('./actorEvidence').classify({name,evidence:modelCandidate.evidence});
+          if(classification!=='ROLE')throw Object.assign(new Error('Actor sin evidencia de un rol del sistema. Revise sus citas y responsabilidades antes de aprobar.'),{code:'ACTOR_EVIDENCE_REQUIRED',statusCode:422});
           const canonicalKey = deduplicationService.getActorCanonicalKey(name);
           const existingActors = await tx.actor.findMany({ where: { projectId, isDeleted: false } });
           const match = existingActors.find(a => deduplicationService.getActorCanonicalKey(a.name) === canonicalKey);
@@ -344,6 +308,8 @@ class CandidateService {
               data: {
                 reviewStatus: 'APPROVED',
                 status: 'APPROVED',
+                evidence: modelCandidate.evidence,
+                aliases: [...new Set([...(match.aliases || []), name])],
                 description: match.description && content?.description && !match.description.includes(content.description)
                   ? `${match.description} · ${content.description}`.slice(0, 500)
                   : (match.description || content?.description || `Actor ${name}`)
@@ -357,6 +323,8 @@ class CandidateService {
                 codeId: `ACT-${String(count).padStart(2, '0')}`,
                 name: deduplicationService.getPreferredActorDisplayName(name, canonicalKey),
                 description: content?.description || `Actor ${name}`,
+                evidence: modelCandidate.evidence,
+                aliases: [name],
                 status: 'APPROVED',
                 reviewStatus: 'APPROVED'
               }
@@ -487,6 +455,8 @@ class CandidateService {
         }
       });
 
+      if(kind==='ACTOR')await require('./actorIdentity').refresh(tx,projectId,[updated]);
+
       return {
         candidate: updated,
         promotedItem,
@@ -570,11 +540,11 @@ class CandidateService {
   async getStats(projectId) {
     const [reqs, models] = await Promise.all([
       prisma.requirementCandidate.findMany({
-        where: { projectId },
+        where: { projectId, type: { in: ['FUNCTIONAL', 'NON_FUNCTIONAL'] } },
         select: { id: true, type: true, status: true, origin: true, qualityReport: true, evidence: true }
       }),
       prisma.modelCandidate.findMany({
-        where: { projectId },
+        where: { projectId, kind: 'ACTOR' },
         select: { id: true, kind: true, status: true, origin: true }
       })
     ]);

@@ -60,6 +60,7 @@ export default function ProjectSummary({ project, onProjectUpdated, onNavigateTo
   );
   const [state, setState] = useState('idle');
   const [errorMessage, setErrorMessage] = useState(null);
+  const [analysisProgress, setAnalysisProgress] = useState('');
   const [isImportModalOpen, setIsImportModalOpen] = useState(false);
   const [pdfFiles, setPdfFiles] = useState([]);
   const [audioFile, setAudioFile] = useState(null);
@@ -100,10 +101,13 @@ export default function ProjectSummary({ project, onProjectUpdated, onNavigateTo
       // 3. Ejecutar pipeline en todas las fuentes disponibles
       let aggregatedSummary = null;
       if (sourcesToAnalyze.length > 0) {
-        for (const sId of sourcesToAnalyze) {
+        for (const [sourceIndex, sId] of sourcesToAnalyze.entries()) {
+          setAnalysisProgress(`Analizando fuente ${sourceIndex + 1} de ${sourcesToAnalyze.length}. Los resultados se guardan para revisi?n.`);
           try {
             const res = await sourcesApi.analyze(sId);
-            const sm = res?.data?.summary || res?.summary;
+            const result = res?.data || res;
+            if (result?.partial) sourceWarnings.push(`Fuente ${sourceIndex + 1}: an?lisis parcial. ${[...new Set((result.failures || []).map(f => f.message))].join('; ')}`);
+            const sm = result?.summary;
             if (sm) {
               aggregatedSummary = {
                 requirementsCount: (aggregatedSummary?.requirementsCount || 0) + (sm.requirementsCount || 0),
@@ -123,21 +127,23 @@ export default function ProjectSummary({ project, onProjectUpdated, onNavigateTo
               };
             }
           } catch (sourceErr) {
-            console.warn('[ProjectSummary] Error analizando fuente:', sourceErr.message);
+            sourceWarnings.push(`Fuente ${sourceIndex + 1}: ${sourceErr.message}`);
           }
         }
       }
 
-      // 4. Actualizar descripción y sincronizar análisis de proyecto
+      // Source analysis already persists candidates. Do not reanalyse partial sources automatically.
       if (description.trim()) {
         await projectsApi.update(project.id, {
-          description: description.trim(),
-          systemDescription: description.trim()
+          description: description.trim(), systemDescription: description.trim()
         });
-        await aiApi.analyzeProject(project.id, description.trim());
-      } else if (sourcesToAnalyze.length > 0) {
-        await aiApi.analyzeProject(project.id, 'Análisis de fuentes documentales del proyecto');
       }
+      if (sourcesToAnalyze.length === 0 && description.trim()) {
+        setAnalysisProgress('Analizando descripci?n del proyecto...');
+        const result = await aiApi.analyzeProject(project.id, description.trim());
+        if (result?.partial) sourceWarnings.push('An?lisis de descripci?n parcial: revisa los hallazgos pendientes.');
+      }
+      setAnalysisProgress('Actualizando resultados...');
 
       setPdfFiles([]);
       setAudioFile(null);
@@ -191,7 +197,7 @@ export default function ProjectSummary({ project, onProjectUpdated, onNavigateTo
             {state === 'analyzing' ? (
               <>
                 <span className="ms ms-sm spin">autorenew</span>
-                <span>{pdfFiles.length || audioFile ? 'Procesando fuentes...' : 'Analizando...'}</span>
+                <span>{analysisProgress || 'Analizando...'}</span>
               </>
             ) : (
               <>

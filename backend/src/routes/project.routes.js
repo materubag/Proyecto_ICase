@@ -41,14 +41,25 @@ router.post('/:projectId/requirements', (req, res, next) => requirementControlle
 
 // Nested Project Actors
 router.get('/:projectId/actors', (req, res, next) => actorController.getByProject(req, res, next));
+router.post('/:projectId/actor-relations/regenerate', async (req,res,next)=>{
+  try{const service=require('../services/analysis/actorRelationRegeneration');await service.prepare(req.params.projectId);res.status(202).json({success:true,data:service.jobs.start({projectId:req.params.projectId,sourceId:req.params.projectId})});}catch(e){next(e);}
+});
+router.get('/:projectId/actor-relations/jobs/:jobId', (req,res)=>{
+  const job=require('../services/analysis/actorRelationRegeneration').jobs.get(req.params.projectId,req.params.jobId);
+  if(!job)return res.status(404).json({success:false,error:{message:'La tarea no está disponible; vuelve a regenerar las relaciones.'}});
+  res.json({success:true,data:job});
+});
 router.post('/:projectId/actors', (req, res, next) => actorController.create(req, res, next));
 router.post('/:projectId/actors/approve-all', async (req, res, next) => {
   try {
     const { projectId } = req.params;
     const prisma = require('../config/prisma');
-    const updated = await prisma.actor.updateMany({
-      where: { projectId },
-      data: { reviewStatus: 'APPROVED', status: 'APPROVED' }
+    const updated = await prisma.$transaction(async tx => {
+      const actors=await tx.actor.findMany({where:{projectId,isDeleted:false}});
+      const eligible=actors.filter(a=>require('../services/analysis/actorEvidence').classify(a)==='ROLE');
+      const result=await tx.actor.updateMany({where:{projectId,id:{in:eligible.map(a=>a.id)}},data:{reviewStatus:'APPROVED',status:'APPROVED'}});
+      await require('../services/analysis/actorIdentity').refresh(tx,projectId);
+      return result;
     });
     res.json({ success: true, count: updated.count });
   } catch (err) { next(err); }
@@ -128,6 +139,7 @@ router.post('/:projectId/analyze', (req, res, next) => aiController.analyze(req,
 router.post('/:projectId/import-analysis', (req, res, next) => documentController.importAnalysis(req, res, next));
 
 // Mockup Generation for Project (n8n prepared legacy)
+router.get('/:projectId/mockup', (req,res,next)=>mockupController.list(req,res,next));
 router.post('/:projectId/mockup', (req, res, next) => mockupController.generate(req, res, next));
 
 // Generación Inteligente de Diagramas Mermaid (Gemini + Validación + Fallback)

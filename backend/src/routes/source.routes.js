@@ -9,4 +9,6 @@ router.get('/:sourceId/versions/:version', (req, res, next) => sourceController.
 router.post('/:sourceId/retry', audioUpload.single('file'), (req, res, next) => sourceController.retryAudio(req, res, next));
 router.post('/:sourceId/analyze', (req, res, next) => sourceController.analyze(req, res, next));
 
+router.get('/:sourceId/analysis/:jobId', (req,res,next)=>sourceController.analysisStatus(req,res,next));
+
 module.exports = router;

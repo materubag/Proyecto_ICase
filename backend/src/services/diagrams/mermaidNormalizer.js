@@ -104,7 +104,7 @@ function normalizeER(code) {
   if (!code || typeof code !== 'string') return 'erDiagram\n';
 
   const rawLines = code.split('\n');
-  const outputLines = ['erDiagram', '    direction TB'];
+    const outputLines = ['erDiagram'];
   let inEntityBlock = false;
   let currentEntity = null;
 
@@ -355,9 +355,9 @@ function normalizeClass(code) {
     // ClassA *-- ClassB
     // ClassA o-- ClassB
     // ClassA --> ClassB
-    const relMatch = line.match(/^(\S+)\s+(\S*[\-.<>|*o]+\S*)\s+(\S+)(?:\s*:\s*(.*))?$/);
+    const relMatch = line.match(/^(\S+)\s+(?:"([^"]*)"\s+)?(<\|--|--\|>|<\|\.\.|\.\.\|>|\*--|--\*|o--|--o|<--|-->|\.\.>|<\.\.|--|\.\.)\s+(?:"([^"]*)"\s+)?([^\s:]+)(?:\s*:\s*(.*))?$/);
     if (relMatch) {
-      const [, rawA, relOp, rawB, rawDesc] = relMatch;
+      const [, rawA, leftMultiplicity, relOp, rightMultiplicity, rawB, rawDesc] = relMatch;
       const classA = toSafeIdentifier(rawA, 'Class');
       const classB = toSafeIdentifier(rawB, 'Class');
 
@@ -370,7 +370,7 @@ function normalizeClass(code) {
       seenClassEdges.add(edgeKey1);
 
       const desc = rawDesc ? `: ${toSafeLabel(rawDesc, 60)}` : '';
-      output.push(`  ${classA} ${relOp} ${classB} ${desc}`.trim());
+      output.push(`  ${classA} ${leftMultiplicity!==undefined?'"'+toSafeLabel(leftMultiplicity,20)+'" ':''}${relOp} ${rightMultiplicity!==undefined?'"'+toSafeLabel(rightMultiplicity,20)+'" ':''}${classB} ${desc}`.trim());
       continue;
     }
 

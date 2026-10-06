@@ -40,267 +40,57 @@ class AIService {
    * @returns {Promise<Object>} Canonical Structured JSON
    */
   async analyzeProject(input) {
-    const { projectId, description, providerOverride } = input;
-
-    // 1. Obtener proyecto y verificar existencia con sus fuentes
-    const project = await prisma.project.findUnique({
-      where: { id: projectId },
-      include: {
-        sources: {
-          include: { currentVersion: true }
-        }
-      }
+    const project = await prisma.project.findUnique({ where: { id: input.projectId },
+      include: { actors: {where:{isDeleted:false}}, sources: { include: { currentVersion: true } } } });
+    if (!project) throw Object.assign(new Error('Proyecto no encontrado'), { statusCode: 404 });
+    const description = input.description || project.systemDescription || project.description || '';
+    const documents = (project.sources || []).filter(s => s.currentVersion?.extractedText);
+    if (!description.trim() && !documents.length) throw Object.assign(new Error('No hay texto para analizar'), { statusCode: 400 });
+    const options = { knownActors: project.actors || [], providerOverride: input.providerOverride, modelOverride: input.modelOverride,
+      providerInstance: input.providerInstance, cache: input.cache };
+    const results = [];
+    for (const source of documents) {
+      const analysis = await require('../analysis/analysisPipeline').run({ ...options, projectId: project.id,
+        sourceId: source.id, sourceVersionId: source.currentVersion.id });
+      results.push({ ...analysis.extraction, metrics: analysis.metrics });
+    }
+    const identity = require('../analysis/requirementIdentity');
+    const knownRequirements = identity.consolidate(results.flatMap(r => r.requirements));
+    if (description.trim()) { const descriptionResult = await require('../analysis/documentExtraction').extract(description, {
+      ...options, fileName: project.name, knownRequirements,
+      contextSegments: identity.unique(results.flatMap(r => r.actors.flatMap(a => a.evidence.map(e => ({
+        ...e, text: e.quote, originalText: e.quote, start: e.quoteStart, end: e.quoteEnd
+      })))))
     });
-
-    if (!project) {
-      const err = new Error(`Proyecto con ID ${projectId} no encontrado`);
-      err.statusCode = 404;
-      throw err;
+      await require('../analysis/actorRelationshipResolver').resolve(descriptionResult,{...options,knownActors:project.actors?.length?project.actors:results.flatMap(r=>r.actors)});
+      results.push(descriptionResult);
     }
-
-    // 1.1 Si el proyecto tiene fuentes documentales (PDFs, audios), ejecutar el pipeline exhaustivo
-    const analysisPipeline = require('../analysis/analysisPipeline');
-    const textNormalizer = require('../document/textNormalizer');
-    const sectionDetector = require('../document/SectionDetector');
-    const requirementDetector = require('../analysis/requirementDetector');
-    const actorDetector = require('../analysis/actorDetector');
-    const entityDetector = require('../analysis/entityDetector');
-    const technologyDetector = require('../analysis/technologyDetector');
-    const architectureDetector = require('../analysis/architectureDetector');
-    const screenDetector = require('../analysis/screenDetector');
-    const processDetector = require('../analysis/processDetector');
-
-    let sourcesTextCombined = '';
-    if (project.sources && project.sources.length > 0) {
-      console.log(`[AIService] Proyecto cuenta con ${project.sources.length} fuente(s). Ejecutando pipeline exhaustivo de análisis...`);
-      for (const source of project.sources) {
-        try {
-          await analysisPipeline.run({ sourceId: source.id, force: true });
-          const ver = source.currentVersion || (source.versions && source.versions[0]);
-          if (ver?.extractedText) {
-            sourcesTextCombined += '\n' + ver.extractedText;
-          }
-        } catch (sErr) {
-          console.warn(`[AIService] Error en pipeline para fuente ${source.name}:`, sErr.message);
-        }
-      }
+    const actors = [];
+    for (const actor of results.flatMap(r => r.actors)) {
+      const existing = actors.find(a => a.id === actor.id);
+      if (existing) existing.evidence = identity.unique([...existing.evidence, ...actor.evidence]);
+      else actors.push({ ...actor });
     }
+    const requirements = identity.consolidate(results.flatMap(r => r.requirements));
+    const result = { ...results.at(-1), project: { name: project.name, description }, rawText: description,
+      requirements, actors, partial: results.some(r => r.partial),
+      functionalRequirements: requirements.filter(r => r.type === 'FUNCTIONAL'),
+      nonFunctionalRequirements: requirements.filter(r => r.type === 'NON_FUNCTIONAL'),
+      segments: identity.unique(results.flatMap(r => r.segments)), coverage: identity.unique(results.flatMap(r => r.coverage)),
+      failures: results.flatMap(r => r.failures), other: results.flatMap(r => r.other),
+      businessRules: results.flatMap(r => r.businessRules),
+      metrics: { ...results.at(-1).metrics, requestsUsed: results.reduce((n,r) => n + r.metrics.requestsUsed, 0),
+        reusedSources: results.filter(r => r.metrics.reusedSource).length,
+        usage: results.flatMap(r => r.metrics.usage || []) } };
+    result.documentAnalysis = { ...result.documentAnalysis, totalRequirements: requirements.length, totalActors: actors.length };
+    await this.persistDocumentExtraction(project.id, result, { options,
+      snapshotKey: require('../analysis/extractionStore').fingerprint({ projectId: project.id,
+        text: JSON.stringify([description, documents.map(s => s.currentVersion.id)]), options }) });
+    return result;
+  }
 
-    // 2. Validar que tenga descripción o fuentes
-    const baseDesc = (description || project.systemDescription || project.description || '').trim();
-    const finalDescription = baseDesc || (sourcesTextCombined.slice(0, 500) ? `Sistema basado en documentos analizados (${project.sources?.map(s => s.name).join(', ')})` : '');
-    
-    if (!finalDescription && !sourcesTextCombined) {
-      const err = new Error('El proyecto debe contar con una descripción general o documentos cargados para ser analizado.');
-      err.statusCode = 400;
-      throw err;
-    }
-
-    // Actualizar systemDescription en el proyecto si ha variado
-    if (description && description.trim() !== project.systemDescription) {
-      await prisma.project.update({
-        where: { id: projectId },
-        data: {
-          description: description.trim(),
-          systemDescription: description.trim()
-        }
-      });
-    }
-
-    // 2.1 Extraer información determinista exhaustiva del texto de fuentes y de la descripción
-    const combinedAnalysisText = (sourcesTextCombined + '\n' + finalDescription).trim();
-    const norm = textNormalizer.normalize(combinedAnalysisText);
-    const sections = sectionDetector.detectSections(norm.rawText);
-    const detReqs = requirementDetector.detect(norm.rawText, sections);
-    const detActors = actorDetector.detect(norm.rawText, sections);
-    const detEntities = entityDetector.detect(norm.rawText, sections);
-    const detTech = technologyDetector.detect(norm.rawText);
-    const detArch = architectureDetector.detect(norm.rawText, detTech);
-    const detScreens = screenDetector.detect(norm.rawText, sections);
-    const detProcesses = processDetector.detect(norm.rawText, sections);
-
-    // 3. Crear el proveedor seleccionado
-    let provider = createAIProvider(providerOverride || env.AI_PROVIDER);
-    console.log(`[AIService] Ejecutando análisis para proyecto '${project.name}' utilizando proveedor: [${provider.constructor.name}]`);
-
-    // 4. Invocar analyzeProject(input) con contexto sintetizado
-    let rawResult = null;
-    try {
-      rawResult = await provider.analyzeProject({
-        projectId,
-        name: project.name,
-        description: finalDescription.slice(0, 2000),
-        context: {
-          ...input.context,
-          knownRequirementsCount: (detReqs.functionalRequirements?.length || 0) + (detReqs.nonFunctionalRequirements?.length || 0),
-          knownActors: detActors.map(a => a.name)
-        }
-      });
-    } catch (aiErr) {
-      console.warn(`[AIService] Proveedor IA no disponible (${aiErr.message}). Utilizando extracción determinista canónica.`);
-      rawResult = {
-        project: { name: project.name, description: finalDescription },
-        requirements: [],
-        actors: [],
-        entities: [],
-        screens: [],
-        architecture: {}
-      };
-    }
-
-    // 5. Normalizar datos y enriquecer con las extracciones deterministas de las fuentes
-    const normalizedResult = normalizeAIResponse(rawResult || {});
-
-    // Fusionar requisitos deterministas prioritarios (RF-XX, RNF-XX) sin duplicar
-    const existingReqCodes = new Set((normalizedResult.requirements || []).map(r => r.code?.toUpperCase()));
-    for (const rf of (detReqs.functionalRequirements || [])) {
-      const code = (rf.code || rf.id || '').toUpperCase();
-      if (code && !existingReqCodes.has(code)) {
-        existingReqCodes.add(code);
-        normalizedResult.requirements.push({
-          id: code,
-          code,
-          name: rf.name || rf.text || 'Requisito funcional',
-          description: rf.description || rf.name || '',
-          type: 'FUNCTIONAL',
-          priority: rf.priority || 'HIGH',
-          actorIds: [],
-          source: 'pdf'
-        });
-      }
-    }
-    for (const rnf of (detReqs.nonFunctionalRequirements || [])) {
-      const code = (rnf.code || rnf.id || '').toUpperCase();
-      if (code && !existingReqCodes.has(code)) {
-        existingReqCodes.add(code);
-        normalizedResult.requirements.push({
-          id: code,
-          code,
-          name: rnf.name || rnf.text || 'Requisito no funcional',
-          description: rnf.description || rnf.name || '',
-          type: 'NON_FUNCTIONAL',
-          priority: rnf.priority || 'MEDIUM',
-          actorIds: [],
-          source: 'pdf'
-        });
-      }
-    }
-
-    // Fusionar actores deterministas
-    const existingActorNames = new Set((normalizedResult.actors || []).map(a => a.name?.toLowerCase().trim()));
-    for (const act of (detActors || [])) {
-      const aName = act.name?.trim();
-      if (aName && !existingActorNames.has(aName.toLowerCase())) {
-        existingActorNames.add(aName.toLowerCase());
-        normalizedResult.actors.push({
-          name: aName,
-          description: act.description || `Rol ${aName} identificado en la documentación`,
-          source: 'pdf'
-        });
-      }
-    }
-
-    // Fusionar entidades deterministas
-    const existingEntityNames = new Set((normalizedResult.entities || []).map(e => e.name?.toLowerCase().trim()));
-    for (const ent of (detEntities.entities || [])) {
-      const eName = ent.name?.trim();
-      if (eName && !existingEntityNames.has(eName.toLowerCase())) {
-        existingEntityNames.add(eName.toLowerCase());
-        normalizedResult.entities.push({
-          name: eName,
-          description: ent.description || `Entidad ${eName}`,
-          attributes: ent.attributes || [{ name: 'id', type: 'String', isPk: true }],
-          source: 'pdf'
-        });
-      }
-    }
-
-    // Fusionar pantallas deterministas
-    const existingScreenNames = new Set((normalizedResult.screens || []).map(s => s.name?.toLowerCase().trim()));
-    for (const scr of (detScreens || [])) {
-      const sName = scr.name?.trim();
-      if (sName && !existingScreenNames.has(sName.toLowerCase())) {
-        existingScreenNames.add(sName.toLowerCase());
-        normalizedResult.screens.push({
-          name: sName,
-          route: scr.route || `/${sName.toLowerCase().replace(/\s+/g, '-')}`,
-          purpose: scr.description || `Vista de ${sName}`,
-          components: scr.components || []
-        });
-      }
-    }
-
-    // Re-indexar y limpiar IDs de actores para garantizar unicidad estricta
-    normalizedResult.actors = normalizedResult.actors.map((act, idx) => ({
-      ...act,
-      id: `ACT-${String(idx + 1).padStart(2, '0')}`
-    }));
-    const validActorIds = new Set(normalizedResult.actors.map(a => a.id));
-    const defaultActorId = normalizedResult.actors[0]?.id || 'ACT-01';
-
-    // Asegurar que cada requisito tenga actorIds válidos
-    normalizedResult.requirements = normalizedResult.requirements.map(req => {
-      const validAssigned = Array.isArray(req.actorIds)
-        ? req.actorIds.filter(id => validActorIds.has(id))
-        : [];
-      return {
-        ...req,
-        actorIds: validAssigned.length > 0 ? validAssigned : [defaultActorId]
-      };
-    });
-
-    // Re-indexar entidades
-    normalizedResult.entities = normalizedResult.entities.map((ent, idx) => ({
-      ...ent,
-      id: `ENT-${String(idx + 1).padStart(2, '0')}`
-    }));
-
-    // Re-indexar pantallas
-    normalizedResult.screens = normalizedResult.screens.map((scr, idx) => ({
-      ...scr,
-      id: `SCR-${String(idx + 1).padStart(2, '0')}`
-    }));
-
-    // Enriquecer arquitectura
-    if (detArch && detArch.name) {
-      normalizedResult.architecture = {
-        style: detArch.name,
-        frontend: detArch.frontend || normalizedResult.architecture?.frontend || 'React',
-        backend: detArch.backend || normalizedResult.architecture?.backend || 'Node.js Express',
-        database: detArch.database || normalizedResult.architecture?.database || 'PostgreSQL',
-        connections: detArch.connections || ['React -> Node.js Express (API REST)', 'Node.js Express -> PostgreSQL'],
-        components: detArch.components || [
-          { name: 'Portal Web', layer: 'Presentation', type: 'React' },
-          { name: 'API REST', layer: 'Business', type: 'Node.js Express' },
-          { name: 'Base de Datos', layer: 'Data', type: 'PostgreSQL' }
-        ],
-        source: 'pdf'
-      };
-    }
-
-    // 6. Validar contrato de respuesta estricto
-    const validation = validateAIResponse(normalizedResult);
-    if (!validation.isValid) {
-      console.error('[AIService] Error de validación de contrato:', validation.error);
-      const err = new Error(validation.error || 'La respuesta del proveedor de IA no cumple el contrato esperado.');
-      err.statusCode = 422;
-      throw err;
-    }
-
-    // 7. Persistencia transaccional en PostgreSQL (reemplazo limpio sin duplicados)
-    await this.persistProjectAnalysis(projectId, normalizedResult);
-
-    // 8. Devolver el JSON estructurado canónico enriquecido
-    return {
-      project: normalizedResult.project,
-      actors: normalizedResult.actors,
-      requirements: normalizedResult.requirements,
-      entities: normalizedResult.entities,
-      relationships: normalizedResult.relationships,
-      screens: normalizedResult.screens,
-      navigation: normalizedResult.navigation,
-      architecture: normalizedResult.architecture
-    };
+  async persistDocumentExtraction(projectId, result, meta = {}) {
+    return require('../analysis/extractionStore').persist(projectId, result, meta);
   }
 
   /**
@@ -327,6 +117,7 @@ class AIService {
       }
 
       // Guardar Actores Canónicos (evitando duplicados mediante canonicalKey y aliases)
+      const actorReferenceMap = new Map();
       if (rawResult.actors && rawResult.actors.length > 0) {
         const existingActors = await tx.actor.findMany({ where: { projectId, isDeleted: false } });
 
@@ -343,6 +134,7 @@ class AIService {
           );
 
           if (match) {
+            actorReferenceMap.set(actor.id, match.id);
             const nextAliases = Array.from(new Set([...(match.aliases || []), rawActorName, displayName]));
             const nextDesc = match.description && actor.description && !match.description.includes(actor.description)
               ? `${match.description} · ${cleanUtf8(actor.description)}`.slice(0, 500)
@@ -367,9 +159,10 @@ class AIService {
                 description: actor.description ? cleanUtf8(actor.description) : null,
                 aliases: [rawActorName, displayName],
                 status: 'PENDING_REVIEW',
-                reviewStatus: 'PENDING'
+                reviewStatus: /^personal$/i.test(rawActorName) ? 'NEEDS_REVIEW' : 'PENDING'
               }
             });
+            actorReferenceMap.set(actor.id, created.id);
             existingActors.push(created);
           }
         }
@@ -412,7 +205,7 @@ class AIService {
                   ? 'LOW'
                   : 'MEDIUM',
               status: 'PENDING',
-              actorIds: req.actorIds || [],
+              actorIds: [...new Set((req.actorIds || []).map(ref => actorReferenceMap.get(ref)).filter(Boolean))],
               dependencies: req.dependencies || [],
               sources: req.sources || [],
               preconditions: req.preconditions ? cleanUtf8(req.preconditions) : ((req.type === 'NON_FUNCTIONAL' || req.type === 'NO_FUNCIONAL' || code.startsWith('RNF')) ? 'Entorno operativo y conectividad estándar' : 'Usuario con sesión activa y permisos correspondientes'),

@@ -2,6 +2,13 @@ const prisma = require('../config/prisma');
 const versionHistoryService = require('./versionHistory.service');
 const useCaseGenerator = require('./diagrams/useCaseGenerator');
 
+
+async function validateActors(projectId, refs) {
+  const actors = await prisma.actor.findMany({where:{projectId,isDeleted:false}});
+  const unknown = refs.filter(ref => !actors.some(a => a.id === ref));
+  if (unknown.length) { const error = new Error('Use IDs persistidos de actores: ' + unknown.join(', ')); error.statusCode=422; throw error; }
+}
+
 class UseCaseService {
   async getUseCasesByProject(projectId) {
     return await prisma.useCase.findMany({
@@ -33,6 +40,7 @@ class UseCaseService {
       reviewStatus
     } = data;
 
+    await validateActors(projectId, require('./analysis/actorIdentity').useCaseActors(data));
     const count = await prisma.useCase.count({ where: { projectId } });
     const code = codeId || `CU-${String(count + 1).padStart(2, '0')}`;
 
@@ -75,6 +83,7 @@ class UseCaseService {
       throw error;
     }
 
+    await validateActors(existing.projectId, require('./analysis/actorIdentity').useCaseActors(data));
     return await prisma.useCase.update({
       where: { id },
       data: {
@@ -125,11 +134,12 @@ class UseCaseService {
    * agrupando operaciones relacionadas (ej. CRUD sobre la misma entidad) y vinculando
    * cada caso de uso con su actor canónico correspondiente y requisitos fuente.
    */
-  async generateFundamentalUseCases(projectId) {
-    const project = await prisma.project.findUnique({
+  async generateFundamentalUseCases(projectId, db = prisma) {
+    if (db === prisma) return prisma.$transaction(tx => this.generateFundamentalUseCases(projectId, tx));
+    const project = await db.project.findUnique({
       where: { id: projectId },
       include: {
-        requirements: { where: { isDeleted: false } },
+        requirements: { where: { isDeleted: false, status: {not:'REMOVED'} } },
         actors: { where: { isDeleted: false } }
       }
     });
@@ -144,29 +154,11 @@ class UseCaseService {
       throw new Error('No hay requisitos funcionales disponibles para generar casos de uso');
     }
 
-    // Mapeo de actores por ID y canonicalName
-    const actorById = new Map();
-    const actorByCode = new Map();
-    for (const a of actors) {
-      if (a.id) actorById.set(a.id, a);
-      if (a.codeId) actorByCode.set(a.codeId, a);
-    }
-
-    // Helper para identificar el actor principal de un requisito
-    const findActorForReq = (req) => {
-      if (Array.isArray(req.actorIds) && req.actorIds.length > 0) {
-        for (const actRef of req.actorIds) {
-          const found = actorByCode.get(actRef) || actorById.get(actRef);
-          if (found) return found;
-        }
-      }
-      // Inferir por mención en nombre o descripción
-      const text = `${req.name} ${req.description || ''}`.toLowerCase();
-      for (const a of actors) {
-        const aName = a.name.toLowerCase();
-        if (text.includes(aName)) return a;
-      }
-      return actors[0] || null;
+    const identity = require('./analysis/actorIdentity');
+    const actorsForReq = req => {
+      const mapped = identity.canonical(req.actorIds || [], actors);
+      if (mapped.pending.length) { const error = new Error('Referencias pendientes en ' + req.code + ': ' + mapped.pending.join(', ')); error.statusCode=422; throw error; }
+      return mapped.ids;
     };
 
     // Diccionario de entidades / tópicos para agrupar requisitos en casos de uso
@@ -205,8 +197,9 @@ class UseCaseService {
     const clusters = new Map();
     for (const req of fnReqs) {
       const { topic, defaultVerb } = extractTopic(req.name);
-      const actor = findActorForReq(req);
-      const actorKey = actor ? (actor.codeId || actor.name) : 'GENERAL';
+      const linkedActors = actorsForReq(req);
+      const actor = actors.find(a => a.id === linkedActors[0]);
+      const actorKey = [...linkedActors].sort().join(',') || 'PENDING';
       const clusterKey = `${topic}__${actorKey}`;
 
       if (!clusters.has(clusterKey)) {
@@ -214,6 +207,7 @@ class UseCaseService {
           topic,
           defaultVerb,
           actor,
+          linkedActors,
           requirements: []
         });
       }
@@ -221,7 +215,7 @@ class UseCaseService {
     }
 
     // Conservar use cases existentes si tenían status APPROVED o personalizar si se regenera
-    const existingUseCases = await prisma.useCase.findMany({ where: { projectId } });
+    const existingUseCases = await db.useCase.findMany({ where: { projectId } });
     const approvedMap = new Map();
     for (const euc of existingUseCases) {
       if (euc.reviewStatus === 'APPROVED') {
@@ -229,18 +223,18 @@ class UseCaseService {
       }
     }
 
-    await prisma.useCase.deleteMany({ where: { projectId } });
+    // Preserve existing IDs and reviewed cases; update generated cases by their source requirements.
 
     const createdList = [];
-    let ucCounter = 1;
+    let ucCounter = Math.max(0, ...existingUseCases.map(c => Number((c.codeId || c.code || '').match(/(\d+)$/)?.[1]) || 0)) + 1;
 
     for (const [, cluster] of clusters) {
       const codeId = `UC-${String(ucCounter).padStart(2, '0')}`;
       ucCounter++;
 
       const reqCodes = cluster.requirements.map(r => r.code || `RF-${r.id}`).filter(Boolean);
-      const primaryActorCode = cluster.actor ? (cluster.actor.codeId || cluster.actor.name) : 'Usuario';
-      const actorName = cluster.actor ? cluster.actor.name : 'Usuario';
+      const primaryActorCode = cluster.actor?.id || null;
+      const actorName = cluster.actor ? cluster.actor.name : 'Responsable pendiente de revision';
       const ucName = `${cluster.defaultVerb} ${cluster.topic}`;
 
       const reqNames = cluster.requirements.map(r => r.name).slice(0, 3).join(', ');
@@ -248,16 +242,17 @@ class UseCaseService {
 
       const isPreviouslyApproved = approvedMap.has(ucName.toLowerCase().trim());
 
-      const created = await prisma.useCase.create({
-        data: {
+      const existing = existingUseCases.find(c => !c.isDeleted && JSON.stringify([...(c.requirementIds || [])].sort()) === JSON.stringify(cluster.requirements.map(r => r.id).sort()));
+      const generatedData = {
           projectId,
           codeId,
           name: ucName,
           processType: 'CORE_OPERATION',
           description,
           primaryActorId: primaryActorCode,
-          secondaryActorIds: [],
-          preconditions: `El actor ${actorName} debe tener acceso y permisos en el módulo correspondiente.`,
+          secondaryActorIds: cluster.linkedActors.slice(1),
+          actorIds: cluster.linkedActors,
+          preconditions: null,
           postconditions: `Las transacciones de ${cluster.topic.toLowerCase()} quedan registradas de manera consistente.`,
           mainFlow: cluster.requirements.slice(0, 4).map((r, idx) => ({
             step: idx + 1,
@@ -266,11 +261,13 @@ class UseCaseService {
           altFlows: [
             { step: '1a', action: 'Datos incompletos o inválidos: el sistema alerta el error antes de persistir.' }
           ],
-          requirementIds: reqCodes,
-          reviewStatus: isPreviouslyApproved ? 'APPROVED' : 'PENDING',
+          requirementIds: cluster.requirements.map(r => r.id),
+          reviewStatus: 'PENDING',
           isDeleted: false
-        }
-      });
+        };
+      const created = existing
+        ? await db.useCase.update({where:{id:existing.id},data:{primaryActorId:primaryActorCode,secondaryActorIds:cluster.linkedActors.slice(1),actorIds:cluster.linkedActors}})
+        : await db.useCase.create({data:generatedData});
       createdList.push(created);
     }
 
@@ -288,62 +285,7 @@ class UseCaseService {
       return useCaseGenerator.generate(actors, []);
     }
 
-    const lines = ['flowchart LR'];
-    const declaredActors = new Set();
-
-    for (const a of actors) {
-      const aId = (a.codeId || a.name).replace(/[^a-zA-Z0-9_]/g, '_').toUpperCase();
-      declaredActors.add(aId);
-      lines.push(`    ${aId}["👤 ${a.name}"]`);
-    }
-
-    const defaultActorId = actors[0] ? (actors[0].codeId || actors[0].name).replace(/[^a-zA-Z0-9_]/g, '_').toUpperCase() : 'ACT_USER';
-    if (!declaredActors.has(defaultActorId)) {
-      lines.push(`    ${defaultActorId}["👤 Usuario"]`);
-      declaredActors.add(defaultActorId);
-    }
-
-    for (const uc of useCases) {
-      const ucNodeId = `UC_${uc.codeId.replace(/[^a-zA-Z0-9_]/g, '_')}`;
-      const title = uc.name.replace(/["\\]/g, '').slice(0, 40);
-      lines.push(`    ${ucNodeId}(["${uc.codeId}: ${title}"])`);
-
-      // Match primary actor by codeId, id, or name
-      const matchedActor = actors.find(a => 
-        a.codeId === uc.primaryActorId ||
-        a.id === uc.primaryActorId ||
-        a.name.toLowerCase() === (uc.primaryActorId || '').toLowerCase()
-      );
-      const pActorNode = matchedActor
-        ? (matchedActor.codeId || matchedActor.name).replace(/[^a-zA-Z0-9_]/g, '_').toUpperCase()
-        : (declaredActors.has(uc.primaryActorId?.replace(/[^a-zA-Z0-9_]/g, '_').toUpperCase()) ? uc.primaryActorId.replace(/[^a-zA-Z0-9_]/g, '_').toUpperCase() : defaultActorId);
-
-      if (declaredActors.has(pActorNode)) {
-        lines.push(`    ${pActorNode} --- ${ucNodeId}`);
-      } else {
-        lines.push(`    ${defaultActorId} --- ${ucNodeId}`);
-      }
-
-      if (Array.isArray(uc.secondaryActorIds)) {
-        for (const sActor of uc.secondaryActorIds) {
-          const matchedSec = actors.find(a => 
-            a.codeId === sActor ||
-            a.id === sActor ||
-            a.name.toLowerCase() === (sActor || '').toLowerCase()
-          );
-          const sId = matchedSec
-            ? (matchedSec.codeId || matchedSec.name).replace(/[^a-zA-Z0-9_]/g, '_').toUpperCase()
-            : sActor.replace(/[^a-zA-Z0-9_]/g, '_').toUpperCase();
-
-          if (declaredActors.has(sId)) {
-            lines.push(`    ${sId} -.-> ${ucNodeId}`);
-          }
-        }
-      }
-    }
-
-    return lines.join('\n');
+    return useCaseGenerator.generate(actors, useCases);
   }
 }
-
 module.exports = new UseCaseService();

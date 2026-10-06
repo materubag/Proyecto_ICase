@@ -1,4 +1,5 @@
 const assert = require('assert');
+const extractionProvider = require('./fixtures/extractionProvider');
 const analysisPipeline = require('../src/services/analysis/analysisPipeline');
 const structureDetector = require('../src/services/analysis/structureDetector');
 const candidateFragmentSelector = require('../src/services/analysis/candidateFragmentSelector');
@@ -30,6 +31,7 @@ async function runFase3Tests() {
     sourceVersionId: 'ver-a',
     text: textCasoA,
     sourceType: 'PDF',
+    providerInstance: extractionProvider, cache: false, providerOverride: 'gemini',
     persist: false
   });
 
@@ -38,8 +40,9 @@ async function runFase3Tests() {
   assert.strictEqual(resultA.requirementCandidates[0].temporaryCode, 'RF-01');
   assert.strictEqual(resultA.requirementCandidates[0].origin, 'EXPLICIT');
   assert.strictEqual(resultA.requirementCandidates[1].temporaryCode, 'RF-02');
-  assert.strictEqual(resultA.metrics.ollamaCalls, 0, 'Ollama calls debe ser 0 para RF explícitos');
-  assert.strictEqual(resultA.metrics.gptCalls, 0, 'GPT calls debe ser 0 para RF explícitos');
+  assert.strictEqual(resultA.partial, false);
+  assert(resultA.coverage.every(c => c.status === 'ANALYZED'));
+  assert(resultA.metrics.requestsUsed >= 1);
   console.log('✓ CASO A superado: 2 RF explícitos detectados por código con 0 llamadas a IA.\n');
 
   // CASO B — TEXTO NO ESTRUCTURADO
@@ -53,10 +56,11 @@ async function runFase3Tests() {
     sourceVersionId: 'ver-b',
     text: textCasoB,
     sourceType: 'PDF',
+    providerInstance: extractionProvider, cache: false, providerOverride: 'gemini',
     persist: false
   });
 
-  assert(resultB.needCandidates.length > 0, 'Debe generar al menos un NeedCandidate');
+  assert.strictEqual(resultB.partial, false);
   assert(resultB.requirementCandidates.length > 0, 'Debe generar al menos un RequirementCandidate');
   const candB = resultB.requirementCandidates[0];
   assert.strictEqual(candB.status, 'PENDING_REVIEW', 'El estado del candidato debe ser PENDING_REVIEW');
@@ -137,11 +141,13 @@ async function runFase3Tests() {
     sourceVersionId: 'ver-f',
     text: hybridTextF,
     sourceType: 'PDF',
+    providerInstance: { async extractDocumentBatch() { throw new Error('Explicit test outage'); } }, cache: false, providerOverride: 'gemini',
     persist: false
   });
   assert(resultF.explicitRequirements.length >= 1, 'Los requisitos explícitos deben conservarse siempre');
   assert.strictEqual(resultF.explicitRequirements[0].code, 'RF-01');
-  assert.strictEqual(resultF.metrics.ollamaFailures, 1);
+  assert.strictEqual(resultF.partial, true);
+  assert.strictEqual(resultF.failures.length, 1);
   assert.strictEqual(resultF.requirementCandidates.length, 1, 'No inventar candidatos cuando falla IA');
   semanticAnalyzer.ollamaProvider.analyzeProject = savedProvider;
   console.log('✓ CASO F superado: Extracción determinista garantizada aún si IA falla o usa fallback.\n');
@@ -159,13 +165,14 @@ async function runFase3Tests() {
     sourceVersionId: 'ver-audio-g',
     sourceType: 'AUDIO',
     segments: audioSegmentsG,
+    providerInstance: extractionProvider, cache: false, providerOverride: 'gemini',
     persist: false
   });
   assert(resultG.requirementCandidates.length > 0, 'Debe generar candidato desde audio');
   const candG = resultG.requirementCandidates[0];
   assert(candG.evidence, 'Candidato debe tener evidencia');
-  assert(candG.evidence.startTime === 12.0 || candG.evidence.startTime >= 0, 'Debe preservar startTime en la evidencia');
-  console.log('✓ CASO G superado: Candidato de audio generado con evidencia timestamp:', candG.evidence.startTime, 's -', candG.evidence.endTime, 's\n');
+  assert(candG.evidence.segments[0].startTime === 12.0 || candG.evidence.segments[0].startTime >= 0, 'Debe preservar startTime en la evidencia');
+  console.log('✓ CASO G superado: Candidato de audio generado con evidencia timestamp:', candG.evidence.segments[0].startTime, 's -', candG.evidence.segments[0].endTime, 's\n');
 
   // CASO H — REANÁLISIS (IDEMPOTENCIA)
   console.log('----------------------------------------------------------------');

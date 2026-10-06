@@ -34,41 +34,10 @@ class DiagramContextBuilder {
   }
 
   buildUseCaseContext(project, projectName) {
-    const deduplicationService = require('../analysis/deduplicationService');
-    // Only approved actors, deduplicated and canonical
-    const approvedActors = (project.actors || []).filter(a => a.reviewStatus === 'APPROVED' || a.status === 'APPROVED');
-    const canonicalActors = deduplicationService.consolidateActors(approvedActors);
-    const actors = canonicalActors.map(a => ({
-      code: 'ACT_' + toSafeIdentifier(a.codeId || a.name, 'ACT').toUpperCase().slice(0, 15),
-      name: a.name.trim(),
-      description: toSafeLabel(a.description || '', 140)
-    }));
-
-    // Prioritize approved use cases
-    const useCases = (project.useCases || [])
-      .filter(uc => uc.reviewStatus === 'APPROVED' || uc.status === 'APPROVED')
-      .map((uc, i) => ({
-        code: 'UC_' + toSafeIdentifier(uc.code || uc.codeId || `CU_${i + 1}`, 'UC').toUpperCase(),
-        name: uc.name.trim(),
-        actor: uc.actor || 'Usuario',
-        description: toSafeLabel(uc.description || '', 140)
-      }));
-
-    // Relevant functional requirements via deduplicationService
-    const selectedReqs = deduplicationService.selectRelevantRequirements(project.requirements || [], 'USE_CASE', 25);
-    const functionalReqs = selectedReqs.map(r => ({
-      code: r.code || 'RF',
-      name: r.name.trim(),
-      description: toSafeLabel(r.description || '', 160)
-    }));
-
-    return {
-      diagramType: 'USE_CASE',
-      project: { name: projectName },
-      actors: actors.length > 0 ? actors : [{ code: 'ACT_USER', name: 'Usuario del Sistema', description: 'Operador principal' }],
-      useCases: useCases.length > 0 ? useCases : undefined,
-      functionalRequirements: functionalReqs
-    };
+    const actors=(project.actors || []).filter(a=>!a.isDeleted).map(a=>({id:a.id,code:a.codeId,name:a.name,description:a.description || ''}));
+    const useCases=(project.useCases || []).filter(c=>!c.isDeleted).map(c=>({id:c.id,code:c.code || c.codeId,name:c.name,description:c.description || '',actorIds:require('../analysis/actorIdentity').useCaseActors(c)}));
+    const functionalRequirements=(project.requirements || []).filter(r=>!r.isDeleted && r.type==='FUNCTIONAL').map(r=>({id:r.id,code:r.code,name:r.name,description:r.description || '',actorIds:r.actorIds || []}));
+    return {diagramType:'USE_CASE',project:{name:projectName},actors,useCases,functionalRequirements};
   }
 
   /**
@@ -447,6 +416,7 @@ class DiagramContextBuilder {
     return {
       diagramType: 'CLASS',
       project: { name: projectName },
+      functionalRequirements: (project.requirements||[]).filter(r=>!r.isDeleted&&r.status!=='REMOVED'&&r.type==='FUNCTIONAL').map(r=>({id:r.id,code:r.code,name:r.name,description:r.description||r.name})),
       classes,
       relationships,
       domainProcesses: processes.slice(0, 10).map(p => p.name),
@@ -555,36 +525,7 @@ class DiagramContextBuilder {
   }
 
   buildFlowchartContext(project, projectName) {
-    const relevantReqs = deduplicationService.selectRelevantRequirements(
-      project.requirements || [],
-      'FLOWCHART',
-      15
-    ).map((r, i) => ({
-      id: `STEP_${i + 1}`,
-      code: r.code || `RF-${i + 1}`,
-      name: r.name.trim(),
-      description: toSafeLabel(r.description || '', 140)
-    }));
-
-    const approvedUseCases = (project.useCases || [])
-      .filter(uc => uc.reviewStatus === 'APPROVED' || uc.status === 'APPROVED')
-      .slice(0, 10)
-      .map((uc, i) => ({
-        id: `UC_${i + 1}`,
-        name: uc.name.trim(),
-        actor: uc.actor || 'Usuario',
-        description: toSafeLabel(uc.description || '', 120)
-      }));
-
-    return {
-      diagramType: 'FLOWCHART',
-      project: { name: projectName },
-      processName: `Flujo Operativo de ${projectName}`,
-      steps: relevantReqs.length > 0 ? relevantReqs : approvedUseCases,
-      ruleDecisions: [
-        { condition: '¿Datos válidos y completos?', onTrue: 'Continuar proceso', onFalse: 'Solicitar corrección' }
-      ]
-    };
+    return {diagramType:'FLOWCHART',project:{name:projectName},steps:(project.requirements||[]).filter(r=>!r.isDeleted&&r.status!=='REMOVED'&&r.type==='FUNCTIONAL').map(r=>({id:r.id,code:r.code,name:r.name,description:r.description||r.name})),ruleDecisions:[]};
   }
 
   buildNavigationContext(project, projectName) {
@@ -594,7 +535,7 @@ class DiagramContextBuilder {
     const screens = approvedScreens.map((s, idx) => {
       const safeId = 'SCR_' + toSafeIdentifier(s.name, `screen_${idx + 1}`).toUpperCase().slice(0, 30);
       return {
-        id: safeId,
+        id: s.id||safeId,
         code: s.codeId || 'SCR',
         name: s.name.trim(),
         displayName: s.name.trim(),
@@ -607,6 +548,8 @@ class DiagramContextBuilder {
     return {
       diagramType: 'NAVIGATION',
       project: { name: projectName },
+      functionalRequirements:(project.requirements||[]).filter(r=>!r.isDeleted&&r.status!=='REMOVED'&&r.type==='FUNCTIONAL').map(r=>({id:r.id,code:r.code,name:r.name,description:r.description||r.name})),
+      navigationNodes:(project.navigationNodes||[]).filter(n=>!n.isDeleted).map(n=>({id:n.id,name:n.name,parentId:n.parentId,route:n.route})),
       hierarchyTitle: `Árbol de Navegación de ${projectName}`,
       screens
     };

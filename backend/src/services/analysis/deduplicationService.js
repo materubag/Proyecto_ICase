@@ -95,14 +95,11 @@ class DeduplicationService {
       clean = clean.slice(0, -1);
     }
 
-    // Role-specific aliases mapping
-    if (/admin|administrad/i.test(clean)) return 'administrador';
-    if (/client|usuario\s+final|comprador/i.test(clean)) return 'cliente';
-    if (/mecanic|tecnic|operario/i.test(clean)) return 'mecanico';
-    if (/recepci|asistente|secretari|cajer/i.test(clean)) return 'recepcion';
-    if (/gerente|director|jefe/i.test(clean)) return 'gerente';
-    if (/auditor|supervisor/i.test(clean)) return 'auditor';
-
+    // Only spelling/gender variants of the same declared role are equivalent.
+    if (/^administrador(?:a)?$/.test(clean)) return 'administrador';
+    if (/^client(?:e)?$/.test(clean)) return 'cliente';
+    if (/^mecanic[oa]$/.test(clean)) return 'mecanico';
+    if (/^recepcion(?:ista)?$/.test(clean)) return 'recepcion';
     return clean;
   }
 
@@ -329,10 +326,16 @@ class DeduplicationService {
       const statement = (cand.statement || cand.description || cand.name || '').trim();
       if (!statement || statement.length < 10) continue;
 
+      const candidateCode = (cand.code || cand.temporaryCode || '').trim().toUpperCase();
+      const isExplicit = cand.origin === 'EXPLICIT' || cand.source === 'explicit' || /^(?:C)?RN?F-\d+$/i.test(candidateCode);
+      const normalizedStatement = this.normalizeText(statement);
+
       // First check if this candidate matches an already approved requirement in the project
-      const matchedApproved = existingApproved.find(app =>
-        this.isSemanticEquivalent({ statement }, { statement: app.description || app.name })
-      );
+      const matchedApproved = existingApproved.find(app => {
+        const approvedCode = (app.code || '').trim().toUpperCase();
+        if (isExplicit) return candidateCode && approvedCode === candidateCode;
+        return this.isSemanticEquivalent({ statement }, { statement: app.description || app.name });
+      });
 
       if (matchedApproved) {
         // Trace source to the existing approved requirement, do not create duplicate!
@@ -342,7 +345,13 @@ class DeduplicationService {
       // Check if this candidate matches an existing group
       let matchedGroup = null;
       for (const g of groups) {
-        if (this.isSemanticEquivalent({ statement }, { statement: g.canonical.statement })) {
+        const groupCode = (g.canonical.code || g.canonical.temporaryCode || '').trim().toUpperCase();
+        const groupIsExplicit = g.canonical.origin === 'EXPLICIT' || g.canonical.source === 'explicit' || /^(?:C)?RN?F-\d+$/i.test(groupCode);
+        const sameExplicitCode = isExplicit && groupIsExplicit && candidateCode && groupCode === candidateCode;
+        const sameStatement = normalizedStatement === this.normalizeText(g.canonical.statement);
+        const equivalentInferred = !isExplicit && !groupIsExplicit && this.isSemanticEquivalent({ statement }, { statement: g.canonical.statement });
+
+        if (sameExplicitCode || sameStatement || equivalentInferred) {
           matchedGroup = g;
           break;
         }

@@ -87,12 +87,13 @@ async function generate(projectId, requirementIds) {
     await d.project(tx, projectId);
     const reqs = await tx.requirement.findMany({ where: { projectId, status: 'APPROVED', ...(requirementIds ? { id: { in: requirementIds } } : {}) }, orderBy: { code: 'asc' } });
     if (!reqs.length) d.fail('APPROVED_REQUIREMENTS_REQUIRED', 'Aprueba requisitos antes de generar modelos.', 400);
+    const catalog = await tx.actor.findMany({where:{projectId,isDeleted:false}});
     const out = [];
     for (const r of reqs) {
       const body = `${r.name}\n${r.description}`;
       const add = (kind, content) => candidate(tx, projectId, { kind, content, requirementIds: [r.id] }).then(c => out.push(c));
-      for (const a of actorDetector.detect(body)) await add('Actor', { name: a.name, description: a.description });
-      if (r.type === 'FUNCTIONAL') await add('UseCase', { code: `CU-${r.code}`, name: r.name, description: r.description, actorNames: actorDetector.detect(body).map(a => a.name), actorIds: r.actorIds.filter(id => /^[0-9a-f-]{36}$/i.test(id)) });
+      if (!catalog.length) for (const a of actorDetector.detect(body)) await add('Actor', { name: a.name, description: a.description });
+      if (r.type === 'FUNCTIONAL') await add('UseCase', { code: `CU-${r.code}`, name: r.name, description: r.description, actorNames: [], actorIds: r.actorIds.filter(id => /^[0-9a-f-]{36}$/i.test(id)) });
       for (const e of entityDetector.detect(body).entities) await add('Entity', { name: e.name, description: e.description });
       const technologies = technologyDetector.detect(body).detected || [];
       for (const t of technologies) await add('Technology', { name: t.name, category: t.category.toUpperCase(), version: null });
@@ -146,6 +147,7 @@ async function review(projectId, id, input) {
         await require('./ImpactAnalysisService').invalidate(tx, impact);
       } else promoted = await tx[delegate].create({ data: { ...data, status: 'APPROVED', requirementIds: c.requirementIds, evidence: c.evidence } });
     }
+    if (c.kind === 'Actor') await require('../analysis/actorIdentity').refresh(tx, projectId, [{...c,promotedId:promoted.id}]);
     for (const id of c.requirementIds) await d.link(tx, projectId, 'Requirement', id, c.kind, promoted.id);
     for (const id of data.actorIds || []) await d.link(tx, projectId, 'Actor', id, c.kind, promoted.id);
     for (const id of content.useCaseIds || []) await d.link(tx, projectId, 'UseCase', id, c.kind, promoted.id);

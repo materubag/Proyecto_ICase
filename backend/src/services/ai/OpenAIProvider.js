@@ -2,6 +2,23 @@ const AIProvider = require('./AIProvider');
 const env = require('../../config/env');
 
 class OpenAIProvider extends AIProvider {
+  async extractDocumentBatch(input, options = {}) {
+    if (!env.OPENAI_API_KEY) throw new Error('OpenAI no configurado');
+    const model = options.model || env.OPENAI_MODEL || 'gpt-5.4-nano';
+    const response = await fetch('https://api.openai.com/v1/chat/completions', {
+      method: 'POST', signal: AbortSignal.timeout(90000),
+      headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${env.OPENAI_API_KEY}` },
+      body: JSON.stringify({ model, response_format: { type: 'json_object' },
+        messages: [{ role: 'system', content: options.prompt || require('../analysis/extractionContract').prompt },
+          { role: 'user', content: JSON.stringify(input) }] })
+    });
+    if (!response.ok) throw new Error(`OpenAI HTTP ${response.status}; modelo solicitado: ${model}`);
+    const result = await response.json();
+    const choice = result.choices?.[0];
+    if (choice?.finish_reason !== 'stop') throw Object.assign(new Error(`OpenAI respuesta incompleta: ${choice?.finish_reason}`), { usage: result.usage });
+    try { return { data: JSON.parse(choice.message.content), usage: result.usage, model }; }
+    catch (error) { error.usage = result.usage; throw error; }
+  }
   /**
    * Structure prepared for OpenAI chat completions API with JSON Mode.
    * Optimized for ISO/IEC/IEEE 29148:2018 and minimum token consumption.
