@@ -49,15 +49,11 @@ class ProcessDetector {
     // 2. Procesos canónicos universales detectables en el texto
     const canonicalProcesses = [
       { name: 'Autenticación y Control de Acceso', trigger: /inicio\s+de\s+sesi[oó]n|recuperaci[oó]n\s+de\s+acceso|autenticaci[oó]n/i, actor: 'Usuario' },
-      { name: 'Gestión de Citas y Agendamiento', trigger: /solicitud\s+de\s+una\s+cita|confirmar\s+la\s+cita/i, actor: 'Cliente / Recepción' },
-      { name: 'Recepción y Registro de Ingreso del Vehículo', trigger: /recepci[oó]n\s+del\s+veh[ií]culo|registro\s+de\s+ingreso/i, actor: 'Recepción' },
-      { name: 'Inspección Técnica y Diagnóstico de Fallas', trigger: /inspecci[oó]n\s+y\s+registra\s+el\s+diagn[oó]stico|c[oó]digos\s+OBD/i, actor: 'Mecánico' },
-      { name: 'Generación y Aprobación de Cotizaciones', trigger: /genera\s+una\s+cotizaci[oó]n|aprueba(?:\s+parcialmente)?\s+o\s+rechaza\s+la\s+cotizaci[oó]n/i, actor: 'Cliente' },
-      { name: 'Ejecución de Orden de Trabajo y Reparación', trigger: /[oó]rden\s+de\s+trabajo|registra\s+avances\s+y\s+repuestos/i, actor: 'Mecánico' },
-      { name: 'Gestión y Descuento Automático de Inventario', trigger: /inventario\s+se\s+actualiza\s+autom[aá]ticamente|descontar\s+del\s+inventario/i, actor: 'Sistema' },
-      { name: 'Pruebas Finales y Entrega del Vehículo', trigger: /realizan\s+pruebas,\s+se\s+finaliza\s+la\s+[oó]rden\s+y\s+se\s+entrega/i, actor: 'Recepción / Mecánico' },
-      { name: 'Mantenimiento Preventivo y Seguimiento', trigger: /programaci[oó]n\s+de\s+mantenimiento\s+preventivo|avisos\s+de\s+mantenimiento/i, actor: 'Sistema' },
-      { name: 'Gestión de la Base de Conocimiento Técnico', trigger: /base\s+de\s+conocimiento|casos\s+resueltos/i, actor: 'Mecánico / Administrador' }
+      { name: 'Registro y Captura de Información', trigger: /registro\s+de\s+ingreso|captura\s+de\s+datos|alta\s+de\s+solicitud/i, actor: 'Usuario' },
+      { name: 'Procesamiento y Validación de Solicitudes', trigger: /validaci[oó]n|aprobaci[oó]n|procesamiento\s+de\s+solicitud/i, actor: 'Operador / Sistema' },
+      { name: 'Gestión y Actualización de Inventario', trigger: /inventario\s+se\s+actualiza|control\s+de\s+stock/i, actor: 'Sistema' },
+      { name: 'Generación de Notificaciones y Reportes', trigger: /notificaci[oó]n|alerta|reporte\s+autom[aá]tico/i, actor: 'Sistema' },
+      { name: 'Auditoría y Cierre de Operaciones', trigger: /auditor[ií]a|cierre\s+de\s+operaci[oó]n|trazabilidad/i, actor: 'Auditor / Sistema' }
     ];
 
     for (const cp of canonicalProcesses) {
@@ -78,10 +74,15 @@ class ProcessDetector {
   }
 
   inferActorFromStep(text) {
-    if (/cliente/i.test(text)) return 'Cliente';
-    if (/mec[aá]nico/i.test(text)) return 'Mecánico';
-    if (/recepci[oó]n|taller\s+confirma/i.test(text)) return 'Recepción';
-    if (/administrador/i.test(text)) return 'Administrador';
+    if (/administrador|admin/i.test(text)) return 'Administrador';
+    if (/cliente|comprador/i.test(text)) return 'Cliente';
+    if (/auditor/i.test(text)) return 'Auditor';
+    if (/supervisor|gerente/i.test(text)) return 'Supervisor';
+    if (/usuario|operador|empleado/i.test(text)) return 'Usuario';
+    const match = text.match(/(?:el|la)\s+([a-záéíóúñ]{3,20})\s+(?:registra|valida|ejecuta|solicita|genera|revisa)/i);
+    if (match) {
+      return match[1].charAt(0).toUpperCase() + match[1].slice(1);
+    }
     return 'Sistema';
   }
 

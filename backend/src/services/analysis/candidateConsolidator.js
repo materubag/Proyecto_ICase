@@ -160,7 +160,7 @@ class CandidateConsolidator {
     cleanText = cleanText.replace(/\.\.+$/, '.').trim();
 
     // 2. Filtro estricto de metadatos, portada, contactos y tablas
-    const isBoilerplate = /^(?:PROPUESTA\s+(?:T[EÉ]CNICA|ECON[OÓ]MICA|CREADA)|DATOS\s+GENERALES|IDENTIFICACI[OÓ]N|Empresa\s+proponente|Soluci[oó]n\s+AUTRON|Sector\s+Taller|Modalidad\s+Plataforma|EQUIPO\s+RESPONSABLE|DATOS\s+DE\s+CONTACTO|COSTOS\s+OPERATIVOS|TOTAL\s+ESTIMADO|Tarifa\s+Subtotal|SOLUCIONES\s+DE\s+SOFTWARE|CONTROL\s+INTELIGENTE|NEXORA)/i.test(cleanText) ||
+    const isBoilerplate = /^(?:PROPUESTA\s+(?:T[EÉ]CNICA|ECON[OÓ]MICA|CREADA)|DATOS\s+GENERALES|IDENTIFICACI[OÓ]N|Empresa\s+proponente|EQUIPO\s+RESPONSABLE|DATOS\s+DE\s+CONTACTO|COSTOS\s+OPERATIVOS|TOTAL\s+ESTIMADO|Tarifa\s+Subtotal|SOLUCIONES\s+DE\s+SOFTWARE)/i.test(cleanText) ||
       /^(?:Cliente|Administrador|Mec[aá]nico|Recepci[oó]n)\s*:/i.test(cleanText) ||
       /^(?:Usuarios|Clientes|Citas|Recepci[oó]n|Diagn[oó]stico|Base|Servicios|Cotizaciones|[OÓ]rdenes|Inventario|Historial|Dashboard)\s+(?:y\s+|de\s+|con\s+)?(?:seguridad|veh[ií]culos|repuestos|ventas|reportes)/i.test(cleanText);
 
@@ -171,7 +171,7 @@ class CandidateConsolidator {
     // 3. Formulación gramatical correcta en español
     let statement = cleanText;
 
-    if (/^(?:El\s+sistema\s+(?:deber[aá]|permitir[aá]|podr[aá]|debe)|El\s+(?:usuario|cliente|administrador|mec[aá]nico)\s+(?:podr[aá]|deber[aá])|Cada\s+|Toda\s+|Una\s+|No\s+se\s+)/i.test(statement)) {
+    if (/^(?:El\s+sistema\s+(?:deber[aá]|permitir[aá]|podr[aá]|debe)|El\s+[a-záéíóúñ]+\s+(?:podr[aá]|deber[aá]|debe|puede)|Cada\s+|Toda\s+|Una\s+|No\s+se\s+)/i.test(statement)) {
       statement = statement.charAt(0).toUpperCase() + statement.slice(1);
       if (!statement.endsWith('.')) statement += '.';
     } else {

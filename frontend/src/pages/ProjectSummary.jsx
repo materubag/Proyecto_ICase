@@ -60,6 +60,7 @@ export default function ProjectSummary({ project, onProjectUpdated, onNavigateTo
   );
   const [state, setState] = useState('idle');
   const [errorMessage, setErrorMessage] = useState(null);
+  const [analysisWarnings, setAnalysisWarnings] = useState([]);
   const [analysisProgress, setAnalysisProgress] = useState('');
   const [isImportModalOpen, setIsImportModalOpen] = useState(false);
   const [pdfFiles, setPdfFiles] = useState([]);
@@ -75,6 +76,8 @@ export default function ProjectSummary({ project, onProjectUpdated, onNavigateTo
     try {
       setState('analyzing');
       setErrorMessage(null);
+      setAnalysisWarnings([]);
+      const sourceWarnings = [];
 
       // 1. Subir archivos nuevos si los hay
       const newlyUploadedSourceIds = [];
@@ -147,7 +150,9 @@ export default function ProjectSummary({ project, onProjectUpdated, onNavigateTo
 
       setPdfFiles([]);
       setAudioFile(null);
-      setState('success');
+      setAnalysisWarnings(sourceWarnings);
+      setState(sourceWarnings.length && !aggregatedSummary && sourcesToAnalyze.length > 0 ? 'error' : 'success');
+      if (sourceWarnings.length) setErrorMessage(sourceWarnings.join(' '));
       await onProjectUpdated();
       await loadSources();
       await loadCandidateStats();
@@ -375,6 +380,12 @@ export default function ProjectSummary({ project, onProjectUpdated, onNavigateTo
           <div className="alert alert-success">
             <span className="ms ms-sm">check_circle</span>
             <span>Análisis completado. Revisa y aprueba los candidatos antes de generar modelos.</span>
+          </div>
+        )}
+        {state === 'success' && analysisWarnings.length > 0 && (
+          <div className="alert alert-warning" role="status">
+            <span className="ms ms-sm">warning</span>
+            <span>{analysisWarnings.join(' ')}</span>
           </div>
         )}
         {state === 'error' && (

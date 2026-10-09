@@ -25,4 +25,15 @@ function consolidate(items = []) {
   }
   return out;
 }
-module.exports = { normalize, keyFor, same, unique, merge, consolidate };
+function subsumes(existing, candidate) {
+  if (!existing || !candidate || existing.type !== candidate.type) return false;
+  const norm = s => String(s || '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase().replace(/[^\w\s]/g, ' ');
+  const tokenize = s => norm(s).split(/\s+/).filter(w => w.length >= 4 && !/^(?:para|como|este|esta|estos|estas|entre|sobre|desde|hasta|segun|donde|cuando|durante|proceso|sistema|aplicacion|modulo|debe|debera|deberan|puede|podra|podran|permite|permitira|mediante|cuenta|forma|parte|cada|todo|toda|todos|todas)$/.test(w));
+  const candTokens = tokenize(candidate.statement || candidate.description || '');
+  if (candTokens.length < 2) return false;
+  const existTokens = tokenize(existing.statement || existing.description || '');
+  if (existTokens.length < 2) return false;
+  const matched = candTokens.filter(ct => existTokens.some(et => et.startsWith(ct.slice(0, 5)) || ct.startsWith(et.slice(0, 5))));
+  return matched.length >= 3 || (matched.length >= 2 && (matched.length / candTokens.length) >= 0.6);
+}
+module.exports = { normalize, keyFor, same, unique, merge, consolidate, subsumes };

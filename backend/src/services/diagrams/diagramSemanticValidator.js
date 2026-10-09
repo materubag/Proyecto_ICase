@@ -61,7 +61,7 @@ class DiagramSemanticValidator {
         if (isPk) hasPk = true;
 
         // Check for descriptive sentence fragments masquerading as attributes
-        if (/claridad|satisfaccion|calidad_del|atencion|falla_del/i.test(name) || name.length > 25) {
+        if (/claridad|satisfaccion|calidad_del|atencion|falla_del/i.test(name) || name.length > 35) {
           warnings.push(`Atributo sospechoso en entidad '${entityName}': "${name}". Parece una frase o descripción en lugar de una propiedad técnica.`);
         }
 
@@ -71,7 +71,10 @@ class DiagramSemanticValidator {
         }
 
         // Check if an obvious non-identifier is marked as PK
-        if (isPk && (/claridad|descripcion|detalle|nota|comentario/i.test(name) || name.length > 20)) {
+        const isStandardIdentifier = /^(id|cod|codigo|uuid|pk|num|numero)(_[a-z0-9_]+)?$|^[a-z0-9_]+_(id|cod|codigo|uuid|pk|num|numero)$|^(id|cod|codigo|uuid|pk|num|numero|clave|sku|isbn|dni|nif|rut|cuit|curp|rfc|serial)$/i.test(name);
+        const isDescriptiveField = /^(descripcion|comentario|nota|observacion|texto|detalle|resumen|contenido|mensaje|claridad)(?:_[a-z0-9_]+)?$/i.test(name);
+
+        if (isPk && (!isStandardIdentifier && (isDescriptiveField || name.length > 35))) {
           errors.push(`Clave primaria (PK) inválida en '${entityName}': "${name}". Una PK debe ser un identificador (ej: id, codigo, id_${entityName.toLowerCase()}).`);
         }
 

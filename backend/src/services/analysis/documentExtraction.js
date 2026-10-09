@@ -1,4 +1,4 @@
-﻿const crypto = require('node:crypto');
+const crypto = require('node:crypto');
 const fs = require('node:fs/promises');
 const path = require('node:path');
 const rules = require('../document/RuleBasedExtractor');
@@ -8,6 +8,7 @@ const identity = require('./requirementIdentity');
 const { locate } = require('./extractionEvidence');
 const hash = value => crypto.createHash('sha256').update(JSON.stringify(value)).digest('hex');
 const stableId = (prefix, value) => `${prefix}-${hash(value).substring(0,20)}`;
+const {recover}=require('./extractionRecovery');
 const cacheDir = path.resolve(__dirname, '../../../.cache/document-extraction');
 
 function segmentText(text, supplied = [], maxChars = 3000, cuts = []) {
@@ -124,8 +125,10 @@ async function extract(text,options={}) {
         if(config.provider!=='local'&&options.mode!=='local')metrics.requestsUsed++;
         response=await provider.extractDocumentBatch(input,{model:config.model,batchIndex:batches.indexOf(items)+1});
         if(response?.usage)metrics.usage.push(response.usage);
-        contract.validate(response?.data,items,context,visibleKnown);
-        if(options.cache!==false)await fs.mkdir(path.dirname(cacheFile),{recursive:true}).then(()=>fs.writeFile(cacheFile,JSON.stringify({data:response.data}),'utf8')).catch(()=>{});
+        const recovery=recover(response?.data,items,context,visibleKnown);
+        response={...response,data:recovery.data,recoveryIssues:recovery.issues};
+        if(recovery.issues.length)failures.push({segmentIds:items.map(s=>s.id),message:'Resultados parciales: '+recovery.issues.length+' hallazgos pendientes',issues:recovery.issues});
+        if(!response.recoveryIssues?.length && options.cache!==false)await fs.mkdir(path.dirname(cacheFile),{recursive:true}).then(()=>fs.writeFile(cacheFile,JSON.stringify({data:response.data}),'utf8')).catch(()=>{});
       }
       const actorMap=new Map();
       for(const a of response.data.actors){
@@ -151,18 +154,20 @@ async function extract(text,options={}) {
       }
       for(const r of response.data.requirements){
         const ev=evidence(r,context), assoc=associations(r.associations);
-        if (classifier.classify(r.statement, {section:ev[0]?.section}) === 'OBJECTIVE') { other.push({type:'OBJECTIVE',statement:r.statement,evidence:ev,source:'explicit'}); continue; }
+        const classification = classifier.classify(r.statement, {section:ev[0]?.section});
+        if (['OBJECTIVE', 'CONTEXT', 'CONSTRAINT'].includes(classification)) {
+          other.push({type:classification,statement:r.statement,evidence:ev,source:'explicit'});
+          continue;
+        }
         const exact=known.find(k=>identity.same(k,r));
-        const matches=(r.matches||[]).map(id=>known.find(k=>k.id===id));
+        const matches=(r.matches||[]).map(id=>known.find(k=>k.id===id)).filter(Boolean);
         // Returned coded proposals are reviews/links to the locally resolved item, not new requirements.
         const normalizeCode=code=>String(code||'').toUpperCase().replace(/[\s_–-]+/g,'');
         const coded=r.code?visibleKnown.filter(k=>normalizeCode(k.originalCode)===normalizeCode(r.code)):[];
-        if(!exact&&!matches.length&&coded.length>1){
-          other.push({type:'UNCERTAIN',reason:'Código compartido por varios requisitos: identificar el requisito antes de fusionar',
-            statement:r.statement,proposedType:r.type,evidence:ev,possibleMatches:coded.map(k=>k.id)});continue;
-        }
+        const subsumed=!exact&&!matches.length&&!coded.length ? visibleKnown.find(k=>identity.subsumes(k,r)) : null;
+        if(subsumed) matches.push(subsumed);
         const targets=exact?[exact]:matches.length?matches:coded;
-        if(targets.length&&(r.relationship!=='INDEPENDENT'||exact||coded.length)){
+        if(targets.length&&(exact||matches.length||coded.length||r.relationship!=='INDEPENDENT')){
           for(const match of targets){
             let target=requirements.find(k=>k.id===match.id);
             if(!target){target={...match};requirements.push(target);}
@@ -185,7 +190,7 @@ async function extract(text,options={}) {
           pending:r.pending,confidence:null,status:'PENDING_REVIEW'});
       }
       other.push(...response.data.other.map(r=>({...r,evidence:evidence(r,context)})));
-      for(const s of items){const c=coverage.find(c=>c.segmentId===s.id);c.status='ANALYZED';c.relationshipsStatus='ANALYZED';if(c.requirementsStatus==='PENDING')c.requirementsStatus='SEMANTIC_RESOLVED';}
+      for(const s of items){const c=coverage.find(c=>c.segmentId===s.id);c.status=response.recoveryIssues?.length?'FAILED':'ANALYZED';c.relationshipsStatus=response.recoveryIssues?.length?'FAILED':'ANALYZED';if(c.requirementsStatus==='PENDING')c.requirementsStatus=response.recoveryIssues?.length?'FAILED':'SEMANTIC_RESOLVED';}
     }catch(error){
       if(error.usage)metrics.usage.push(error.usage);
       failures.push({segmentIds:items.map(s=>s.id),message:error.message});

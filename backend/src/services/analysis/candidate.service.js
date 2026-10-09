@@ -298,7 +298,7 @@ class CandidateService {
         case 'ACTOR': {
           const deduplicationService = require('./deduplicationService');
           const classification=require('./actorEvidence').classify({name,evidence:modelCandidate.evidence});
-          if(classification!=='ROLE')throw Object.assign(new Error('Actor sin evidencia de un rol del sistema. Revise sus citas y responsabilidades antes de aprobar.'),{code:'ACTOR_EVIDENCE_REQUIRED',statusCode:422});
+          if(classification==='PROJECT_CONTEXT')throw Object.assign(new Error('Este candidato corresponde al contexto o proveedor del proyecto y no a un rol del sistema.'),{code:'PROJECT_CONTEXT_NOT_ACTOR',statusCode:422});
           const canonicalKey = deduplicationService.getActorCanonicalKey(name);
           const existingActors = await tx.actor.findMany({ where: { projectId, isDeleted: false } });
           const match = existingActors.find(a => deduplicationService.getActorCanonicalKey(a.name) === canonicalKey);
