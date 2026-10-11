@@ -23,8 +23,8 @@ export default function ProjectUseCases({ project, onProjectUpdated }) {
   const [saving, setSaving] = useState(false);
   const [preGenModalOpen, setPreGenModalOpen] = useState(false);
 
-  // Diagram modal
-  const [diagramModalOpen, setDiagramModalOpen] = useState(false);
+  // View mode: 'diagram' | 'table' (Option 1: diagram is default)
+  const [viewMode, setViewMode] = useState('diagram');
   const [diagramCode, setDiagramCode] = useState('');
   const [diagramLoading, setDiagramLoading] = useState(false);
   const [diagramError, setDiagramError] = useState(null);
@@ -33,7 +33,23 @@ export default function ProjectUseCases({ project, onProjectUpdated }) {
 
   useEffect(() => {
     loadUseCases();
+    loadDiagram();
   }, [project.id]);
+
+  async function loadDiagram() {
+    try {
+      setDiagramLoading(true);
+      setDiagramError(null);
+      const res = await useCasesApi.getDiagram(project.id);
+      const code = res?.data?.diagram || res?.diagram || '';
+      setDiagramCode(code);
+    } catch (err) {
+      console.error('Error loading use cases diagram:', err);
+      setDiagramError(err.message || 'Error al obtener diagrama de casos de uso');
+    } finally {
+      setDiagramLoading(false);
+    }
+  }
 
   async function loadUseCases() {
     try {
@@ -68,6 +84,7 @@ export default function ProjectUseCases({ project, onProjectUpdated }) {
       const data = res?.data || res || [];
       setUseCases(data);
       if (data.length > 0) setSelected(data[0]);
+      await loadDiagram();
       if (onProjectUpdated) await onProjectUpdated();
     } catch (err) {
       alert(`Error al generar casos de uso: ${err.message}`);
@@ -84,6 +101,7 @@ export default function ProjectUseCases({ project, onProjectUpdated }) {
       if (selected?.id === id) {
         setSelected(prev => ({ ...prev, reviewStatus: status }));
       }
+      loadDiagram();
       if (onProjectUpdated) await onProjectUpdated();
     } catch (err) {
       alert(`Error al actualizar estado: ${err.message}`);
@@ -99,6 +117,7 @@ export default function ProjectUseCases({ project, onProjectUpdated }) {
       }
       setUseCases(prev => prev.map(u => ({ ...u, reviewStatus: 'APPROVED' })));
       if (selected) setSelected(prev => ({ ...prev, reviewStatus: 'APPROVED' }));
+      loadDiagram();
       if (onProjectUpdated) await onProjectUpdated();
     } catch (err) {
       alert(`Error al aprobar casos de uso: ${err.message}`);
@@ -114,6 +133,7 @@ export default function ProjectUseCases({ project, onProjectUpdated }) {
       await useCasesApi.delete(id);
       setUseCases(prev => prev.filter(u => u.id !== id));
       if (selected?.id === id) setSelected(null);
+      loadDiagram();
       if (onProjectUpdated) await onProjectUpdated();
     } catch (err) {
       alert(`Error al eliminar caso de uso: ${err.message}`);
@@ -165,26 +185,12 @@ export default function ProjectUseCases({ project, onProjectUpdated }) {
       }
       setModalOpen(false);
       await loadUseCases();
+      await loadDiagram();
       if (onProjectUpdated) await onProjectUpdated();
     } catch (err) {
       alert(`Error al guardar: ${err.message}`);
     } finally {
       setSaving(false);
-    }
-  }
-
-  async function handleOpenDiagram() {
-    setDiagramModalOpen(true);
-    setDiagramLoading(true);
-    setDiagramError(null);
-    try {
-      const res = await useCasesApi.getDiagram(project.id);
-      const code = res?.data?.diagram || res?.diagram || '';
-      setDiagramCode(code);
-    } catch (err) {
-      setDiagramError(err.message || 'Error al obtener diagrama');
-    } finally {
-      setDiagramLoading(false);
     }
   }
 
@@ -226,18 +232,42 @@ export default function ProjectUseCases({ project, onProjectUpdated }) {
               {pendingCount} pendiente{pendingCount !== 1 ? 's' : ''}
             </span>
           )}
+
+          {/* Selector de Vista: Diagrama UML vs Lista de Casos */}
+          <div className="view-toggle" style={{ margin: 0, marginLeft: '8px' }}>
+            <button
+              type="button"
+              className={`view-toggle-btn ${viewMode === 'diagram' ? 'active' : ''}`}
+              onClick={() => setViewMode('diagram')}
+              title="Visualizar directamente el diagrama UML de Casos de Uso"
+            >
+              <span className="ms ms-xs">account_tree</span>
+              <span>Diagrama UML</span>
+            </button>
+            <button
+              type="button"
+              className={`view-toggle-btn ${viewMode === 'table' ? 'active' : ''}`}
+              onClick={() => setViewMode('table')}
+              title="Ver tabla y lista detallada de Casos de Uso"
+            >
+              <span className="ms ms-xs">table_rows</span>
+              <span>Lista de Casos ({useCases.length})</span>
+            </button>
+          </div>
         </div>
 
         <div className="page-actions">
-          <div className="search-bar" style={{ width: '220px' }}>
-            <span className="ms">search</span>
-            <input
-              type="text"
-              placeholder="Buscar casos de uso..."
-              value={search}
-              onChange={e => setSearch(e.target.value)}
-            />
-          </div>
+          {viewMode === 'table' && (
+            <div className="search-bar" style={{ width: '200px' }}>
+              <span className="ms">search</span>
+              <input
+                type="text"
+                placeholder="Buscar casos de uso..."
+                value={search}
+                onChange={e => setSearch(e.target.value)}
+              />
+            </div>
+          )}
 
           <button
             className="btn btn-outline btn-sm"
@@ -249,7 +279,7 @@ export default function ProjectUseCases({ project, onProjectUpdated }) {
             <span>{generating ? 'Generando...' : (useCases.length > 0 ? 'Regenerar Casos de Uso' : 'Generar Casos de Uso')}</span>
           </button>
 
-          {pendingCount > 0 && (
+          {viewMode === 'table' && pendingCount > 0 && (
             <button
               className="btn btn-outline btn-sm"
               onClick={handleApproveAll}
@@ -262,14 +292,17 @@ export default function ProjectUseCases({ project, onProjectUpdated }) {
             </button>
           )}
 
-          <button
-            className="btn btn-outline btn-sm"
-            onClick={handleOpenDiagram}
-            title="Visualizar diagrama Mermaid de Casos de Uso"
-          >
-            <span className="ms ms-xs">account_tree</span>
-            <span>Ver Diagrama</span>
-          </button>
+          {viewMode === 'diagram' && (
+            <button
+              className="btn btn-outline btn-sm"
+              onClick={loadDiagram}
+              disabled={diagramLoading}
+              title="Actualizar y recargar el diagrama UML"
+            >
+              <span className="ms ms-xs">refresh</span>
+              <span>Actualizar Diagrama</span>
+            </button>
+          )}
 
           <button className="btn btn-primary btn-sm" onClick={openNewModal}>
             <span className="ms ms-xs">add</span>
@@ -278,8 +311,40 @@ export default function ProjectUseCases({ project, onProjectUpdated }) {
         </div>
       </div>
 
-      {/* Split view: Left list, Right detail */}
-      <div className="split-view">
+      {viewMode === 'diagram' ? (
+        <div style={{ flex: 1, display: 'flex', flexDirection: 'column', minHeight: 0, overflow: 'hidden' }}>
+          {diagramLoading ? (
+            <div style={{ flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: '12px', color: 'var(--secondary)' }}>
+              <span className="ms ms-lg spin">progress_activity</span>
+              <span>Cargando diagrama UML de casos de uso...</span>
+            </div>
+          ) : diagramError ? (
+            <div style={{ padding: '24px' }}>
+              <div className="alert alert-error">{diagramError}</div>
+              <button className="btn btn-outline btn-sm" onClick={loadDiagram} style={{ marginTop: '12px' }}>
+                <span className="ms ms-xs">refresh</span> Reintentar
+              </button>
+            </div>
+          ) : !diagramCode ? (
+            <div className="empty-state" style={{ flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center' }}>
+              <div className="empty-state-icon"><span className="ms ms-xl">account_tree</span></div>
+              <p className="empty-state-title">Sin diagrama generado</p>
+              <p className="empty-state-desc">Haz clic en generar casos de uso para estructurar los requisitos y visualizar el diagrama.</p>
+              <button className="btn btn-primary btn-sm" onClick={requestGenerate} disabled={generating}>
+                <span className="ms ms-xs">auto_awesome</span>
+                <span>{generating ? 'Generando...' : 'Generar Casos de Uso'}</span>
+              </button>
+            </div>
+          ) : (
+            <DiagramViewport
+              code={diagramCode}
+              title={`Diagrama de Casos de Uso UML — ${project.name}`}
+            />
+          )}
+        </div>
+      ) : (
+        /* Split view: Left list, Right detail */
+        <div className="split-view">
         <section className="split-left">
           <div className="table-header-bar" style={{ gridTemplateColumns: '70px 1.5fr 1fr 100px 90px 80px' }}>
             <div className="table-col-label">ID</div>
@@ -536,6 +601,7 @@ export default function ProjectUseCases({ project, onProjectUpdated }) {
           )}
         </aside>
       </div>
+      )}
 
       {/* Edit/Create Modal */}
       {modalOpen && (
@@ -631,32 +697,6 @@ export default function ProjectUseCases({ project, onProjectUpdated }) {
         </Modal>
       )}
 
-      {/* Diagram Modal */}
-      {diagramModalOpen && (
-        <Modal
-          isOpen={true}
-          title={`Diagrama de Casos de Uso — ${project.name}`}
-          onClose={() => setDiagramModalOpen(false)}
-          size="xlarge"
-        >
-          <div style={{ display: 'flex', flexDirection: 'column', height: '70vh' }}>
-            {diagramLoading ? (
-              <div style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                <p>Cargando diagrama de casos de uso...</p>
-              </div>
-            ) : diagramError ? (
-              <div className="alert alert-error" style={{ margin: '16px' }}>
-                {diagramError}
-              </div>
-            ) : (
-              <DiagramViewport
-                code={diagramCode}
-                title="Casos de Uso del Proyecto"
-              />
-            )}
-          </div>
-        </Modal>
-      )}
       {/* Modal de Validación Previa de Información para Casos de Uso (Req #15) */}
       {preGenModalOpen && (
         <Modal

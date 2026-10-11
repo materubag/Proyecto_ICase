@@ -567,12 +567,12 @@ class DeduplicationService {
         case 'USE_CASE':
           if (/registrar|crear|consultar|gestionar|solicitar|aprobar|emitir|generar|cancelar|asignar/i.test(text)) score += 4;
           if (req.actorIds && req.actorIds.length > 0) score += 3;
-          if (/usuario|cliente|mecanico|recepcion|admin/i.test(text)) score += 2;
+          if (/usuario|cliente|administrador|operador|gestor|tecnico|responsable/i.test(text)) score += 2;
           break;
 
         case 'ER':
           if (/entidad|tabla|relaci|datos|campo|atributo|clave|id|codigo/i.test(text)) score += 4;
-          if (/vehiculo|orden|cliente|producto|servicio|cita|factura|repuesto|inventario/i.test(text)) score += 3;
+          if (/registro|documento|transaccion|item|catalogo|detalle|movimiento|solicitud|comprobante|historial/i.test(text)) score += 3;
           if (/tiene|posee|asociad|pertenece|registra|contiene/i.test(text)) score += 3;
           break;
 

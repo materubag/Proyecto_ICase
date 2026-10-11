@@ -150,4 +150,63 @@ router.post('/:projectId/diagrams/:type/validate', (req, res, next) => diagramCo
 router.put('/:projectId/diagrams/:type', (req, res, next) => diagramController.updateDiagram(req, res, next));
 router.post('/:projectId/diagrams/cross-validate', (req, res, next) => diagramController.crossValidate(req, res, next));
 
+// Arquitectura del Proyecto (Consulta y Edición)
+router.get('/:projectId/architecture', async (req, res, next) => {
+  try {
+    const { projectId } = req.params;
+    const prisma = require('../config/prisma');
+    let arch = await prisma.architecture.findFirst({
+      where: { projectId },
+      orderBy: { createdAt: 'desc' },
+      include: { components: true }
+    });
+    res.json({ success: true, data: arch });
+  } catch (err) { next(err); }
+});
+
+router.put('/:projectId/architecture', async (req, res, next) => {
+  try {
+    const { projectId } = req.params;
+    const { style, frontend, backend, database, softwareDiagram, deploymentDiagram } = req.body;
+    const prisma = require('../config/prisma');
+    let arch = await prisma.architecture.findFirst({
+      where: { projectId },
+      orderBy: { createdAt: 'desc' }
+    });
+    if (arch) {
+      arch = await prisma.architecture.update({
+        where: { id: arch.id },
+        data: {
+          ...(style !== undefined && { style }),
+          ...(frontend !== undefined && { frontend }),
+          ...(backend !== undefined && { backend }),
+          ...(database !== undefined && { database }),
+          ...(softwareDiagram !== undefined && { softwareDiagram }),
+          ...(deploymentDiagram !== undefined && { deploymentDiagram }),
+          status: 'APPROVED',
+          reviewStatus: 'APPROVED',
+          revision: arch.revision + 1
+        },
+        include: { components: true }
+      });
+    } else {
+      arch = await prisma.architecture.create({
+        data: {
+          projectId,
+          style: style || 'Arquitectura en 3 Capas (Presentación, Servicios y Datos)',
+          frontend: frontend || 'React',
+          backend: backend || 'Node.js + Express',
+          database: database || 'PostgreSQL',
+          softwareDiagram,
+          deploymentDiagram,
+          status: 'APPROVED',
+          reviewStatus: 'APPROVED'
+        },
+        include: { components: true }
+      });
+    }
+    res.json({ success: true, data: arch });
+  } catch (err) { next(err); }
+});
+
 module.exports = router;

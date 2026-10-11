@@ -2,70 +2,251 @@ import React, { useState, useEffect, useMemo } from 'react';
 import MockupRenderer from '../components/mockup-renderer/MockupRenderer';
 import DiagramViewport from '../components/common/DiagramViewport';
 import Modal from '../components/common/Modal';
-import { screenOptions } from '../utils/mockupScreenOptions';
+import { screenOptions, SCREEN_CATEGORIES } from '../utils/mockupScreenOptions';
 import { engineering } from '../api/engineering.api';
 import { projectsApi } from '../api/projects.api';
 import { mockupApi } from '../api/mockup.api';
 
 export default function ProjectPrototype({ project, onProjectUpdated }) {
-  const [selectorOpen,setSelectorOpen]=useState(!(project.screens||[]).length);
-  const [detailsScreen,setDetailsScreen]=useState(null);
-  const [loadingMockups,setLoadingMockups]=useState(true);
-  const [localNodes,setLocalNodes]=useState(null);
-  const availableScreens=screenOptions({...project,navigationNodes:localNodes || project.navigationNodes});
-  const [selectedNodeIds,setSelectedNodeIds]=useState([]);
-  useEffect(()=>{setGeneratedScreens([]);setSelectedNodeIdReset();setLocalNodes(null);},[project.id]);
-  useEffect(()=>{
-    let active=true;setLoadingMockups(true);
-    mockupApi.list(project.id).then(result=>{if(!active)return;const stored=result.screens||[];setGeneratedScreens(stored);if(stored.length)setSelectorOpen(false);}).catch(error=>{if(active)setGenerationError('No se pudieron cargar los mockups guardados: '+error.message);}).finally(()=>{if(active)setLoadingMockups(false);});
-    return ()=>{active=false;};
-  },[project.id]);
-  function setSelectedNodeIdReset(){setSelectedNodeIds([]);setSelectedScreenId(null);}
+  const STORAGE_KEY = `icase_mockup_generating_${project.id}`;
+
+  // 1. Estados
+  const [detailsScreen, setDetailsScreen] = useState(null);
+  const [loadingMockups, setLoadingMockups] = useState(true);
+  const [localNodes, setLocalNodes] = useState(null);
+  const [selectedCategory, setSelectedCategory] = useState('all');
+  const availableScreens = screenOptions({ ...project, navigationNodes: localNodes || project.navigationNodes });
+  const [selectedNodeIds, setSelectedNodeIds] = useState([]);
   const [generatedScreens, setGeneratedScreens] = useState([]);
-  const [isGenerating, setIsGenerating] = useState(false);
+  const [isGenerating, setIsGenerating] = useState(() => {
+    try {
+      const raw = localStorage.getItem(`icase_mockup_generating_${project.id}`);
+      if (raw) {
+        const parsed = JSON.parse(raw);
+        if (Date.now() - (parsed.startedAt || 0) < 900000) return true;
+        localStorage.removeItem(`icase_mockup_generating_${project.id}`);
+      }
+    } catch (e) {}
+    return false;
+  });
+  const [elapsedSeconds, setElapsedSeconds] = useState(() => {
+    try {
+      const raw = localStorage.getItem(`icase_mockup_generating_${project.id}`);
+      if (raw) {
+        const parsed = JSON.parse(raw);
+        if (parsed.startedAt) return Math.max(0, Math.floor((Date.now() - parsed.startedAt) / 1000));
+      }
+    } catch (e) {}
+    return 0;
+  });
   const [generationError, setGenerationError] = useState(null);
+
   const screens = generatedScreens.length > 0 ? generatedScreens : (project.screens || []);
-  const [selectedScreenId, setSelectedScreenId] = useState(screens[0]?.id || null);
+  const [selectedScreenId, setSelectedScreenId] = useState(null);
+  const [selectorOpen, setSelectorOpen] = useState(!(project.screens || []).length);
   const [viewMode, setViewMode] = useState('render'); // 'render' | 'sketch' | 'structure' | 'relations' | 'html'
+
+  // Cronómetro en vivo mientras genera
+  useEffect(() => {
+    if (!isGenerating) {
+      setElapsedSeconds(0);
+      return;
+    }
+    const timer = setInterval(() => {
+      setElapsedSeconds(prev => prev + 1);
+    }, 1000);
+    return () => clearInterval(timer);
+  }, [isGenerating]);
+
+  // 2. Funciones auxiliares
+  const handleSelectCore = () => {
+    const coreIds = availableScreens.filter(s => s.isCore || s.category === 'workshop').map(s => s.id);
+    setSelectedNodeIds(coreIds);
+  };
+
+  const handleSelectAll = () => {
+    setSelectedNodeIds(availableScreens.map(s => s.id));
+  };
+
+  const handleClearSelection = () => {
+    setSelectedNodeIds([]);
+  };
+
+  function setSelectedNodeIdReset() {
+    setSelectedNodeIds([]);
+    setSelectedScreenId(null);
+  }
+
+  const handleCancelGenerating = () => {
+    setIsGenerating(false);
+    localStorage.removeItem(STORAGE_KEY);
+  };
+
+  // 3. Efectos
+  useEffect(() => {
+    setSelectedNodeIdReset();
+    setLocalNodes(null);
+  }, [project.id]);
+
+  // Carga inicial de pantallas guardadas (no resetea isGenerating si el usuario inició una generación)
+  useEffect(() => {
+    let active = true;
+    setLoadingMockups(true);
+    mockupApi.list(project.id)
+      .then(result => {
+        if (!active) return;
+        const stored = result.screens || [];
+        setGeneratedScreens(stored);
+        if (stored.length) {
+          setSelectorOpen(false);
+          setSelectedScreenId(prev => prev || stored[0]?.id || null);
+        }
+      })
+      .catch(error => {
+        if (active) setGenerationError('No se pudieron cargar los mockups guardados: ' + error.message);
+      })
+      .finally(() => {
+        if (active) setLoadingMockups(false);
+      });
+    return () => { active = false; };
+  }, [project.id]);
+
+  // Polling si se está generando en segundo plano
+  useEffect(() => {
+    if (!isGenerating) return;
+    const interval = setInterval(() => {
+      // Validar si excedió el timeout de 15 minutos
+      try {
+        const raw = localStorage.getItem(STORAGE_KEY);
+        if (raw) {
+          const parsed = JSON.parse(raw);
+          if (Date.now() - (parsed.startedAt || 0) > 900000) {
+            setIsGenerating(false);
+            localStorage.removeItem(STORAGE_KEY);
+            setGenerationError('La generación en n8n superó el tiempo máximo de 15 minutos.');
+            return;
+          }
+        }
+      } catch (e) {}
+
+      mockupApi.list(project.id)
+        .then(result => {
+          const stored = result.screens || [];
+          if (!stored.length) return;
+          try {
+            const raw = localStorage.getItem(STORAGE_KEY);
+            if (raw) {
+              const meta = JSON.parse(raw);
+              const prevVersions = meta.prevVersions || {};
+              // Detectar si alguna pantalla seleccionada tiene una versión más nueva
+              const hasNewVersion = stored.some(s => {
+                const prevVer = prevVersions[s.id] || 0;
+                return (s.version || 1) > prevVer;
+              });
+              if (hasNewVersion) {
+                setGeneratedScreens(stored);
+                setSelectorOpen(false);
+                setIsGenerating(false);
+                localStorage.removeItem(STORAGE_KEY);
+                setSelectedScreenId(stored[0]?.id || null);
+              }
+            }
+          } catch (e) {}
+        })
+        .catch(err => {
+          console.warn('[Mockup] Polling list error:', err.message);
+        });
+    }, 2500);
+
+    return () => clearInterval(interval);
+  }, [isGenerating, project.id, STORAGE_KEY]);
 
   useEffect(() => {
     if (screens.length > 0 && (!selectedScreenId || !screens.some(s => s.id === selectedScreenId))) {
       setSelectedScreenId(screens[0].id);
     }
-  }, [screens]);
+  }, [screens, selectedScreenId]);
 
+  // 4. Manejo de generacion
   async function handleGenerateMockup() {
     if (isGenerating) return;
-    if(!selectedNodeIds.length){setGenerationError('Selecciona las pantallas que quieres generar.');return;}
+
+    let targetNodeIds = [...selectedNodeIds];
+    if (!targetNodeIds.length) {
+      const coreIds = availableScreens.filter(s => s.isCore || s.category === 'workshop').map(s => s.id);
+      targetNodeIds = coreIds.length ? coreIds : availableScreens.map(s => s.id);
+      setSelectedNodeIds(targetNodeIds);
+    }
+
     try {
+      const prevVersions = {};
+      screens.forEach(s => {
+        if (s.id) prevVersions[s.id] = s.version || 1;
+      });
+
       setIsGenerating(true);
+      setElapsedSeconds(0);
+      localStorage.setItem(STORAGE_KEY, JSON.stringify({
+        startedAt: Date.now(),
+        targetCount: targetNodeIds.length,
+        prevVersions
+      }));
       setGenerationError(null);
-      const selected=availableScreens.filter(n=>selectedNodeIds.includes(n.id));
-      const ids=[];
-      for(const node of selected){
-        if(!node.proposed){ids.push(node.id);continue;}
-        const candidate=await engineering(project.id,'/models',{kind:'NavigationNode',name:node.name,content:{name:node.name,route:node.route,platform:node.platform,parentId:null,actorIds:[],useCaseIds:[]},requirementIds:node.requirementIds});
-        const promoted=await engineering(project.id,'/models/'+candidate.id,{status:'APPROVED'},'PATCH');
+
+      const selected = availableScreens.filter(n => targetNodeIds.includes(n.id));
+      const ids = [];
+      for (const node of selected) {
+        if (!node.proposed) {
+          ids.push(node.id);
+          continue;
+        }
+        const candidate = await engineering(project.id, '/models', {
+          kind: 'NavigationNode',
+          name: node.name,
+          content: {
+            name: node.name,
+            route: node.route,
+            platform: node.platform,
+            parentId: null,
+            actorIds: [],
+            useCaseIds: []
+          },
+          requirementIds: node.requirementIds
+        });
+        const promoted = await engineering(project.id, '/models/' + candidate.id, { status: 'APPROVED' }, 'PATCH');
         ids.push(promoted.promotedId);
       }
-      const updated=await projectsApi.getById(project.id);
-      setLocalNodes(updated.navigationNodes||[]);setSelectedNodeIds(ids);
+
+      const updated = await projectsApi.getById(project.id);
+      setLocalNodes(updated.navigationNodes || []);
+      setSelectedNodeIds(ids);
       await onProjectUpdated?.();
+
       const result = await mockupApi.generateMockup(
         project.id,
         `Generar un prototipo visual para: ${project.systemDescription || project.description || project.name}`,
         ids
       );
+
       const nextScreens = result?.screens || result?.data?.screens || [];
       if (nextScreens.length === 0) throw new Error('El backend no devolvió pantallas para mostrar.');
-      const normalized=nextScreens.map((screen,index)=>({...screen,id:screen.id || availableScreens.find(n=>n.route===screen.route||n.name===screen.name)?.id || 'generated-'+index}));
-      setGeneratedScreens(previous=>[...previous.filter(old=>!normalized.some(n=>n.route===old.route||n.id===old.id)),...normalized]);
+
+      const normalized = nextScreens.map((screen, index) => ({
+        ...screen,
+        id: screen.id || availableScreens.find(n => n.route === screen.route || n.name === screen.name)?.id || 'generated-' + index
+      }));
+
+      setGeneratedScreens(previous => [
+        ...previous.filter(old => !normalized.some(n => n.route === old.route || n.id === old.id)),
+        ...normalized
+      ]);
       setSelectedScreenId(normalized[0]?.id || null);
       setSelectorOpen(false);
     } catch (error) {
       setGenerationError(error.message || 'No se pudo generar el prototipo.');
     } finally {
       setIsGenerating(false);
+      localStorage.removeItem(STORAGE_KEY);
     }
   }
 
@@ -150,9 +331,9 @@ export default function ProjectPrototype({ project, onProjectUpdated }) {
             </div>
           )}
 
-          <button className="btn btn-primary btn-sm" onClick={handleGenerateMockup} disabled={isGenerating || !selectedNodeIds.length}>
+          <button className="btn btn-primary btn-sm" onClick={handleGenerateMockup} disabled={isGenerating}>
             {isGenerating ? (
-              <><span className="ms ms-sm spin">autorenew</span><span>Generando...</span></>
+              <><span className="ms ms-sm spin">progress_activity</span><span>Generando ({Math.floor(elapsedSeconds / 60)}m {elapsedSeconds % 60 < 10 ? '0' : ''}{elapsedSeconds % 60}s)...</span></>
             ) : (
               <><span className="ms ms-sm">auto_awesome</span><span>Generar con n8n</span></>
             )}
@@ -160,20 +341,120 @@ export default function ProjectPrototype({ project, onProjectUpdated }) {
         </div>
       </div>
 
-      <section style={{flexShrink:0,padding:'16px 24px',borderBottom:'1px solid var(--border-default)'}}>
-        <div style={{display:'flex',alignItems:'center',justifyContent:'space-between',gap:12}}>
-          <div><strong>Pantallas a generar</strong><span style={{marginLeft:12,fontSize:13,color:'var(--secondary)'}}>{selectedNodeIds.length} seleccionadas</span></div>
-          <button type="button" className="btn btn-outline btn-sm" aria-expanded={selectorOpen} onClick={()=>setSelectorOpen(value=>!value)}>{selectorOpen?'Ocultar selector':'Seleccionar pantallas'}</button>
+      <section style={{flexShrink:0,padding:'16px 24px',borderBottom:'1px solid var(--border-default)',background:'var(--surface-container-lowest)'}}>
+        <div style={{display:'flex',alignItems:'center',justifyContent:'space-between',gap:12,flexWrap:'wrap'}}>
+          <div style={{display:'flex',alignItems:'center',gap:10}}>
+            <strong style={{fontSize:14}}>Pantallas para Prototipo</strong>
+            <span style={{fontSize:12,color:'var(--secondary)',background:'var(--surface-container-low)',padding:'2px 8px',borderRadius:6}}>
+              {selectedNodeIds.length} de {availableScreens.length} seleccionadas
+            </span>
+          </div>
+          <div style={{display:'flex',gap:6,alignItems:'center',flexWrap:'wrap'}}>
+            <button type="button" className="btn btn-outline btn-xs" onClick={handleSelectCore} title="Selecciona las 5 pantallas operativas del taller">
+              <span className="ms ms-xs">target</span><span>Taller Core (5)</span>
+            </button>
+            <button type="button" className="btn btn-outline btn-xs" onClick={handleSelectAll}>
+              <span className="ms ms-xs">select_all</span><span>Todas ({availableScreens.length})</span>
+            </button>
+            <button type="button" className="btn btn-ghost btn-xs" onClick={handleClearSelection} disabled={!selectedNodeIds.length}>
+              <span className="ms ms-xs">clear</span><span>Limpiar</span>
+            </button>
+            <button type="button" className="btn btn-primary btn-sm" aria-expanded={selectorOpen} onClick={()=>setSelectorOpen(v=>!v)}>
+              <span className="ms ms-xs">{selectorOpen ? 'expand_less' : 'tune'}</span>
+              <span>{selectorOpen ? 'Ocultar catálogo' : 'Elegir pantallas'}</span>
+            </button>
+          </div>
         </div>
-        {selectorOpen && <>
-        {availableScreens.length ? <>
-          <p>Selecciona solo las pantallas que necesitas. Se enviaran {selectedNodeIds.length} al generador.</p>
-          <div style={{display:'grid',gridTemplateColumns:'repeat(auto-fit,minmax(250px,1fr))',gap:8,maxHeight:220,overflowY:'auto'}}>{availableScreens.map(node=><div key={node.id} style={{display:'flex',alignItems:'center',gap:10,padding:'10px 12px',border:selectedNodeIds.includes(node.id)?'1px solid var(--primary)':'1px solid var(--border-default)',borderRadius:8,background:'var(--surface-container-lowest)'}}>
-            <label style={{display:'flex',alignItems:'center',gap:8,flex:1,minWidth:0,cursor:'pointer'}}><input type="checkbox" disabled={isGenerating} checked={selectedNodeIds.includes(node.id)} onChange={event=>setSelectedNodeIds(ids=>event.target.checked?[...ids,node.id]:ids.filter(id=>id!==node.id))}/><span style={{fontSize:13,fontWeight:600}}>{node.name}</span></label>
-            <button type="button" className="btn btn-ghost btn-sm" onClick={()=>setDetailsScreen(node)}>Ver detalles</button>
-          </div>)}</div>
-        </> : <p>No hay pantallas aprobadas con ruta y requisitos vinculados. No hay requisitos funcionales aprobados para proponer pantallas.</p>}
-        </>}
+        {selectorOpen && (
+          <div style={{marginTop:14}}>
+            {/* Category tabs */}
+            <div style={{display:'flex',gap:6,marginBottom:12,borderBottom:'1px solid var(--border-default)',paddingBottom:8,overflowX:'auto'}}>
+              <button
+                type="button"
+                className={`btn btn-xs ${selectedCategory === 'all' ? 'btn-primary' : 'btn-ghost'}`}
+                onClick={() => setSelectedCategory('all')}
+              >
+                Todas ({availableScreens.length})
+              </button>
+              {SCREEN_CATEGORIES.map(cat => {
+                const catScreens = availableScreens.filter(s => s.category === cat.id);
+                const count = catScreens.length;
+                const catIds = catScreens.map(s => s.id);
+                const isAllSelected = catIds.length > 0 && catIds.every(id => selectedNodeIds.includes(id));
+                return (
+                  <button
+                    key={cat.id}
+                    type="button"
+                    className={`btn btn-xs ${selectedCategory === cat.id ? 'btn-primary' : 'btn-ghost'}`}
+                    onClick={() => setSelectedCategory(cat.id)}
+                    style={{display:'flex',alignItems:'center',gap:4}}
+                  >
+                    <span className="ms ms-xs">{cat.icon}</span>
+                    <span>{cat.label} ({count})</span>
+                    {isAllSelected && <span style={{fontSize:10,color:'#10b981'}}>✓</span>}
+                  </button>
+                );
+              })}
+            </div>
+
+            {/* Screens Grid */}
+            <div style={{display:'grid',gridTemplateColumns:'repeat(auto-fit,minmax(270px,1fr))',gap:10,maxHeight:260,overflowY:'auto',paddingRight:4}}>
+              {availableScreens
+                .filter(node => selectedCategory === 'all' || node.category === selectedCategory)
+                .map(node => {
+                  const isChecked = selectedNodeIds.includes(node.id);
+                  return (
+                    <div
+                      key={node.id}
+                      style={{
+                        display:'flex',
+                        flexDirection:'column',
+                        justifyContent:'space-between',
+                        padding:'10px 12px',
+                        border: isChecked ? '1.5px solid var(--primary)' : '1px solid var(--border-default)',
+                        borderRadius: 8,
+                        background: isChecked ? 'rgba(37,99,235,0.04)' : 'var(--surface-container-lowest)',
+                        transition: 'all 0.15s ease'
+                      }}
+                    >
+                      <div style={{display:'flex',alignItems:'flex-start',gap:10}}>
+                        <input
+                          type="checkbox"
+                          disabled={isGenerating}
+                          checked={isChecked}
+                          onChange={event => setSelectedNodeIds(ids => event.target.checked ? [...ids, node.id] : ids.filter(id => id !== node.id))}
+                          style={{marginTop:3,cursor:'pointer'}}
+                        />
+                        <div style={{flex:1,minWidth:0}}>
+                          <div style={{fontSize:13,fontWeight:600,color:'var(--on-surface)',lineHeight:1.3}}>
+                            {node.name}
+                          </div>
+                          <div style={{display:'flex',alignItems:'center',gap:6,marginTop:4,flexWrap:'wrap'}}>
+                            <code style={{fontSize:11,color:'var(--primary)',background:'rgba(37,99,235,0.08)',padding:'1px 5px',borderRadius:4}}>
+                              {node.route}
+                            </code>
+                            <span style={{fontSize:11,color:'var(--secondary)'}}>
+                              {node.functionalities?.length || 0} RF{node.functionalities?.length === 1 ? '' : 's'}
+                            </span>
+                            {node.isCore && (
+                              <span style={{fontSize:10,background:'#fef3c7',color:'#b45309',fontWeight:600,padding:'1px 5px',borderRadius:4}}>
+                                Core
+                              </span>
+                            )}
+                          </div>
+                        </div>
+                      </div>
+                      <div style={{display:'flex',justifyContent:'flex-end',marginTop:8}}>
+                        <button type="button" className="btn btn-ghost btn-xs" onClick={() => setDetailsScreen(node)} style={{fontSize:11,padding:'2px 6px'}}>
+                          Ver detalles
+                        </button>
+                      </div>
+                    </div>
+                  );
+                })}
+            </div>
+          </div>
+        )}
       </section>
       <Modal isOpen={!!detailsScreen} onClose={()=>setDetailsScreen(null)} title={detailsScreen?.name||'Pantalla'}>
         <p>{detailsScreen?.description}</p><small>{detailsScreen?.route}</small>
@@ -187,7 +468,43 @@ export default function ProjectPrototype({ project, onProjectUpdated }) {
         </div>
       )}
 
-      {loadingMockups ? <div className="page-scrollable">Cargando mockups guardados...</div> : screens.length === 0 ? (
+      {isGenerating && (
+        <div style={{ margin: '14px 24px 0', padding: '14px 18px', borderRadius: 8, background: '#eff6ff', border: '1px solid #3b82f6', display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12 }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+            <span className="ms ms-md spin" style={{ color: '#2563eb', fontSize: 24 }}>progress_activity</span>
+            <div>
+              <div style={{ fontWeight: 600, color: '#1d4ed8', fontSize: 13 }}>
+                Generando pantallas con n8n y Google Stitch ({Math.floor(elapsedSeconds / 60)}m {elapsedSeconds % 60 < 10 ? '0' : ''}{elapsedSeconds % 60}s)
+              </div>
+              <div style={{ fontSize: 12, color: '#475569', marginTop: 2 }}>
+                El flujo de n8n está construyendo el código HTML interactivo en alta fidelidad. Puedes cambiar de pestaña o esperar aquí; el progreso no se perderá (puede tardar de 5 a 11 minutos).
+              </div>
+            </div>
+          </div>
+          <button type="button" className="btn btn-outline btn-xs" onClick={handleCancelGenerating} style={{ borderColor: '#93c5fd', color: '#1e40af', background: '#fff' }}>
+            Cancelar espera
+          </button>
+        </div>
+      )}
+
+      {loadingMockups ? (
+        <div className="page-scrollable" style={{display:'flex',alignItems:'center',justifyContent:'center',minHeight:240}}>
+          <div style={{display:'flex',flexDirection:'column',alignItems:'center',gap:10}}>
+            <span className="ms ms-lg spin" style={{color:'var(--primary)'}}>autorenew</span>
+            <span style={{color:'var(--secondary)',fontSize:13}}>Cargando prototipos guardados...</span>
+          </div>
+        </div>
+      ) : isGenerating && screens.length === 0 ? (
+        <div className="page-scrollable">
+          <div className="empty-state" style={{ border: '1px solid rgba(37,99,235,0.3)', borderRadius: 'var(--radius-lg)', background: 'rgba(37,99,235,0.03)' }}>
+            <div className="empty-state-icon"><span className="ms ms-xl spin" style={{color:'var(--primary)'}}>autorenew</span></div>
+            <p className="empty-state-title" style={{color:'var(--primary)'}}>Construyendo prototipos de la aplicación</p>
+            <p className="empty-state-desc">
+              Generando vistas de alta fidelidad, componentes y código HTML interactivo a partir de los requerimientos seleccionados...
+            </p>
+          </div>
+        </div>
+      ) : screens.length === 0 ? (
         <div className="page-scrollable">
           <div className="empty-state" style={{ border: '1px dashed var(--outline-variant)', borderRadius: 'var(--radius-lg)' }}>
             <div className="empty-state-icon"><span className="ms ms-xl">devices</span></div>

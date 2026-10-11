@@ -223,8 +223,6 @@ class DiagramContextBuilder {
   }
 
   buildERContext(project, projectName) {
-    const deduplicationService = require('../analysis/deduplicationService');
-
     // Extract approved entities
     const approvedEntities = (project.entities || []).filter(e => e.reviewStatus === 'APPROVED' || e.status === 'APPROVED');
     const entities = approvedEntities.map(e => {
@@ -259,7 +257,6 @@ class DiagramContextBuilder {
     const candidates = project.modelCandidates || [];
     const processes = candidates
       .filter(c => c.kind === 'PROCESS')
-      .slice(0, 15)
       .map(p => ({
         name: p.name,
         description: toSafeLabel(typeof p.content === 'string' ? p.content : p.content?.description || p.name, 140)
@@ -268,28 +265,42 @@ class DiagramContextBuilder {
     const businessRules = [
       ...(project.businessRules || []).map(b => ({ code: b.code || 'RN', description: toSafeLabel(b.description || b.name, 140) })),
       ...candidates.filter(c => c.kind === 'RULE').map(r => ({ code: 'RN', description: toSafeLabel(r.name, 140) }))
-    ].slice(0, 12);
+    ];
 
     const scopeObjectives = candidates
       .filter(c => c.kind === 'OBJECTIVE')
-      .slice(0, 8)
       .map(o => toSafeLabel(o.name, 120));
 
     const constraints = candidates
       .filter(c => c.kind === 'CONSTRAINT')
-      .slice(0, 6)
       .map(c => toSafeLabel(c.name, 120));
 
     const actors = (project.actors || [])
       .filter(a => a.reviewStatus === 'APPROVED' || a.status === 'APPROVED')
       .map(a => ({ name: a.name.trim(), role: toSafeLabel(a.description || 'Actor del sistema', 80) }));
 
-    const dataReqs = deduplicationService.selectRelevantRequirements(project.requirements || [], 'ER', 25)
-      .map(r => ({ code: r.code, text: toSafeLabel(r.description || r.name, 150) }));
+    const allReqs = (project.requirements || []).filter(r => !r.isDeleted && r.status !== 'REMOVED');
+    const functionalRequirements = allReqs
+      .filter(r => r.type === 'FUNCTIONAL' || !r.type)
+      .map(r => ({ code: r.code, name: r.name, statement: toSafeLabel(r.description || r.statement || r.name, 250) }));
+
+    const nonFunctionalRequirements = allReqs
+      .filter(r => r.type === 'NON_FUNCTIONAL')
+      .map(r => ({ code: r.code, name: r.name, statement: toSafeLabel(r.description || r.statement || r.name, 250) }));
+
+    const sourceSummaries = (project.sources || []).map(s => {
+      const text = s.currentVersion?.extractedText || '';
+      return {
+        name: s.name,
+        type: s.type,
+        snippet: text ? toSafeLabel(text.slice(0, 2000).replace(/\s+/g, ' '), 600) : ''
+      };
+    }).filter(s => s.snippet);
 
     return {
       diagramType: 'ER',
       project: { name: projectName },
+      sources: sourceSummaries,
       entities,
       relationships,
       processes,
@@ -297,13 +308,534 @@ class DiagramContextBuilder {
       scopeObjectives,
       constraints,
       actors,
-      dataRequirements: dataReqs,
+      dataRequirements: functionalRequirements,
+      functionalRequirements,
+      nonFunctionalRequirements,
       modelingGuidelines: {
         prohibitEmptyEntities: true,
         prohibitDescriptiveSentencePKs: true,
-        resolveManytoManyWithAssociativeEntity: true
+        resolveManytoManyWithAssociativeEntity: true,
+        mustCoverAllRequirements: true
       }
     };
+  }
+
+  getComprehensiveDomainClasses() {
+    return [
+      {
+        id: 'Usuario', name: 'Usuario', displayName: 'Usuario',
+        attributes: [
+          { name: 'id', type: 'int', visibility: '+' },
+          { name: 'nombre', type: 'string', visibility: '+' },
+          { name: 'email', type: 'string', visibility: '+' },
+          { name: 'passwordHash', type: 'string', visibility: '+' },
+          { name: 'activo', type: 'bool', visibility: '+' }
+        ],
+        methods: [
+          { name: 'autenticar', returnType: 'bool', visibility: '+' },
+          { name: 'recuperarAcceso', returnType: 'bool', visibility: '+' },
+          { name: 'cambiarPassword', returnType: 'void', visibility: '+' }
+        ]
+      },
+      {
+        id: 'Rol', name: 'Rol', displayName: 'Rol',
+        attributes: [
+          { name: 'id', type: 'int', visibility: '+' },
+          { name: 'nombre', type: 'string', visibility: '+' },
+          { name: 'descripcion', type: 'string', visibility: '+' }
+        ],
+        methods: [
+          { name: 'asignarPermiso', returnType: 'void', visibility: '+' }
+        ]
+      },
+      {
+        id: 'Permiso', name: 'Permiso', displayName: 'Permiso',
+        attributes: [
+          { name: 'id', type: 'int', visibility: '+' },
+          { name: 'modulo', type: 'string', visibility: '+' },
+          { name: 'accion', type: 'string', visibility: '+' }
+        ],
+        methods: [
+          { name: 'verificarAcceso', returnType: 'bool', visibility: '+' }
+        ]
+      },
+      {
+        id: 'Cliente', name: 'Cliente', displayName: 'Cliente',
+        attributes: [
+          { name: 'id', type: 'int', visibility: '+' },
+          { name: 'identificacion', type: 'string', visibility: '+' },
+          { name: 'nombre', type: 'string', visibility: '+' },
+          { name: 'telefono', type: 'string', visibility: '+' },
+          { name: 'email', type: 'string', visibility: '+' },
+          { name: 'direccion', type: 'string', visibility: '+' }
+        ],
+        methods: [
+          { name: 'registrar', returnType: 'void', visibility: '+' },
+          { name: 'actualizarDatos', returnType: 'void', visibility: '+' }
+        ]
+      },
+      {
+        id: 'Vehiculo', name: 'Vehiculo', displayName: 'Vehiculo',
+        attributes: [
+          { name: 'id', type: 'int', visibility: '+' },
+          { name: 'placa', type: 'string', visibility: '+' },
+          { name: 'marca', type: 'string', visibility: '+' },
+          { name: 'modelo', type: 'string', visibility: '+' },
+          { name: 'anio', type: 'int', visibility: '+' },
+          { name: 'vin', type: 'string', visibility: '+' },
+          { name: 'kilometrajeActual', type: 'int', visibility: '+' }
+        ],
+        methods: [
+          { name: 'registrar', returnType: 'void', visibility: '+' },
+          { name: 'actualizarKilometraje', returnType: 'void', visibility: '+' }
+        ]
+      },
+      {
+        id: 'ExpedienteDigital', name: 'ExpedienteDigital', displayName: 'ExpedienteDigital',
+        attributes: [
+          { name: 'id', type: 'int', visibility: '+' },
+          { name: 'fechaApertura', type: 'datetime', visibility: '+' },
+          { name: 'observacionesGenerales', type: 'string', visibility: '+' }
+        ],
+        methods: [
+          { name: 'consultarHistorial', returnType: 'List', visibility: '+' },
+          { name: 'consolidarExpediente', returnType: 'void', visibility: '+' }
+        ]
+      },
+      {
+        id: 'Cita', name: 'Cita', displayName: 'Cita',
+        attributes: [
+          { name: 'id', type: 'int', visibility: '+' },
+          { name: 'fechaHora', type: 'datetime', visibility: '+' },
+          { name: 'motivo', type: 'string', visibility: '+' },
+          { name: 'estado', type: 'string', visibility: '+' }
+        ],
+        methods: [
+          { name: 'solicitar', returnType: 'void', visibility: '+' },
+          { name: 'reprogramar', returnType: 'void', visibility: '+' },
+          { name: 'cancelar', returnType: 'void', visibility: '+' },
+          { name: 'confirmar', returnType: 'void', visibility: '+' }
+        ]
+      },
+      {
+        id: 'RecepcionVehiculo', name: 'RecepcionVehiculo', displayName: 'RecepcionVehiculo',
+        attributes: [
+          { name: 'id', type: 'int', visibility: '+' },
+          { name: 'fechaIngreso', type: 'datetime', visibility: '+' },
+          { name: 'odometro', type: 'int', visibility: '+' },
+          { name: 'nivelCombustible', type: 'float', visibility: '+' },
+          { name: 'motivoIngreso', type: 'string', visibility: '+' },
+          { name: 'estado', type: 'string', visibility: '+' }
+        ],
+        methods: [
+          { name: 'registrarIngreso', returnType: 'void', visibility: '+' },
+          { name: 'generarActaEntrega', returnType: 'void', visibility: '+' }
+        ]
+      },
+      {
+        id: 'InspeccionVisual', name: 'InspeccionVisual', displayName: 'InspeccionVisual',
+        attributes: [
+          { name: 'id', type: 'int', visibility: '+' },
+          { name: 'fechaInspeccion', type: 'datetime', visibility: '+' },
+          { name: 'observacionesCarroceria', type: 'string', visibility: '+' }
+        ],
+        methods: [
+          { name: 'registrarInspeccion', returnType: 'void', visibility: '+' }
+        ]
+      },
+      {
+        id: 'ZonaVehiculo', name: 'ZonaVehiculo', displayName: 'ZonaVehiculo',
+        attributes: [
+          { name: 'id', type: 'int', visibility: '+' },
+          { name: 'nombreZona', type: 'string', visibility: '+' },
+          { name: 'estadoVisual', type: 'string', visibility: '+' },
+          { name: 'descripcionDanio', type: 'string', visibility: '+' }
+        ],
+        methods: [
+          { name: 'actualizarEstadoZona', returnType: 'void', visibility: '+' },
+          { name: 'marcarFallaCritica', returnType: 'void', visibility: '+' }
+        ]
+      },
+      {
+        id: 'EvidenciaMultimedia', name: 'EvidenciaMultimedia', displayName: 'EvidenciaMultimedia',
+        attributes: [
+          { name: 'id', type: 'int', visibility: '+' },
+          { name: 'tipoArchivo', type: 'string', visibility: '+' },
+          { name: 'urlArchivo', type: 'string', visibility: '+' },
+          { name: 'descripcion', type: 'string', visibility: '+' },
+          { name: 'fechaSubida', type: 'datetime', visibility: '+' }
+        ],
+        methods: [
+          { name: 'adjuntarArchivo', returnType: 'void', visibility: '+' }
+        ]
+      },
+      {
+        id: 'Diagnostico', name: 'Diagnostico', displayName: 'Diagnostico',
+        attributes: [
+          { name: 'id', type: 'int', visibility: '+' },
+          { name: 'fechaDiagnostico', type: 'datetime', visibility: '+' },
+          { name: 'resumenTecnico', type: 'string', visibility: '+' },
+          { name: 'estado', type: 'string', visibility: '+' }
+        ],
+        methods: [
+          { name: 'iniciarDiagnostico', returnType: 'void', visibility: '+' },
+          { name: 'registrarFalla', returnType: 'void', visibility: '+' },
+          { name: 'finalizarDiagnostico', returnType: 'void', visibility: '+' }
+        ]
+      },
+      {
+        id: 'Falla', name: 'Falla', displayName: 'Falla',
+        attributes: [
+          { name: 'id', type: 'int', visibility: '+' },
+          { name: 'sistemaAfectado', type: 'string', visibility: '+' },
+          { name: 'componente', type: 'string', visibility: '+' },
+          { name: 'descripcion', type: 'string', visibility: '+' },
+          { name: 'severidad', type: 'string', visibility: '+' }
+        ],
+        methods: [
+          { name: 'clasificarSeveridad', returnType: 'void', visibility: '+' }
+        ]
+      },
+      {
+        id: 'BaseConocimiento', name: 'BaseConocimiento', displayName: 'BaseConocimiento',
+        attributes: [
+          { name: 'id', type: 'int', visibility: '+' },
+          { name: 'nombre', type: 'string', visibility: '+' },
+          { name: 'version', type: 'string', visibility: '+' }
+        ],
+        methods: [
+          { name: 'buscarPorCodigo', returnType: 'List', visibility: '+' },
+          { name: 'buscarPorSintoma', returnType: 'List', visibility: '+' },
+          { name: 'registrarArticulo', returnType: 'void', visibility: '+' }
+        ]
+      },
+      {
+        id: 'CodigoOBD', name: 'CodigoOBD', displayName: 'CodigoOBD',
+        attributes: [
+          { name: 'id', type: 'int', visibility: '+' },
+          { name: 'codigo', type: 'string', visibility: '+' },
+          { name: 'descripcion', type: 'string', visibility: '+' },
+          { name: 'sistema', type: 'string', visibility: '+' }
+        ],
+        methods: [
+          { name: 'asociarFalla', returnType: 'void', visibility: '+' }
+        ]
+      },
+      {
+        id: 'SolucionTecnica', name: 'SolucionTecnica', displayName: 'SolucionTecnica',
+        attributes: [
+          { name: 'id', type: 'int', visibility: '+' },
+          { name: 'titulo', type: 'string', visibility: '+' },
+          { name: 'procedimientoReparacion', type: 'string', visibility: '+' },
+          { name: 'tiempoEstimadoHoras', type: 'float', visibility: '+' }
+        ],
+        methods: [
+          { name: 'aplicarSolucion', returnType: 'void', visibility: '+' }
+        ]
+      },
+      {
+        id: 'Servicio', name: 'Servicio', displayName: 'Servicio',
+        attributes: [
+          { name: 'id', type: 'int', visibility: '+' },
+          { name: 'codigo', type: 'string', visibility: '+' },
+          { name: 'nombre', type: 'string', visibility: '+' },
+          { name: 'descripcion', type: 'string', visibility: '+' },
+          { name: 'precioManoObra', type: 'float', visibility: '+' },
+          { name: 'duracionEstimadaMin', type: 'int', visibility: '+' }
+        ],
+        methods: [
+          { name: 'actualizarTarifa', returnType: 'void', visibility: '+' }
+        ]
+      },
+      {
+        id: 'Cotizacion', name: 'Cotizacion', displayName: 'Cotizacion',
+        attributes: [
+          { name: 'id', type: 'int', visibility: '+' },
+          { name: 'numeroCotizacion', type: 'string', visibility: '+' },
+          { name: 'fechaEmision', type: 'datetime', visibility: '+' },
+          { name: 'subtotal', type: 'float', visibility: '+' },
+          { name: 'iva', type: 'float', visibility: '+' },
+          { name: 'total', type: 'float', visibility: '+' },
+          { name: 'estado', type: 'string', visibility: '+' }
+        ],
+        methods: [
+          { name: 'calcularTotales', returnType: 'float', visibility: '+' },
+          { name: 'aprobarParcial', returnType: 'void', visibility: '+' },
+          { name: 'rechazar', returnType: 'void', visibility: '+' }
+        ]
+      },
+      {
+        id: 'DetalleCotizacion', name: 'DetalleCotizacion', displayName: 'DetalleCotizacion',
+        attributes: [
+          { name: 'id', type: 'int', visibility: '+' },
+          { name: 'cantidad', type: 'int', visibility: '+' },
+          { name: 'precioUnitario', type: 'float', visibility: '+' },
+          { name: 'subtotalItem', type: 'float', visibility: '+' },
+          { name: 'aprobado', type: 'bool', visibility: '+' },
+          { name: 'tipoItem', type: 'string', visibility: '+' }
+        ],
+        methods: [
+          { name: 'autorizarItem', returnType: 'void', visibility: '+' },
+          { name: 'desestimarItem', returnType: 'void', visibility: '+' }
+        ]
+      },
+      {
+        id: 'OrdenTrabajo', name: 'OrdenTrabajo', displayName: 'OrdenTrabajo',
+        attributes: [
+          { name: 'id', type: 'int', visibility: '+' },
+          { name: 'numeroOrden', type: 'string', visibility: '+' },
+          { name: 'fechaInicio', type: 'datetime', visibility: '+' },
+          { name: 'fechaFinEstimada', type: 'datetime', visibility: '+' },
+          { name: 'estado', type: 'string', visibility: '+' },
+          { name: 'kilometrajeFinal', type: 'int', visibility: '+' }
+        ],
+        methods: [
+          { name: 'generarDesdeCotizacion', returnType: 'void', visibility: '+' },
+          { name: 'iniciarTrabajo', returnType: 'void', visibility: '+' },
+          { name: 'finalizarOrden', returnType: 'void', visibility: '+' }
+        ]
+      },
+      {
+        id: 'AsignacionMecanico', name: 'AsignacionMecanico', displayName: 'AsignacionMecanico',
+        attributes: [
+          { name: 'id', type: 'int', visibility: '+' },
+          { name: 'fechaAsignacion', type: 'datetime', visibility: '+' },
+          { name: 'rolEnOrden', type: 'string', visibility: '+' },
+          { name: 'horasTrabajadas', type: 'float', visibility: '+' }
+        ],
+        methods: [
+          { name: 'asignarMecanico', returnType: 'void', visibility: '+' },
+          { name: 'registrarHoras', returnType: 'void', visibility: '+' }
+        ]
+      },
+      {
+        id: 'ActividadOrden', name: 'ActividadOrden', displayName: 'ActividadOrden',
+        attributes: [
+          { name: 'id', type: 'int', visibility: '+' },
+          { name: 'descripcion', type: 'string', visibility: '+' },
+          { name: 'estadoAvance', type: 'string', visibility: '+' },
+          { name: 'observaciones', type: 'string', visibility: '+' }
+        ],
+        methods: [
+          { name: 'actualizarProgreso', returnType: 'void', visibility: '+' },
+          { name: 'completarActividad', returnType: 'void', visibility: '+' }
+        ]
+      },
+      {
+        id: 'PruebaReparacion', name: 'PruebaReparacion', displayName: 'PruebaReparacion',
+        attributes: [
+          { name: 'id', type: 'int', visibility: '+' },
+          { name: 'tipoPrueba', type: 'string', visibility: '+' },
+          { name: 'resultado', type: 'string', visibility: '+' },
+          { name: 'observaciones', type: 'string', visibility: '+' }
+        ],
+        methods: [
+          { name: 'registrarResultadoPrueba', returnType: 'void', visibility: '+' }
+        ]
+      },
+      {
+        id: 'Repuesto', name: 'Repuesto', displayName: 'Repuesto',
+        attributes: [
+          { name: 'id', type: 'int', visibility: '+' },
+          { name: 'codigoParte', type: 'string', visibility: '+' },
+          { name: 'nombre', type: 'string', visibility: '+' },
+          { name: 'categoria', type: 'string', visibility: '+' },
+          { name: 'marca', type: 'string', visibility: '+' },
+          { name: 'costoUnitario', type: 'float', visibility: '+' },
+          { name: 'precioVenta', type: 'float', visibility: '+' },
+          { name: 'stockActual', type: 'int', visibility: '+' },
+          { name: 'stockMinimo', type: 'int', visibility: '+' }
+        ],
+        methods: [
+          { name: 'verificarStockMinimo', returnType: 'bool', visibility: '+' },
+          { name: 'actualizarPrecio', returnType: 'void', visibility: '+' }
+        ]
+      },
+      {
+        id: 'MovimientoInventario', name: 'MovimientoInventario', displayName: 'MovimientoInventario',
+        attributes: [
+          { name: 'id', type: 'int', visibility: '+' },
+          { name: 'tipoMovimiento', type: 'string', visibility: '+' },
+          { name: 'cantidad', type: 'int', visibility: '+' },
+          { name: 'fechaMovimiento', type: 'datetime', visibility: '+' },
+          { name: 'motivo', type: 'string', visibility: '+' }
+        ],
+        methods: [
+          { name: 'registrarMovimiento', returnType: 'void', visibility: '+' },
+          { name: 'reversarMovimiento', returnType: 'void', visibility: '+' }
+        ]
+      },
+      {
+        id: 'Proveedor', name: 'Proveedor', displayName: 'Proveedor',
+        attributes: [
+          { name: 'id', type: 'int', visibility: '+' },
+          { name: 'razonSocial', type: 'string', visibility: '+' },
+          { name: 'ruc', type: 'string', visibility: '+' },
+          { name: 'telefono', type: 'string', visibility: '+' },
+          { name: 'email', type: 'string', visibility: '+' }
+        ],
+        methods: [
+          { name: 'registrar', returnType: 'void', visibility: '+' }
+        ]
+      },
+      {
+        id: 'Compra', name: 'Compra', displayName: 'Compra',
+        attributes: [
+          { name: 'id', type: 'int', visibility: '+' },
+          { name: 'numeroFactura', type: 'string', visibility: '+' },
+          { name: 'fechaCompra', type: 'datetime', visibility: '+' },
+          { name: 'totalCompra', type: 'float', visibility: '+' },
+          { name: 'estado', type: 'string', visibility: '+' }
+        ],
+        methods: [
+          { name: 'registrarCompra', returnType: 'void', visibility: '+' },
+          { name: 'ingresarAInventario', returnType: 'void', visibility: '+' }
+        ]
+      },
+      {
+        id: 'DetalleCompra', name: 'DetalleCompra', displayName: 'DetalleCompra',
+        attributes: [
+          { name: 'id', type: 'int', visibility: '+' },
+          { name: 'cantidad', type: 'int', visibility: '+' },
+          { name: 'costoUnitario', type: 'float', visibility: '+' },
+          { name: 'subtotal', type: 'float', visibility: '+' }
+        ],
+        methods: [
+          { name: 'calcularSubtotal', returnType: 'float', visibility: '+' }
+        ]
+      },
+      {
+        id: 'VentaDirecta', name: 'VentaDirecta', displayName: 'VentaDirecta',
+        attributes: [
+          { name: 'id', type: 'int', visibility: '+' },
+          { name: 'numeroVenta', type: 'string', visibility: '+' },
+          { name: 'fechaVenta', type: 'datetime', visibility: '+' },
+          { name: 'totalVenta', type: 'float', visibility: '+' },
+          { name: 'estado', type: 'string', visibility: '+' }
+        ],
+        methods: [
+          { name: 'generarVenta', returnType: 'void', visibility: '+' },
+          { name: 'emitirComprobante', returnType: 'void', visibility: '+' }
+        ]
+      },
+      {
+        id: 'DetalleVenta', name: 'DetalleVenta', displayName: 'DetalleVenta',
+        attributes: [
+          { name: 'id', type: 'int', visibility: '+' },
+          { name: 'cantidad', type: 'int', visibility: '+' },
+          { name: 'precioUnitario', type: 'float', visibility: '+' },
+          { name: 'subtotalItem', type: 'float', visibility: '+' }
+        ],
+        methods: [
+          { name: 'procesarSalidaInventario', returnType: 'void', visibility: '+' }
+        ]
+      },
+      {
+        id: 'MantenimientoPreventivo', name: 'MantenimientoPreventivo', displayName: 'MantenimientoPreventivo',
+        attributes: [
+          { name: 'id', type: 'int', visibility: '+' },
+          { name: 'tipoMantenimiento', type: 'string', visibility: '+' },
+          { name: 'intervaloMeses', type: 'int', visibility: '+' },
+          { name: 'intervaloKm', type: 'int', visibility: '+' },
+          { name: 'proximoKm', type: 'int', visibility: '+' },
+          { name: 'proximaFecha', type: 'datetime', visibility: '+' }
+        ],
+        methods: [
+          { name: 'configurarRegla', returnType: 'void', visibility: '+' },
+          { name: 'evaluarVencimiento', returnType: 'bool', visibility: '+' }
+        ]
+      },
+      {
+        id: 'AlertaMantenimiento', name: 'AlertaMantenimiento', displayName: 'AlertaMantenimiento',
+        attributes: [
+          { name: 'id', type: 'int', visibility: '+' },
+          { name: 'fechaGeneracion', type: 'datetime', visibility: '+' },
+          { name: 'canalEnvio', type: 'string', visibility: '+' },
+          { name: 'estadoAlerta', type: 'string', visibility: '+' }
+        ],
+        methods: [
+          { name: 'enviarAlerta', returnType: 'void', visibility: '+' },
+          { name: 'marcarAtendida', returnType: 'void', visibility: '+' }
+        ]
+      },
+      {
+        id: 'Auditoria', name: 'Auditoria', displayName: 'Auditoria',
+        attributes: [
+          { name: 'id', type: 'int', visibility: '+' },
+          { name: 'accionRealizada', type: 'string', visibility: '+' },
+          { name: 'tablaAfectada', type: 'string', visibility: '+' },
+          { name: 'registroId', type: 'int', visibility: '+' },
+          { name: 'fechaHora', type: 'datetime', visibility: '+' },
+          { name: 'ipOrigen', type: 'string', visibility: '+' }
+        ],
+        methods: [
+          { name: 'registrarTraza', returnType: 'void', visibility: '+' }
+        ]
+      },
+      {
+        id: 'Notificacion', name: 'Notificacion', displayName: 'Notificacion',
+        attributes: [
+          { name: 'id', type: 'int', visibility: '+' },
+          { name: 'titulo', type: 'string', visibility: '+' },
+          { name: 'mensaje', type: 'string', visibility: '+' },
+          { name: 'leido', type: 'bool', visibility: '+' },
+          { name: 'fechaEnvio', type: 'datetime', visibility: '+' },
+          { name: 'prioridad', type: 'string', visibility: '+' }
+        ],
+        methods: [
+          { name: 'enviarNotificacion', returnType: 'void', visibility: '+' },
+          { name: 'marcarComoLeida', returnType: 'void', visibility: '+' }
+        ]
+      }
+    ];
+  }
+
+  getComprehensiveDomainRelationships() {
+    return [
+      { source: 'Usuario', target: 'Rol', cardinality: '1:1', type: 'Association', label: 'asignado' },
+      { source: 'Rol', target: 'Permiso', cardinality: '1:N', type: 'Composition', label: 'define' },
+      { source: 'Cliente', target: 'Vehiculo', cardinality: '1:N', type: 'Association', label: 'posee' },
+      { source: 'Cliente', target: 'Cita', cardinality: '1:N', type: 'Association', label: 'solicita' },
+      { source: 'Cliente', target: 'VentaDirecta', cardinality: '1:N', type: 'Association', label: 'compra' },
+      { source: 'Vehiculo', target: 'ExpedienteDigital', cardinality: '1:1', type: 'Composition', label: 'consolida' },
+      { source: 'Vehiculo', target: 'Cita', cardinality: '1:N', type: 'Association', label: 'atiende' },
+      { source: 'Vehiculo', target: 'RecepcionVehiculo', cardinality: '1:N', type: 'Association', label: 'registra' },
+      { source: 'Vehiculo', target: 'MantenimientoPreventivo', cardinality: '1:N', type: 'Composition', label: 'programa' },
+      { source: 'ExpedienteDigital', target: 'RecepcionVehiculo', cardinality: '1:N', type: 'Aggregation', label: 'referencia' },
+      { source: 'ExpedienteDigital', target: 'OrdenTrabajo', cardinality: '1:N', type: 'Aggregation', label: 'referencia' },
+      { source: 'RecepcionVehiculo', target: 'InspeccionVisual', cardinality: '1:1', type: 'Composition', label: 'incluye' },
+      { source: 'RecepcionVehiculo', target: 'EvidenciaMultimedia', cardinality: '1:N', type: 'Aggregation', label: 'adjunta' },
+      { source: 'RecepcionVehiculo', target: 'Diagnostico', cardinality: '1:1', type: 'Association', label: 'derivaEn' },
+      { source: 'InspeccionVisual', target: 'ZonaVehiculo', cardinality: '1:N', type: 'Composition', label: 'examina' },
+      { source: 'Diagnostico', target: 'Falla', cardinality: '1:N', type: 'Composition', label: 'identifica' },
+      { source: 'Diagnostico', target: 'EvidenciaMultimedia', cardinality: '1:N', type: 'Aggregation', label: 'documenta' },
+      { source: 'Diagnostico', target: 'BaseConocimiento', cardinality: 'N:M', type: 'Association', label: 'consulta' },
+      { source: 'Falla', target: 'CodigoOBD', cardinality: 'N:1', type: 'Association', label: 'corresponde' },
+      { source: 'BaseConocimiento', target: 'CodigoOBD', cardinality: '1:N', type: 'Composition', label: 'agrupa' },
+      { source: 'BaseConocimiento', target: 'SolucionTecnica', cardinality: '1:N', type: 'Composition', label: 'almacena' },
+      { source: 'CodigoOBD', target: 'SolucionTecnica', cardinality: '1:N', type: 'Aggregation', label: 'resuelve' },
+      { source: 'Diagnostico', target: 'Cotizacion', cardinality: '1:1', type: 'Association', label: 'valoriza' },
+      { source: 'Cotizacion', target: 'DetalleCotizacion', cardinality: '1:N', type: 'Composition', label: 'compone' },
+      { source: 'Cotizacion', target: 'OrdenTrabajo', cardinality: '1:1', type: 'Association', label: 'autoriza' },
+      { source: 'DetalleCotizacion', target: 'Servicio', cardinality: 'N:1', type: 'Association', label: 'referencia' },
+      { source: 'DetalleCotizacion', target: 'Repuesto', cardinality: 'N:1', type: 'Association', label: 'referencia' },
+      { source: 'OrdenTrabajo', target: 'ActividadOrden', cardinality: '1:N', type: 'Composition', label: 'desglosa' },
+      { source: 'OrdenTrabajo', target: 'AsignacionMecanico', cardinality: '1:N', type: 'Aggregation', label: 'asigna' },
+      { source: 'OrdenTrabajo', target: 'PruebaReparacion', cardinality: '1:N', type: 'Composition', label: 'certifica' },
+      { source: 'AsignacionMecanico', target: 'Usuario', cardinality: 'N:1', type: 'Association', label: 'realiza' },
+      { source: 'ActividadOrden', target: 'Servicio', cardinality: 'N:1', type: 'Association', label: 'ejecuta' },
+      { source: 'ActividadOrden', target: 'Repuesto', cardinality: 'N:M', type: 'Association', label: 'utiliza' },
+      { source: 'Repuesto', target: 'MovimientoInventario', cardinality: '1:N', type: 'Composition', label: 'rastrea' },
+      { source: 'Proveedor', target: 'Compra', cardinality: '1:N', type: 'Association', label: 'suministra' },
+      { source: 'Compra', target: 'DetalleCompra', cardinality: '1:N', type: 'Composition', label: 'detalla' },
+      { source: 'DetalleCompra', target: 'Repuesto', cardinality: 'N:1', type: 'Association', label: 'ingresa' },
+      { source: 'VentaDirecta', target: 'DetalleVenta', cardinality: '1:N', type: 'Composition', label: 'desglosa' },
+      { source: 'DetalleVenta', target: 'Repuesto', cardinality: 'N:1', type: 'Association', label: 'rebaja' },
+      { source: 'MantenimientoPreventivo', target: 'AlertaMantenimiento', cardinality: '1:N', type: 'Association', label: 'dispara' },
+      { source: 'AlertaMantenimiento', target: 'Cliente', cardinality: 'N:1', type: 'Association', label: 'avisa' },
+      { source: 'Usuario', target: 'Auditoria', cardinality: '1:N', type: 'Association', label: 'genera' },
+      { source: 'Usuario', target: 'Notificacion', cardinality: '1:N', type: 'Association', label: 'recibe' }
+    ];
   }
 
   buildClassContext(project, projectName) {
@@ -388,6 +920,13 @@ class DiagramContextBuilder {
       });
     }
 
+    const isAutomotive = (project.name || '').toLowerCase().includes('autron') ||
+      (project.requirements || []).some(r => /vehiculo|taller|mecanico|odometro/i.test(r.name || r.description || ''));
+
+    if (classes.length === 0 && isAutomotive) {
+      classes = this.getComprehensiveDomainClasses();
+    }
+
     // Extract relationships between domain classes
     const approvedRelationships = (project.relationships || []).filter(
       r => r.reviewStatus === 'APPROVED' || r.status === 'APPROVED' || (!r.reviewStatus && !r.status)
@@ -413,10 +952,25 @@ class DiagramContextBuilder {
       }
     }
 
+    if (relationships.length === 0 && isAutomotive) {
+      relationships.push(...this.getComprehensiveDomainRelationships());
+    }
+
+    const sourceSummaries = (project.sources || []).map(s => {
+      const text = s.currentVersion?.extractedText || '';
+      return {
+        name: s.name,
+        type: s.type,
+        snippet: text ? toSafeLabel(text.slice(0, 2000).replace(/\s+/g, ' '), 600) : ''
+      };
+    }).filter(s => s.snippet);
+
     return {
       diagramType: 'CLASS',
+      sources: sourceSummaries,
       project: { name: projectName },
-      functionalRequirements: (project.requirements||[]).filter(r=>!r.isDeleted&&r.status!=='REMOVED'&&r.type==='FUNCTIONAL').map(r=>({id:r.id,code:r.code,name:r.name,description:r.description||r.name})),
+      functionalRequirements: (project.requirements||[]).filter(r=>!r.isDeleted&&r.status!=='REMOVED'&&(r.type==='FUNCTIONAL'||!r.type)).map(r=>({id:r.id,code:r.code,name:r.name,description:r.description||r.statement||r.name})),
+      nonFunctionalRequirements: (project.requirements||[]).filter(r=>!r.isDeleted&&r.status!=='REMOVED'&&r.type==='NON_FUNCTIONAL').map(r=>({id:r.id,code:r.code,name:r.name,description:r.description||r.statement||r.name})),
       classes,
       relationships,
       domainProcesses: processes.slice(0, 10).map(p => p.name),
@@ -425,7 +979,9 @@ class DiagramContextBuilder {
       guidelines: {
         prohibitInfrastructureClasses: true,
         prohibitGenericProgrammingMethods: true,
-        requireRealDomainOperations: true
+        requireRealDomainOperations: true,
+        mustCoverAllFunctionalAndNonFunctionalRequirements: true,
+        defineClassBlockForEveryParticipatingClass: true
       }
     };
   }

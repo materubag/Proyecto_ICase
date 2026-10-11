@@ -2,16 +2,34 @@ const AIProvider = require('./AIProvider');
 const env = require('../../config/env');
 
 class GeminiProvider extends AIProvider {
-  async extractDocumentBatch(input, options = {}) {
+  async extractDocumentBatch(input, options = {}, retryCount = 0) {
     const model = options.model || env.GEMINI_MODEL || this.model;
     if (!this.apiKey) throw new Error('Gemini no configurado');
     await this.throttle();
-    const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(model)}:generateContent`, {
-      method: 'POST', signal: AbortSignal.timeout(90000), headers: { 'Content-Type': 'application/json', 'x-goog-api-key': this.apiKey },
-      body: JSON.stringify({ systemInstruction: { parts: [{ text: options.prompt || require('../analysis/extractionContract').prompt }] },
-        contents: [{ parts: [{ text: JSON.stringify(input) }] }],
-        generationConfig: { responseMimeType: 'application/json', maxOutputTokens: 8192, temperature: 0 } })
-    });
+    let response;
+    try {
+      response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(model)}:generateContent`, {
+        method: 'POST', signal: AbortSignal.timeout(90000), headers: { 'Content-Type': 'application/json', 'x-goog-api-key': this.apiKey },
+        body: JSON.stringify({ systemInstruction: { parts: [{ text: options.prompt || require('../analysis/extractionContract').prompt }] },
+          contents: [{ parts: [{ text: JSON.stringify(input) }] }],
+          generationConfig: { responseMimeType: 'application/json', maxOutputTokens: 8192, temperature: 0 } })
+      });
+    } catch (networkErr) {
+      if (retryCount === 0) {
+        console.warn(`[GeminiProvider] Error de red en extractDocumentBatch (${networkErr.message}). Reintentando en 3s...`);
+        await new Promise(r => setTimeout(r, 3000));
+        return this.extractDocumentBatch(input, options, retryCount + 1);
+      }
+      throw networkErr;
+    }
+
+    if ((response.status === 429 || response.status === 503) && retryCount === 0) {
+      const waitMs = response.status === 429 ? 5000 : 3000;
+      console.warn(`[GeminiProvider] Gemini HTTP ${response.status} en extractDocumentBatch. Esperando ${waitMs}ms antes de reintentar...`);
+      await new Promise(r => setTimeout(r, waitMs));
+      return this.extractDocumentBatch(input, options, retryCount + 1);
+    }
+
     if (!response.ok) throw new Error(`Gemini HTTP ${response.status}; modelo solicitado: ${model}`);
     const result = await response.json();
     const candidate = result.candidates?.[0];

@@ -28,18 +28,42 @@ export default function ProjectModel({ project, onProjectUpdated, initialTab = '
   const [crossValLoading, setCrossValLoading] = useState(false);
   const [crossValReport, setCrossValReport] = useState(null);
 
+  const ER_GEN_KEY = `icase_er_gen_${project.id}`;
+  const CLASS_GEN_KEY = `icase_class_gen_${project.id}`;
+
   // Project data states
   const [classes, setClasses] = useState(project.classModels || []);
   const [classDiagramCode, setClassDiagramCode] = useState('');
   const [loadingClasses, setLoadingClasses] = useState(false);
-  const [generatingClasses, setGeneratingClasses] = useState(false);
+  const [generatingClasses, setGeneratingClasses] = useState(() => {
+    try {
+      const raw = localStorage.getItem(`icase_class_gen_${project.id}`);
+      if (raw && Date.now() - parseInt(raw, 10) < 180000) return true;
+    } catch (e) {}
+    return false;
+  });
   const [classIsOutdated, setClassIsOutdated] = useState(false);
 
   // ER Diagram states
   const [erStoredCode, setErStoredCode] = useState('');
-  const [generatingER, setGeneratingER] = useState(false);
+  const [generatingER, setGeneratingER] = useState(() => {
+    try {
+      const raw = localStorage.getItem(`icase_er_gen_${project.id}`);
+      if (raw && Date.now() - parseInt(raw, 10) < 180000) return true;
+    } catch (e) {}
+    return false;
+  });
   const [generationError, setGenerationError] = useState('');
   const [erIsOutdated, setErIsOutdated] = useState(false);
+
+  // Polling si se está generando en segundo plano y el usuario cambia de pestaña
+  useEffect(() => {
+    if (!generatingER && !generatingClasses) return;
+    const interval = setInterval(() => {
+      loadDiagrams();
+    }, 2500);
+    return () => clearInterval(interval);
+  }, [generatingER, generatingClasses]);
 
   // Edit Class Modal (Governance)
   const [editClassModalOpen, setEditClassModalOpen] = useState(false);
@@ -164,6 +188,7 @@ export default function ProjectModel({ project, onProjectUpdated, initialTab = '
   async function handleGenerateER(force = false) {
     try {
       setGeneratingER(true);
+      localStorage.setItem(ER_GEN_KEY, Date.now().toString());
       setGenerationError('');
       const isForce = typeof force === 'object' ? Boolean(force.force) : Boolean(force);
       const res = await diagramsApi.generateDiagram(project.id, 'ER', isForce);
@@ -182,12 +207,14 @@ export default function ProjectModel({ project, onProjectUpdated, initialTab = '
       setGenerationError(err.message);
     } finally {
       setGeneratingER(false);
+      localStorage.removeItem(ER_GEN_KEY);
     }
   }
 
   async function handleGenerateClassDiagram(force = true) {
     try {
       setGeneratingClasses(true);
+      localStorage.setItem(CLASS_GEN_KEY, Date.now().toString());
       setGenerationError('');
       const isForce = typeof force === 'object' ? Boolean(force.force) : Boolean(force);
       const res = await diagramsApi.generateDiagram(project.id, 'CLASS', isForce);
@@ -207,6 +234,7 @@ export default function ProjectModel({ project, onProjectUpdated, initialTab = '
       setGenerationError(err.message);
     } finally {
       setGeneratingClasses(false);
+      localStorage.removeItem(CLASS_GEN_KEY);
     }
   }
 
