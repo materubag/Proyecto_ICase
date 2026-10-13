@@ -2,7 +2,7 @@ import React, { useState, useEffect, useMemo } from 'react';
 import MockupRenderer from '../components/mockup-renderer/MockupRenderer';
 import DiagramViewport from '../components/common/DiagramViewport';
 import Modal from '../components/common/Modal';
-import { screenOptions, SCREEN_CATEGORIES } from '../utils/mockupScreenOptions';
+import { screenOptions, getScreenCategories, SCREEN_CATEGORIES } from '../utils/mockupScreenOptions';
 import { engineering } from '../api/engineering.api';
 import { projectsApi } from '../api/projects.api';
 import { mockupApi } from '../api/mockup.api';
@@ -15,6 +15,7 @@ export default function ProjectPrototype({ project, onProjectUpdated }) {
   const [loadingMockups, setLoadingMockups] = useState(true);
   const [localNodes, setLocalNodes] = useState(null);
   const [selectedCategory, setSelectedCategory] = useState('all');
+  const categories = useMemo(() => getScreenCategories(project), [project]);
   const availableScreens = screenOptions({ ...project, navigationNodes: localNodes || project.navigationNodes });
   const [selectedNodeIds, setSelectedNodeIds] = useState([]);
   const [generatedScreens, setGeneratedScreens] = useState([]);
@@ -60,8 +61,17 @@ export default function ProjectPrototype({ project, onProjectUpdated }) {
 
   // 2. Funciones auxiliares
   const handleSelectCore = () => {
-    const coreIds = availableScreens.filter(s => s.isCore || s.category === 'workshop').map(s => s.id);
+    const coreIds = availableScreens.filter(s => s.isCore).map(s => s.id);
     setSelectedNodeIds(coreIds);
+  };
+
+  const handleSelectCategory = () => {
+    if (selectedCategory === 'all') {
+      setSelectedNodeIds(availableScreens.map(s => s.id));
+    } else {
+      const catIds = availableScreens.filter(s => s.category === selectedCategory).map(s => s.id);
+      setSelectedNodeIds(prev => Array.from(new Set([...prev, ...catIds])));
+    }
   };
 
   const handleSelectAll = () => {
@@ -350,9 +360,14 @@ export default function ProjectPrototype({ project, onProjectUpdated }) {
             </span>
           </div>
           <div style={{display:'flex',gap:6,alignItems:'center',flexWrap:'wrap'}}>
-            <button type="button" className="btn btn-outline btn-xs" onClick={handleSelectCore} title="Selecciona las 5 pantallas operativas del taller">
-              <span className="ms ms-xs">target</span><span>Taller Core (5)</span>
+            <button type="button" className="btn btn-outline btn-xs" onClick={handleSelectCore} title="Selecciona las pantallas Core prioritarias">
+              <span className="ms ms-xs">target</span><span>Pantallas Core</span>
             </button>
+            {selectedCategory !== 'all' && (
+              <button type="button" className="btn btn-outline btn-xs" onClick={handleSelectCategory} title="Selecciona todas las pantallas del actor actual">
+                <span className="ms ms-xs">checklist</span><span>Actor ({categories.find(c=>c.id===selectedCategory)?.label || 'Actual'})</span>
+              </button>
+            )}
             <button type="button" className="btn btn-outline btn-xs" onClick={handleSelectAll}>
               <span className="ms ms-xs">select_all</span><span>Todas ({availableScreens.length})</span>
             </button>
@@ -376,7 +391,7 @@ export default function ProjectPrototype({ project, onProjectUpdated }) {
               >
                 Todas ({availableScreens.length})
               </button>
-              {SCREEN_CATEGORIES.map(cat => {
+              {categories.map(cat => {
                 const catScreens = availableScreens.filter(s => s.category === cat.id);
                 const count = catScreens.length;
                 const catIds = catScreens.map(s => s.id);
@@ -439,6 +454,11 @@ export default function ProjectPrototype({ project, onProjectUpdated }) {
                             {node.isCore && (
                               <span style={{fontSize:10,background:'#fef3c7',color:'#b45309',fontWeight:600,padding:'1px 5px',borderRadius:4}}>
                                 Core
+                              </span>
+                            )}
+                            {node.actorName && (
+                              <span style={{fontSize:10,background:'rgba(2,132,199,0.08)',color:'var(--primary)',fontWeight:500,padding:'1px 5px',borderRadius:4}}>
+                                {node.actorName}
                               </span>
                             )}
                           </div>

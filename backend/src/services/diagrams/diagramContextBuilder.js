@@ -144,6 +144,21 @@ class DiagramContextBuilder {
         { name: 'ubicacion', type: 'string', isPk: false }
       ];
     }
+    if (norm.includes('EVIDENCIA') || norm.includes('FOTO') || norm.includes('MULTIMEDIA') || norm.includes('IMAGEN')) {
+      return [
+        { name: 'id', type: 'int', isPk: true },
+        { name: 'diagnostico_id', type: 'int', isPk: false, isFk: true },
+        { name: 'recepcion_id', type: 'int', isPk: false, isFk: true },
+        { name: 'url_original', type: 'string', isPk: false },
+        { name: 'url_optimizada', type: 'string', isPk: false },
+        { name: 'url_thumbnail', type: 'string', isPk: false },
+        { name: 'peso_bytes', type: 'int', isPk: false },
+        { name: 'formato_mime', type: 'string', isPk: false },
+        { name: 'ancho_px', type: 'int', isPk: false },
+        { name: 'alto_px', type: 'int', isPk: false },
+        { name: 'estado_optimizacion', type: 'string', isPk: false }
+      ];
+    }
     if (norm.includes('DETALLE')) {
       return [
         { name: 'id', type: 'int', isPk: true },
@@ -460,13 +475,20 @@ class DiagramContextBuilder {
         id: 'EvidenciaMultimedia', name: 'EvidenciaMultimedia', displayName: 'EvidenciaMultimedia',
         attributes: [
           { name: 'id', type: 'int', visibility: '+' },
-          { name: 'tipoArchivo', type: 'string', visibility: '+' },
-          { name: 'urlArchivo', type: 'string', visibility: '+' },
-          { name: 'descripcion', type: 'string', visibility: '+' },
+          { name: 'urlOriginal', type: 'string', visibility: '+' },
+          { name: 'urlOptimizada', type: 'string', visibility: '+' },
+          { name: 'urlThumbnail', type: 'string', visibility: '+' },
+          { name: 'pesoBytes', type: 'int', visibility: '+' },
+          { name: 'formatoMime', type: 'string', visibility: '+' },
+          { name: 'anchoPx', type: 'int', visibility: '+' },
+          { name: 'altoPx', type: 'int', visibility: '+' },
+          { name: 'estadoOptimizacion', type: 'string', visibility: '+' },
           { name: 'fechaSubida', type: 'datetime', visibility: '+' }
         ],
         methods: [
-          { name: 'adjuntarArchivo', returnType: 'void', visibility: '+' }
+          { name: 'adjuntarArchivo', returnType: 'void', visibility: '+' },
+          { name: 'optimizar', returnType: 'bool', visibility: '+' },
+          { name: 'generarThumbnail', returnType: 'string', visibility: '+' }
         ]
       },
       {

@@ -1,6 +1,7 @@
 const prisma = require('../../config/prisma');
 const env = require('../../config/env');
 const GeminiProvider = require('../ai/GeminiProvider');
+const OpenAIProvider = require('../ai/OpenAIProvider');
 const diagramAvailabilityService = require('./diagramAvailabilityService');
 const diagramContextBuilder = require('./diagramContextBuilder');
 const mermaidNormalizer = require('./mermaidNormalizer');
@@ -18,6 +19,7 @@ const architectureGenerator = require('./architectureGenerator');
 class DiagramAiService {
   constructor() {
     this.gemini = new GeminiProvider();
+    this.openai = new OpenAIProvider();
   }
 
   /**
@@ -547,6 +549,7 @@ REGLAS ESTRICTAS DE MODELADO:
    - Entidades de detalle y composición: desgloses transaccionales con cantidades, precios unitarios y estados de aprobación (ej: detalles de cotización, líneas de compra/venta, actividades operativas).
    - Catálogos maestros y bases de información técnica o de conocimiento: servicios, productos/ítems, clasificaciones, síntomas, códigos o soluciones documentadas.
    - Trazabilidad, control y auditoría: historial de eventos, movimientos de inventario/recursos, inspecciones/evidencias, reglas preventivas/alertas, registros de auditoría y notificaciones.
+   - Evidencias fotográficas y optimización gráfica (RF-12, RF-07, RNF-12): entidad EVIDENCIA_MULTIMEDIA conectada a RECEPCION y DIAGNOSTICO con atributos técnicos para PostgreSQL: url_original, url_optimizada, url_thumbnail, peso_bytes, formato_mime, ancho_px, alto_px, estado_optimizacion.
    El diagrama debe incluir la cantidad de entidades que demande la complejidad del documento (entre 18 y 28 entidades para sistemas integrales) sin omitir módulos.
 
 2. DECLARACIÓN OBLIGATORIA DE BLOQUES DE ATRIBUTOS:
@@ -577,7 +580,7 @@ REGLAS ESTRICTAS DE MODELADO:
 1. COBERTURA TOTAL Y EXHAUSTIVA DE REQUISITOS (RF y RNF):
    Examina TODOS los requisitos y modela una clase para cada concepto sustantivo del sistema específico analizado:
    - Entidades Maestras y Actores del Negocio: Modela los sujetos y recursos centrales (usuarios, roles con matriz de permisos, clientes o usuarios finales, y los activos o recursos centrales del negocio).
-   - Procesos de Ingreso, Inspección y Evaluación: Si los requisitos describen recepciones, revisiones, estados visuales por zonas o evidencias multimedia, modela sus clases correspondientes con operaciones de captura y registro.
+   - Procesos de Ingreso, Inspección y Evaluación: Si los requisitos describen recepciones, revisiones, estados visuales por zonas o evidencias multimedia (RF-12, RNF-12), modela sus clases correspondientes (EvidenciaMultimedia) con atributos (urlOriginal, urlOptimizada, urlThumbnail, pesoBytes, formatoMime) y operaciones de captura y optimización (+optimizar(), +generarThumbnail()).
    - Diagnósticos, Análisis Técnico y Bases de Conocimiento: Modela clases para el diagnóstico técnico, fallas/incidencias, códigos de referencia y bases de conocimiento/soluciones con métodos de búsqueda y resolución.
    - Cotizaciones, Presupuestos y Aprobación: Modela la cabecera y el detalle de cotizaciones, asegurando soporte para aprobación parcial o total de ítems por el cliente.
    - Ejecución Operativa, Tareas y Asignación: Modela las órdenes de trabajo/servicio, desglose de actividades, asignación de responsables y pruebas de calidad o verificación.

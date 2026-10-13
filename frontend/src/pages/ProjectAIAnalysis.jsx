@@ -8,8 +8,8 @@ export default function ProjectAIAnalysis({ project, onProjectUpdated, onNavigat
   const [description, setDescription] = useState(
     project.systemDescription || project.description || ''
   );
-  const [provider, setProvider] = useState('gemini');
-  const [model, setModel] = useState('');
+  const [provider, setProvider] = useState('openai');
+  const [model, setModel] = useState('gpt6-luna');
   const [analyzing, setAnalyzing] = useState(false);
   const [analysisResult, setAnalysisResult] = useState(null);
   const [importing, setImporting] = useState(false);
