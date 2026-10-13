@@ -58,12 +58,12 @@ class MockupService {
     const screens = this.buildScreenPlan(project, relevantRequirements);
     const structuredPrompt = [
       prompt,
-      `Generar exactamente ${screens.length} pantallas profesionales para ${project.name}.`,
-      'Respetar estrictamente los nombres y objetivos de screens recibidos.',
-      'No agregar login, dashboard ni otros flujos sin requisitos aprobados.',
-      'No generar pantallas absurdas, genericas, de configuracion o de contenido inventado.',
-      'Usar los requisitos solo para definir contenido, campos, indicadores y acciones relevantes.',
-      'Cada pantalla debe tener una jerarquia visual clara, navegacion coherente y datos de ejemplo realistas.'
+      `Generar exactamente ${screens.length} pantallas profesionales y minimalistas para ${project.name}.`,
+      '1. DISEÑO MINIMALISTA: Interfaz limpia, espacios despejados, sin sobrecarga visual ni componentes saturados.',
+      '2. ESTRICTAMENTE EN ESPAÑOL: Todo el contenido, botones, campos, títulos, tablas y placeholders deben estar 100% en español.',
+      '3. CERO SOBRECARGA VISUAL: Formularios concretos con solo los campos indispensables. Máximo 1 acción principal clara por vista. Tablas concisas y legibles.',
+      '4. COHERENCIA DE DATOS ENTRE PANTALLAS: Los datos de ejemplo (identificadores, códigos de órdenes, nombres de clientes, estados y roles) deben ser consistentes y coordinados en todas las pantallas.',
+      '5. Respetar estrictamente los nombres y rutas de screens recibidos.'
     ].join('\n');
 
     // 1. Si N8N_MOCKUP_WEBHOOK está definido, intentar delegar al flujo n8n
@@ -97,81 +97,107 @@ class MockupService {
             ...await this.normalizeN8nResult(n8nResult, screens)
           };
         } else {
-          console.warn(`[MockupService] n8n retornó HTTP ${response.status}. Usando generador inteligente Gemini...`);
+          console.warn(`[MockupService] n8n retornó HTTP ${response.status}. Usando generador inteligente de IA...`);
         }
       } catch (err) {
-        console.warn(`[MockupService] Error contactando n8n webhook (${err.message}). Usando generador inteligente Gemini...`);
+        console.warn(`[MockupService] Error contactando n8n webhook (${err.message}). Usando generador inteligente de IA...`);
       }
     }
 
-    // 2. Fallback inteligente: Generación mediante IA (Gemini) basada en requisitos
-    return this.generateWithGemini(project, screens, relevantRequirements, prompt);
+    // 2. Generación asistida por IA derivada de los requisitos aprobados (OpenAI o Gemini)
+    return this.generateWithAI(project, screens, relevantRequirements, prompt);
   }
 
   /**
-   * Generación de mockups asistida por IA (Gemini) derivada de los requisitos aprobados
+   * Generación de mockups asistida por IA (OpenAI o Gemini) con enfoque minimalista y en español.
    */
-  async generateWithGemini(project, screens, requirements, prompt = '') {
-    const GeminiProvider = require('../ai/GeminiProvider');
+  async generateWithAI(project, screens, requirements, prompt = '') {
     const { generateHtmlMockup } = require('./mockupGenerator');
-    const gemini = new GeminiProvider();
+    const providerName = (env.AI_PROVIDER || 'openai').toLowerCase();
 
-    const promptText = `Eres un diseñador UX/UI de software empresarial ICASE.
-Genera prototipos visuales interactivos para las siguientes ${screens.length} pantallas del sistema ${project.name}:
+    const actorsList = (project.actors || []).map(a => a.name).join(', ') || 'Usuarios del sistema';
 
+    const promptText = `Eres un diseñador UX/UI de software empresarial enfocado en interfaces minimalistas y modernas.
+Genera prototipos visuales limpios, elegantes y minimalistas para las siguientes ${screens.length} pantallas del sistema "${project.name}":
+
+ACTORES Y ROLES DEL SISTEMA:
+${actorsList}
+
+PANTALLAS A GENERAR:
 ${screens.map((s, i) => `PANTALLA ${i + 1}:
 - ID: "${s.id}"
 - Nombre: "${s.name}"
 - Ruta: "${s.route}"
-- Requisitos funcionales cubiertos:
+- Requisitos cubiertos:
 ${(s.requirements || []).map(r => `  * [${r.code}] ${r.name || r.description}`).join('\n') || '  * Operaciones del módulo'}
 `).join('\n')}
 
-INSTRUCCIONES DE DISEÑO:
-1. Para cada pantalla, diseña una estructura realista que cumpla con los requisitos descritos.
-2. Tipos de componentes a incluir:
-   - "navbar": Barra de navegación con nombre del sistema y módulo.
-   - "heading": Título principal y subtítulo de la vista (meta: { level: 2 }).
-   - "card": Tarjeta resumen o métricas clave relevantes (label, description).
-   - "form": Formulario con campos específicos (meta.fields: [{ label, type, placeholder }]).
-   - "table": Tabla con columnas y filas de datos de ejemplo verosímiles (meta: { headers: [...], rows: [[...], [...]] }).
-   - "action": Botones de acción principales y secundarios (meta.buttons: [{ label, variant }]).
-3. Mantén exactamente los IDs, nombres y rutas recibidos.
-4. Devuelve ÚNICAMENTE un JSON válido con esta estructura:
+REGLAS ESTRICTAS DE DISEÑO:
+1. MINIMALISMO ABSOLUTO: Diseño despejado, espaciado generoso, sin saturación visual ni elementos innecesarios.
+2. 100% EN ESPAÑOL: Todos los textos, botones, etiquetas, encabezados, tablas y estados deben estar exclusivamente en español (sin anglicismos).
+3. CERO SOBRECARGA: 
+   - Formularios limpios con solo 2 a 4 campos indispensables.
+   - Máximo 1 botón de acción principal ("Guardar", "Registrar", "Confirmar") y 1 secundario ("Cancelar" o "Limpiar").
+   - Tablas concisas de 3 a 5 columnas con 2 a 3 filas de datos representativos.
+4. COHERENCIA DE DATOS: Los identificadores (ej: "ORD-001", "CLI-101"), nombres de personas, estados ("Completado", "En Proceso", "Pendiente") y fechas deben guardar perfecta coherencia entre todas las pantallas del sistema.
+5. Mantén exactamente los IDs, nombres y rutas recibidos.
+
+Devuelve ÚNICAMENTE un JSON válido con esta estructura:
 {
   "screens": [
     {
       "id": "identificador_recibido",
       "name": "nombre_recibido",
       "route": "ruta_recibida",
-      "description": "descripción concreta del objetivo de la pantalla",
+      "description": "descripción concreta y breve",
       "components": [
-        { "type": "navbar", "label": "..." },
-        { "type": "heading", "label": "...", "description": "..." },
-        { "type": "card", "label": "...", "description": "..." },
-        { "type": "form", "label": "...", "meta": { "fields": [{ "label": "...", "type": "text", "placeholder": "..." }] } },
-        { "type": "table", "label": "...", "meta": { "headers": ["Col1", "Col2"], "rows": [["Val1", "Val2"]] } }
+        { "type": "navbar", "label": "Nombre del Módulo" },
+        { "type": "heading", "label": "Título de la Pantalla", "description": "Breve explicación" },
+        { "type": "card", "label": "Resumen Clave", "description": "Métricas o estado principal" },
+        { "type": "form", "label": "Registro de Datos", "meta": { "fields": [{ "label": "Campo", "type": "text", "placeholder": "Ejemplo..." }] } },
+        { "type": "table", "label": "Listado Principal", "meta": { "headers": ["Código", "Concepto", "Estado"], "rows": [["001", "Dato coherente", "Completado"]] } }
       ]
     }
   ]
 }`;
 
-    const payload = {
-      contents: [{ parts: [{ text: promptText }] }],
-      generationConfig: {
-        responseMimeType: 'application/json',
-        maxOutputTokens: 8192,
-        temperature: 0.1
-      }
-    };
-
     let generatedScreens = [];
-    try {
-      const rawText = await gemini.callGeminiApi(payload);
-      const parsed = gemini.parseOrRepairJson(rawText);
-      generatedScreens = Array.isArray(parsed) ? parsed : (parsed.screens || parsed.data?.screens || []);
-    } catch (aiErr) {
-      console.warn('[MockupService] Error en llamada Gemini para mockups:', aiErr.message);
+
+    // Intento con OpenAI si está configurado
+    if (providerName === 'openai' && env.OPENAI_API_KEY) {
+      try {
+        const OpenAIProvider = require('../ai/OpenAIProvider');
+        const openai = new OpenAIProvider();
+        const aiResponse = await openai.extractDocumentBatch(
+          { screens, project: { name: project.name, actors: project.actors } },
+          { prompt: promptText }
+        );
+        const data = aiResponse?.data;
+        generatedScreens = Array.isArray(data) ? data : (data?.screens || data?.data?.screens || []);
+      } catch (openAiErr) {
+        console.warn('[MockupService] Error en llamada OpenAI para mockups:', openAiErr.message);
+      }
+    }
+
+    // Fallback o elección directa Gemini
+    if (generatedScreens.length === 0 && (providerName === 'gemini' || env.GEMINI_API_KEY)) {
+      try {
+        const GeminiProvider = require('../ai/GeminiProvider');
+        const gemini = new GeminiProvider();
+        const payload = {
+          contents: [{ parts: [{ text: promptText }] }],
+          generationConfig: {
+            responseMimeType: 'application/json',
+            maxOutputTokens: 8192,
+            temperature: 0.1
+          }
+        };
+        const rawText = await gemini.callGeminiApi(payload);
+        const parsed = gemini.parseOrRepairJson(rawText);
+        generatedScreens = Array.isArray(parsed) ? parsed : (parsed.screens || parsed.data?.screens || []);
+      } catch (geminiErr) {
+        console.warn('[MockupService] Error en llamada Gemini para mockups:', geminiErr.message);
+      }
     }
 
     const finalScreens = screens.map((requested, idx) => {
@@ -179,16 +205,16 @@ INSTRUCCIONES DE DISEÑO:
       const components = (found?.components && found.components.length > 0) ? found.components : [
         { type: 'navbar', label: `${project.name} - ${requested.name}` },
         { type: 'heading', label: requested.name, description: requested.description },
-        { type: 'card', label: `Módulo: ${requested.name}`, description: `Gestión operativa respaldada por los requisitos funcionales del proyecto.` },
-        { type: 'form', label: `Datos de Registro`, meta: { fields: [{ label: 'Código / Identificador', type: 'text', placeholder: 'Ingrese código...' }, { label: 'Descripción / Observaciones', type: 'text', placeholder: 'Detalle de la operación...' }] } },
-        { type: 'table', label: `Registros Activos`, meta: { headers: ['Código', 'Descripción', 'Estado', 'Fecha'], rows: [['#001', 'Operación 1', 'Activo', '2026-10-10'], ['#002', 'Operación 2', 'Completado', '2026-10-10']] } }
+        { type: 'card', label: requested.name, description: `Operación principal respaldada por los requisitos funcionales del sistema.` },
+        { type: 'form', label: `Datos de Registro`, meta: { fields: [{ label: 'Código / Identificador', type: 'text', placeholder: 'Ej: REG-001' }, { label: 'Descripción', type: 'text', placeholder: 'Detalle...' }] } },
+        { type: 'table', label: `Registros Activos`, meta: { headers: ['Código', 'Concepto', 'Responsable', 'Estado'], rows: [['REG-001', 'Atención registrada', 'Administrador', 'Completado'], ['REG-002', 'En revisión', 'Recepción', 'En Proceso']] } }
       ];
 
       const screenObj = {
         id: requested.id,
         name: requested.name,
         route: requested.route,
-        description: requested.description,
+        description: requested.description || found?.description,
         components,
         layout: { type: 'grid' }
       };
@@ -198,7 +224,7 @@ INSTRUCCIONES DE DISEÑO:
     });
 
     return {
-      provider: 'gemini-intelligent',
+      provider: `${providerName}-intelligent`,
       success: true,
       screens: finalScreens
     };

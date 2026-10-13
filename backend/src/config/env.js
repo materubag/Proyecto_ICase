@@ -40,7 +40,7 @@ module.exports = {
 
   // Configuración OpenAI (Opcional - nunca obligatorio para el flujo principal)
   OPENAI_API_KEY: process.env.OPENAI_API_KEY || '',
-  OPENAI_MODEL: process.env.OPENAI_MODEL || 'gpt6-luna',
+  OPENAI_MODEL: process.env.OPENAI_MODEL || 'gpt-5.6-luna',
   OPENAI_REASONING_EFFORT: process.env.OPENAI_REASONING_EFFORT || 'high',
 
   // Configuración n8n (Exclusivo para Mockups)

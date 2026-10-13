@@ -12,23 +12,23 @@ function MockNavbar({ component }) {
       alignItems: 'center',
       justifyContent: 'space-between',
       padding: '0.75rem 1.25rem',
-      backgroundColor: '#1e293b',
+      backgroundColor: '#0f172a',
       color: '#ffffff',
       borderRadius: 'var(--radius-sm)',
       marginBottom: '1rem'
     }}>
-      <span style={{ fontWeight: 600, fontSize: '0.95rem' }}>{component.label || 'Application Bar'}</span>
+      <span style={{ fontWeight: 600, fontSize: '0.95rem' }}>{component.label || 'Barra Principal'}</span>
       <div style={{ display: 'flex', gap: '0.75rem', fontSize: '0.8rem', opacity: 0.85 }}>
         <span>Inicio</span>
+        <span>Operaciones</span>
         <span>Perfil</span>
-        <span>Salir</span>
       </div>
     </div>
   );
 }
 
 function MockSidebar({ component }) {
-  const items = component.meta?.items || ['Dashboard', 'Registros', 'Reportes', 'Configuración'];
+  const items = component.meta?.items || ['Inicio', 'Registros', 'Consultas', 'Configuración'];
   return (
     <div style={{
       width: '180px',
@@ -150,24 +150,24 @@ function MockCard({ component }) {
 }
 
 function MockTable({ component }) {
-  const headers = component.meta?.headers || ['Columna 1', 'Columna 2', 'Columna 3'];
+  const headers = component.meta?.headers || ['Código', 'Concepto', 'Responsable', 'Estado'];
   const rows = component.meta?.rows || [
-    ['Dato A1', 'Dato B1', 'Dato C1'],
-    ['Dato A2', 'Dato B2', 'Dato C2']
+    ['REG-001', 'Atención registrada', 'Administrador', 'Completado'],
+    ['REG-002', 'Solicitud pendiente', 'Recepción', 'En Proceso']
   ];
 
   return (
-    <div style={{ marginBottom: '1rem', overflowX: 'auto', border: '1px solid #e2e8f0', borderRadius: '4px' }}>
+    <div style={{ marginBottom: '1rem', overflowX: 'auto', border: '1px solid #e2e8f0', borderRadius: '6px' }}>
       {component.label && (
-        <div style={{ padding: '0.75rem 1rem', fontWeight: 600, fontSize: '0.875rem', borderBottom: '1px solid #e2e8f0', background: '#f8fafc' }}>
+        <div style={{ padding: '0.75rem 1rem', fontWeight: 600, fontSize: '0.875rem', borderBottom: '1px solid #e2e8f0', background: '#f8fafc', color: '#0f172a' }}>
           {component.label}
         </div>
       )}
       <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '0.8125rem' }}>
         <thead>
-          <tr style={{ background: '#f1f5f9', color: '#475569', textAlign: 'left' }}>
+          <tr style={{ background: '#f8fafc', color: '#475569', textAlign: 'left' }}>
             {headers.map((h, i) => (
-              <th key={i} style={{ padding: '0.5rem 0.75rem', borderBottom: '1px solid #e2e8f0' }}>{h}</th>
+              <th key={i} style={{ padding: '0.55rem 0.75rem', borderBottom: '1px solid #e2e8f0', fontWeight: 600 }}>{h}</th>
             ))}
           </tr>
         </thead>
@@ -175,7 +175,15 @@ function MockTable({ component }) {
           {rows.map((row, rIdx) => (
             <tr key={rIdx} style={{ borderBottom: rIdx === rows.length - 1 ? 'none' : '1px solid #f1f5f9' }}>
               {row.map((col, cIdx) => (
-                <td key={cIdx} style={{ padding: '0.55rem 0.75rem' }}>{col}</td>
+                <td key={cIdx} style={{ padding: '0.6rem 0.75rem', color: '#1e293b' }}>
+                  {String(col).toLowerCase().includes('completado') ? (
+                    <span style={{ background: '#ecfdf5', color: '#065f46', padding: '2px 6px', borderRadius: 4, fontWeight: 600, fontSize: '0.75rem' }}>{col}</span>
+                  ) : String(col).toLowerCase().includes('proceso') ? (
+                    <span style={{ background: '#fffbeb', color: '#92400e', padding: '2px 6px', borderRadius: 4, fontWeight: 600, fontSize: '0.75rem' }}>{col}</span>
+                  ) : cIdx === 0 ? (
+                    <code style={{ fontSize: '0.775rem' }}>{col}</code>
+                  ) : col}
+                </td>
               ))}
             </tr>
           ))}
@@ -186,7 +194,7 @@ function MockTable({ component }) {
 }
 
 function MockList({ component }) {
-  const items = component.meta?.items || ['Elemento 1', 'Elemento 2', 'Elemento 3'];
+  const items = component.meta?.items || ['Opción 1', 'Opción 2', 'Opción 3'];
   return (
     <ul style={{ paddingLeft: '1.25rem', marginBottom: '1rem', fontSize: '0.875rem', color: '#334155' }}>
       {items.map((it, idx) => (

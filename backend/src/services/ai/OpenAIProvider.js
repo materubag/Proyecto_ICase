@@ -4,8 +4,9 @@ const env = require('../../config/env');
 class OpenAIProvider extends AIProvider {
   async extractDocumentBatch(input, options = {}) {
     if (!env.OPENAI_API_KEY) throw new Error('OpenAI no configurado');
-    const model = options.model || env.OPENAI_MODEL || 'gpt6-luna';
+    const model = options.model || env.OPENAI_MODEL || 'gpt-5.6-luna';
     const reasoningEffort = options.reasoning_effort || env.OPENAI_REASONING_EFFORT;
+
     const bodyPayload = {
       model,
       response_format: { type: 'json_object' },
@@ -13,7 +14,7 @@ class OpenAIProvider extends AIProvider {
         { role: 'system', content: options.prompt || require('../analysis/extractionContract').prompt },
         { role: 'user', content: JSON.stringify(input) }
       ],
-      ...(reasoningEffort ? { reasoning_effort: reasoningEffort, reasoning: { effort: reasoningEffort } } : {})
+      ...(reasoningEffort ? { reasoning_effort: reasoningEffort } : {})
     };
 
     const response = await fetch('https://api.openai.com/v1/chat/completions', {
@@ -22,6 +23,7 @@ class OpenAIProvider extends AIProvider {
       headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${env.OPENAI_API_KEY}` },
       body: JSON.stringify(bodyPayload)
     });
+
     if (!response.ok) {
       let errText = '';
       try { errText = typeof response.text === 'function' ? await response.text() : ''; } catch (e) {}
@@ -100,7 +102,7 @@ Reglas:
             { role: 'system', content: systemPrompt },
             { role: 'user', content: input.customPrompt || userMessage }
           ],
-          ...(reasoningEffort ? { reasoning_effort: reasoningEffort, reasoning: { effort: reasoningEffort } } : {})
+          ...(reasoningEffort ? { reasoning_effort: reasoningEffort } : {})
         })
       });
     }
