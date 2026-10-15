@@ -343,9 +343,9 @@ export default function ProjectPrototype({ project, onProjectUpdated }) {
 
           <button className="btn btn-primary btn-sm" onClick={handleGenerateMockup} disabled={isGenerating}>
             {isGenerating ? (
-              <><span className="ms ms-sm spin">progress_activity</span><span>Generando ({Math.floor(elapsedSeconds / 60)}m {elapsedSeconds % 60 < 10 ? '0' : ''}{elapsedSeconds % 60}s)...</span></>
+              <><span className="ms ms-sm spin">progress_activity</span><span>Generando con Stitch ({Math.floor(elapsedSeconds / 60)}m {elapsedSeconds % 60 < 10 ? '0' : ''}{elapsedSeconds % 60}s)...</span></>
             ) : (
-              <><span className="ms ms-sm">auto_awesome</span><span>Generar con n8n</span></>
+              <><span className="ms ms-sm">auto_awesome</span><span>Generar con Stitch</span></>
             )}
           </button>
         </div>
@@ -494,10 +494,10 @@ export default function ProjectPrototype({ project, onProjectUpdated }) {
             <span className="ms ms-md spin" style={{ color: '#2563eb', fontSize: 24 }}>progress_activity</span>
             <div>
               <div style={{ fontWeight: 600, color: '#1d4ed8', fontSize: 13 }}>
-                Generando pantallas con n8n y Google Stitch ({Math.floor(elapsedSeconds / 60)}m {elapsedSeconds % 60 < 10 ? '0' : ''}{elapsedSeconds % 60}s)
+                Generando pantallas con Google Stitch ({Math.floor(elapsedSeconds / 60)}m {elapsedSeconds % 60 < 10 ? '0' : ''}{elapsedSeconds % 60}s)
               </div>
               <div style={{ fontSize: 12, color: '#475569', marginTop: 2 }}>
-                El flujo de n8n está construyendo el código HTML interactivo en alta fidelidad. Puedes cambiar de pestaña o esperar aquí; el progreso no se perderá (puede tardar de 5 a 11 minutos).
+                Google Stitch está construyendo el código HTML interactivo en alta fidelidad y en paralelo. Puedes cambiar de pestaña o esperar aquí; el progreso no se perderá.
               </div>
             </div>
           </div>
@@ -518,7 +518,7 @@ export default function ProjectPrototype({ project, onProjectUpdated }) {
         <div className="page-scrollable">
           <div className="empty-state" style={{ border: '1px solid rgba(37,99,235,0.3)', borderRadius: 'var(--radius-lg)', background: 'rgba(37,99,235,0.03)' }}>
             <div className="empty-state-icon"><span className="ms ms-xl spin" style={{color:'var(--primary)'}}>autorenew</span></div>
-            <p className="empty-state-title" style={{color:'var(--primary)'}}>Construyendo prototipos de la aplicación</p>
+            <p className="empty-state-title" style={{color:'var(--primary)'}}>Construyendo prototipos de la aplicación con Google Stitch</p>
             <p className="empty-state-desc">
               Generando vistas de alta fidelidad, componentes y código HTML interactivo a partir de los requerimientos seleccionados...
             </p>
@@ -530,11 +530,11 @@ export default function ProjectPrototype({ project, onProjectUpdated }) {
             <div className="empty-state-icon"><span className="ms ms-xl">devices</span></div>
             <p className="empty-state-title">Sin pantallas generadas</p>
             <p className="empty-state-desc">
-              Selecciona las pantallas de la lista superior y pulsa Generar con n8n.
+              Selecciona las pantallas de la lista superior y pulsa Generar con Stitch.
             </p>
             <button className="btn btn-primary btn-sm" onClick={handleGenerateMockup} disabled={isGenerating}>
               <span className="ms ms-sm">auto_awesome</span>
-              <span>{isGenerating ? 'Generando...' : 'Generar prototipo'}</span>
+              <span>{isGenerating ? 'Generando...' : 'Generar con Stitch'}</span>
             </button>
           </div>
         </div>

@@ -66,8 +66,20 @@ class MockupService {
       '5. Respetar estrictamente los nombres y rutas de screens recibidos.'
     ].join('\n');
 
-    // 1. Si N8N_MOCKUP_WEBHOOK está definido, intentar delegar al flujo n8n
-    if (env.N8N_MOCKUP_WEBHOOK && env.N8N_MOCKUP_WEBHOOK.trim().length > 0) {
+    // 1. Conexión DIRECTA con Google Stitch API (Sin intermediarios de n8n ni ngrok)
+    const mockupProvider = (env.MOCKUP_PROVIDER || 'stitch').toLowerCase();
+    if (mockupProvider === 'stitch' && env.GOOGLE_STITCH_API_KEY) {
+      try {
+        console.log(`[MockupService] Iniciando generación directa con Google Stitch API (MCP)...`);
+        const stitchService = require('./GoogleStitchService');
+        return await stitchService.generateMockups(project, screens, relevantRequirements, prompt);
+      } catch (stitchErr) {
+        console.warn(`[MockupService] Error en Google Stitch directo (${stitchErr.message}). Activando respaldo de IA...`);
+      }
+    }
+
+    // 2. Si N8N_MOCKUP_WEBHOOK está definido y se configuró como proveedor, intentar delegar al flujo n8n
+    if (mockupProvider === 'n8n' && env.N8N_MOCKUP_WEBHOOK && env.N8N_MOCKUP_WEBHOOK.trim().length > 0) {
       console.log(`[MockupService] Delegating mockup generation to n8n webhook: ${env.N8N_MOCKUP_WEBHOOK}`);
       try {
         const response = await fetch(env.N8N_MOCKUP_WEBHOOK, {
@@ -104,7 +116,7 @@ class MockupService {
       }
     }
 
-    // 2. Generación asistida por IA derivada de los requisitos aprobados (OpenAI o Gemini)
+    // 3. Generación asistida por IA derivada de los requisitos aprobados (OpenAI o Gemini)
     return this.generateWithAI(project, screens, relevantRequirements, prompt);
   }
 
