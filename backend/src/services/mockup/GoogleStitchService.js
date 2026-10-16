@@ -115,17 +115,27 @@ ${title}`);
       sections.push(`INSTRUCCIONES ADICIONALES:\n${userPrompt.trim()}`);
     }
 
-    sections.push(`REGLAS ESTRICTAS DE DISEÑO:
-- Genera exactamente UNA pantalla.
-- Genera únicamente "${title}".
+    sections.push(`SISTEMA DE DISEÑO GLOBAL OBLIGATORIO (COHERENCIA TOTAL ENTRE TODAS LAS PANTALLAS):
+- Esta pantalla pertenece a una aplicación web unificada de nivel corporativo para "${project.name}".
+- PALETA DE COLORES GLOBAL:
+  * Color Primario / Acento: Índigo (#4F46E5 / Tailwind indigo-600) para botones principales, enlaces activos y badges destacados.
+  * Fondo General: Slate muy suave (#F8FAFC / bg-slate-50).
+  * Tarjetas y Paneles: Blanco puro (#FFFFFF / bg-white) con borde fino (border border-slate-200) y sombra suave (shadow-sm rounded-xl).
+  * Textos: Slate oscuro (#0F172A / text-slate-900) para títulos y Slate (#64748B / text-slate-500) para subtítulos y etiquetas.
+- CONTENIDO DEDICADO SIN BARRAS EXTERNAS DUPLICADAS:
+  * NO generes barras de navegación externas oscuras ni menús inventados en esta vista.
+  * Diseña exclusivamente el ÁREA DE TRABAJO del módulo "${title}" (la tarjeta principal con formulario, tabla de registros, filtros y botones de acción).
 - 100% EN ESPAÑOL: Todos los textos, botones, formularios, tablas, placeholders y estados deben estar exclusivamente en español (sin anglicismos).
-- MINIMALISMO ABSOLUTO: Interfaz limpia, despejada, sin saturación visual ni elementos irrelevantes.
-- FORMULARIOS LIMPIOS: Solo los campos indispensables (de 2 a 4 campos).
-- ACCIONES CLARAS: Máximo 1 botón de acción principal ("Guardar", "Registrar") y 1 secundario ("Cancelar" o "Limpiar").
-- TABLAS CONCISAS: De 3 a 5 columnas con 2 a 3 filas de datos representativos y badges de estado legibles ("Completado", "En Proceso").
-- COHERENCIA DE DATOS: Códigos de registro (ej. REG-001, CLI-101), nombres y estados coherentes en todas las pantallas.
-- El diseño debe ser responsivo, elegante y profesional.
-- No mostrar código fuente en la interfaz ni comentarios de desarrollo.`);
+- FORMULARIOS MODERNOS Y ESTANDARIZADOS:
+  * Inputs con borde gris sutil (border-slate-300), bordes redondeados (rounded-lg), padding cómodo (px-3 py-2) y focus con anillo índigo (focus:ring-2 focus:ring-indigo-500).
+- BOTONES HOMOGÉNEOS:
+  * Acción principal: bg-indigo-600 hover:bg-indigo-700 text-white font-medium px-5 py-2.5 rounded-lg shadow-sm.
+  * Acción secundaria: bg-slate-100 hover:bg-slate-200 text-slate-700 font-medium px-4 py-2.5 rounded-lg border border-slate-300.
+- TABLAS Y LISTADOS UNIFORMES:
+  * Encabezados claros en bg-slate-100 con texto en mayúsculas pequeñas (text-xs uppercase tracking-wider font-semibold text-slate-600).
+  * Filas con hover:bg-slate-50 y bordes inferiores finos.
+  * Badges de estado estilizados (ej. verde suave para completado, amarillo suave para en proceso).
+- COHERENCIA DE DATOS: Utiliza identificadores claros (ej: REG-001, CLI-101), nombres realistas y coherencia con el dominio automotriz/operativo.`);
 
     return sections.join('\n\n');
   }

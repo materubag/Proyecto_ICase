@@ -47,6 +47,13 @@ export default function ProjectPrototype({ project, onProjectUpdated }) {
   const [selectorOpen, setSelectorOpen] = useState(!(project.screens || []).length);
   const [viewMode, setViewMode] = useState('render'); // 'render' | 'sketch' | 'structure' | 'relations' | 'html'
 
+  // Sistema de Diseño Unificado (Design System & App Shell)
+  const [themeConfig, setThemeConfig] = useState({
+    color: 'indigo', // 'indigo' | 'blue' | 'emerald' | 'violet' | 'slate'
+    layout: 'sidebar', // 'sidebar' | 'topbar'
+    showShell: true // true = aplicación completa unificada, false = solo tarjeta de vista
+  });
+
   // Cronómetro en vivo mientras genera
   useEffect(() => {
     if (!isGenerating) {
@@ -540,6 +547,108 @@ export default function ProjectPrototype({ project, onProjectUpdated }) {
         </div>
       ) : (
         <>
+          {/* Control Bar: Sistema de Diseño Unificado */}
+          <div style={{
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'space-between',
+            padding: '10px 24px',
+            backgroundColor: 'var(--surface-container-low)',
+            borderBottom: '1px solid var(--border-default)',
+            fontSize: '0.8rem',
+            flexWrap: 'wrap',
+            gap: '12px'
+          }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+              <span className="ms ms-xs" style={{ color: 'var(--primary)' }}>auto_fix_high</span>
+              <strong style={{ fontSize: '0.8rem', color: 'var(--on-surface)' }}>Diseño Unificado de la Aplicación:</strong>
+              
+              {/* Presets de Color */}
+              <div style={{ display: 'flex', alignItems: 'center', gap: '4px', marginLeft: '6px' }}>
+                {[
+                  { id: 'indigo', label: 'Índigo', color: '#4f46e5' },
+                  { id: 'blue', label: 'Azul', color: '#2563eb' },
+                  { id: 'emerald', label: 'Esmeralda', color: '#059669' },
+                  { id: 'violet', label: 'Violeta', color: '#7c3aed' },
+                  { id: 'slate', label: 'Slate', color: '#0f172a' }
+                ].map(th => (
+                  <button
+                    key={th.id}
+                    type="button"
+                    title={`Aplicar paleta ${th.label}`}
+                    onClick={() => setThemeConfig(prev => ({ ...prev, color: th.id }))}
+                    style={{
+                      display: 'flex',
+                      alignItems: 'center',
+                      gap: '4px',
+                      padding: '3px 8px',
+                      borderRadius: '12px',
+                      fontSize: '0.725rem',
+                      fontWeight: themeConfig.color === th.id ? 600 : 400,
+                      border: themeConfig.color === th.id ? `2px solid ${th.color}` : '1px solid var(--border-default)',
+                      backgroundColor: themeConfig.color === th.id ? 'var(--surface)' : 'transparent',
+                      color: 'var(--on-surface)',
+                      cursor: 'pointer'
+                    }}
+                  >
+                    <span style={{ width: '8px', height: '8px', borderRadius: '50%', backgroundColor: th.color, display: 'inline-block' }} />
+                    <span>{th.label}</span>
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            {/* Layout Mode y Toggle Shell */}
+            <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+              <div style={{ display: 'flex', backgroundColor: 'var(--surface)', borderRadius: '6px', border: '1px solid var(--border-default)', padding: '2px' }}>
+                <button
+                  type="button"
+                  onClick={() => setThemeConfig(prev => ({ ...prev, layout: 'sidebar' }))}
+                  style={{
+                    padding: '3px 8px',
+                    borderRadius: '4px',
+                    fontSize: '0.725rem',
+                    border: 'none',
+                    cursor: 'pointer',
+                    fontWeight: themeConfig.layout === 'sidebar' ? 600 : 400,
+                    backgroundColor: themeConfig.layout === 'sidebar' ? 'var(--primary)' : 'transparent',
+                    color: themeConfig.layout === 'sidebar' ? '#ffffff' : 'var(--secondary)'
+                  }}
+                >
+                  Sidebar Lateral
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setThemeConfig(prev => ({ ...prev, layout: 'topbar' }))}
+                  style={{
+                    padding: '3px 8px',
+                    borderRadius: '4px',
+                    fontSize: '0.725rem',
+                    border: 'none',
+                    cursor: 'pointer',
+                    fontWeight: themeConfig.layout === 'topbar' ? 600 : 400,
+                    backgroundColor: themeConfig.layout === 'topbar' ? 'var(--primary)' : 'transparent',
+                    color: themeConfig.layout === 'topbar' ? '#ffffff' : 'var(--secondary)'
+                  }}
+                >
+                  Navbar Superior
+                </button>
+              </div>
+
+              {/* Toggle de Marco Completo */}
+              <button
+                type="button"
+                onClick={() => setThemeConfig(prev => ({ ...prev, showShell: !prev.showShell }))}
+                className="btn btn-outline btn-xs"
+                style={{ fontSize: '0.725rem', display: 'flex', alignItems: 'center', gap: '4px' }}
+                title="Alternar entre ver la aplicación completa con navegación o solo la tarjeta"
+              >
+                <span className="ms ms-xs">{themeConfig.showShell ? 'check_box' : 'check_box_outline_blank'}</span>
+                <span>Marco Unificado ({themeConfig.showShell ? 'Activo' : 'Inactivo'})</span>
+              </button>
+            </div>
+          </div>
+
           {/* Screen selector tabs */}
           {viewMode !== 'relations' && (
             <div className="screen-selector" style={{flexShrink:0}}>
@@ -615,7 +724,13 @@ export default function ProjectPrototype({ project, onProjectUpdated }) {
                   <span style={{ fontSize: '0.75rem', color: 'var(--secondary)', textTransform: 'uppercase', fontWeight: 600, display: 'block', marginBottom: '8px' }}>
                     Previsualización de la Pantalla:
                   </span>
-                  <MockupRenderer screen={currentScreen} />
+                  <MockupRenderer
+                    screen={currentScreen}
+                    project={project}
+                    allScreens={screens}
+                    onSelectScreen={setSelectedScreenId}
+                    themeConfig={themeConfig}
+                  />
                 </div>
               </div>
             ) : viewMode === 'relations' ? (
@@ -643,7 +758,13 @@ export default function ProjectPrototype({ project, onProjectUpdated }) {
                   <span><strong>Modo Sketch / Wireframe:</strong> Renderizado de baja fidelidad en escala de grises para validar la distribución de bloques sin distracción de color.</span>
                 </div>
                 <div style={{ filter: 'grayscale(1) contrast(1.15)', border: '2px dashed #94a3b8', borderRadius: '8px', padding: '10px', background: '#fafafa' }}>
-                  <MockupRenderer screen={currentScreen} />
+                  <MockupRenderer
+                    screen={currentScreen}
+                    project={project}
+                    allScreens={screens}
+                    onSelectScreen={setSelectedScreenId}
+                    themeConfig={themeConfig}
+                  />
                 </div>
               </div>
             ) : viewMode === 'html' ? (
@@ -656,7 +777,13 @@ export default function ProjectPrototype({ project, onProjectUpdated }) {
                 </pre>
               </div>
             ) : (
-              <MockupRenderer screen={currentScreen} />
+              <MockupRenderer
+                screen={currentScreen}
+                project={project}
+                allScreens={screens}
+                onSelectScreen={setSelectedScreenId}
+                themeConfig={themeConfig}
+              />
             )}
           </div>
         </>

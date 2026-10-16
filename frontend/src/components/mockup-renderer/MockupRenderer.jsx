@@ -258,16 +258,100 @@ function RenderComponent({ component }) {
   }
 }
 
-export default function MockupRenderer({ screen }) {
+import AppShellPreview, { THEMES } from './AppShellPreview';
+
+export default function MockupRenderer({
+  screen,
+  project,
+  allScreens = [],
+  onSelectScreen,
+  themeConfig = { color: 'indigo', layout: 'sidebar', showShell: true }
+}) {
   if (!screen) {
     return (
-      <div style={{ textAlign: 'center', padding: '2rem', color: 'var(--text-muted)' }}>
+      <div style={{ textAlign: 'center', padding: '3rem', color: 'var(--text-muted)' }}>
         No hay datos de pantalla para renderizar.
       </div>
     );
   }
 
-  if (screen.html || screen.htmlUrl) {
+  const currentTheme = THEMES[themeConfig?.color] || THEMES.indigo;
+  const showShell = themeConfig?.showShell !== false;
+
+  // Inyección de estilos de tema para que el HTML de Stitch o del generador adopte el color primario elegido
+  const themeInjectionCss = `
+    <style>
+      :root {
+        --primary-theme: ${currentTheme.primary};
+        --primary-hover: ${currentTheme.primaryHover};
+        --primary-light: ${currentTheme.primaryLight};
+      }
+      .btn-mockup-primary, button[type="submit"], .btn-primary, [class*="bg-indigo-"], [class*="bg-blue-"], [class*="bg-primary"] {
+        background-color: ${currentTheme.primary} !important;
+        border-color: ${currentTheme.primary} !important;
+        color: #ffffff !important;
+      }
+      .btn-mockup-primary:hover, button[type="submit"]:hover {
+        background-color: ${currentTheme.primaryHover} !important;
+      }
+      .mockup-input:focus, input:focus, select:focus, textarea:focus {
+        border-color: ${currentTheme.primary} !important;
+        box-shadow: 0 0 0 2px ${currentTheme.primaryLight} !important;
+      }
+      /* Ocultar barras maestras duplicadas si el HTML interno ya las traía */
+      .mockup-topbar { display: none !important; }
+      body { background-color: transparent !important; padding: 0.5rem !important; }
+      .mockup-container { max-width: 100% !important; margin: 0 !important; box-shadow: none !important; border: none !important; }
+    </style>
+  `;
+
+  let processedHtml = null;
+  if (screen.html) {
+    if (screen.html.includes('</head>')) {
+      processedHtml = screen.html.replace('</head>', `${themeInjectionCss}</head>`);
+    } else {
+      processedHtml = `${themeInjectionCss}${screen.html}`;
+    }
+  }
+
+  // Contenido interno según el tipo de pantalla
+  const renderInnerContent = () => {
+    if (processedHtml || screen.htmlUrl) {
+      return (
+        <iframe
+          title={`Prototipo ${screen.name}`}
+          src={processedHtml ? undefined : screen.htmlUrl}
+          srcDoc={processedHtml || undefined}
+          sandbox="allow-scripts"
+          style={{
+            width: '100%',
+            minHeight: '620px',
+            border: 0,
+            background: 'transparent',
+            display: 'block'
+          }}
+        />
+      );
+    }
+
+    const hasSidebar = screen.components?.some(c => c.type === 'sidebar');
+    const nonSidebarComponents = screen.components?.filter(c => c.type !== 'sidebar') || [];
+    const sidebarComponent = screen.components?.find(c => c.type === 'sidebar');
+
+    return (
+      <div style={{ display: 'flex', minHeight: '360px', background: '#ffffff', borderRadius: '8px', padding: '16px', border: '1px solid #e2e8f0' }}>
+        {hasSidebar && !showShell && <MockSidebar component={sidebarComponent} />}
+        <div className="mockup-canvas-content" style={{ flex: 1 }}>
+          {nonSidebarComponents.map((comp, idx) => (
+            <RenderComponent key={idx} component={comp} />
+          ))}
+        </div>
+      </div>
+    );
+  };
+
+  // Si showShell es false, renderizar en modo tarjeta simple (componente aislado)
+  if (!showShell) {
     return (
       <div className="mockup-preview-window">
         <div className="mockup-header-bar">
@@ -280,42 +364,22 @@ export default function MockupRenderer({ screen }) {
             {screen.route || '/'} — {screen.name}
           </div>
         </div>
-        <iframe
-          title={`Prototipo ${screen.name}`}
-          src={screen.html ? undefined : screen.htmlUrl}
-          srcDoc={screen.html || undefined}
-          sandbox="allow-scripts"
-          style={{ width: '100%', minHeight: '620px', border: 0, background: '#fff' }}
-        />
+        {renderInnerContent()}
       </div>
     );
   }
 
-  const hasSidebar = screen.components?.some(c => c.type === 'sidebar');
-  const nonSidebarComponents = screen.components?.filter(c => c.type !== 'sidebar') || [];
-  const sidebarComponent = screen.components?.find(c => c.type === 'sidebar');
-
+  // Modo Aplicación Completa Unificada (App Shell)
   return (
-    <div className="mockup-preview-window">
-      <div className="mockup-header-bar">
-        <div className="window-dots">
-          <div className="window-dot" style={{ backgroundColor: '#f87171' }} />
-          <div className="window-dot" style={{ backgroundColor: '#fbbf24' }} />
-          <div className="window-dot" style={{ backgroundColor: '#34d399' }} />
-        </div>
-        <div style={{ fontSize: '0.75rem', color: '#64748b', marginLeft: '0.75rem', fontFamily: 'monospace' }}>
-          {screen.route || '/'} — {screen.name}
-        </div>
-      </div>
-
-      <div style={{ display: 'flex', minHeight: '360px' }}>
-        {hasSidebar && <MockSidebar component={sidebarComponent} />}
-        <div className="mockup-canvas-content" style={{ flex: 1 }}>
-          {nonSidebarComponents.map((comp, idx) => (
-            <RenderComponent key={idx} component={comp} />
-          ))}
-        </div>
-      </div>
-    </div>
+    <AppShellPreview
+      screen={screen}
+      project={project}
+      allScreens={allScreens}
+      onSelectScreen={onSelectScreen}
+      themeConfig={themeConfig}
+    >
+      {renderInnerContent()}
+    </AppShellPreview>
   );
 }
+
