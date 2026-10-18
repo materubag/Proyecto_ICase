@@ -119,25 +119,67 @@ class RuleBasedExtractor {
   }
 
   extractCodedRequirements(text = '', sections = [], prefix, type) {
-    const rows = [...text.matchAll(/[^\n]*(?:\n|$)/g)].filter(m => m[0]);
-    const pattern = /^[ \t|]*(?:(?:Requisitos?\s+(?:no\s+)?funcionales?|Código)\s+)?((RNF|RF)[ \t_–-]*([0-9]+))\b[ \t:|.–-]*(.*)$/i;
+    const rows = [...text.matchAll(/[^\n]*(?:\n|$)/g)].filter(m => m[0]).flatMap(row=>{
+      const starts=[...row[0].matchAll(/(?:^|[.;]\s+)((?:RNF|RF)[ _-]*\d+)\s*:/gi)].map(m=>m.index+m[0].indexOf(m[1]));
+      if(starts.length<2)return [row];
+      return starts.map((start,index)=>Object.assign([row[0].slice(start,starts[index+1]??row[0].length)],{index:row.index+start}));
+    });
+    const pattern = /^[ \t|]*(?:(?:\d+[.)]|[-*•])\s+)?(?:(?:Requisitos?\s+(?:no\s+)?funcionales?|Código)\s+)?((RNF|RF|RN)[ \t_–-]*([0-9]+))\b[ \t:|.–-]*(.*)$/i;
     const out = [];
+    const repeatedHeadings=new Set();
+    const headingPages=new Map();let currentPage=0;
+    for(const row of rows){
+      const line=row[0].trim(),page=line.match(/^\[PÁGINA\s+(\d+)\]$/i);
+      if(page){currentPage=Number(page[1]);continue;}
+      if(currentPage&&/^[A-ZÁÉÍÓÚÑ][A-ZÁÉÍÓÚÑ \t-]{5,}$/.test(line)&&!pattern.test(line)){
+        const pages=headingPages.get(line)||new Set();pages.add(currentPage);headingPages.set(line,pages);
+      }
+    }
+    for(const [line,pages] of headingPages)if(pages.size>1)repeatedHeadings.add(line);
+    const cells = line => line.replace(/^\s*\||\|\s*$/g, '').split(/\t|\|/).map(c => c.trim());
+    let columns = null;
     for (let i = 0; i < rows.length; i++) {
       const first = rows[i][0].replace(/\r?\n$/, '');
+      const header = cells(first);
+      if (header.length > 1 && header.some(c => /^(?:descripci[oó]n|requisito|enunciado)$/i.test(c)) && header.some(c => /^(?:c[oó]digo|id)$/i.test(c))) { columns = header; continue; }
       const m = first.match(pattern);
       if (!m || m[2].toUpperCase() !== prefix || /^(?:(?:A|AL|HASTA|TO)\s+)?R(?:N)?F[ -]*\d+\s*$/i.test(m[4])) continue;
       let description = m[4].replace(/\|\s*$/, '').trim();
+      let boundaryContext=null;
+      const extractionIssues = [];
+      const rowCells = cells(first);
+      const descriptionColumn = columns?.findIndex(c => /^(?:descripci[oó]n|requisito|enunciado)$/i.test(c));
+      const table = rowCells.length > 1;
+      const declared = {};
+      const collect = values => {
+        for(const [index,column] of (columns || []).entries()) {
+          const key=/^actores?|responsables?$/i.test(column)?'actors':/^dependencias?|prerrequisitos?$/i.test(column)?'dependencies':/^prioridad$/i.test(column)?'priority':/^reglas?(?: de negocio)?$/i.test(column)?'businessRules':/^tipo$/i.test(column)?'type':null;
+          if(key && values[index]) declared[key]=[declared[key],values[index]].filter(Boolean).join('\n');
+        }
+      };
+      if (table && descriptionColumn >= 0 && rowCells.length === columns.length) description = rowCells[descriptionColumn];
+      else if (table) { description=rowCells[1]||''; extractionIssues.push('AMBIGUOUS_TABLE_COLUMNS'); }
+      if(table && columns && rowCells.length===columns.length)collect(rowCells);
       let end = rows[i].index + first.length;
       let started = Boolean(description);
       for (let j = i + 1; j < rows.length; j++) {
         const next = rows[j][0].replace(/\r?\n$/, '');
         const clean = next.trim();
-        if (/^\[PÁGINA|SALTO_PAGINA|^[•*]|^\d+(?:\.\d+)*\.?\s+[A-ZÁÉÍÓÚÑ]|^[A-ZÁÉÍÓÚÑ][A-ZÁÉÍÓÚÑ \t·-]{5,}$/.test(clean) || pattern.test(next)) break;
+        if(repeatedHeadings.has(clean)||/^(?:P[aá]gina\s+\d+(?:\s+de\s+\d+)?|--\s*\d+\s+of\s+\d+\s*--)$/i.test(clean)){end=rows[j].index+next.length;continue;}
+        if (/^(?:\[PÁGINA\s+\d+\]|---\s*\[SALTO_PAGINA\]\s*---)$/.test(clean)) { end = rows[j].index + next.length; continue; }
+        const nextCells = cells(next);
+        if (columns && nextCells.length === columns.length && nextCells.every((c,k) => c === columns[k])) { end = rows[j].index + next.length; continue; }
+        if (/^[•*]|^RN[\s_-]*\d+\b|^\d+(?:\.\d+)*\.?\s+[A-ZÁÉÍÓÚÑ]|^[A-ZÁÉÍÓÚÑ][A-ZÁÉÍÓÚÑ \t·-]{5,}$/.test(clean) || pattern.test(next)) break;
         if (!clean) { if (started) break; else continue; }
         // A complete sentence followed by another paragraph is a separate finding.
         // Explicit conditional continuations stay attached (e.g. "solo si...", "con...").
-        if (started && /[.;]$/.test(description) && !/^(?:si\b|cuando\b|siempre\b|solo\b|únicamente\b|bajo\b|con\b|sin\b|excepto\b|y\b|o\b|también\b|además\b|asimismo\b|el sistema\b|la aplicación\b|debe(?:rá)?\b)/i.test(clean) && !/^[ \t]+\S/.test(next)) break;
-        description += (description ? '\n' : '') + clean;
+        if (!table && started && /[.;]$/.test(description) && !/^(?:si\b|cuando\b|siempre\b|solo\b|únicamente\b|bajo\b|con\b|sin\b|excepto\b|y\b|o\b|también\b|además\b|asimismo\b|el sistema\b|la aplicación\b|debe(?:rá)?\b)/i.test(clean) && !/^[ \t]+\S/.test(next)) {
+          extractionIssues.push('AMBIGUOUS_PARAGRAPH_BOUNDARY');boundaryContext={text:next,start:rows[j].index,end:rows[j].index+next.length};break;
+        }
+        let continuation = clean;
+        if (table && descriptionColumn >= 0 && nextCells.length === columns.length) { continuation = nextCells[descriptionColumn];collect(nextCells); }
+        else if (table && nextCells.length > 1) { continuation=nextCells[1]||'';extractionIssues.push('AMBIGUOUS_TABLE_CONTINUATION'); }
+        description += (description ? '\n' : '') + continuation;
         started = true; end = rows[j].index + next.length;
       }
       if (!description) continue;
@@ -148,7 +190,7 @@ class RuleBasedExtractor {
       const pages = [...text.substring(0, start).matchAll(/\[PÁGINA\s+(\d+)\]/gi)];
       out.push({ id: code, code, originalCode: m[1], name, text: name, description: name, type,
         source: 'explicit', extractionMethod: 'LOCAL', section: this.findSectionForOffset(start, sections),
-        sourceText, start, end, page: pages.length ? Number(pages.at(-1)[1]) : null });
+        sourceText, originalDescription:description, declared, boundaryContext, start, end, extractionIssues, page: pages.length ? Number(pages.at(-1)[1]) : null });
     }
     // Same code with different text is not silently discarded.
     return out;
@@ -164,23 +206,9 @@ class RuleBasedExtractor {
     let counter = 1;
 
     // 1. Buscar patrones explícitos RN-01, RN 01, etc.
-    const rnExplicitRegex = /^(?:(?:Regla\s+de\s+negocio|Reglas\s+de\s+negocio)\s+)?\b(RN)[\s\-_–]?([0-9]{1,3})\b[\s\t:.\-]+(.+)$/gmi;
-    const matches = [...text.matchAll(rnExplicitRegex)];
-    for (const m of matches) {
-      const num = parseInt(m[2], 10);
-      const id = `RN-${String(num).padStart(2, '0')}`;
-      const ruleText = m[3].trim();
-      if (!seenTexts.has(ruleText.toLowerCase())) {
-        seenTexts.add(ruleText.toLowerCase());
-        rules.push({
-          id,
-          code: id,
-          text: ruleText,
-          description: ruleText,
-          source: 'pdf',
-          section: 'Reglas de negocio'
-        });
-      }
+    for(const row of this.extractCodedRequirements(text,sections,'RN','BUSINESS_RULE')){
+      seenTexts.add(row.text.toLowerCase());
+      rules.push({...row,id:row.originalCode,code:row.originalCode,source:'explicit'});
     }
 
     // 2. Si hay secciones específicas de reglas de negocio, extraer sus viñetas

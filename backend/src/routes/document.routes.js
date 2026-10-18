@@ -9,15 +9,7 @@ const maxSizeBytes = (env.MAX_PDF_SIZE_MB || 10) * 1024 * 1024;
 const upload = multer({
   storage: multer.memoryStorage(),
   limits: { fileSize: maxSizeBytes },
-  fileFilter: (req, file, cb) => {
-    if (file.mimetype === 'application/pdf' || file.originalname.toLowerCase().endsWith('.pdf')) {
-      cb(null, true);
-    } else {
-      const err = new Error('Solo se permiten archivos en formato PDF (.pdf)');
-      err.statusCode = 400;
-      cb(err, false);
-    }
-  }
+  fileFilter: require('../utils/pdfFilePolicy').fileFilter
 });
 
 // Extracción sin IA

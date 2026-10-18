@@ -82,6 +82,7 @@ class DocumentController {
         });
       }
 
+      require('../utils/pdfFilePolicy').validate({originalname:extractionData.fileName || extractionData.document?.name});
       const analysisInput = documentAnalyzer.buildAnalysisInput(extractionData);
       const structuredResult = await documentAnalyzer.analyzeWithAI(
         analysisInput,

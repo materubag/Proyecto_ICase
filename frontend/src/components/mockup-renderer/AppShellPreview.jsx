@@ -116,13 +116,6 @@ function resolveScreenActor(s) {
 
   if (catalogMatch) return catalogMatch.actorName || catalogMatch.categoryName;
 
-  const n = (s.name || '').toLowerCase();
-  if (n.includes('login') || n.includes('acceso')) return 'Acceso y Login';
-  if (n.includes('recep') || n.includes('cita') || n.includes('cliente') || n.includes('vehiculo')) return 'Recepción';
-  if (n.includes('diag') || n.includes('orden') || n.includes('taller') || n.includes('conocimiento')) return 'Mecánico';
-  if (n.includes('portal') || n.includes('mis vehic') || n.includes('cotiz')) return 'Portal del Cliente';
-  if (n.includes('report') || n.includes('usuario') || n.includes('admin') || n.includes('indicador')) return 'Administrador';
-
   return 'Operaciones del Sistema';
 }
 
@@ -170,19 +163,7 @@ export default function AppShellPreview({
 
   // Perfil del usuario simulado según el rol
   const userProfile = useMemo(() => {
-    if (selectedRoleFilter === 'Mecánico') {
-      return { name: 'Ing. Javier Morales', role: 'Técnico Mecánico Especialista', initials: 'JM', icon: 'build' };
-    }
-    if (selectedRoleFilter === 'Recepción') {
-      return { name: 'Elena Ramírez', role: 'Atención y Recepción de Vehículos', initials: 'ER', icon: 'directions_car' };
-    }
-    if (selectedRoleFilter === 'Cliente' || selectedRoleFilter === 'Portal del Cliente') {
-      return { name: 'Carlos Mendoza', role: 'Cliente Particular', initials: 'CM', icon: 'person' };
-    }
-    if (selectedRoleFilter === 'Administrador') {
-      return { name: 'Lic. Roberto Gómez', role: 'Administrador General del Sistema', initials: 'RG', icon: 'admin_panel_settings' };
-    }
-    return { name: 'Usuario Principal', role: 'Superusuario (Todos los Roles)', initials: 'SA', icon: 'shield' };
+    return { name: 'Vista previa', role: selectedRoleFilter === 'ALL' ? 'Roles documentados' : selectedRoleFilter, initials: 'VP', icon: 'person' };
   }, [selectedRoleFilter]);
 
   if (!showShell) {

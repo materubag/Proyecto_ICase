@@ -2,7 +2,7 @@ const contract=require('./extractionContract');
 const {locate}=require('./extractionEvidence');
 function recover(data,segments,context=[],known=[]){
  if(!data||!['coveredSegmentIds','actors','requirements','other'].every(k=>Array.isArray(data[k])))throw Error('Contrato de extraccion incompleto');
- const clean={coveredSegmentIds:segments.map(s=>s.id),actors:[],requirements:[],links:[],other:[]},issues=[],all=[...segments,...context];
+ const clean={coveredSegmentIds:segments.map(s=>s.id),actors:[],requirements:[],links:[],relations:[],other:[]},issues=[],all=[...segments,...context];
  if(data.coveredSegmentIds.length!==segments.length||segments.some(s=>!data.coveredSegmentIds.includes(s.id)))issues.push({kind:'coverage',message:'Cobertura de segmentos incompleta'});
  const report=(kind,item,error)=>issues.push({kind,statement:item?.statement||item?.name||'',segmentIds:item?.segmentIds||[],quote:item?.quote||'',message:error.message});
  const evidence=item=>{
@@ -30,6 +30,7 @@ function recover(data,segments,context=[],known=[]){
   }catch(error){report('requirements',req,error);}
  }
  for(const link of data.links||[])accept('links',link);
+ for(const relation of data.relations||[])accept('relations',relation);
  for(const item of data.other)accept('other',item);
  contract.validate(clean,segments,context,known);
  return {data:clean,issues};

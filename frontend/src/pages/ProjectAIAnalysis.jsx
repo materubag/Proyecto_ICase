@@ -9,7 +9,7 @@ export default function ProjectAIAnalysis({ project, onProjectUpdated, onNavigat
     project.systemDescription || project.description || ''
   );
   const [provider, setProvider] = useState('openai');
-  const [model, setModel] = useState('gpt6-luna');
+  const [model, setModel] = useState('');
   const [analyzing, setAnalyzing] = useState(false);
   const [analysisResult, setAnalysisResult] = useState(null);
   const [importing, setImporting] = useState(false);
@@ -17,10 +17,6 @@ export default function ProjectAIAnalysis({ project, onProjectUpdated, onNavigat
   const [error, setError] = useState(null);
 
   async function handleAnalyze() {
-    if (!description.trim()) {
-      alert('Por favor ingrese una descripción general del sistema antes de analizar.');
-      return;
-    }
 
     try {
       setAnalyzing(true);
@@ -64,11 +60,11 @@ export default function ProjectAIAnalysis({ project, onProjectUpdated, onNavigat
         </div>
 
         <p style={{ color: 'var(--text-muted)', fontSize: '0.875rem', marginBottom: '1rem' }}>
-          Ingrese la especificación narrativa o requerimientos de negocio. El motor de IA analizará la descripción y generará una especificación canónica estructurada en JSON.
+          Se analizan exclusivamente los PDF cargados en las fuentes del proyecto. La descripción se conserva como contexto del proyecto.
         </p>
 
         <div className="form-group">
-          <label className="form-label">Descripción General del Sistema *</label>
+          <label className="form-label">Descripción del proyecto (opcional)</label>
           <textarea
             className="form-control"
             rows={5}
@@ -97,7 +93,7 @@ export default function ProjectAIAnalysis({ project, onProjectUpdated, onNavigat
           <button
             className="btn btn-primary"
             onClick={handleAnalyze}
-            disabled={analyzing || !description.trim()}
+            disabled={analyzing}
           >
             {analyzing ? (
               <span>Analizando sistema...</span>

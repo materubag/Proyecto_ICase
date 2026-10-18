@@ -24,15 +24,7 @@ const pdfDiskStorage = multer.diskStorage({
 const sourceUpload = multer({
   storage: pdfDiskStorage,
   limits: { fileSize: (env.MAX_PDF_SIZE_MB || 10) * 1024 * 1024, files: 20 },
-  fileFilter: (req, file, cb) => {
-    if (file.mimetype === 'application/pdf' || file.originalname.toLowerCase().endsWith('.pdf')) {
-      file.originalname = sanitizeFilename(file.originalname);
-      return cb(null, true);
-    }
-    const error = new Error(`Solo se permiten archivos PDF en Fuentes. Archivo recibido: "${file.originalname}". Para grabaciones, utiliza la opción de Subir Audio.`);
-    error.statusCode = 400;
-    cb(error);
-  }
+  fileFilter: require('../utils/pdfFilePolicy').fileFilter
 });
 
 module.exports = {

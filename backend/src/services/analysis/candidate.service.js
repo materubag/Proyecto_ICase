@@ -81,14 +81,14 @@ class CandidateService {
 
     // Consultar ModelCandidates (Actores, Procesos, Reglas, Tecnologías, Arquitectura, Entidades, etc.)
     let modelList = [];
-    const modelWhere = { projectId, kind: 'ACTOR' };
+    const modelWhere = { projectId, kind: {in:['ACTOR','BUSINESS_RULE','REQUIREMENT_DISCOVERY','REQUIREMENT_RELATION']} };
     if (status !== 'ALL') modelWhere.status = status;
     if (kind !== 'ALL' && kind !== 'REQUIREMENT' && kind !== 'REQUISITOS') {
       modelWhere.kind = kind;
     }
 
-    if (kind === 'ALL' || kind === 'ACTOR' || kind === 'ACTORES') {
-      modelWhere.kind = 'ACTOR';
+    if (['ALL','ACTOR','ACTORES','BUSINESS_RULE','REQUIREMENT_DISCOVERY','REQUIREMENT_RELATION'].includes(kind)) {
+      if(kind==='ACTORES')modelWhere.kind='ACTOR';
       const models = await prisma.modelCandidate.findMany({
         where: modelWhere,
         orderBy: [{ status: 'asc' }, { kind: 'asc' }, { createdAt: 'desc' }]
@@ -103,13 +103,13 @@ class CandidateService {
           categoryGroup: this.mapKindToGroup(m.kind),
           temporaryCode: this.generateTemporaryCode(m.kind, m.name),
           title: m.name,
-          statement: m.content?.statement || m.content?.description || m.content?.summary || m.name,
+          statement: m.content?.statement || m.content?.description || m.content?.summary || m.content?.reason || m.name,
           originalStatement: m.name,
           type: m.kind,
           category: m.kind,
-          priority: 'MEDIUM',
+          priority: null,
           origin: m.origin || 'RULE',
-          confidence: m.confidence ?? (m.origin === 'INFERRED' ? 0.8 : 0.95),
+          confidence: m.confidence ?? null,
           status: m.status,
           rejectionReason: null,
           evidence: {
@@ -133,6 +133,8 @@ class CandidateService {
   mapKindToGroup(kind) {
     const k = (kind || '').toUpperCase();
     if (k === 'REQUIREMENT') return 'REQUISITOS';
+    if (k === 'REQUIREMENT_DISCOVERY') return 'CAPACIDADES POR VALIDAR';
+    if (k === 'REQUIREMENT_RELATION') return 'RELACIONES POR VALIDAR';
     if (k === 'ACTOR') return 'ACTORES';
     if (k === 'PROCESS') return 'PROCESOS';
     if (k === 'BUSINESS_RULE') return 'REGLAS DE NEGOCIO';
@@ -295,6 +297,17 @@ class CandidateService {
       const { projectId, kind, name, content } = modelCandidate;
 
       switch (kind) {
+        case 'REQUIREMENT_RELATION': {
+          promotedItem=await require('./dependencyResolver').approveCandidate(tx,modelCandidate);
+          break;
+        }
+        case 'REQUIREMENT_DISCOVERY': {
+          const identity=require('./requirementIdentity');
+          const canonicalKey=identity.keyFor(content);
+          const candidate=await tx.requirementCandidate.upsert({where:{projectId_canonicalKey:{projectId,canonicalKey}},update:{},create:{projectId,canonicalKey,temporaryCode:content.id||'CANDIDATE',title:name,statement:content.statement,type:content.type,origin:'INFERRED',status:'PENDING_REVIEW',priority:null,evidence:require('./extractionStore').envelope(content)}});
+          promotedItem=(await require('./extractionStore').promote(tx,candidate)).promotedItem;
+          break;
+        }
         case 'ACTOR': {
           const deduplicationService = require('./deduplicationService');
           const classification=require('./actorEvidence').classify({name,evidence:modelCandidate.evidence});
@@ -337,7 +350,8 @@ class CandidateService {
             data: {
               projectId,
               name,
-              description: content?.description || name,
+              description: content?.description || content?.statement || name,
+              evidence: content?.evidence || modelCandidate.evidence || [],
               status: 'APPROVED'
             }
           });
@@ -482,6 +496,7 @@ class CandidateService {
 
     const model = await prisma.modelCandidate.findUnique({ where: { id } });
     if (model) {
+      if(model.kind==='REQUIREMENT_RELATION'&&model.status!=='PENDING_REVIEW')throw Object.assign(new Error('La propuesta ya fue revisada.'),{statusCode:409,code:'VERSION_CONFLICT'});
       return prisma.modelCandidate.update({
         where: { id },
         data: { status: 'REJECTED' }
@@ -544,7 +559,7 @@ class CandidateService {
         select: { id: true, type: true, status: true, origin: true, qualityReport: true, evidence: true }
       }),
       prisma.modelCandidate.findMany({
-        where: { projectId, kind: 'ACTOR' },
+        where: { projectId, kind: {in:['ACTOR','BUSINESS_RULE','REQUIREMENT_DISCOVERY','REQUIREMENT_RELATION']} },
         select: { id: true, kind: true, status: true, origin: true }
       })
     ]);

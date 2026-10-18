@@ -14,6 +14,7 @@ const cacheDir = path.resolve(__dirname, '../../../.cache/document-extraction');
 function segmentText(text, supplied = [], maxChars = 3000, cuts = []) {
   const sections = sectionsDetector.detectSections(text), segments = [];
   const offsets = new Set([0, text.length, ...cuts]);
+  for(const m of text.matchAll(/\[PÁGINA\s+\d+\][ \t]*\n?/gi))offsets.add(m.index+m[0].length);
   for (const s of sections) if (Number.isInteger(s.start)) offsets.add(s.start);
   for (const m of text.matchAll(/\n(?=\s*(?:(?:RF|RNF)[\s_-]*\d+\b|\n|[-*•]\s|\[PÁGINA\s+\d+\]))/gi)) offsets.add(m.index+1);
   let begin = 0;
@@ -25,7 +26,7 @@ function segmentText(text, supplied = [], maxChars = 3000, cuts = []) {
       if (original.trim()) {
         const pages=[...text.substring(0,start+1).matchAll(/\[PÁGINA\s+(\d+)\]/gi)];
         const src=supplied.find(s=>s.text?.includes(original.trim()));
-        segments.push({ id:stableId('SEG',[hash(text),start,end]),text:original,originalText:original,start,end,
+        segments.push({ id:stableId('SEG',[original,segments.filter(s=>s.text===original).length]),text:original,originalText:original,start,end,
           page:src?.page??(pages.length?Number(pages.at(-1)[1]):null),
           section:sections.find(s=>start>=s.start&&start<s.end)?.title||'General',
           ...(src?{sourceSegmentId:src.id,startTime:src.startTime,endTime:src.endTime,speaker:src.speaker}:{}) });
@@ -53,6 +54,7 @@ async function extract(text,options={}) {
   const classifier=require('./statementClassifier');
   const objectives=classifier.objectives(text,sections);
   const local=[...rules.extractFunctionalRequirements(text,sections),...rules.extractNonFunctionalRequirements(text,sections)];
+  const analysisMode=local.some(r=>r.originalCode)?'EXPLICIT_REQUIREMENTS':'REQUIREMENTS_DISCOVERY';
   const segments=segmentText(text,options.segments||[],3000,local.flatMap(r=>[r.start,r.end]));
   const documentHash=hash(text);
   const evidence = (item, extra=[]) => locate(item,[...segments,...extra]).map(s=>({...s,
@@ -63,7 +65,7 @@ async function extract(text,options={}) {
     return {id:stableId('REQ',[r.type,r.text]),code:r.originalCode,originalCode:r.originalCode,
       name:r.text,description:r.text,statement:r.text,type:r.type,source:'explicit',extractionMethod:'LOCAL',section:r.section,context:{section:r.section,start:r.start,end:r.end},
       evidence:evidence({segmentIds:parts.map(s=>s.id),quote:r.sourceText}),segmentIds:parts.map(s=>s.id),
-      associations:[],actorIds:[],pending:[],confidence:null,status:'PENDING_REVIEW'};
+      associations:[],actorIds:[],pending:[],declared:r.declared||{},boundaryContext:r.boundaryContext||null,originalDescription:r.originalDescription||r.text,extractionIssues:r.extractionIssues||[],confidence:null,status:'PENDING_REVIEW'};
   }));
   for(const objective of objectives)for(const c of objective.capabilities){
     const ev=evidence({segmentIds:segments.filter(s=>s.start<c.end&&s.end>c.start).map(s=>s.id),quote:c.quote});
@@ -73,6 +75,8 @@ async function extract(text,options={}) {
     else requirements.push({statement:c.statement,name:c.statement,description:c.statement,type:'FUNCTIONAL',originalCode:null,source:'explicit',extractionMethod:'LOCAL',evidence:ev,segmentIds:ev.map(s=>s.id),associations:[],actorIds:[],pending:['Capacidad mencionada en objetivo: revisar alcance'],status:'PENDING_REVIEW'});
   }
   requirements=identity.consolidate(requirements);
+  const additionalCandidates=analysisMode==='EXPLICIT_REQUIREMENTS'?requirements.filter(r=>!r.originalCode):[];
+  if(analysisMode==='EXPLICIT_REQUIREMENTS')requirements=requirements.filter(r=>r.originalCode);
   const localRequirementCount=requirements.length;
   const previous=options.previousResult;
   if(previous)requirements=identity.consolidate([...requirements,...previous.requirements.filter(r=>classifier.classify(r.statement,r)!=='OBJECTIVE')]);
@@ -89,6 +93,8 @@ async function extract(text,options={}) {
     else actors.push({id,name:profile.name,description:profile.description,kind:profile.kind,source:'explicit',evidence:ev,classification:'ROLE'});
   }
   const coverage=segments.map(s=>({segmentId:s.id,requirementsStatus:s.mode==='RELATIONSHIPS_ONLY'?'LOCAL_RESOLVED':'PENDING',relationshipsStatus:'PENDING',status:'PENDING'}));
+  require('./declaredFields').resolve({requirements,actors,segments},options);
+  require('./actorRelationshipResolver').resolveLocal({requirements,actors},options.knownActors||[]);
   const metrics={...config,requestsUsed:0,cacheHits:0,reusedSemanticBatches:0,localRequirements:localRequirementCount,usage:[]};
   let provider=options.providerInstance;
   try {
@@ -98,12 +104,24 @@ async function extract(text,options={}) {
   } catch(error) { provider={async extractDocumentBatch(){throw error;}}; }
   const globalContext=identity.unique([...(options.contextSegments||[]),...segments.filter(s=>/PERFILES|ACTORES|ROLES|FUERA DEL ALCANCE/i.test(s.section))]);
   const batches=[];let batch=[],chars=0;
+  const positive=(value,fallback)=>Number.isInteger(Number(value))&&Number(value)>0?Number(value):fallback;
+  const batchChars=positive(options.batchChars||process.env.EXTRACTION_BATCH_CHARS,12000);
+  const batchSize=positive(options.batchSize||process.env.EXTRACTION_BATCH_SIZE,8);
   for(const s of segments) {
-    if(batch.length&&(chars+s.text.length>12000||batch.length>=8)){batches.push(batch);batch=[];chars=0;}
+    if(batch.length&&(chars+s.text.length>batchChars||batch.length>=batchSize)){batches.push(batch);batch=[];chars=0;}
     batch.push(s);chars+=s.text.length;
   }
   if(batch.length)batches.push(batch);
   for(const items of batches) {
+    const localBatch=requirements.filter(r=>r.segmentIds.some(id=>items.some(s=>s.id===id)));
+    if(items.every(s=>s.mode==='RELATIONSHIPS_ONLY')&&localBatch.length&&localBatch.every(r=>
+      !r.extractionIssues?.length&&r.associations.some(a=>a.role==='EXECUTOR'&&['DOCUMENTED_SUBJECT','DOCUMENTED_COLUMN'].includes(a.method))&&
+      !/[.;]\s+\S|\by\b/i.test(r.statement)&&
+      !/\b(?:si|cuando|depende|requiere|previo|antes|despu[eé]s)\b/i.test(r.statement))){
+      metrics.localResolvedBatches=(metrics.localResolvedBatches||0)+1;
+      for(const s of items){const c=coverage.find(c=>c.segmentId===s.id);c.status='ANALYZED';c.relationshipsStatus='LOCAL_RESOLVED';}
+      continue;
+    }
     if(previous&&items.every(s=>previous.coverage.some(c=>c.segmentId===s.id&&c.status==='ANALYZED'))){
       metrics.reusedSemanticBatches++;
       for(const s of items){const c=coverage.find(c=>c.segmentId===s.id);c.status='ANALYZED';c.relationshipsStatus='ANALYZED';if(c.requirementsStatus==='PENDING')c.requirementsStatus='SEMANTIC_RESOLVED';}
@@ -113,7 +131,7 @@ async function extract(text,options={}) {
     const context=identity.unique([...globalContext,segments[first-1],segments[last+1]].filter(s=>s&&!items.some(i=>i.id===s.id)));
     // Summaries/objectives can repeat a requirement from any earlier section.
     const visibleKnown=known;
-    const input={segments:items.map(s=>({id:s.id,text:s.text,section:s.section,mode:s.mode})),
+    const input={analysisMode,segments:items.map(s=>({id:s.id,text:s.text,section:s.section,mode:s.mode})),
       context:context.map(s=>({id:s.id,text:s.text,start:s.start,end:s.end})),
       knownActors:(options.knownActors || []).filter(a=>!a.isDeleted).map(a=>({id:a.id,name:a.name,aliases:a.aliases || [],description:a.description || ''})),
       knownRequirements:visibleKnown.map(r=>({id:r.id,code:r.originalCode,type:r.type,statement:r.statement,segmentIds:r.segmentIds}))};
@@ -124,7 +142,7 @@ async function extract(text,options={}) {
       if(!response){
         if(config.provider!=='local'&&options.mode!=='local')metrics.requestsUsed++;
         response=await provider.extractDocumentBatch(input,{model:config.model,batchIndex:batches.indexOf(items)+1});
-        if(response?.usage)metrics.usage.push(response.usage);
+        if(response?.usage)metrics.usage.push(require('./analysisUsage').record(response.usage,{model:config.model,stage:'EXTRACTION',rates:options.rates}));
         const recovery=recover(response?.data,items,context,visibleKnown);
         response={...response,data:recovery.data,recoveryIssues:recovery.issues};
         if(recovery.issues.length)failures.push({segmentIds:items.map(s=>s.id),message:'Resultados parciales: '+recovery.issues.length+' hallazgos pendientes',issues:recovery.issues});
@@ -132,6 +150,10 @@ async function extract(text,options={}) {
       }
       const actorMap=new Map();
       for(const a of response.data.actors){
+        if(/^(?:el |la )?(?:sistema|aplicaci[oó]n|plataforma)$/i.test(a.name.trim())){
+          other.push({type:'CONTEXT',reason:'Comportamiento interno; no es un actor externo',statement:a.name,evidence:evidence(a,context)});
+          continue;
+        }
         const id=stableId('ACT',[a.name.trim().toLowerCase(),a.kind]);
         const ev=evidence(a,context);
         const classification=require('./actorEvidence').classify({...a,evidence:ev});
@@ -184,15 +206,20 @@ async function extract(text,options={}) {
         if(r.segmentIds.every(id=>segments.find(s=>s.id===id)?.mode==='RELATIONSHIPS_ONLY')){
           other.push({type:'UNCERTAIN',reason:'La IA propuso otro requisito en un bloque ya resuelto; revisar sin insertarlo',statement:r.statement,evidence:ev});continue;
         }
-        requirements.push({statement:r.statement.trim().replace(/\s+/g,' '),name:r.statement.trim(),description:r.statement.trim(),type:r.type,
+        const destination=analysisMode==='EXPLICIT_REQUIREMENTS'?additionalCandidates:requirements;
+        destination.push({statement:r.statement.trim().replace(/\s+/g,' '),name:r.statement.trim(),description:r.statement.trim(),type:r.type,
           originalCode:null,source:r.explicit?'explicit':'inferred',extractionMethod:'SEMANTIC',
           evidence:ev,segmentIds:ev.map(s=>s.id),associations:assoc,actorIds:assoc.map(a=>a.actorId),
-          pending:r.pending,confidence:null,status:'PENDING_REVIEW'});
+          pending:r.pending,analysisStatus:r.explicit?'ANALYZED':'UNRESOLVED',confidence:null,status:'PENDING_REVIEW'});
       }
       other.push(...response.data.other.map(r=>({...r,evidence:evidence(r,context)})));
+      for(const relation of response.data.relations||[]){
+        const target=requirements.find(r=>r.id===relation.requirementId);
+        if(target)target.proposedRelations=identity.unique([...(target.proposedRelations||[]),{targetId:relation.targetId,kind:relation.kind,status:'UNRESOLVED',reason:relation.reason,evidence:evidence(relation,context)}]);
+      }
       for(const s of items){const c=coverage.find(c=>c.segmentId===s.id);c.status=response.recoveryIssues?.length?'FAILED':'ANALYZED';c.relationshipsStatus=response.recoveryIssues?.length?'FAILED':'ANALYZED';if(c.requirementsStatus==='PENDING')c.requirementsStatus=response.recoveryIssues?.length?'FAILED':'SEMANTIC_RESOLVED';}
     }catch(error){
-      if(error.usage)metrics.usage.push(error.usage);
+      if(error.usage)metrics.usage.push(require('./analysisUsage').record(error.usage,{model:config.model,stage:'EXTRACTION',rates:options.rates}));
       failures.push({segmentIds:items.map(s=>s.id),message:error.message});
       for(const s of items){const c=coverage.find(c=>c.segmentId===s.id);c.status='FAILED';c.relationshipsStatus='FAILED';if(c.requirementsStatus==='PENDING')c.requirementsStatus='FAILED';}
     }
@@ -200,10 +227,18 @@ async function extract(text,options={}) {
   requirements=identity.consolidate(requirements).map(r=>({...r,code:r.originalCode||r.id,
     pending:identity.unique([...r.pending,...(r.type==='FUNCTIONAL'&&!r.associations.length?['Responsable pendiente de revisión']:[])])}));
   const partial=failures.length>0;
-  return {extractionVersion:contract.PROMPT_VERSION,architecture:{},project:{name:options.fileName||'Documento',description:''},rawText:text,
+  // Preserve explicit business rules even with AI disabled or a failed semantic batch.
+  for(const rule of rules.extractBusinessRules(text,sections)) {
+    const quote=rule.text;
+    const matched=Number.isInteger(rule.start)?segments.filter(s=>s.start<rule.end&&s.end>rule.start):segments.filter(s=>s.text.includes(quote));
+    if(matched.length&&!other.some(o=>o.type==='BUSINESS_RULE'&&o.evidence?.some(e=>identity.normalize(e.quote).includes(identity.normalize(quote)))))other.push({type:'BUSINESS_RULE',code:rule.originalCode||rule.code,statement:quote,source:'explicit',evidence:evidence({segmentIds:matched.map(s=>s.id),quote:rule.sourceText||quote})});
+  }
+  const result={analysisMode,additionalCandidates:identity.consolidate(additionalCandidates),extractionVersion:contract.PROMPT_VERSION,architecture:{},project:{name:options.fileName||'Documento',description:''},rawText:text,
     objectives:identity.unique(other.filter(r=>r.type==='OBJECTIVE')),requirements,actors,other,businessRules:other.filter(r=>r.type==='BUSINESS_RULE'),segments,coverage,failures,partial,metrics,
     functionalRequirements:requirements.filter(r=>r.type==='FUNCTIONAL'),nonFunctionalRequirements:requirements.filter(r=>r.type==='NON_FUNCTIONAL'),
     entities:[],relationships:[],screens:[],navigation:[],statistics:{totalFragments:segments.length,aiFragments:coverage.filter(c=>c.status==='ANALYZED').length},
     documentAnalysis:{sourceFile:options.fileName,totalRequirements:requirements.length,totalActors:actors.length,aiAnalysisStatus:partial?'partial':'complete',...config}};
+  require('./actorRelationshipResolver').resolveLocal(result,options.knownActors||[]);
+  return require('./catalogIntegrity').analyze(result);
 }
 module.exports={extract,segmentText,configuration,createProvider};

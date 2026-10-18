@@ -8,6 +8,7 @@ class AnalysisPipeline {
     if(persist){
       source=await prisma.source.findUnique({where:{id:sourceId},include:{currentVersion:{include:{segments:true}}}});
       if(!source)throw Object.assign(new Error('Fuente no encontrada'),{statusCode:404});
+      if(source.type && source.type!=='PDF')throw Object.assign(new Error('Solo se analizan fuentes PDF.'),{statusCode:415,code:'PDF_REQUIRED'});
       if(projectId&&projectId!==source.projectId)throw Object.assign(new Error('La fuente pertenece a otro proyecto'),{statusCode:409});
       version=sourceVersionId?await prisma.sourceVersion.findUnique({where:{id:sourceVersionId},include:{segments:true}}):source.currentVersion;
       if(!version||version.sourceId!==source.id)throw Object.assign(new Error('Versión ajena o inexistente'),{statusCode:409});
@@ -29,6 +30,7 @@ class AnalysisPipeline {
       previousResult:!force&&snapshot?.content?.result?.partial?snapshot.content.result:null});
     if(reused)result.metrics={...result.metrics,requestsUsed:0,usage:[]};
     if(persist)await require('./actorRelationshipResolver').resolve(result,{...options,sourceId:source.id,sourceVersionId:version.id});
+    require('./catalogIntegrity').analyze(result);
     const saved=persist?await store.persist(source.projectId,result,meta):{
       requirements:result.requirements.map(r=>({projectId,sourceId:source.id,sourceVersionId:version.id,temporaryCode:r.originalCode||r.id,
         title:r.name,statement:r.statement,type:r.type,origin:r.source==='inferred'?'INFERRED':'EXPLICIT',confidence:null,status:'PENDING_REVIEW',

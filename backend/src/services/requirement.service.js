@@ -46,7 +46,7 @@ class RequirementService {
         name: name.trim(),
         description: description.trim(),
         type: type || 'FUNCTIONAL',
-        priority: priority || 'MEDIUM',
+        priority: priority || null,
         status: status || 'PENDING',
         actorIds: Array.isArray(actorIds) ? actorIds : [],
         dependencies: Array.isArray(dependencies) ? dependencies : [],

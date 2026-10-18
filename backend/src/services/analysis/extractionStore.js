@@ -2,11 +2,16 @@
 const identity=require('./requirementIdentity');
 const config=require('./documentExtraction').configuration;
 const prisma=require('../../config/prisma');
-const fingerprint=({sourceVersionId,text,options={},projectId})=>'extraction-v2-'+crypto.createHash('sha256').update(JSON.stringify([projectId,sourceVersionId||null,text,config(options),(options.knownActors||[]).map(a=>[a.id,a.name,a.aliases]).sort((a,b)=>a[0].localeCompare(b[0]))])).digest('hex');
+const fingerprint=({sourceVersionId,text,options={},projectId})=>'extraction-v3-'+crypto.createHash('sha256').update(JSON.stringify([projectId,sourceVersionId||null,text,config(options),options.mode||null,options.actorLegend||{},options.roleLegend||{},(options.knownActors||[]).map(a=>[a.id,a.name,a.aliases,a.description]).sort((a,b)=>a[0].localeCompare(b[0]))])).digest('hex');
 async function lock(tx,projectId){if(tx.$queryRawUnsafe)await tx.$queryRawUnsafe('SELECT pg_advisory_xact_lock(hashtext($1))::text',projectId);}
 function envelope(r){return {canonicalKey:identity.keyFor(r),internalId:r.id,originalCode:r.originalCode||null,
-  originalCodes:r.originalCodes||[],segments:r.evidence||[],associations:r.associations||[],actorIds:r.actorIds||[],
-  section:r.section||null,context:r.context||null,pending:r.pending||[],refinements:r.refinements||[],extractionMethods:r.extractionMethods||[r.extractionMethod||'SEMANTIC']};}
+  originalCodes:r.originalCodes||[],originalDescription:r.originalDescription||null,declared:r.declared||{},boundaryContext:r.boundaryContext||null,segments:r.evidence||[],associations:r.associations||[],actorIds:r.actorIds||[],
+  section:r.section||null,context:r.context||null,pending:r.pending||[],reviewStatus:r.reviewStatus||null,
+  dependencyStatus:r.dependencyStatus||'UNANALYZED',dependencies:r.dependencies||[],dependencyEvidence:r.dependencyEvidence||[],
+  relations:r.relations||[],proposedRelations:r.proposedRelations||[],readActorIds:r.readActorIds||[],
+  businessRuleRefs:r.businessRuleRefs||[],
+  actorAnalysisStatus:r.actorAnalysisStatus||'UNRESOLVED',behavior:r.behavior||null,accessActorIds:r.accessActorIds||[],
+  extractionIssues:r.extractionIssues||[],refinements:r.refinements||[],extractionMethods:r.extractionMethods||[r.extractionMethod||'SEMANTIC']};}
 function mergeEnvelope(a={},b={}){
   return {...a,...b,originalCode:a.originalCode||b.originalCode||null,
     originalCodes:identity.unique([...(a.originalCodes||[]),...(b.originalCodes||[]),a.originalCode,b.originalCode].filter(Boolean)),
@@ -15,11 +20,14 @@ function mergeEnvelope(a={},b={}){
     actorIds:[...new Set([...(a.actorIds||[]),...(b.actorIds||[])])],
     pending:identity.unique([...(a.pending||[]),...(b.pending||[])]),
     refinements:identity.unique([...(a.refinements||[]),...(b.refinements||[])]),
+    relationHistory:identity.unique([...(a.relationHistory||[]),...(a.relations||[])]),
+    relations:(b.relations||a.relations||[]).map(relation=>(a.relations||[]).find(old=>old.status==='APPROVED'&&require('./dependencyResolver').proposalKey(a.internalId,old)===require('./dependencyResolver').proposalKey(b.internalId||a.internalId,relation))||relation),
     extractionMethods:identity.unique([...(a.extractionMethods||[]),...(b.extractionMethods||[])])};
 }
 async function findSnapshot(meta){return prisma.modelCandidate.findFirst({where:{projectId:meta.projectId,kind:'DOCUMENT_ANALYSIS',fingerprint:fingerprint(meta)}});}
 async function persist(projectId,result,meta={}){
   const clean=JSON.parse(JSON.stringify(result));
+  require('./catalogIntegrity').analyze(clean);
   return prisma.$transaction(async tx=>{
     await lock(tx,projectId);
     const old=await tx.requirementCandidate.findMany({where:{projectId},orderBy:{createdAt:'asc'}});
@@ -57,7 +65,7 @@ async function persist(projectId,result,meta={}){
         temporaryCode:r.originalCode||r.id,title:r.name||r.statement,statement:r.statement,
         originalStatement:r.evidence.map(e=>e.quote).join('\n'),type:r.type,
         origin:r.source==='inferred'?'INFERRED':'EXPLICIT',status:'PENDING_REVIEW',confidence:null,
-        qualityReport:{pending:evidence.pending,partial:clean.partial}}});
+        priority:r.priority??null,qualityReport:{pending:evidence.pending,partial:clean.partial}}});
       if(!existing)old.push(row);
       saved.push(row);
       if(row.promotedRequirementId){
@@ -71,6 +79,14 @@ async function persist(projectId,result,meta={}){
       }
     }
     const models=[];
+    for(const r of clean.requirements)for(const proposal of r.proposedRelations||[]){
+      const fingerprint=require('./dependencyResolver').proposalKey(r.id,proposal);
+      models.push(await tx.modelCandidate.upsert({where:{projectId_fingerprint:{projectId,fingerprint}},update:{},create:{projectId,kind:'REQUIREMENT_RELATION',name:`${r.originalCode||r.id}: ${proposal.kind}`,content:{...proposal,sourceRequirementId:r.id},evidence:proposal.evidence,fingerprint,status:'PENDING_REVIEW',origin:'INFERRED'}}));
+    }
+    for(const item of [...(clean.additionalCandidates||[]).map(r=>({...r,kind:'REQUIREMENT_DISCOVERY'})),...(clean.businessRules||[]).map(r=>({...r,kind:'BUSINESS_RULE'}))]){
+      const key=item.kind+'-'+crypto.createHash('sha256').update(identity.normalize(item.statement||item.quote||item.reason)).digest('hex');
+      models.push(await tx.modelCandidate.upsert({where:{projectId_fingerprint:{projectId,fingerprint:key}},update:{evidence:item.evidence||[]},create:{projectId,kind:item.kind,name:(item.statement||item.quote||item.reason).slice(0,160),content:item,evidence:item.evidence||[],fingerprint:key,status:'PENDING_REVIEW',origin:item.source==='explicit'?'EXPLICIT':'INFERRED'}}));
+    }
     const catalog=await tx.actor?.findMany({where:{projectId,isDeleted:false}}) || [];
     const actorIdentity=require('./actorIdentity');
     for(const actor of clean.actors){
@@ -85,9 +101,9 @@ async function persist(projectId,result,meta={}){
     const snapshotKey=meta.snapshotKey||fingerprint({projectId,text:clean.rawText||'',sourceVersionId:meta.sourceVersionId,options:meta.options});
     const {rawText,...snapshot}=clean;
     models.push(await tx.modelCandidate.upsert({where:{projectId_fingerprint:{projectId,fingerprint:snapshotKey}},
-      update:{content:{result:snapshot,partial:clean.partial,coverage:clean.coverage,failures:clean.failures,metrics:clean.metrics,sourceVersionId:meta.sourceVersionId||null}},
+      update:{content:{result:snapshot,partial:clean.partial,coverage:clean.coverage,failures:clean.failures,metrics:clean.metrics,sourceVersionId:meta.sourceVersionId||null,sourceId:meta.sourceId||null}},
       create:{projectId,kind:'DOCUMENT_ANALYSIS',name:clean.project.name,fingerprint:snapshotKey,status:'PENDING_REVIEW',origin:'EXPLICIT',confidence:null,
-        content:{result:snapshot,partial:clean.partial,coverage:clean.coverage,failures:clean.failures,metrics:clean.metrics,sourceVersionId:meta.sourceVersionId||null}}}));
+        content:{result:snapshot,partial:clean.partial,coverage:clean.coverage,failures:clean.failures,metrics:clean.metrics,sourceVersionId:meta.sourceVersionId||null,sourceId:meta.sourceId||null}}}));
     if(meta.sourceVersionId){
       await tx.sourceVersion.update({where:{id:meta.sourceVersionId},data:{analyzedAt:clean.partial?null:new Date()}});
       await tx.source.update({where:{id:meta.sourceId},data:{status:clean.partial?'PENDING_REVIEW':'ANALYZED'}});
@@ -98,6 +114,7 @@ async function persist(projectId,result,meta={}){
 async function promote(tx,candidate){
   await lock(tx,candidate.projectId);
   const current=await tx.requirementCandidate.findUnique({where:{id:candidate.id}});
+  if(current.evidence?.reviewStatus==='NEEDS_REVIEW'||current.evidence?.extractionIssues?.length)throw Object.assign(new Error('Corrige la extracción antes de aprobar este requisito.'),{statusCode:422,code:'EXTRACTION_NEEDS_REVIEW'});
   if(current.rejectionReason==='RECLASSIFIED_PROJECT_OBJECTIVE' || require('./statementClassifier').classify(current.statement,current.evidence)==='OBJECTIVE') {
     throw Object.assign(new Error('Este enunciado es un objetivo del proyecto y no puede promoverse como requisito.'),{code:'PROJECT_OBJECTIVE_NOT_REQUIREMENT',statusCode:422});
   }
@@ -105,10 +122,20 @@ async function promote(tx,candidate){
   const reserved=await tx.requirement.findMany({where:{projectId:current.projectId}});
   const all=reserved.filter(r=>!r.isDeleted);
   let official=all.find(r=>r.canonicalKey===key)||all.find(r=>r.id===current.promotedRequirementId)||all.find(r=>identity.same(r,current));
+  const originalCode=current.evidence?.originalCode;
+  if(originalCode&&reserved.some(r=>require('./catalogIntegrity').normalizeCode(r.code)===require('./catalogIntegrity').normalizeCode(originalCode)&&r.id!==official?.id)){
+    throw Object.assign(new Error('El código documental ya identifica otro requisito; resuelve el conflicto sin renumerar el original.'),{statusCode:422,code:'ORIGINAL_CODE_CONFLICT'});
+  }
   const ev=mergeEnvelope(Array.isArray(official?.sources)?{legacySources:official.sources}:official?.sources||{},current.evidence||{});
+  const dependencyRows=(ev.dependencies||[]).map(ref=>all.find(r=>r.id===ref||r.sources?.internalId===ref));
+  const dependencyCodes=dependencyRows.filter(Boolean).map(r=>r.code);
+  ev.pendingDependencyReferences=(ev.dependencies||[]).filter((ref,i)=>!dependencyRows[i]);
+  if(ev.pendingDependencyReferences.length)ev.dependencyStatus='UNRESOLVED';
   const actorModels=await tx.modelCandidate.findMany({where:{projectId:current.projectId,kind:'ACTOR'}});
   const ai=require('./actorIdentity');
   const actors=await tx.actor.findMany({where:{projectId:current.projectId,isDeleted:false}});
+  ev.accessActorIds=ai.canonical((ev.associations||[]).filter(a=>a.role==='EXECUTOR').map(a=>a.actorId),actors,actorModels).ids;
+  ev.readActorIds=ai.canonical((ev.associations||[]).filter(a=>a.role==='VIEWER').map(a=>a.actorId),actors,actorModels).ids;
   const actorIds=ai.canonical(ai.executorAssociations(ev).map(a=>a.actorId),actors,actorModels).ids;
   if(official)official=await tx.requirement.update({where:{id:official.id},data:{canonicalKey:key,sources:ev,actorIds:[...new Set([...official.actorIds,...actorIds])]}});
   else{
@@ -119,7 +146,7 @@ async function promote(tx,candidate){
       code=`${prefix}-${String(next).padStart(2,'0')}`;
     }
     official=await tx.requirement.create({data:{projectId:current.projectId,canonicalKey:key,code,name:current.title,description:current.statement,
-      type:current.type,priority:current.priority,status:'APPROVED',actorIds,sources:ev,qualityReport:current.qualityReport||{}}});
+      type:current.type,priority:current.priority??null,status:'APPROVED',actorIds,dependencies:dependencyCodes,sources:ev,qualityReport:current.qualityReport||{}}});
     await require('../engineering/change.service').remember(tx,official);
   }
   const domain=require('../engineering/domain');
@@ -127,6 +154,7 @@ async function promote(tx,candidate){
     for(const [kind,id] of [['Source',e.sourceId],['SourceVersion',e.sourceVersionId],['AudioSegment',e.sourceSegmentId]])if(id)await domain.link(tx,current.projectId,kind,id,'Requirement',official.id,'EVIDENCE');
   }
   const updated=await tx.requirementCandidate.update({where:{id:current.id},data:{status:'APPROVED',promotedRequirementId:official.id}});
+  await require('./dependencyResolver').refresh(tx,current.projectId);
   return {candidate:updated,promotedItem:official,kind:'REQUIREMENT',reused:Boolean(all.find(r=>r.id===official.id))};
 }
 module.exports={fingerprint,findSnapshot,persist,promote,lock,envelope,mergeEnvelope};

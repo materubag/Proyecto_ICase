@@ -14,6 +14,7 @@ function merge(a, b) {
     actorIds: [...new Set([...(a.actorIds || []), ...(b.actorIds || [])])],
     segmentIds: [...new Set([...(a.segmentIds || []), ...(b.segmentIds || [])])],
     pending: unique([...(a.pending || []), ...(b.pending || [])]),
+    extractionIssues: unique([...(a.extractionIssues || []), ...(b.extractionIssues || [])]),
     refinements: unique([...(a.refinements || []), ...(b.refinements || [])]) };
 }
 function consolidate(items = []) {

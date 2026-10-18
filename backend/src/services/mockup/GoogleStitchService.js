@@ -135,7 +135,7 @@ ${title}`);
   * Encabezados claros en bg-slate-100 con texto en mayúsculas pequeñas (text-xs uppercase tracking-wider font-semibold text-slate-600).
   * Filas con hover:bg-slate-50 y bordes inferiores finos.
   * Badges de estado estilizados (ej. verde suave para completado, amarillo suave para en proceso).
-- COHERENCIA DE DATOS: Utiliza identificadores claros (ej: REG-001, CLI-101), nombres realistas y coherencia con el dominio automotriz/operativo.`);
+- COHERENCIA DE DATOS: Usa exclusivamente el dominio, actores y capacidades documentados en el contexto del proyecto. Los datos visuales de ejemplo no constituyen requisitos aprobados.`);
 
     return sections.join('\n\n');
   }

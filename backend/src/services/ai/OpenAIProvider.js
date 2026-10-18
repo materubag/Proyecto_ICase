@@ -76,7 +76,7 @@ Genera un JSON conciso con las siguientes claves:
 }
 Reglas:
 - Requisitos atómicos, verificables, sin ambigüedades.
-- DEBES incluir obligatoriamente tanto Requisitos Funcionales (códigos "RF-01", "RF-02"... con type "FUNCTIONAL") como Requisitos No Funcionales (códigos "RNF-01", "RNF-02"... con type "NON_FUNCTIONAL", cubriendo áreas como rendimiento, seguridad, disponibilidad, respaldo e integridad).
+- Extrae solo requisitos respaldados por el documento. Conserva códigos y descripciones explícitos. No añadas RF, RNF, reglas, actores ni condiciones por defecto. Si falta evidencia, usa null o indica que requiere revisión.
 - Toda pantalla mencionada en "navigation" ('from' y 'to') DEBE estar declarada en el arreglo "screens" y su valor DEBE ser el campo "name" exacto de la pantalla (ej: "Inicio de Sesión", "Panel Principal", "Catálogo"). No uses rutas "/..." en "from" ni en "to".
 - No agregues texto fuera del JSON.`;
 
@@ -109,12 +109,6 @@ Reglas:
 
     try {
       let response = await sendRequest(model);
-
-      // Si el modelo específico (e.g. gpt-5.4-nano) no está disponible en la cuenta, fallback inmediato a gpt-4o-mini
-      if (!response.ok && (response.status === 404 || response.status === 400)) {
-        console.warn(`[OpenAIProvider] Modelo ${model} no disponible (HTTP ${response.status}). Reintentando con gpt-4o-mini...`);
-        response = await sendRequest('gpt-4o-mini');
-      }
 
       if (!response.ok) {
         const errBody = await response.text();

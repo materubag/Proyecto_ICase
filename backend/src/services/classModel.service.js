@@ -83,6 +83,7 @@ class ClassModelService {
    * Genera el modelado de clases orientado a objetos a partir de las entidades y arquitectura.
    */
   async generateClassesFromEntities(projectId) {
+    await require('./analysis/catalogIntegrity').assertProject(prisma,projectId);
     const project = await prisma.project.findUnique({
       where: { id: projectId },
       include: {

@@ -152,35 +152,6 @@ class EntityDetector {
       }
     });
 
-    // Relaciones clave del dominio automotriz si ambas entidades existen
-    const domainPairs = [
-      { source: 'Cliente', target: 'Vehiculo', card: '1:N', desc: 'Un cliente posee uno o varios vehículos.' },
-      { source: 'Vehiculo', target: 'OrdenTrabajo', card: '1:N', desc: 'Un vehículo acumula órdenes de trabajo en su historial.' },
-      { source: 'Cotizacion', target: 'OrdenTrabajo', card: '1:1', desc: 'Una cotización aprobada genera una orden de trabajo.' },
-      { source: 'OrdenTrabajo', target: 'Repuesto', card: 'N:M', desc: 'Una orden consume varios repuestos.' },
-      { source: 'Vehiculo', target: 'Cita', card: '1:N', desc: 'Un vehículo puede tener citas agendadas.' }
-    ];
-
-    domainPairs.forEach(pair => {
-      const hasSource = entityNames.some(n => n.toLowerCase().includes(pair.source.toLowerCase()));
-      const hasTarget = entityNames.some(n => n.toLowerCase().includes(pair.target.toLowerCase()));
-      const key = `${pair.source}->${pair.target}`;
-
-      if (hasSource && hasTarget && !seen.has(key)) {
-        seen.add(key);
-        relationships.push({
-          id: `REL-${String(relationships.length + 1).padStart(2, '0')}`,
-          source: pair.source,
-          target: pair.target,
-          cardinality: pair.card,
-          origin: 'INFERRED',
-          evidence: pair.desc,
-          confidence: 0.8,
-          description: pair.desc
-        });
-      }
-    });
-
     return relationships;
   }
 

@@ -136,6 +136,7 @@ class UseCaseService {
    */
   async generateFundamentalUseCases(projectId, db = prisma) {
     if (db === prisma) return prisma.$transaction(tx => this.generateFundamentalUseCases(projectId, tx));
+    await require('./analysis/catalogIntegrity').assertProject(db,projectId);
     const project = await db.project.findUnique({
       where: { id: projectId },
       include: {

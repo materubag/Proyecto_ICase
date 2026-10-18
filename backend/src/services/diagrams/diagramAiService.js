@@ -434,6 +434,7 @@ REGLAS CRÍTICAS DE AISLAMIENTO Y DOMINIO:
    * Generates a single diagram with Gemini, deterministic normalization, validation and repair.
    */
   async generateDiagram(projectId, diagramType, options = {}) {
+    await require('../analysis/catalogIntegrity').assertProject(prisma,projectId);
     if(diagramType==='USE_CASE'){
       await prisma.$transaction(tx=>require('../analysis/actorIdentity').refresh(tx,projectId));
       const existingUCs = await prisma.useCase.count({ where: { projectId, isDeleted: false } });
@@ -536,131 +537,15 @@ REGLAS CRÍTICAS DE AISLAMIENTO Y DOMINIO:
     }else if(['ER','CLASS','NAVIGATION','FLOWCHART'].includes(diagramType)&&['openai','gemini'].includes(env.AI_PROVIDER)){
       const extraction=require('../analysis/documentExtraction');
       const config=extraction.configuration();
-      const modelInstructions=diagramType==='ER'
-        ? `Genera un modelo Entidad-Relación erDiagram compatible con Mermaid 10 (PROHIBIDO incluir la directiva 'direction').
-OBJETIVO CRÍTICO:
-Debes analizar la TOTALIDAD de los requisitos funcionales (RF) y no funcionales (RNF) provistos en el contexto para generar un modelo de datos relacional COMPLETO, ROBUSTO y EXHAUSTIVO que soporte todas las operaciones del sistema.
-
-REGLAS ESTRICTAS DE MODELADO:
-1. COBERTURA TOTAL Y EXHAUSTIVA DE REQUISITOS (RF y RNF):
-   Examina TODOS y cada uno de los requisitos y modela una entidad para cada concepto con datos persistentes del sistema:
-   - Entidades maestras del dominio: usuarios, roles, actores principales, clientes/personas y activos o recursos centrales del negocio.
-   - Entidades transaccionales y de operación: solicitudes, citas, órdenes, recepciones, movimientos, registros de atención o eventos principales.
-   - Entidades de detalle y composición: desgloses transaccionales con cantidades, precios unitarios y estados de aprobación (ej: detalles de cotización, líneas de compra/venta, actividades operativas).
-   - Catálogos maestros y bases de información técnica o de conocimiento: servicios, productos/ítems, clasificaciones, síntomas, códigos o soluciones documentadas.
-   - Trazabilidad, control y auditoría: historial de eventos, movimientos de inventario/recursos, inspecciones/evidencias, reglas preventivas/alertas, registros de auditoría y notificaciones.
-   - Evidencias fotográficas y optimización gráfica (RF-12, RF-07, RNF-12): entidad EVIDENCIA_MULTIMEDIA conectada a RECEPCION y DIAGNOSTICO con atributos técnicos para PostgreSQL: url_original, url_optimizada, url_thumbnail, peso_bytes, formato_mime, ancho_px, alto_px, estado_optimizacion.
-   El diagrama debe incluir la cantidad de entidades que demande la complejidad del documento (entre 18 y 28 entidades para sistemas integrales) sin omitir módulos.
-
-2. DECLARACIÓN OBLIGATORIA DE BLOQUES DE ATRIBUTOS:
-   - Para CADA entidad que aparezca en el diagrama o participe en relaciones, DEBES declarar su bloque completo de atributos delimitado por llaves { }.
-   - PROHIBIDO dejar entidades vacías o sin bloque declarado.
-
-3. CLAVES TÉCNICAS (PK y FK):
-   - Cada entidad DEBE tener una clave primaria técnica: 'int id PK' o 'int id_entidad PK' o 'string codigo PK'.
-   - Toda relación debe reflejarse con su respectiva clave foránea 'FK' (ej: int cliente_id FK).
-   - PROHIBIDO usar textos descriptivos como PK.
-
-4. ATRIBUTOS TÉCNICOS:
-   - Atributos solo con caracteres ASCII y guiones bajos (ej: fecha_creacion, monto_total).
-   - Tipos válidos: int, string, float, boolean, datetime.
-
-5. CARDINALIDADES PRECISAS Y SIN ENTIDADES AISLADAS:
-   - Usa cardinalidades reales: ||--o{ (1 a muchos), ||--|| (1 a 1), }o--o{ (muchos a muchos).
-   - Conecta TODAS las entidades en el diagrama (CERO entidades aisladas).
-   - Resuelve relaciones muchos a muchos mediante entidades asociativas o de detalle con sus atributos cuantitativos.`
-        : `Genera classDiagram compatible con Mermaid 10. Si no hay clases ni entidades aprobadas, deriva un modelo de dominio PROPUESTO desde los requisitos funcionales y casos de uso. Incluye atributos y operaciones del negocio justificados. No copies automaticamente el modelo relacional ni conviertas actores en clases sin identidad persistente documentada. No inventes servicios tecnicos, metodos genericos ni herencia sin respaldo. Usa firmas de metodos sencillas sin tipos complejos.`;
-      let instructions=diagramType==='NAVIGATION'?'Genera flowchart TD compatible con Mermaid 10. Representa un ARBOL con una sola raiz del proyecto, modulos y pantallas justificadas por los requisitos. Cada nodo salvo la raiz tiene exactamente un padre, sin ciclos ni nodos desconectados. No dibujes pasos de procesos ni flujos operativos. Conserva parentId y rutas documentadas cuando existan. Si faltan pantallas, los modulos y rutas son una propuesta de diseño, no permisos confirmados. No asignes accesos a roles ni inventes capacidades. Usa etiquetas sencillas sin sintaxis HTML.':modelInstructions;
-      if(diagramType==='CLASS') {
-        instructions = `Genera un Diagrama de Clases classDiagram compatible con Mermaid 10.
-OBJETIVO CRÍTICO:
-Debes analizar la TOTALIDAD de los requisitos funcionales (RF) y no funcionales (RNF) del sistema provistos en el contexto estructurado para generar un modelo de clases de dominio orientado a objetos COMPLETO, ROBUSTO y EXHAUSTIVO que represente toda la arquitectura de negocio del software.
-
-REGLAS ESTRICTAS DE MODELADO:
-1. COBERTURA TOTAL Y EXHAUSTIVA DE REQUISITOS (RF y RNF):
-   Examina TODOS los requisitos y modela una clase para cada concepto sustantivo del sistema específico analizado:
-   - Entidades Maestras y Actores del Negocio: Modela los sujetos y recursos centrales (usuarios, roles con matriz de permisos, clientes o usuarios finales, y los activos o recursos centrales del negocio).
-   - Procesos de Ingreso, Inspección y Evaluación: Si los requisitos describen recepciones, revisiones, estados visuales por zonas o evidencias multimedia (RF-12, RNF-12), modela sus clases correspondientes (EvidenciaMultimedia) con atributos (urlOriginal, urlOptimizada, urlThumbnail, pesoBytes, formatoMime) y operaciones de captura y optimización (+optimizar(), +generarThumbnail()).
-   - Diagnósticos, Análisis Técnico y Bases de Conocimiento: Modela clases para el diagnóstico técnico, fallas/incidencias, códigos de referencia y bases de conocimiento/soluciones con métodos de búsqueda y resolución.
-   - Cotizaciones, Presupuestos y Aprobación: Modela la cabecera y el detalle de cotizaciones, asegurando soporte para aprobación parcial o total de ítems por el cliente.
-   - Ejecución Operativa, Tareas y Asignación: Modela las órdenes de trabajo/servicio, desglose de actividades, asignación de responsables y pruebas de calidad o verificación.
-   - Catálogos de Servicios y Recursos: Modela catálogos de servicios (con tarifas y tiempos), productos/recursos y trazabilidad de inventario (entradas, salidas, ajustes de stock).
-   - Operaciones Comerciales y Compras: Modela ventas directas con sus líneas de detalle y compras a proveedores para abastecimiento.
-   - Mantenimientos Preventivos y Alertas: Modela reglas preventivas por tiempo/uso y emisión de alertas automáticas proactivas.
-   - Expedientes e Historiales Consolidados: Modela el expediente digital o historial integral que unifica las operaciones y evidencias del activo o cliente.
-   - Seguridad, Auditoría y Notificaciones: Modela auditoría de operaciones críticas y notificaciones internas.
-   El diagrama debe incluir entre 25 y 35 clases completas para reflejar fielmente la totalidad de la arquitectura del software analizado.
-
-2. DECLARACIÓN OBLIGATORIA DE CADA CLASE:
-   - Para CADA clase que participe en el diagrama o en relaciones, DEBES incluir su bloque de definición completo:
-     class NombreClase {
-       +tipo atributo
-       +operacion(parametros) tipoRetorno
-     }
-   - PROHIBIDO dejar clases sin bloque de definición (PROHIBIDO mencionar clases en relaciones que no tengan su bloque 'class Nombre { ... }' declarado con sus atributos y métodos).
-
-3. CADA ATRIBUTO EN SU PROPIA LÍNEA:
-   - PROHIBIDO agrupar atributos separados por coma en una sola línea (PROHIBIDO: '+int id, +string nombre').
-   - Declara CADA atributo y método en su propio renglón separado dentro del bloque de la clase.
-
-4. ATRIBUTOS Y MÉTODOS DE DOMINIO REALES:
-   - Atributos tipados en camelCase con visibilidad (+int id, +string codigo, +float precio, +datetime fecha, +string estado).
-   - Métodos con firmas claras y parámetros que representen responsabilidades de negocio reales según los requisitos (ej: registrarRecepcion, adjuntarEvidencia, buscarSolucion, aprobarParcial, asignarMecanico, consumirRepuesto, registrarEntradaStock, calcularTotal, emitirAlerta).
-   - SINTAXIS OBLIGATORIA DE MÉTODOS CON PARÉNTESIS '()':
-     Cada método de cada clase DEBE escribirse OBLIGATORIAMENTE con sus paréntesis '()' y tipo de retorno:
-     Ejemplo:
-       +registrar() void
-       +actualizarKilometraje(int km) void
-       +autenticar(string email, string password) boolean
-       +calcularTotal() float
-     PROHIBIDO TERMINANTEMENTE:
-     - Omitir los paréntesis (PROHIBIDO: '+void registrar', '+void actualizarKilometraje').
-     - Concatenar tipos de parámetros con guiones bajos (PROHIBIDO: '+autenticar_string', '+void actualizarKilometraje_int', '+asociarFalla_int').
-     Todo método DEBE tener la sintaxis estándar: +nombreMetodo(parametros) tipoRetorno
-   - PROHIBIDO métodos de programación genéricos o de relleno (getId, setId, toDTO, validate, save).
-
-5. PROHIBICIÓN DE CLASES DE INFRAESTRUCTURA TÉCNICA PURA:
-   - No incluyas JwtService, TokenService, AuthenticationService. Modela las clases de dominio del negocio.
-
-6. RELACIONES ORIENTADAS A OBJETOS COMPLETAS:
-   - Conecta las clases mediante relaciones UML en Mermaid (asociación -->, composición *--, agregación o--, herencia --|>) con multiplicidades y etiquetas claras.
-   - Conecta TODAS las clases en el diagrama (CERO clases aisladas).`;
-      }
+      let instructions = diagramType==='ER'
+        ? 'Genera erDiagram Mermaid 10 sin direction. Usa solo entidades, atributos, claves y cardinalidades documentados o aprobados. No impongas cantidad de entidades, claves tecnicas, columnas ni relaciones. Si falta evidencia, conserva la informacion como pendiente y no completes estructuras.'
+        : diagramType==='NAVIGATION'
+          ? 'Genera una propuesta de navegacion basada exclusivamente en pantallas aprobadas y capacidades documentadas. No inventes rutas, permisos ni pantallas.'
+          : 'Genera classDiagram Mermaid 10 con clases, atributos, operaciones y relaciones documentados o aprobados. No impongas cantidad de clases, herencia ni operaciones CRUD. No conviertas actores automaticamente en entidades. PROHIBIDO: getId, setId, toDTO, validate, save, validarReglas sin evidencia documental.';
       let format=diagramType==='NAVIGATION'?'Devuelve exclusivamente JSON {"nodes":[{"id":"identificador unico","name":"nombre","parentId":null,"route":null}]}. parentId referencia otro nodo o es null para modulos principales. No devuelvas Mermaid.':'Devuelve JSON {"mermaidCode":"codigo Mermaid completo"}.';
       if(diagramType==='FLOWCHART'){
-        instructions = `Genera un Diagrama de Flujo de Procesos flowchart TD compatible con Mermaid 10.
-OBJETIVO CRÍTICO:
-Debes analizar los requisitos y casos de uso del sistema provistos en el contexto estructurado para generar un DIAGRAMA DE FLUJO DE PROCESOS (Flowchart) INTEGRADO, ROBUSTO Y CONECTADO de inicio a fin.
-El diagrama debe modelar el proceso operativo y de negocio medular del sistema analizado como una secuencia lógica completa de decisiones y actividades (similar a un flujograma estándar de ingeniería de software con rombos de decisión y ramas Sí/No).
-
-REGLAS ESTRICTAS DE MODELADO:
-1. UN SOLO FLUJO DE PROCESO CENTRAL CONECTADO (PROHIBIDO GENERAR PROCESOS AISLADOS O PARALELOS DESCONECTADOS):
-   - Inicia con un nodo terminal: START(["Inicio: Recepción o Solicitud del Proceso"])
-   - Encadena todos los pasos desde el Inicio hasta los nodos de Fin.
-   - PROHIBIDO TERMINANTEMENTE generar cadenas independientes aisladas o procesos en silos desconectados en paralelo.
-
-2. PUNTOS DE DECISIÓN OBLIGATORIOS CON ROMBOS {} Y RAMAS ETIQUETADAS:
-   - Incorpora entre 3 y 5 puntos de decisión de negocio reales derivados de los requisitos usando la sintaxis de rombo:
-     ID_DECISION{"¿Pregunta o condición específica?"}
-   - Cada rombo de decisión DEBE tener al menos dos ramas etiquetadas con |Sí| y |No| (o condiciones claras de rama):
-     ID_DECISION -->|Sí| PASO_SIGUIENTE
-     ID_DECISION -->|No| RUTA_ALTERNATIVA
-   - Modela decisiones cruciales del dominio analizado (por ejemplo: validación de datos/citas previas, detección de fallas o averías en inspección/diagnóstico, autorización/aprobación de cotización por el cliente, disponibilidad de inventario/stock, aprobación de control de calidad o pruebas técnicas).
-
-3. RESOLUCIÓN DE RUTAS ALTERNATIVAS Y REINTENTOS:
-   - Las ramas que tomen caminos alternativos deben reconectarse lógicamente (ej: reintentar corrección, solicitar compra a proveedores) o culminar en un fin alternativo explícito (ej: FIN_CANCEL(["Fin: Proceso Cancelado / Desestimado"])).
-
-4. NODOS DE ACCIÓN CLAROS:
-   - Declara acciones concretas en rectángulos ["Descripción de la actividad o proceso"].
-
-5. NODOS TERMINALES FINALES:
-   - Concluye el flujo en nodos terminales ovalados:
-     FIN_EXITO(["Fin: Entrega y Cierre Exitoso"])
-   - PROHIBIDO usar la palabra reservada 'end' como identificador de nodo.
-
-6. DEVUELVE EXCLUSIVAMENTE JSON:
-   Devuelve JSON {"mermaidCode":"codigo Mermaid flowchart TD completo"}.`;
-        format = 'Devuelve JSON {"mermaidCode":"codigo Mermaid completo"}.';
+        instructions='Genera flowchart TD Mermaid 10 desde procesos y dependencias documentados. No conectes actividades por compartir palabras. No inventes decisiones, secuencias ni ramas. Si no existe una secuencia documentada, representa actividades independientes e indica la limitacion.';
+        format='Devuelve JSON {"mermaidCode":"codigo Mermaid completo"}.';
       }
       let response;
       try {
@@ -681,7 +566,7 @@ REGLAS ESTRICTAS DE MODELADO:
             mermaidCode = this.cleanMermaidCode(response.data.mermaidCode);
             usedProvider = config.provider.toUpperCase();
           } else {
-            console.warn('[DiagramAiService] IA no devolvió mermaidCode en FLOWCHART. Usando generador determinista estructurado...');
+            structuredContext.flowWarning='La respuesta no contiene un flujo valido; se muestran actividades independientes sin secuencia documentada.';
             mermaidCode = this.generateDeterministicFallback(diagramType, project, structuredContext);
             usedProvider = 'FALLBACK_DETERMINISTIC';
           }

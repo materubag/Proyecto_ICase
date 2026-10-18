@@ -286,7 +286,7 @@ export default function ProjectSources({ project, embedded = false, onNavigateTo
                 Gestión de Fuentes del Proyecto
               </h2>
               <p className="section-subtitle" style={{ margin: '4px 0 0 0', fontSize: '0.85rem' }}>
-                Documentos PDF y audios de entrevistas integrados como base de requisitos
+                Documentos PDF como base del analisis de requisitos
               </p>
             </div>
           </div>
@@ -427,7 +427,7 @@ export default function ProjectSources({ project, embedded = false, onNavigateTo
             <div>
               <strong style={{ display: 'block', color: 'var(--on-surface)' }}>No hay fuentes registradas</strong>
               <span style={{ fontSize: '0.85rem' }}>
-                Sube un documento PDF de especificación o un archivo de audio de entrevista para comenzar.
+                Sube un documento PDF para comenzar.
               </span>
             </div>
           </div>

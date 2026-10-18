@@ -23,6 +23,7 @@ const { sourceUpload } = require('../middleware/pdfUpload.middleware');
 // Multer memory storage para subida de múltiples archivos (documentos y audios)
 const uploadMulti = multer({
   storage: multer.memoryStorage(),
+  fileFilter: require('../utils/pdfFilePolicy').fileFilter,
   limits: { fileSize: 35 * 1024 * 1024 } // 35 MB por archivo
 });
 
@@ -123,7 +124,7 @@ router.get('/:projectId/history', (req, res, next) => versionHistoryController.g
 // Project Sources
 router.get('/:projectId/sources', (req, res, next) => sourceController.list(req, res, next));
 router.post('/:projectId/sources', sourceUpload.array('files', 20), (req, res, next) => sourceController.upload(req, res, next));
-router.post('/:projectId/sources/audio', audioUpload.single('file'), (req, res, next) => sourceController.uploadAudio(req, res, next));
+router.post('/:projectId/sources/audio', require('../utils/pdfFilePolicy').pdfOnly);
 
 // Project Candidates & Approval Center
 router.get('/:projectId/candidates', (req, res, next) => candidateController.listByProject(req, res, next));

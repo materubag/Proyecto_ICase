@@ -85,6 +85,7 @@ async function candidate(tx, projectId, input) {
 async function generate(projectId, requirementIds) {
   return d.transaction(async tx => {
     await d.project(tx, projectId);
+    await require('../analysis/catalogIntegrity').assertProject(tx,projectId);
     const reqs = await tx.requirement.findMany({ where: { projectId, status: 'APPROVED', ...(requirementIds ? { id: { in: requirementIds } } : {}) }, orderBy: { code: 'asc' } });
     if (!reqs.length) d.fail('APPROVED_REQUIREMENTS_REQUIRED', 'Aprueba requisitos antes de generar modelos.', 400);
     const catalog = await tx.actor.findMany({where:{projectId,isDeleted:false}});

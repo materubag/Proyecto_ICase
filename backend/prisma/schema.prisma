@@ -255,7 +255,7 @@ model RequirementCandidate {
   originalStatement     String?             @db.Text
   type                  CandidateType       @default(FUNCTIONAL)
   category              String? // E.g. "PERFORMANCE", "SECURITY", "USABILITY"
-  priority              RequirementPriority @default(MEDIUM)
+  priority              RequirementPriority?
   origin                CandidateOrigin     @default(INFERRED)
   confidence            Float?
   status                CandidateStatus     @default(PENDING_REVIEW)
@@ -289,7 +289,7 @@ model Requirement {
   name           String
   description    String              @db.Text
   type           RequirementType     @default(FUNCTIONAL)
-  priority       RequirementPriority @default(MEDIUM)
+  priority       RequirementPriority?
   status         RequirementStatus   @default(PENDING)
   actorIds       String[]            @default([])
   dependencies   String[]            @default([])

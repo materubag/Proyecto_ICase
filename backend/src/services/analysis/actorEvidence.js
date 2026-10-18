@@ -5,6 +5,7 @@ function classify(actor){
     ? actor.evidence
     : (actor.evidence && typeof actor.evidence === 'object' ? [actor.evidence] : (actor.evidence ? [{ quote: String(actor.evidence) }] : []));
   const quotes=rawEv.map(e=>normalize(e.quote || e.text || e.snippet || '').replace(/^[•*\-]\s*/,'')).filter(Boolean);
+  if(quotes.some(q=>q.includes(name)&&/\b(?:envia|recibe|confirma|integra)\b.*\b(?:al|del|con el) sistema\b/.test(q)))return 'ROLE';
 
   // 1. Vendor, developer, IT provider or proposal authors are project context, NOT actors
   const vendorTerms = /\b(?:soporte t[eé]cnico|garant[ií]a|desarrollo del proyecto|equipo de desarrollo|proveedor|proponente|consultora|puesta en producci[oó]n|levantamiento de informaci[oó]n|entregar documentaci[oó]n|propuesta econ[oó]mica|propuesta t[eé]cnica|corregir[aá]n errores atribuibles al desarrollo)\b/i;

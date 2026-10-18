@@ -1,3 +1,4 @@
+import { isPdf } from '../utils/pdfFilePolicy';
 import React, { useState, useEffect } from 'react';
 import { engineering } from '../api/engineering.api';
 import { aiApi } from '../api/ai.api';
@@ -64,7 +65,7 @@ export default function ProjectSummary({ project, onProjectUpdated, onNavigateTo
   const [analysisProgress, setAnalysisProgress] = useState('');
   const [isImportModalOpen, setIsImportModalOpen] = useState(false);
   const [pdfFiles, setPdfFiles] = useState([]);
-  const [audioFile, setAudioFile] = useState(null);
+
 
   const reqCount    = project.requirements?.length ?? project._count?.requirements ?? 0;
   const actorCount  = project.actors?.length       ?? project._count?.actors       ?? 0;
@@ -73,6 +74,9 @@ export default function ProjectSummary({ project, onProjectUpdated, onNavigateTo
 
   async function handleAnalyze() {
     if (state === 'analyzing') return;
+    if(!pdfFiles.length&&!sources.some(s=>s.type==='PDF')){
+      setState('error');setErrorMessage('Carga un archivo PDF antes de analizar.');return;
+    }
     try {
       setState('analyzing');
       setErrorMessage(null);
@@ -89,16 +93,12 @@ export default function ProjectSummary({ project, onProjectUpdated, onNavigateTo
           else if (item.id) newlyUploadedSourceIds.push(item.id);
         });
       }
-      if (audioFile) {
-        const audioRes = await sourcesApi.uploadAudio(project.id, audioFile);
-        if (audioRes.source?.id) newlyUploadedSourceIds.push(audioRes.source.id);
-        else if (audioRes.id) newlyUploadedSourceIds.push(audioRes.id);
-      }
+
 
       // 2. Fuentes a analizar: las recién subidas o existentes en el proyecto
       const sourcesToAnalyze = [...newlyUploadedSourceIds];
       if (sourcesToAnalyze.length === 0 && sources && sources.length > 0) {
-        sources.forEach(s => sourcesToAnalyze.push(s.id));
+        sources.filter(s=>s.type==='PDF').forEach(s => sourcesToAnalyze.push(s.id));
       }
 
       // 3. Ejecutar pipeline en todas las fuentes disponibles
@@ -141,15 +141,10 @@ export default function ProjectSummary({ project, onProjectUpdated, onNavigateTo
           description: description.trim(), systemDescription: description.trim()
         });
       }
-      if (sourcesToAnalyze.length === 0 && description.trim()) {
-        setAnalysisProgress('Analizando descripci?n del proyecto...');
-        const result = await aiApi.analyzeProject(project.id, description.trim());
-        if (result?.partial) sourceWarnings.push('An?lisis de descripci?n parcial: revisa los hallazgos pendientes.');
-      }
       setAnalysisProgress('Actualizando resultados...');
 
       setPdfFiles([]);
-      setAudioFile(null);
+
       setAnalysisWarnings(sourceWarnings);
       setState(sourceWarnings.length && !aggregatedSummary && sourcesToAnalyze.length > 0 ? 'error' : 'success');
       if (sourceWarnings.length) setErrorMessage(sourceWarnings.join(' '));
@@ -197,7 +192,7 @@ export default function ProjectSummary({ project, onProjectUpdated, onNavigateTo
           <button
             className="btn btn-primary btn-sm"
             onClick={handleAnalyze}
-            disabled={state === 'analyzing' || (!description.trim() && pdfFiles.length === 0 && !audioFile && sources.length === 0)}
+            disabled={state === 'analyzing' || (pdfFiles.length === 0 && !sources.some(s=>s.type === 'PDF'))}
           >
             {state === 'analyzing' ? (
               <>
@@ -508,7 +503,7 @@ export default function ProjectSummary({ project, onProjectUpdated, onNavigateTo
           </div>
 
           <div className="form-group" style={{ marginBottom: '12px' }}>
-            <label className="form-label">Descripción del Sistema *</label>
+            <label className="form-label">Contexto del proyecto (opcional)</label>
             <textarea
               className="form-control"
               rows={6}
@@ -534,24 +529,16 @@ export default function ProjectSummary({ project, onProjectUpdated, onNavigateTo
                 disabled={state === 'analyzing'}
                 onChange={event => {
                   const files = Array.from(event.target.files || []);
-                  const invalid = files.filter(f => !f.name.toLowerCase().endsWith('.pdf'));
+                  const invalid = files.filter(f => !isPdf(f));
                   if (invalid.length > 0) {
-                    const audioExts = ['.mp3', '.wav', '.m4a', '.ogg', '.webm', '.aac', '.flac', '.mp4'];
-                    const hasAudio = invalid.some(f => audioExts.some(ext => f.name.toLowerCase().endsWith(ext)));
                     setState('error');
-                    setErrorMessage(hasAudio
-                      ? `Has seleccionado un archivo de audio en la opción de PDF ("${invalid.map(f => f.name).join(', ')}"). Utiliza la opción de "Audio / entrevista".`
-                      : `Solo se permiten archivos PDF. Archivo no válido: "${invalid.map(f => f.name).join(', ')}".`);
+                    setErrorMessage('Solo se permiten archivos PDF (.pdf).');
                   }
-                  setPdfFiles(files.filter(f => f.name.toLowerCase().endsWith('.pdf')));
+                  setPdfFiles(files.filter(f => isPdf(f)));
                 }}
               />
             </label>
-            <label style={{ display: 'flex', alignItems: 'center', gap: '10px', padding: '10px 12px', border: '1px dashed var(--outline-variant)', borderRadius: '6px', background: 'var(--surface-container-low)', cursor: 'pointer' }}>
-              <span className="ms ms-sm" style={{ color: 'var(--primary)' }}>mic</span>
-              <span style={{ minWidth: 0, flex: 1 }}><strong style={{ display: 'block', fontSize: '0.8rem' }}>Audio / entrevista</strong><small style={{ color: 'var(--secondary)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', display: 'block' }}>{audioFile?.name || 'Opcional · Faster-Whisper local'}</small></span>
-              <input type="file" accept="audio/*,.mp3,.wav,.m4a,.ogg,.webm" hidden disabled={state === 'analyzing'} onChange={event => setAudioFile(event.target.files?.[0] || null)} />
-            </label>
+
           </div>
 
           <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: '8px' }}>
@@ -562,10 +549,10 @@ export default function ProjectSummary({ project, onProjectUpdated, onNavigateTo
               <button
                 className="btn btn-primary btn-sm"
                 onClick={handleAnalyze}
-                disabled={state === 'analyzing' || !description.trim()}
+                disabled={state === 'analyzing' || (pdfFiles.length === 0 && !sources.some(s=>s.type === 'PDF'))}
               >
                 {state === 'analyzing' ? (
-                    <><span className="ms ms-sm spin">autorenew</span><span>{pdfFiles.length || audioFile ? 'Procesando fuentes...' : 'Analizando...'}</span></>
+                    <><span className="ms ms-sm spin">autorenew</span><span>{pdfFiles.length ? 'Procesando fuentes...' : 'Analizando...'}</span></>
                 ) : (
                   <><span className="ms ms-sm">play_arrow</span><span>Analizar proyecto</span></>
                 )}
@@ -591,7 +578,7 @@ export default function ProjectSummary({ project, onProjectUpdated, onNavigateTo
                   Documentos y Fuentes Subidas ({sources.length})
                 </h3>
                 <p style={{ fontSize: '0.75rem', color: 'var(--secondary)', margin: '2px 0 0' }}>
-                  Archivos PDF de especificaciones y audios de entrevistas vinculados a este proyecto.
+                  Archivos PDF de especificaciones vinculados a este proyecto.
                 </p>
               </div>
             </div>
@@ -604,9 +591,9 @@ export default function ProjectSummary({ project, onProjectUpdated, onNavigateTo
           {sources.length === 0 ? (
             <div style={{ padding: '24px', textAlign: 'center', border: '1px dashed var(--outline-variant)', borderRadius: 'var(--radius-md)', background: 'var(--surface-container-lowest)' }}>
               <span className="ms ms-lg" style={{ color: 'var(--outline)', display: 'block', marginBottom: '8px' }}>cloud_upload</span>
-              <p style={{ fontSize: '0.8125rem', fontWeight: 500, color: 'var(--on-surface)', margin: 0 }}>No hay documentos ni audios subidos aún.</p>
+              <p style={{ fontSize: '0.8125rem', fontWeight: 500, color: 'var(--on-surface)', margin: 0 }}>No hay documentos PDF subidos aún.</p>
               <p style={{ fontSize: '0.75rem', color: 'var(--secondary)', margin: '4px 0 0' }}>
-                Selecciona tus archivos PDF o audios arriba y haz clic en <strong>"Analizar proyecto"</strong> para procesarlos.
+                Selecciona tus archivos PDF arriba y haz clic en <strong>"Analizar proyecto"</strong> para procesarlos.
               </p>
             </div>
           ) : (

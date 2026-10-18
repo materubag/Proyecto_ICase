@@ -43,3 +43,26 @@ backend/.cache/
 # Tests
 /backend/tests/
 /frontend/tests/
+
+# Keep the offline extraction regression suite reviewable and reproducible.
+!/backend/tests/
+/backend/tests/*
+!/backend/tests/catalog_integrity.test.js
+!/backend/tests/document_extraction.test.js
+!/backend/tests/requirement_flow.test.js
+!/backend/tests/actor_identity.test.js
+!/backend/tests/objective_classification.test.js
+!/backend/tests/analysis_jobs.test.js
+!/backend/tests/er_diagram_fix.test.js
+!/backend/tests/candidate_review_scope.test.js
+!/backend/tests/actor_evidence.test.js
+!/backend/tests/fixtures/
+!/frontend/tests/
+/frontend/tests/*
+!/frontend/tests/responseReader.test.mjs
+!/frontend/tests/mockupScreenOptions.test.mjs
+!/frontend/tests/chen.test.mjs
+
+# Phase 2 offline and isolated integration tests
+!/backend/tests/*.js
+!/frontend/tests/*.mjs

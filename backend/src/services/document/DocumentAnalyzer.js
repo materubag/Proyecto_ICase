@@ -26,7 +26,7 @@ class DocumentAnalyzer {
     const sections = sectionDetector.detectSections(cleanedText);
 
     // 4. Extracción basada en reglas deterministas (RF, RNF, Actores, Reglas, Entidades, etc.)
-    const rules = ruleBasedExtractor.extract(cleanedText, sections, {
+    const rules = ruleBasedExtractor.extract(extracted.extractedText, sectionDetector.detectSections(extracted.extractedText), {
       fileName: extracted.fileName || fileName,
       pageCount: extracted.pageCount
     });
@@ -81,6 +81,8 @@ class DocumentAnalyzer {
       pageCount: extracted.pageCount,
       textLength: cleanedText.length,
       extractedText: extracted.extractedText,
+      rawLayoutText: extracted.rawLayoutText,
+      pdfExtractionVersion:extracted.extractionVersion,
       detectedSections: sections.map(s => ({
         title: s.title,
         category: s.category,

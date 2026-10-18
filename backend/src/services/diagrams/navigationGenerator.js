@@ -15,6 +15,7 @@ module.exports = {
    */
   generate(screens = [], projectName = 'Sistema de Información') {
     const lines = ['flowchart TD'];
+    if (!screens?.length) return lines.join('\n');
 
     const rootId = 'APP_ROOT';
     const safeProjectName = toSafeLabel(projectName, 40) || 'Sistema';

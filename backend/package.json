@@ -4,16 +4,18 @@
   "description": "Backend API for ICASE (Integrated Computer-Aided Software Engineering) Tool",
   "main": "src/server.js",
   "scripts": {
-    "test": "node --require ./tests/fixtures/offline.cjs --test tests/document_extraction.test.js tests/requirement_flow.test.js tests/engineering.test.js tests/audio.test.js tests/pipeline.test.js tests/fase3.test.js tests/gemini_multipdf_whisper.test.js tests/actor_identity.test.js tests/objective_classification.test.js tests/analysis_jobs.test.js",
+    "test": "node --require ./tests/fixtures/offline.cjs --test tests/*.test.js",
     "test:extraction": "node --require ./tests/fixtures/offline.cjs --test tests/document_extraction.test.js tests/requirement_flow.test.js",
-    "test:requirements:integration": "node tests/requirement_flow.integration.js",
-    "test:integration": "node tests/engineering.integration.js",
+    "test:requirements:integration": "node --test tests/analysis_postgres.integration.js",
+    "test:integration": "node --test tests/analysis_postgres.integration.js",
     "start": "node src/server.js",
     "dev": "nodemon src/server.js",
     "prisma:generate": "prisma generate",
     "prisma:migrate": "prisma migrate dev",
     "prisma:push": "prisma db push",
-    "prisma:studio": "prisma studio"
+    "prisma:studio": "prisma studio",
+    "test:integrity": "node --require ./tests/fixtures/offline.cjs --test tests/catalog_integrity.test.js",
+    "test:postgres": "node --test tests/analysis_postgres.integration.js"
   },
   "keywords": [
     "icase",

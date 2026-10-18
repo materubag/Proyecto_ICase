@@ -72,7 +72,7 @@ export default function ProjectRequirements({ project, onProjectUpdated, initial
   const [name, setName] = useState('');
   const [description, setDescription] = useState('');
   const [type, setType] = useState('FUNCTIONAL');
-  const [priority, setPriority] = useState('MEDIUM');
+  const [priority, setPriority] = useState('');
   const [status, setStatus] = useState('PENDING');
   const [actorIds, setActorIds] = useState([]);
   const [dependencies, setDependencies] = useState([]);
@@ -102,8 +102,8 @@ export default function ProjectRequirements({ project, onProjectUpdated, initial
     setName(''); setDescription('');
     setType('FUNCTIONAL'); setPriority('MEDIUM'); setStatus('PENDING');
     setActorIds([]); setDependencies([]);
-    setPreconditions('El usuario debe estar autenticado con rol y permisos correspondientes.');
-    setPostconditions('El sistema actualiza el registro en la base de datos y refleja los cambios.');
+    setPreconditions('');
+    setPostconditions('');
     setReqModalOpen(true);
   }
 
@@ -111,11 +111,11 @@ export default function ProjectRequirements({ project, onProjectUpdated, initial
     e?.stopPropagation();
     setEditingReq(req);
     setCode(req.code); setName(req.name); setDescription(req.description);
-    setType(req.type); setPriority(req.priority); setStatus(req.status);
+    setType(req.type); setPriority(req.priority || ''); setStatus(req.status);
     setActorIds(Array.isArray(req.actorIds) ? req.actorIds : []);
     setDependencies(Array.isArray(req.dependencies) ? req.dependencies : []);
-    setPreconditions(req.qualityReport?.preconditions || req.preconditions || 'El usuario debe estar autenticado con rol y permisos correspondientes.');
-    setPostconditions(req.qualityReport?.postconditions || req.postconditions || 'El sistema actualiza el registro en la base de datos y refleja los cambios.');
+    setPreconditions(req.qualityReport?.preconditions || req.preconditions || '');
+    setPostconditions(req.qualityReport?.postconditions || req.postconditions || '');
     setReqModalOpen(true);
   }
 
@@ -125,7 +125,7 @@ export default function ProjectRequirements({ project, onProjectUpdated, initial
     try {
       setSavingReq(true);
       const payload = {
-        code, name, description, type, priority, status,
+        code, name, description, type, priority: priority || null, status,
         actorIds: Array.isArray(actorIds) ? actorIds : [],
         dependencies: Array.isArray(dependencies) ? dependencies : [],
         qualityReport: {
@@ -287,10 +287,10 @@ export default function ProjectRequirements({ project, onProjectUpdated, initial
               </thead>
               <tbody>
                 {filtered.map((req, idx) => {
-                  const pre = req.qualityReport?.preconditions || req.preconditions || 'El usuario debe estar autenticado con rol y permisos correspondientes.';
-                  const post = req.qualityReport?.postconditions || req.postconditions || 'El sistema actualiza el registro en la base de datos y refleja los cambios.';
+                  const pre = req.qualityReport?.preconditions || req.preconditions || '';
+                  const post = req.qualityReport?.postconditions || req.postconditions || '';
                   const actors = (req.actorIds || []).map(id => actorsMap.get(id) || id).join(', ') || 'Sin actor asignado';
-                  const deps = (req.dependencies || []).join(', ') || 'Ninguna';
+                  const deps = (req.dependencies || []).join(', ') || (req.sources?.dependencyStatus === 'ANALYZED' ? 'Ninguna documentada' : 'Pendiente de an?lisis');
 
                   return (
                     <tr
@@ -321,7 +321,7 @@ export default function ProjectRequirements({ project, onProjectUpdated, initial
                       <td style={{ padding: '12px 14px' }}>
                         <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
                           <div className={`priority-dot ${PRIORITY_DOT[req.priority] || 'medium'}`} />
-                          <span style={{ fontWeight: 600 }}>{PRIORITY_LABEL[req.priority] || req.priority}</span>
+                          <span style={{ fontWeight: 600 }}>{PRIORITY_LABEL[req.priority] || 'Pendiente'}</span>
                         </div>
                       </td>
                       <td style={{ padding: '12px 14px', color: 'var(--secondary)' }}>
@@ -418,7 +418,7 @@ export default function ProjectRequirements({ project, onProjectUpdated, initial
                 <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
                   <div className={`priority-dot ${PRIORITY_DOT[req.priority] || 'medium'}`} />
                   <span style={{ fontSize: '0.8125rem', color: 'var(--secondary)', fontWeight: selected?.id === req.id ? 500 : 400 }}>
-                    {PRIORITY_LABEL[req.priority]}
+                    {PRIORITY_LABEL[req.priority] || 'Pendiente'}
                   </span>
                 </div>
                 <div>
@@ -478,7 +478,7 @@ export default function ProjectRequirements({ project, onProjectUpdated, initial
                     {selected.name}
                   </h2>
                   <p style={{ fontSize: '0.6875rem', color: 'var(--secondary)', marginTop: '3px' }}>
-                    {TYPE_LABELS[selected.type]} · Prioridad {PRIORITY_LABEL[selected.priority]}
+                    {TYPE_LABELS[selected.type]} · Prioridad {PRIORITY_LABEL[selected.priority] || 'Pendiente'}
                   </p>
                 </div>
               </div>
@@ -560,7 +560,7 @@ export default function ProjectRequirements({ project, onProjectUpdated, initial
                       <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
                         <div className={`priority-dot ${PRIORITY_DOT[selected.priority]}`} />
                         <span style={{ fontSize: '0.875rem', fontWeight: 600, color: 'var(--on-surface)' }}>
-                          {PRIORITY_LABEL[selected.priority]}
+                          {PRIORITY_LABEL[selected.priority] || 'Pendiente'}
                         </span>
                       </div>
                     </div>
@@ -633,6 +633,7 @@ export default function ProjectRequirements({ project, onProjectUpdated, initial
             <div className="form-group">
               <label className="form-label">Prioridad</label>
               <select className="form-control" value={priority} onChange={e => setPriority(e.target.value)}>
+                <option value="">Pendiente de definir</option>
                 <option value="HIGH">Alta</option>
                 <option value="MEDIUM">Media</option>
                 <option value="LOW">Baja</option>

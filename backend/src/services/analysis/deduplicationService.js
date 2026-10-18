@@ -147,7 +147,9 @@ class DeduplicationService {
 
     // Merge incoming actors
     actors.forEach(act => {
-      const key = this.getActorCanonicalKey(act.name);
+      const aliasKeys=(act.aliases||[]).map(alias=>this.getActorCanonicalKey(alias));
+      const matches=[...canonicalMap.keys()].filter(key=>aliasKeys.includes(key));
+      const key = matches.length===1?matches[0]:this.getActorCanonicalKey(act.name);
       const displayName = this.getPreferredActorDisplayName(act.name, key);
 
       if (!canonicalMap.has(key)) {
@@ -363,7 +365,7 @@ class DeduplicationService {
         const sameStatement = normalizedStatement === this.normalizeText(g.canonical.statement);
         const equivalentInferred = !isExplicit && !groupIsExplicit && this.isSemanticEquivalent({ statement }, { statement: g.canonical.statement });
 
-        if (sameExplicitCode || sameStatement || equivalentInferred) {
+        if ((sameExplicitCode && sameStatement) || (sameStatement && !(isExplicit && groupIsExplicit && candidateCode!==groupCode)) || equivalentInferred) {
           matchedGroup = g;
           break;
         }
@@ -374,11 +376,11 @@ class DeduplicationService {
         temporaryCode: cand.temporaryCode || cand.code || null,
         statement,
         originalStatement: cand.originalStatement || statement,
-        sourceFile: cand.evidence?.sourceFile || cand.source?.name || 'Documento',
+        sourceFile: cand.evidence?.sourceFile || cand.source?.name || cand.sourceFile || 'Documento',
         sourceId: cand.sourceId || null,
         sourceVersionId: cand.sourceVersionId || null,
         method: cand.origin || 'EXTRACTED',
-        confidence: cand.confidence ?? 1.0
+        confidence: cand.confidence ?? null
       };
 
       if (matchedGroup) {
@@ -414,7 +416,8 @@ class DeduplicationService {
                     g.canonical.type === 'RNF' ||
                     (g.canonical.temporaryCode && g.canonical.temporaryCode.startsWith('CRNF'));
 
-      const code = isRNF
+      const originalCode=g.canonical.code || g.canonical.temporaryCode;
+      const code = /^(?:C)?RN?F-\d+$/i.test(originalCode||'') ? originalCode : isRNF
         ? `RNF-${String(rnfCounter++).padStart(2, '0')}`
         : `RF-${String(rfCounter++).padStart(2, '0')}`;
 
