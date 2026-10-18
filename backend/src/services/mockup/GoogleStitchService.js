@@ -17,6 +17,9 @@ class GoogleStitchService {
    * Crea un proyecto nuevo en Google Stitch
    */
   async createProject(projectName = 'Proyecto ICASE') {
+    if (!this.apiKey) {
+      throw new Error('Configura GOOGLE_STITCH_API_KEY en el entorno para utilizar Google Stitch.');
+    }
     console.log(`[GoogleStitch] Creando proyecto en Stitch: "${projectName}"...`);
     const response = await fetch(this.apiUrl, {
       method: 'POST',
