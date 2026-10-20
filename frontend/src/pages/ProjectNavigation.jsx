@@ -25,7 +25,7 @@ export default function ProjectNavigation({ project, onProjectUpdated }) {
     try {
       const raw = localStorage.getItem(`icase_nav_gen_${project.id}`);
       if (raw && Date.now() - parseInt(raw, 10) < 180000) return true;
-    } catch (e) {}
+    } catch (e) { }
     return false;
   });
 
@@ -36,7 +36,7 @@ export default function ProjectNavigation({ project, onProjectUpdated }) {
     try {
       const raw = localStorage.getItem(`icase_flow_gen_${project.id}`);
       if (raw && Date.now() - parseInt(raw, 10) < 180000) return true;
-    } catch (e) {}
+    } catch (e) { }
     return false;
   });
   const [flowNotice, setFlowNotice] = useState('');
@@ -118,7 +118,7 @@ export default function ProjectNavigation({ project, onProjectUpdated }) {
       localStorage.setItem(FLOW_GEN_KEY, Date.now().toString());
       const isForce = typeof force === 'object' ? Boolean(force.force) : Boolean(force);
       const res = await diagramsApi.generateDiagram(project.id, 'FLOWCHART', isForce);
-      setFlowNotice(res.warning||'');
+      setFlowNotice(res.warning || '');
       const code = res?.code || res?.mermaidCode || res?.diagram?.mermaidCode || res?.artifact?.mermaidCode;
       if (code) {
         setStoredFlowDiagram(code);
@@ -133,10 +133,10 @@ export default function ProjectNavigation({ project, onProjectUpdated }) {
     }
   }
 
-  const effectiveNavCode = storedNavDiagram || ((navigationNodes.length||screens.length)?localNavCode:'');
+  const effectiveNavCode = storedNavDiagram || ((navigationNodes.length || screens.length) ? localNavCode : '');
   const effectiveFlowCode = storedFlowDiagram || '';
 
-  
+
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', height: '100%', overflow: 'hidden' }}>
@@ -237,20 +237,23 @@ export default function ProjectNavigation({ project, onProjectUpdated }) {
               </div>
             </div>
 
+
             <DiagramViewport
               code={effectiveNavCode}
               type="flowchart"
               title="Árbol de Navegación (Jerarquía Padre → Hijo)"
               minHeight="520px"
+              initialZoom={0.4}
               isOutdated={isNavOutdated}
               onRegenerate={() => handleGenerateNav(true)}
               canGenerate={true}
               isGenerating={generatingNav}
             />
+
           </div>
         )}
 
-        {flowNotice&&<p role="status" style={{padding:'12px'}}>{flowNotice}</p>}
+        {flowNotice && <p role="status" style={{ padding: '12px' }}>{flowNotice}</p>}
         {/* SUBTAB 2: DIAGRAMA DE FLUJO */}
         {activeTab === 'flow' && (
           <div>

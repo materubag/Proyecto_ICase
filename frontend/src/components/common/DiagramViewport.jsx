@@ -4,9 +4,28 @@ import ChenDiagram from '../diagrams/ChenDiagram';
 
 /**
  * DiagramViewport
- * Reusable viewport container for Mermaid diagrams with zoom, pan, fit, scroll controls,
- * Diagram/Code toggle, regeneration confirmation, outdated banner, and empty/error states.
+ *
+ * Contenedor reutilizable para diagramas Mermaid con:
+ * - Zoom inicial configurable (40 % por defecto).
+ * - Zoom manual para acercar y alejar.
+ * - Ajuste al espacio disponible.
+ * - Pantalla completa dentro de la aplicación.
+ * - Vista del diagrama y del código Mermaid.
+ * - Copia del código.
+ * - Confirmación antes de regenerar.
+ * - Indicadores de generación y errores de renderizado.
  */
+
+const clampZoom = (value) => {
+  const numericValue = Number(value);
+
+  if (!Number.isFinite(numericValue)) {
+    return 1;
+  }
+
+  return Math.min(2.5, Math.max(0.4, numericValue));
+};
+
 export default function DiagramViewport({
   code,
   type = 'flowchart',
@@ -14,6 +33,7 @@ export default function DiagramViewport({
   minHeight = '480px',
   maxHeight = 'calc(100vh - 240px)',
   className = '',
+  initialZoom = 1,
   onValidated,
   onRegenerate,
   isGenerating = false,
@@ -21,101 +41,207 @@ export default function DiagramViewport({
   canGenerate = true,
   missingInfo = []
 }) {
-  const [zoom, setZoom] = useState(1);
+  // Estados del componente
+  const [zoom, setZoom] = useState(() => clampZoom(initialZoom));
   const [fitMode, setFitMode] = useState(false);
   const [isFullscreen, setIsFullscreen] = useState(false);
-  const [viewMode, setViewMode] = useState('diagram'); // 'diagram' | 'code'
+  const [viewMode, setViewMode] = useState('diagram');
   const [copied, setCopied] = useState(false);
   const [showConfirmModal, setShowConfirmModal] = useState(false);
   const [renderError, setRenderError] = useState(null);
+
+  // Referencias
   const viewportRef = useRef(null);
+  const copyTimeoutRef = useRef(null);
 
+  // Valores derivados
+  const hasCode =
+    typeof code === 'string' && code.trim().length > 0;
+
+  // Restablecer el visor cuando cambia el código o el zoom inicial.
   useEffect(() => {
-    setFitMode(true);setZoom(1);setRenderError(null);
-    if(viewportRef.current){viewportRef.current.scrollTop=0;viewportRef.current.scrollLeft=0;}
-  }, [code]);
+    setFitMode(false);
+    setZoom(clampZoom(initialZoom));
+    setRenderError(null);
+    setCopied(false);
 
+    if (viewportRef.current) {
+      viewportRef.current.scrollTop = 0;
+      viewportRef.current.scrollLeft = 0;
+    }
+
+    if (copyTimeoutRef.current !== null) {
+      window.clearTimeout(copyTimeoutRef.current);
+      copyTimeoutRef.current = null;
+    }
+  }, [code, initialZoom]);
+
+  // Limpiar el temporizador al desmontar el componente.
+  useEffect(() => {
+    return () => {
+      if (copyTimeoutRef.current !== null) {
+        window.clearTimeout(copyTimeoutRef.current);
+      }
+    };
+  }, []);
+
+  // Mantener el scroll del documento bloqueado en pantalla completa.
+  useEffect(() => {
+    if (!isFullscreen) {
+      return undefined;
+    }
+
+    const previousOverflow = document.body.style.overflow;
+    document.body.style.overflow = 'hidden';
+
+    return () => {
+      document.body.style.overflow = previousOverflow;
+    };
+  }, [isFullscreen]);
+
+  // Zoom de acercamiento.
   const handleZoomIn = () => {
     setFitMode(false);
-    setZoom((prev) => Math.min(Number((prev + 0.15).toFixed(2)), 2.5));
+    setZoom((prev) => clampZoom(prev + 0.15));
   };
 
+  // Zoom de alejamiento.
   const handleZoomOut = () => {
     setFitMode(false);
-    setZoom((prev) => Math.max(Number((prev - 0.15).toFixed(2)), 0.4));
+    setZoom((prev) => clampZoom(prev - 0.15));
   };
 
+  // Restablecer el zoom inicial.
   const handleResetZoom = () => {
     setFitMode(false);
-    setZoom(1);
+    setZoom(clampZoom(initialZoom));
   };
 
+  // Activar o desactivar el modo de ajuste.
   const handleToggleFit = () => {
     setFitMode((prev) => !prev);
-    if (!fitMode) {
-      setZoom(1);
-    }
   };
 
+  // Entrar o salir de pantalla completa.
   const handleToggleFullscreen = () => {
     setIsFullscreen((prev) => !prev);
   };
 
-  // Keyboard escape to exit fullscreen
+  // Gestionar Escape para cerrar el modal o salir de pantalla completa.
   useEffect(() => {
-    const handleKeyDown = (e) => {
-      if (e.key === 'Escape' && isFullscreen) {
+    const handleKeyDown = (event) => {
+      if (event.key !== 'Escape') {
+        return;
+      }
+
+      if (showConfirmModal) {
+        setShowConfirmModal(false);
+        return;
+      }
+
+      if (isFullscreen) {
         setIsFullscreen(false);
       }
     };
+
     window.addEventListener('keydown', handleKeyDown);
-    return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [isFullscreen]);
 
-  const copyMermaidCode = () => {
-    if (code && navigator.clipboard) {
-      navigator.clipboard.writeText(code);
+    return () => {
+      window.removeEventListener('keydown', handleKeyDown);
+    };
+  }, [showConfirmModal, isFullscreen]);
+
+  // Copiar el código Mermaid.
+  const copyMermaidCode = async () => {
+    if (!hasCode) {
+      return;
+    }
+
+    try {
+      if (!navigator.clipboard?.writeText) {
+        throw new Error(
+          'El portapapeles no está disponible en este navegador.'
+        );
+      }
+
+      await navigator.clipboard.writeText(code);
+
       setCopied(true);
-      setTimeout(() => setCopied(false), 2000);
+
+      if (copyTimeoutRef.current !== null) {
+        window.clearTimeout(copyTimeoutRef.current);
+      }
+
+      copyTimeoutRef.current = window.setTimeout(() => {
+        setCopied(false);
+        copyTimeoutRef.current = null;
+      }, 2000);
+    } catch (error) {
+      console.error(
+        'No se pudo copiar el código Mermaid:',
+        error
+      );
     }
   };
 
+  // Solicitar confirmación antes de regenerar.
   const handleRegenerateClick = () => {
-    if (code && code.trim().length > 0) {
+    if (isGenerating || !canGenerate || !onRegenerate) {
+      return;
+    }
+
+    if (hasCode) {
       setShowConfirmModal(true);
-    } else if (onRegenerate) {
-      onRegenerate(true);
+      return;
     }
+
+    setRenderError(null);
+    onRegenerate(true);
   };
 
+  // Confirmar la regeneración.
   const handleConfirmRegenerate = () => {
-    setShowConfirmModal(false);
-    if (onRegenerate) {
-      onRegenerate(true);
+    if (isGenerating || !canGenerate || !onRegenerate) {
+      return;
     }
+
+    setShowConfirmModal(false);
+    setRenderError(null);
+
+    onRegenerate(true);
   };
 
-  const handleDiagramValidated = (isValid, err) => {
-    if (!isValid && err) {
-      setRenderError(err);
-    } else {
+  // Recibir el resultado de validación del diagrama.
+  const handleDiagramValidated = (isValid, error) => {
+    if (isValid) {
       setRenderError(null);
+    } else {
+      setRenderError(
+        error || 'Error desconocido al renderizar el diagrama.'
+      );
     }
-    if (onValidated) {
-      onValidated(isValid, err);
+
+    if (typeof onValidated === 'function') {
+      onValidated(isValid, error);
     }
   };
 
   return (
     <div
-      className={`diagram-viewport-wrapper ${isFullscreen ? 'diagram-fullscreen' : ''} ${className}`}
+      className={`diagram-viewport-wrapper ${
+        isFullscreen ? 'diagram-fullscreen' : ''
+      } ${className}`}
       style={{
         display: 'flex',
         flexDirection: 'column',
-        borderRadius: isFullscreen ? 0 : 'var(--radius-md)',
+        borderRadius: isFullscreen
+          ? 0
+          : 'var(--radius-md)',
         border: '1px solid var(--border-default)',
         background: 'var(--surface-container-lowest)',
-        boxShadow: isFullscreen ? 'none' : 'var(--shadow-xs)',
+        boxShadow: isFullscreen
+          ? 'none'
+          : 'var(--shadow-xs)',
         position: isFullscreen ? 'fixed' : 'relative',
         top: isFullscreen ? 0 : 'auto',
         left: isFullscreen ? 0 : 'auto',
@@ -127,8 +253,7 @@ export default function DiagramViewport({
         overflow: 'hidden'
       }}
     >
-
-      {/* Viewport Toolbar */}
+      {/* Barra de herramientas */}
       <div
         className="diagram-viewport-toolbar"
         style={{
@@ -143,128 +268,229 @@ export default function DiagramViewport({
           flexWrap: 'wrap'
         }}
       >
-        <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
-          <span className="ms ms-xs" style={{ color: 'var(--primary)' }}>
+        {/* Título y selector de vista */}
+        <div
+          style={{
+            display: 'flex',
+            alignItems: 'center',
+            gap: '10px',
+            flexWrap: 'wrap'
+          }}
+        >
+          <span
+            className="ms ms-xs"
+            style={{ color: 'var(--primary)' }}
+            aria-hidden="true"
+          >
             schema
           </span>
-          <span style={{ fontSize: '0.8125rem', fontWeight: 600, color: 'var(--on-surface)' }}>
+
+          <span
+            style={{
+              fontSize: '0.8125rem',
+              fontWeight: 600,
+              color: 'var(--on-surface)'
+            }}
+          >
             {title || 'Diagrama Mermaid'}
           </span>
 
-          {code && (
+          {isOutdated && hasCode && (
             <span
+              role="status"
               style={{
-                fontSize: '0.6875rem',
-                color: 'var(--secondary)',
-                background: 'var(--surface-container)',
-                padding: '2px 6px',
-                borderRadius: 'var(--radius-xs)',
-                fontFamily: 'var(--font-mono)'
+                fontSize: '0.7rem',
+                color: '#92400e',
+                background: 'rgba(245, 158, 11, 0.12)',
+                borderRadius: '4px',
+                padding: '3px 7px'
               }}
             >
-              {fitMode ? 'Ajustado' : `${Math.round(zoom * 100)}%`}
+              Diagrama desactualizado
             </span>
           )}
 
-          {/* Toggle [ Diagrama ] [ Código Mermaid ] */}
-          {code && (
-            <div className="view-toggle" style={{ transform: 'scale(0.9)', transformOrigin: 'left center' }}>
+          {hasCode && (
+            <div
+              className="view-toggle"
+              style={{
+                transform: 'scale(0.9)',
+                transformOrigin: 'left center'
+              }}
+            >
               <button
                 type="button"
-                className={`view-toggle-btn ${viewMode === 'diagram' ? 'active' : ''}`}
+                className={`view-toggle-btn ${
+                  viewMode === 'diagram' ? 'active' : ''
+                }`}
                 onClick={() => setViewMode('diagram')}
-                style={{ padding: '2px 10px', fontSize: '0.75rem' }}
+                aria-pressed={viewMode === 'diagram'}
+                style={{
+                  padding: '2px 10px',
+                  fontSize: '0.75rem'
+                }}
               >
-                <span>Diagrama</span>
+                Diagrama
               </button>
+
               <button
                 type="button"
-                className={`view-toggle-btn ${viewMode === 'code' ? 'active' : ''}`}
+                className={`view-toggle-btn ${
+                  viewMode === 'code' ? 'active' : ''
+                }`}
                 onClick={() => setViewMode('code')}
-                style={{ padding: '2px 10px', fontSize: '0.75rem' }}
+                aria-pressed={viewMode === 'code'}
+                style={{
+                  padding: '2px 10px',
+                  fontSize: '0.75rem'
+                }}
               >
-                <span>Código Mermaid</span>
+                Código Mermaid
               </button>
             </div>
           )}
         </div>
 
-        {/* Action Controls */}
-        <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+        {/* Controles */}
+        <div
+          style={{
+            display: 'flex',
+            alignItems: 'center',
+            gap: '6px',
+            flexWrap: 'wrap'
+          }}
+        >
           {onRegenerate && (
             <button
               type="button"
               className="btn btn-outline btn-sm"
               onClick={handleRegenerateClick}
               disabled={isGenerating || !canGenerate}
-              style={{ fontSize: '0.75rem', height: '28px', display: 'flex', alignItems: 'center', gap: '4px' }}
-              title={code ? 'Regenerar diagrama con Gemini' : 'Generar diagrama con Gemini'}
+              style={{
+                fontSize: '0.75rem',
+                height: '28px',
+                display: 'flex',
+                alignItems: 'center',
+                gap: '4px'
+              }}
+              title={
+                hasCode
+                  ? 'Regenerar diagrama'
+                  : 'Generar diagrama'
+              }
             >
-              <span className={`ms ms-xs ${isGenerating ? 'spin' : ''}`}>
-                {isGenerating ? 'autorenew' : code ? 'sync' : 'auto_fix_high'}
+              <span
+                className={`ms ms-xs ${
+                  isGenerating ? 'spin' : ''
+                }`}
+                aria-hidden="true"
+              >
+                {isGenerating
+                  ? 'autorenew'
+                  : hasCode
+                    ? 'sync'
+                    : 'auto_fix_high'}
               </span>
-              <span>{isGenerating ? 'Generando...' : code ? 'Regenerar' : 'Generar diagrama'}</span>
+
+              <span>
+                {isGenerating
+                  ? 'Generando...'
+                  : hasCode
+                    ? 'Regenerar'
+                    : 'Generar diagrama'}
+              </span>
             </button>
           )}
 
-          {code && viewMode === 'diagram' && (
+          {hasCode && viewMode === 'diagram' && (
             <>
               <button
                 type="button"
                 className="btn btn-ghost btn-sm btn-icon"
                 onClick={handleZoomOut}
-                disabled={zoom <= 0.4}
-                title="Reducir zoom (-)"
+                disabled={zoom <= 0.4 || fitMode}
+                title="Reducir zoom"
                 aria-label="Reducir zoom"
               >
-                <span className="ms ms-xs">zoom_out</span>
+                <span className="ms ms-xs" aria-hidden="true">
+                  zoom_out
+                </span>
+              </button>
+
+              <span
+                style={{
+                  fontSize: '0.6875rem',
+                  color: 'var(--secondary)',
+                  background: 'var(--surface-container)',
+                  padding: '2px 6px',
+                  borderRadius: 'var(--radius-xs)',
+                  fontFamily: 'var(--font-mono)'
+                }}
+                aria-live="polite"
+              >
+                {fitMode
+                  ? 'Ajustado'
+                  : `${Math.round(zoom * 100)}%`}
+              </span>
+
+              <button
+                type="button"
+                className="btn btn-ghost btn-sm btn-icon"
+                onClick={handleZoomIn}
+                disabled={zoom >= 2.5 || fitMode}
+                title="Aumentar zoom"
+                aria-label="Aumentar zoom"
+              >
+                <span className="ms ms-xs" aria-hidden="true">
+                  zoom_in
+                </span>
               </button>
 
               <button
                 type="button"
                 className="btn btn-ghost btn-sm"
                 onClick={handleResetZoom}
-                style={{ fontSize: '0.75rem', padding: '0 6px', height: '26px' }}
-                title="Restablecer tamaño real (100%)"
+                disabled={
+                  !fitMode &&
+                  Math.abs(zoom - clampZoom(initialZoom)) < 0.001
+                }
+                title="Restablecer zoom"
+                style={{
+                  fontSize: '0.7rem',
+                  padding: '0 6px',
+                  height: '26px'
+                }}
               >
-                100%
+                Restablecer
               </button>
 
-              <button
-                type="button"
-                className="btn btn-ghost btn-sm btn-icon"
-                onClick={handleZoomIn}
-                disabled={zoom >= 2.5}
-                title="Aumentar zoom (+)"
-                aria-label="Aumentar zoom"
-              >
-                <span className="ms ms-xs">zoom_in</span>
-              </button>
+              <div
+                style={{
+                  width: '1px',
+                  height: '16px',
+                  background: 'var(--border-default)',
+                  margin: '0 2px'
+                }}
+              />
 
-              <div style={{ width: '1px', height: '16px', background: 'var(--border-default)', margin: '0 2px' }} />
-
-              <button
-                type="button"
-                className={`btn btn-sm ${fitMode ? 'btn-primary' : 'btn-ghost'}`}
-                onClick={handleToggleFit}
-                style={{ fontSize: '0.75rem', padding: '0 8px', height: '26px' }}
-                title="Ajustar al ancho disponible"
-              >
-                <span className="ms ms-xs">fit_screen</span>
-                <span style={{ marginLeft: '4px' }}>Ajustar</span>
-              </button>
             </>
           )}
 
-          {code && (
+          {hasCode && (
             <button
               type="button"
               className="btn btn-ghost btn-sm btn-icon"
               onClick={copyMermaidCode}
-              title={copied ? '¡Copiado!' : 'Copiar código Mermaid'}
-              aria-label="Copiar código"
+              title={
+                copied
+                  ? 'Copiado'
+                  : 'Copiar código Mermaid'
+              }
+              aria-label="Copiar código Mermaid"
             >
-              <span className="ms ms-xs">{copied ? 'done' : 'content_copy'}</span>
+              <span className="ms ms-xs" aria-hidden="true">
+                {copied ? 'done' : 'content_copy'}
+              </span>
             </button>
           )}
 
@@ -272,17 +498,29 @@ export default function DiagramViewport({
             type="button"
             className="btn btn-ghost btn-sm btn-icon"
             onClick={handleToggleFullscreen}
-            title={isFullscreen ? 'Salir de pantalla completa' : 'Pantalla completa'}
-            aria-label="Pantalla completa"
+            title={
+              isFullscreen
+                ? 'Salir de pantalla completa'
+                : 'Pantalla completa'
+            }
+            aria-label={
+              isFullscreen
+                ? 'Salir de pantalla completa'
+                : 'Pantalla completa'
+            }
+            aria-pressed={isFullscreen}
           >
-            <span className="ms ms-xs">{isFullscreen ? 'close_fullscreen' : 'open_in_full'}</span>
+            <span className="ms ms-xs" aria-hidden="true">
+              {isFullscreen
+                ? 'close_fullscreen'
+                : 'open_in_full'}
+            </span>
           </button>
         </div>
       </div>
 
-      {/* Main View Area */}
-      {!code ? (
-        /* Empty State / Loading State */
+      {/* Estado vacío o generación inicial */}
+      {!hasCode ? (
         <div
           style={{
             padding: '60px 24px',
@@ -291,11 +529,12 @@ export default function DiagramViewport({
             flexDirection: 'column',
             alignItems: 'center',
             justifyContent: 'center',
-            minHeight: isFullscreen ? 'calc(100vh - 60px)' : minHeight
+            minHeight: isFullscreen
+              ? 'calc(100vh - 60px)'
+              : minHeight
           }}
         >
           {isGenerating ? (
-            /* Loading state — first generation */
             <>
               <div
                 style={{
@@ -307,30 +546,70 @@ export default function DiagramViewport({
                   animation: 'spin 0.8s linear infinite',
                   marginBottom: '16px'
                 }}
+                role="status"
+                aria-label="Generando"
               />
-              <h4 style={{ margin: '0 0 6px 0', fontSize: '1rem', color: 'var(--on-surface)' }}>
-                Generando diagrama con Gemini…
+
+              <h4
+                style={{
+                  margin: '0 0 6px',
+                  fontSize: '1rem',
+                  color: 'var(--on-surface)'
+                }}
+              >
+                Generando diagrama...
               </h4>
-              <p style={{ margin: 0, fontSize: '0.8125rem', color: 'var(--secondary)', maxWidth: '400px' }}>
-                Esto puede tardar unos segundos. El diagrama aparecerá aquí cuando esté listo.
+
+              <p
+                style={{
+                  margin: 0,
+                  fontSize: '0.8125rem',
+                  color: 'var(--secondary)',
+                  maxWidth: '400px'
+                }}
+              >
+                El diagrama aparecerá aquí cuando termine
+                la generación.
               </p>
             </>
           ) : (
-            /* Empty state */
             <>
-              <span className="ms" style={{ fontSize: '48px', color: 'var(--outline)', marginBottom: '12px' }}>
+              <span
+                className="ms"
+                aria-hidden="true"
+                style={{
+                  fontSize: '48px',
+                  color: 'var(--outline)',
+                  marginBottom: '12px'
+                }}
+              >
                 schema
               </span>
-              <h4 style={{ margin: '0 0 6px 0', fontSize: '1rem', color: 'var(--on-surface)' }}>
+
+              <h4
+                style={{
+                  margin: '0 0 6px',
+                  fontSize: '1rem',
+                  color: 'var(--on-surface)'
+                }}
+              >
                 Este diagrama todavía no ha sido generado
               </h4>
-              <p style={{ margin: '0 0 16px 0', fontSize: '0.8125rem', color: 'var(--secondary)', maxWidth: '440px' }}>
+
+              <p
+                style={{
+                  margin: '0 0 16px',
+                  fontSize: '0.8125rem',
+                  color: 'var(--secondary)',
+                  maxWidth: '440px'
+                }}
+              >
                 {canGenerate
-                  ? 'Puedes solicitar su generación inteligente con Gemini basada en el análisis documental del proyecto.'
-                  : 'La información del proyecto es insuficiente para construir este diagrama de forma fiable.'}
+                  ? 'Puedes generar el diagrama a partir de la información del proyecto.'
+                  : 'La información disponible no es suficiente para generar este diagrama.'}
               </p>
 
-              {!canGenerate && missingInfo && missingInfo.length > 0 && (
+              {!canGenerate && missingInfo.length > 0 && (
                 <div
                   style={{
                     marginBottom: '16px',
@@ -344,9 +623,17 @@ export default function DiagramViewport({
                   }}
                 >
                   <strong>Falta información:</strong>
-                  <ul style={{ margin: '4px 0 0 16px', padding: 0 }}>
-                    {missingInfo.map((m, i) => (
-                      <li key={i}>{m}</li>
+
+                  <ul
+                    style={{
+                      margin: '4px 0 0 16px',
+                      padding: 0
+                    }}
+                  >
+                    {missingInfo.map((item, index) => (
+                      <li key={`${item}-${index}`}>
+                        {item}
+                      </li>
                     ))}
                   </ul>
                 </div>
@@ -358,9 +645,15 @@ export default function DiagramViewport({
                   className="btn btn-primary btn-sm"
                   onClick={handleRegenerateClick}
                   disabled={isGenerating || !canGenerate}
-                  style={{ display: 'inline-flex', alignItems: 'center', gap: '6px' }}
+                  style={{
+                    display: 'inline-flex',
+                    alignItems: 'center',
+                    gap: '6px'
+                  }}
                 >
-                  <span className="ms ms-xs">auto_fix_high</span>
+                  <span className="ms ms-xs" aria-hidden="true">
+                    auto_fix_high
+                  </span>
                   <span>Generar diagrama</span>
                 </button>
               )}
@@ -368,31 +661,52 @@ export default function DiagramViewport({
           )}
         </div>
       ) : viewMode === 'code' ? (
-        /* Mermaid Code Viewer */
+        /* Visor del código Mermaid */
         <div
           style={{
             flex: 1,
             overflow: 'auto',
-            minHeight: isFullscreen ? '0' : minHeight,
+            minHeight: isFullscreen ? 0 : minHeight,
             maxHeight: isFullscreen ? 'none' : maxHeight,
             background: 'var(--surface-container-lowest)',
             padding: '20px'
           }}
         >
-          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '8px' }}>
-            <span style={{ fontSize: '0.75rem', fontWeight: 600, color: 'var(--secondary)', textTransform: 'uppercase' }}>
-              Código Mermaid Generado
+          <div
+            style={{
+              display: 'flex',
+              justifyContent: 'space-between',
+              alignItems: 'center',
+              marginBottom: '8px'
+            }}
+          >
+            <span
+              style={{
+                fontSize: '0.75rem',
+                fontWeight: 600,
+                color: 'var(--secondary)',
+                textTransform: 'uppercase'
+              }}
+            >
+              Código Mermaid
             </span>
+
             <button
               type="button"
               className="btn btn-outline btn-sm"
               onClick={copyMermaidCode}
               style={{ fontSize: '0.72rem' }}
             >
-              <span className="ms ms-xs">{copied ? 'done' : 'content_copy'}</span>
-              <span style={{ marginLeft: '4px' }}>{copied ? 'Copiado' : 'Copiar'}</span>
+              <span className="ms ms-xs" aria-hidden="true">
+                {copied ? 'done' : 'content_copy'}
+              </span>
+
+              <span style={{ marginLeft: '4px' }}>
+                {copied ? 'Copiado' : 'Copiar'}
+              </span>
             </button>
           </div>
+
           <pre
             style={{
               margin: 0,
@@ -412,16 +726,17 @@ export default function DiagramViewport({
           </pre>
         </div>
       ) : (
-        /* Diagram Render View */
+        /* Área del diagrama */
         <div
           ref={viewportRef}
           className="diagram-viewport-canvas"
           style={{
             flex: 1,
             overflow: 'auto',
-            minHeight: isFullscreen ? '0' : minHeight,
+            minHeight: isFullscreen ? 0 : minHeight,
             maxHeight: isFullscreen ? 'none' : maxHeight,
-            background: 'radial-gradient(var(--border-default) 1px, transparent 1px)',
+            background:
+              'radial-gradient(var(--border-default) 1px, transparent 1px)',
             backgroundSize: '20px 20px',
             backgroundColor: '#fafcff',
             padding: '24px',
@@ -429,7 +744,7 @@ export default function DiagramViewport({
             display: 'block'
           }}
         >
-          {/* Loading overlay while regenerating */}
+          {/* Indicador de regeneración */}
           {isGenerating && (
             <div
               style={{
@@ -445,6 +760,8 @@ export default function DiagramViewport({
                 gap: '14px',
                 pointerEvents: 'all'
               }}
+              role="status"
+              aria-live="polite"
             >
               <div
                 style={{
@@ -456,19 +773,36 @@ export default function DiagramViewport({
                   animation: 'spin 0.8s linear infinite'
                 }}
               />
+
               <div style={{ textAlign: 'center' }}>
-                <p style={{ margin: 0, fontSize: '0.9rem', fontWeight: 600, color: 'var(--on-surface)' }}>
-                  Generando diagrama con Gemini
+                <p
+                  style={{
+                    margin: 0,
+                    fontSize: '0.9rem',
+                    fontWeight: 600,
+                    color: 'var(--on-surface)'
+                  }}
+                >
+                  Generando diagrama
                 </p>
-                <p style={{ margin: '4px 0 0', fontSize: '0.78rem', color: 'var(--secondary)' }}>
-                  Esto puede tardar unos segundos…
+
+                <p
+                  style={{
+                    margin: '4px 0 0',
+                    fontSize: '0.78rem',
+                    color: 'var(--secondary)'
+                  }}
+                >
+                  Esto puede tardar unos segundos...
                 </p>
               </div>
             </div>
           )}
 
+          {/* Error de renderizado */}
           {renderError && (
             <div
+              role="alert"
               style={{
                 marginBottom: '16px',
                 padding: '12px 16px',
@@ -480,62 +814,111 @@ export default function DiagramViewport({
                 display: 'flex',
                 alignItems: 'center',
                 justifyContent: 'space-between',
-                gap: '12px'
+                gap: '12px',
+                flexWrap: 'wrap'
               }}
             >
               <div>
-                <strong>⚠ No se pudo renderizar el diagrama:</strong> El código Mermaid contiene un error sintáctico.
+                <strong>
+                  No se pudo renderizar el diagrama.
+                </strong>{' '}
+                Comprueba la sintaxis del código Mermaid.
+                {typeof renderError === 'string' && (
+                  <p
+                    style={{
+                      margin: '6px 0 0',
+                      overflowWrap: 'anywhere'
+                    }}
+                  >
+                    {renderError}
+                  </p>
+                )}
               </div>
-              <div style={{ display: 'flex', gap: '8px' }}>
+
+              <div
+                style={{
+                  display: 'flex',
+                  gap: '8px',
+                  flexWrap: 'wrap'
+                }}
+              >
                 <button
                   type="button"
                   className="btn btn-outline btn-sm"
                   onClick={() => setViewMode('code')}
-                  style={{ fontSize: '0.72rem', color: '#b42318', borderColor: '#b42318' }}
+                  style={{
+                    fontSize: '0.72rem',
+                    color: '#b42318',
+                    borderColor: '#b42318'
+                  }}
                 >
                   Ver código
                 </button>
+
                 {onRegenerate && (
                   <button
                     type="button"
                     className="btn btn-primary btn-sm"
                     onClick={handleRegenerateClick}
-                    disabled={isGenerating}
+                    disabled={isGenerating || !canGenerate}
                     style={{ fontSize: '0.72rem' }}
                   >
-                    Reintentar generación
+                    Regenerar
                   </button>
                 )}
               </div>
             </div>
           )}
 
+          {/* Diagrama escalado */}
           <div
-            className={`diagram-viewport-content ${fitMode ? 'fit-mode' : ''}`}
+            className={`diagram-viewport-content ${
+              fitMode ? 'fit-mode' : ''
+            }`}
             style={{
               transform: fitMode ? 'none' : `scale(${zoom})`,
               transformOrigin: 'top left',
               transition: 'transform 0.15s ease-out',
-              width: fitMode ? '100%' : type==='erDiagram'?'max-content':'fit-content',
+              width: fitMode
+                ? '100%'
+                : type === 'erDiagram'
+                  ? 'max-content'
+                  : 'fit-content',
               minWidth: '100%',
               display: 'flex',
               justifyContent: 'center',
               alignItems: 'flex-start'
             }}
           >
-            {type==='erDiagram'?<ChenDiagram code={code} fit={fitMode} onValidated={handleDiagramValidated}/>:<MermaidDiagram
-              code={code}
-              type={type}
-              onValidated={handleDiagramValidated}
-            />}
+            {type === 'erDiagram' ? (
+              <ChenDiagram
+                code={code}
+                fit={fitMode}
+                onValidated={handleDiagramValidated}
+              />
+            ) : (
+              <MermaidDiagram
+                code={code}
+                type={type}
+                onValidated={handleDiagramValidated}
+              />
+            )}
           </div>
         </div>
       )}
 
-      {/* Regeneration Confirmation Modal */}
+      {/* Modal de confirmación */}
       {showConfirmModal && (
         <div
           className="modal-backdrop"
+          onMouseDown={(event) => {
+            if (
+              event.target === event.currentTarget &&
+              !isGenerating
+            ) {
+              setShowConfirmModal(false);
+            }
+          }}
           style={{
             position: 'fixed',
             top: 0,
@@ -547,12 +930,17 @@ export default function DiagramViewport({
             display: 'flex',
             alignItems: 'center',
             justifyContent: 'center',
-            zIndex: 1060,
+            zIndex: 10000,
             padding: '16px'
           }}
         >
           <div
             className="modal-card panel"
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="regenerate-dialog-title"
+            aria-describedby="regenerate-dialog-description"
+            onMouseDown={(event) => event.stopPropagation()}
             style={{
               width: '100%',
               maxWidth: '420px',
@@ -563,27 +951,75 @@ export default function DiagramViewport({
               boxShadow: 'var(--shadow-lg)'
             }}
           >
-            <div style={{ display: 'flex', alignItems: 'center', gap: '10px', color: 'var(--primary)', marginBottom: '10px' }}>
-              <span className="ms" style={{ fontSize: '24px' }}>sync</span>
-              <h4 style={{ margin: 0, fontSize: '0.95rem', fontWeight: 600 }}>¿Regenerar diagrama?</h4>
+            <div
+              style={{
+                display: 'flex',
+                alignItems: 'center',
+                gap: '10px',
+                color: 'var(--primary)',
+                marginBottom: '10px'
+              }}
+            >
+              <span
+                className="ms"
+                aria-hidden="true"
+                style={{ fontSize: '24px' }}
+              >
+                sync
+              </span>
+
+              <h4
+                id="regenerate-dialog-title"
+                style={{
+                  margin: 0,
+                  fontSize: '0.95rem',
+                  fontWeight: 600
+                }}
+              >
+                ¿Regenerar diagrama?
+              </h4>
             </div>
-            <p style={{ margin: '0 0 16px', fontSize: '0.8125rem', color: 'var(--on-surface)', lineHeight: 1.45 }}>
-              Este diagrama ya existe. Regenerarlo construirá una nueva versión con Gemini reemplazando la versión actual.
+
+            <p
+              id="regenerate-dialog-description"
+              style={{
+                margin: '0 0 16px',
+                fontSize: '0.8125rem',
+                color: 'var(--on-surface)',
+                lineHeight: 1.45
+              }}
+            >
+              Se solicitará una nueva versión del diagrama.
+              El resultado dependerá de la información
+              disponible en el proyecto y de la respuesta
+              del servidor.
             </p>
-            <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '8px' }}>
+
+            <div
+              style={{
+                display: 'flex',
+                justifyContent: 'flex-end',
+                gap: '8px'
+              }}
+            >
               <button
                 type="button"
                 className="btn btn-ghost btn-sm"
                 onClick={() => setShowConfirmModal(false)}
+                disabled={isGenerating}
               >
                 Cancelar
               </button>
+
               <button
                 type="button"
                 className="btn btn-primary btn-sm"
                 onClick={handleConfirmRegenerate}
+                disabled={isGenerating || !canGenerate}
               >
-                Regenerar
+                {isGenerating
+                  ? 'Generando...'
+                  : 'Regenerar'}
               </button>
             </div>
           </div>
