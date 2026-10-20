@@ -279,9 +279,10 @@ class UseCaseService {
    * Genera el diagrama Mermaid de casos de uso para los casos creados.
    */
   async getMermaidDiagram(projectId) {
-    const useCases = await this.getUseCasesByProject(projectId);
-    const actors = await prisma.actor.findMany({ where: { projectId } });
+    let useCases = await this.getUseCasesByProject(projectId);
+    const actors = await prisma.actor.findMany({ where: { projectId, isDeleted: false } });
 
+    // Si no existen casos de uso pero hay requisitos, generar casos automáticamente
     if (useCases.length === 0) {
       return useCaseGenerator.generate(actors, []);
     }

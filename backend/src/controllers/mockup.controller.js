@@ -5,8 +5,15 @@ class MockupController {
 
   async generate(req, res, next) {
     try {
+      // Permitir hasta 7 minutos de timeout para flujos extensos de n8n / Google Stitch
+      if (req.setTimeout) req.setTimeout(420000);
+      if (res.setTimeout) res.setTimeout(420000);
+
       const { projectId } = req.params;
-      const { prompt } = req.body;
+      const { prompt, screenIds, mode = 'stitch' } = req.body;
+      if (!['stitch', 'local'].includes(mode)) {
+        return res.status(400).json({ success: false, error: { message: 'Modo de generación inválido.' } });
+      }
 
       const project = await projectService.getProjectById(projectId);
       if (!project) {
@@ -16,14 +23,15 @@ class MockupController {
         });
       }
 
-      const mockupData = await require('../services/engineering/mockup-artifact.service').generate(projectId, prompt, req.body.artifactId, req.body.navigationNodeIds);
-      const screens = mockupData.screens;
+      const mockupData = await require('../services/engineering/mockup-artifact.service').generate(
+        projectId, prompt, req.body.artifactId, req.body.navigationNodeIds, { mode, screenIds }
+      );
 
       res.status(200).json({
         success: true,
         data: {
           ...mockupData,
-          screens
+          screens: mockupData.screens
         }
       });
     } catch (error) {

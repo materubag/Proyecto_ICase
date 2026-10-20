@@ -7,7 +7,7 @@ import { engineering } from '../api/engineering.api';
 import { projectsApi } from '../api/projects.api';
 import { mockupApi } from '../api/mockup.api';
 
-export default function ProjectPrototype({ project, onProjectUpdated }) {
+export default function ProjectPrototype({ project, onProjectUpdated, mockupGeneration = null, onStartGeneration = null }) {
   const STORAGE_KEY = `icase_mockup_generating_${project.id}`;
 
   // 1. Estados
@@ -41,6 +41,14 @@ export default function ProjectPrototype({ project, onProjectUpdated }) {
     return 0;
   });
   const [generationError, setGenerationError] = useState(null);
+
+  useEffect(() => {
+    if (!mockupGeneration || mockupGeneration.projectId !== project.id) return;
+    setIsGenerating(mockupGeneration.isGenerating);
+    if (mockupGeneration.error) {
+      setGenerationError(mockupGeneration.error.message || String(mockupGeneration.error));
+    }
+  }, [mockupGeneration, project.id]);
 
   const screens = generatedScreens.length > 0 ? generatedScreens : (project.screens || []);
   const [selectedScreenId, setSelectedScreenId] = useState(null);
@@ -239,11 +247,14 @@ export default function ProjectPrototype({ project, onProjectUpdated }) {
       setSelectedNodeIds(ids);
       await onProjectUpdated?.();
 
-      const result = await mockupApi.generateMockup(
-        project.id,
-        `Generar un prototipo visual para: ${project.systemDescription || project.description || project.name}`,
-        ids
-      );
+      const prompt = `Generar un prototipo visual para: ${project.systemDescription || project.description || project.name}`;
+      const result = onStartGeneration
+        ? await onStartGeneration(project.id, prompt, ids)
+        : await mockupApi.generateMockup(
+            project.id,
+            prompt,
+            ids
+          );
 
       const nextScreens = result?.screens || result?.data?.screens || [];
       if (nextScreens.length === 0) throw new Error('El backend no devolvió pantallas para mostrar.');

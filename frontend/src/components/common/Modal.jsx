@@ -1,6 +1,6 @@
 import React, { useEffect } from 'react';
 
-export default function Modal({ isOpen, onClose, title, children, footer }) {
+export default function Modal({ isOpen = true, onClose, title, children, footer, size, className = '', style = {} }) {
   useEffect(() => {
     const handleKeyDown = (e) => {
       if (e.key === 'Escape' && isOpen) onClose();
@@ -11,9 +11,20 @@ export default function Modal({ isOpen, onClose, title, children, footer }) {
 
   if (!isOpen) return null;
 
+  const cardStyle = { ...style };
+  if (size === 'xlarge') {
+    cardStyle.maxWidth = '1100px';
+    cardStyle.width = '92vw';
+  } else if (size === 'large') {
+    cardStyle.maxWidth = '850px';
+    cardStyle.width = '88vw';
+  } else if (size === 'small') {
+    cardStyle.maxWidth = '420px';
+  }
+
   return (
     <div className="modal-overlay" onClick={onClose}>
-      <div className="modal-card" onClick={(e) => e.stopPropagation()}>
+      <div className={`modal-card ${className}`.trim()} style={cardStyle} onClick={(e) => e.stopPropagation()}>
         <div className="modal-header">
           <h3 className="modal-title">{title}</h3>
           <button className="modal-close" onClick={onClose} aria-label="Cerrar">

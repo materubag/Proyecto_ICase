@@ -1,4 +1,6 @@
+
 const { id, token, label, normalize, resolveEntityName } = require('./mermaidSyntax');
+
 
 module.exports = {
   generate(entities = [], relationships = []) {

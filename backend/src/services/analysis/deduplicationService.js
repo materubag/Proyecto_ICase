@@ -428,7 +428,7 @@ class DeduplicationService {
         type: isRNF ? 'NON_FUNCTIONAL' : 'FUNCTIONAL',
         sources: g.sources,
         redundancyCount: g.redundancyCount,
-        status: 'PENDING'
+        status: (g.canonical?.status && g.canonical.status !== 'PENDING') ? g.canonical.status : 'PENDING_REVIEW'
       };
     });
 

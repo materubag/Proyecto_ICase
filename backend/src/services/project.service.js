@@ -3,7 +3,9 @@ const prisma = require('../config/prisma');
 class ProjectService {
   async getAllProjects(filterArchived = true) {
     return await prisma.project.findMany({
+
       where: filterArchived ? { status: { not: 'ARCHIVED' } } : undefined,
+
       orderBy: { updatedAt: 'desc' },
       include: {
         _count: {

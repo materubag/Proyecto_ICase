@@ -367,6 +367,7 @@ REGLAS CRÍTICAS DE AISLAMIENTO Y DOMINIO:
         const useCases = (project.useCases && project.useCases.length > 0)
           ? project.useCases
           : (context.functionalRequirements || []).map((r, i) => ({
+              codeId: `CU-${String(i + 1).padStart(2, '0')}`,
               code: `CU-${String(i + 1).padStart(2, '0')}`,
               name: r.name,
               id: r.id, actorIds: r.actorIds || []
@@ -442,8 +443,7 @@ REGLAS CRÍTICAS DE AISLAMIENTO Y DOMINIO:
         try {
           const ucService = require('../useCase.service');
           await ucService.generateFundamentalUseCases(projectId);
-          // Reload useCases into project
-          project.useCases = await prisma.useCase.findMany({ where: { projectId, isDeleted: false } });
+          // The complete project, including use cases, is loaded below.
         } catch (ucErr) {
           console.warn('[DiagramAiService] No se pudieron auto-generar casos de uso fundamentales:', ucErr.message);
         }

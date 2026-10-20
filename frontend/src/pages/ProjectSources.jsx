@@ -328,16 +328,16 @@ export default function ProjectSources({ project, embedded = false, onNavigateTo
                   : 'rgba(21, 115, 71, 0.1)',
               color:
                 message.type === 'error'
-                  ? '#b42318'
+                  ? '#f87171'
                   : message.type === 'warning'
                   ? '#9a6700'
-                  : '#157347',
+                  : '#34d399',
               border: `1px solid ${
                 message.type === 'error'
-                  ? '#b42318'
+                  ? '#f87171'
                   : message.type === 'warning'
                   ? '#9a6700'
-                  : '#157347'
+                  : '#34d399'
               }`
             }}
           >
@@ -479,7 +479,7 @@ export default function ProjectSources({ project, embedded = false, onNavigateTo
                           placeItems: 'center',
                           flexShrink: 0,
                           background: isAudio ? 'rgba(103, 80, 164, 0.12)' : 'rgba(21, 115, 71, 0.12)',
-                          color: isAudio ? 'var(--primary, #6750A4)' : '#157347'
+                          color: isAudio ? 'var(--primary, #6750A4)' : '#34d399'
                         }}
                       >
                         {isAudio ? <Mic size={20} /> : <FileText size={20} />}
@@ -555,7 +555,7 @@ export default function ProjectSources({ project, embedded = false, onNavigateTo
                         <span
                           style={{
                             fontSize: '0.75rem',
-                            color: '#b42318',
+                            color: '#f87171',
                             display: 'inline-flex',
                             alignItems: 'center',
                             gap: '4px'
@@ -728,7 +728,7 @@ export default function ProjectSources({ project, embedded = false, onNavigateTo
                                   </div>
                                   <div style={{ padding: '10px 12px', background: 'var(--surface-container-low)', borderRadius: '6px', border: '1px solid var(--outline-variant)' }}>
                                     <div style={{ fontSize: '0.72rem', color: 'var(--secondary)' }}>RF (Funcionales)</div>
-                                    <div style={{ fontSize: '1.25rem', fontWeight: 700, color: '#157347' }}>{rf}</div>
+                                    <div style={{ fontSize: '1.25rem', fontWeight: 700, color: '#34d399' }}>{rf}</div>
                                   </div>
                                   <div style={{ padding: '10px 12px', background: 'var(--surface-container-low)', borderRadius: '6px', border: '1px solid var(--outline-variant)' }}>
                                     <div style={{ fontSize: '0.72rem', color: 'var(--secondary)' }}>RNF (No Funcionales)</div>
@@ -740,7 +740,7 @@ export default function ProjectSources({ project, embedded = false, onNavigateTo
                                   </div>
                                   <div style={{ padding: '10px 12px', background: 'var(--surface-container-low)', borderRadius: '6px', border: '1px solid var(--outline-variant)' }}>
                                     <div style={{ fontSize: '0.72rem', color: 'var(--secondary)' }}>Conflictos</div>
-                                    <div style={{ fontSize: '1.25rem', fontWeight: 700, color: conflicts > 0 ? '#b42318' : 'var(--outline)' }}>{conflicts}</div>
+                                    <div style={{ fontSize: '1.25rem', fontWeight: 700, color: conflicts > 0 ? '#f87171' : 'var(--outline)' }}>{conflicts}</div>
                                   </div>
                                   <div style={{ padding: '10px 12px', background: 'var(--surface-container-low)', borderRadius: '6px', border: '1px solid var(--outline-variant)' }}>
                                     <div style={{ fontSize: '0.72rem', color: 'var(--secondary)' }}>Observaciones ISO</div>
@@ -816,7 +816,7 @@ export default function ProjectSources({ project, embedded = false, onNavigateTo
                               className="btn btn-outline btn-sm"
                               onClick={() => handleCopyText(source.currentVersion?.extractedText || '', source.id)}
                             >
-                              {copiedPdfId === source.id ? <Check size={14} color="#157347" /> : <Copy size={14} />}
+                              {copiedPdfId === source.id ? <Check size={14} color="#34d399" /> : <Copy size={14} />}
                               <span style={{ marginLeft: '4px' }}>
                                 {copiedPdfId === source.id ? 'Copiado' : 'Copiar'}
                               </span>

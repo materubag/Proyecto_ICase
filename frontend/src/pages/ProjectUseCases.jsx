@@ -1,5 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { useCasesApi } from '../api/useCases.api';
+import { actorsApi } from '../api/actors.api';
+import { requirementsApi } from '../api/requirements.api';
 import Modal from '../components/common/Modal';
 import DiagramViewport from '../components/common/DiagramViewport';
 import RequirementMultiSelect from '../components/common/RequirementMultiSelect';
@@ -29,12 +31,10 @@ export default function ProjectUseCases({ project, onProjectUpdated }) {
   const [diagramLoading, setDiagramLoading] = useState(false);
   const [diagramError, setDiagramError] = useState(null);
 
-  const actors = project.actors || [];
+  const [actorsList, setActorsList] = useState(project.actors || []);
+  const [requirementsList, setRequirementsList] = useState(project.requirements || []);
 
-  useEffect(() => {
-    loadUseCases();
-    loadDiagram();
-  }, [project.id]);
+  useEffect(() => { loadDiagram(); }, [project.id]);
 
   async function loadDiagram() {
     try {
@@ -67,7 +67,29 @@ export default function ProjectUseCases({ project, onProjectUpdated }) {
     }
   }
 
-  const functionalReqs = (project.requirements || []).filter(r => r.type === 'FUNCTIONAL' || !r.type);
+  useEffect(() => {
+    loadUseCases();
+    if (project.actors && project.actors.length > 0) {
+      setActorsList(project.actors);
+    } else if (project.id) {
+      actorsApi.getByProject(project.id).then(res => {
+        const data = res?.data || res || [];
+        if (Array.isArray(data)) setActorsList(data);
+      }).catch(() => {});
+    }
+
+    if (project.requirements && project.requirements.length > 0) {
+      setRequirementsList(project.requirements);
+    } else if (project.id) {
+      requirementsApi.getByProject(project.id).then(res => {
+        const data = res?.data || res || [];
+        if (Array.isArray(data)) setRequirementsList(data);
+      }).catch(() => {});
+    }
+  }, [project.id, project.actors, project.requirements]);
+
+  const actors = actorsList;
+  const functionalReqs = (requirementsList || []).filter(r => r.type === 'FUNCTIONAL' || !r.type);
   const relevantReqsCount = functionalReqs.length;
   const actorsCount = actors.length;
   const estimatedCases = Math.max(1, Math.min(10, Math.ceil(relevantReqsCount / 3)));
@@ -653,9 +675,9 @@ export default function ProjectUseCases({ project, onProjectUpdated }) {
 
             <div>
               <RequirementMultiSelect
-                requirements={project.requirements || []}
-                selectedCodes={requirementIds.map(id=>(project.requirements||[]).find(r=>r.id===id)?.code||id)}
-                onChange={codes=>setRequirementIds(codes.map(code=>(project.requirements||[]).find(r=>r.code===code)?.id).filter(Boolean))}
+                requirements={requirementsList}
+                selectedCodes={requirementIds.map(id=>requirementsList.find(r=>r.id===id)?.code||id)}
+                onChange={codes=>setRequirementIds(codes.map(code=>requirementsList.find(r=>r.code===code)?.id).filter(Boolean))}
                 label="Requisitos Funcionales Asociados"
                 placeholder="Buscar y asociar requisitos al caso de uso..."
               />
@@ -700,7 +722,7 @@ export default function ProjectUseCases({ project, onProjectUpdated }) {
       {/* Modal de Validación Previa de Información para Casos de Uso (Req #15) */}
       {preGenModalOpen && (
         <Modal
-          isOpen={true}
+          isOpen={preGenModalOpen}
           title="Verificación de Información para Casos de Uso"
           onClose={() => setPreGenModalOpen(false)}
           footer={(

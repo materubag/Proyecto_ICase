@@ -9,6 +9,34 @@ mermaid.initialize({
   fontFamily: 'Inter, system-ui, sans-serif'
 });
 
+
+/**
+ * Sanitizes raw Mermaid code to ensure compatibility and remove invalid tokens.
+ */
+export function sanitizeMermaidCode(rawCode, type = 'flowchart') {
+  if (!rawCode || typeof rawCode !== 'string') return '';
+  let clean = rawCode.trim();
+
+  // If erDiagram, fix any union types or invalid symbols in attribute lines
+  if (/^\s*erDiagram/im.test(clean) || String(type).toUpperCase() === 'ER') {
+    // Replace lines like: "    string|null motivo" -> "    string motivo"
+    clean = clean.replace(/^(\s*)([a-zA-Z0-9_]+)\s*\|[^\s{}]*(\s+[a-zA-Z0-9_]+)/gm, '$1$2$3');
+    const lines = clean.split('\n');
+    let insideEntity = false;
+    clean = lines.map(line => {
+      const trimmed = line.trim();
+      if (trimmed.endsWith('{')) insideEntity = true;
+      if (trimmed === '}' || trimmed.startsWith('}')) insideEntity = false;
+      if (insideEntity && line.includes('|')) {
+        return line.replace(/([a-zA-Z0-9_]+)\s*\|[a-zA-Z0-9_]+/g, '$1');
+      }
+      return line;
+    }).join('\n');
+  }
+
+  return clean;
+}
+
 /**
  * Client-side emergency sanitization for Mermaid syntax errors (accents, reserved words).
  */
@@ -81,18 +109,20 @@ export default function MermaidDiagram({ code, type = 'flowchart', className = '
     let isMounted = true;
 
     async function renderChart() {
-      if (!code || !code.trim()) {
+      const sanitizedCode = sanitizeMermaidCode(code, type);
+      if (!sanitizedCode) {
         setSvgContent('');
         setError(null);
         return;
       }
 
       const id = `mermaid-${Math.random().toString(36).substring(2, 9)}`;
-      let targetCode = code.trim();
+      let targetCode = sanitizedCode;
 
       try {
         setError(null);
         setSvgContent('');
+
 
         // Attempt 1: Parse original code
         try {
@@ -105,6 +135,7 @@ export default function MermaidDiagram({ code, type = 'flowchart', className = '
         }
 
         const { svg } = await mermaid.render(id, targetCode);
+
         if (isMounted) {
           setSvgContent(svg);
           setError(null);

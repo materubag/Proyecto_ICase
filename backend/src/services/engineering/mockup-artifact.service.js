@@ -1,7 +1,7 @@
 const d = require('./domain');
 const diagrams = require('../diagrams/DiagramService');
 const mockupService = require('../mockup/mockup.service');
-async function generate(projectId, prompt, artifactId, navigationNodeIds) {
+async function generate(projectId, prompt, artifactId, navigationNodeIds, options = {}) {
   const project = await d.project(d.prisma, projectId);
   project.requirements = await d.prisma.requirement.findMany({ where: { projectId, status: 'APPROVED' } });
   project.actors = await d.prisma.actor.findMany({ where: { projectId, status: 'APPROVED' } });
@@ -10,6 +10,18 @@ async function generate(projectId, prompt, artifactId, navigationNodeIds) {
   if (!project.requirements.length) d.fail('APPROVED_REQUIREMENTS_REQUIRED', undefined, 400);
   if (!project.navigationNodes.length) d.fail('APPROVED_MODELS_REQUIRED', 'Define navegación aprobada para generar pantallas con evidencia.', 400);
   if (project.platform === 'UNKNOWN' && project.navigationNodes.some(n => n.platform === 'UNKNOWN')) d.fail('PLATFORM_REQUIRED', 'Confirma la plataforma del proyecto o de cada pantalla.', 400);
+  if (navigationNodeIds === undefined && options.screenIds !== undefined) {
+    if (!Array.isArray(options.screenIds) || !options.screenIds.length || options.screenIds.some(id => typeof id !== 'string')) {
+      d.fail('SCREENS_SELECTION_REQUIRED', 'Selecciona al menos una pantalla.', 400);
+    }
+    const selected = await d.prisma.screen.findMany({ where: { projectId, isDeleted: false, id: { in: options.screenIds } } });
+    if (new Set(options.screenIds).size !== selected.length) d.fail('INVALID_SCREEN_SELECTION', undefined, 400);
+    navigationNodeIds = selected.map(screen => {
+      const node = project.navigationNodes.find(n => n.route && n.route === screen.route || n.name === screen.name);
+      if (!node) d.fail('INVALID_SCREEN_SELECTION', 'La pantalla necesita navegación aprobada.', 400);
+      return node.id;
+    });
+  }
   if(navigationNodeIds !== undefined) {
     if(!Array.isArray(navigationNodeIds)||!navigationNodeIds.length||navigationNodeIds.some(id=>typeof id!=='string')) d.fail('SCREENS_SELECTION_REQUIRED','Selecciona al menos una pantalla aprobada.',400);
     const chosen=new Set(navigationNodeIds);
@@ -31,7 +43,9 @@ async function generate(projectId, prompt, artifactId, navigationNodeIds) {
   const useCaseIds = new Set(project.navigationNodes.flatMap(n => n.useCaseIds));
   project.actors = project.actors.filter(a => actorIds.has(a.id));
   project.useCases = project.useCases.filter(c => useCaseIds.has(c.id));
-  const result = await mockupService.generateMockup(project, prompt);
+  const result = options.mode === 'local'
+    ? await mockupService.generateLocalMockups(project)
+    : await mockupService.generateMockup(project, prompt);
   return d.transaction(async tx => {
     const versions = [];
     for (const screen of result.screens || []) {

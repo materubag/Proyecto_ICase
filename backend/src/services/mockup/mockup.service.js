@@ -53,6 +53,22 @@ class MockupService {
    * @param {Object} project - Project data
    * @param {string} prompt - Optional prompt or focus for the mockup
    */
+  async generateLocalMockups(project) {
+    const { generateHtmlMockup } = require('./mockupGenerator');
+    const requirements = this.selectRelevantRequirements(project.requirements || []);
+    const screens = this.buildScreenPlan(project, requirements).map(screen => ({
+      ...screen,
+      components: [
+        { type: 'heading', label: screen.name, description: screen.description }
+      ]
+    }));
+    return {
+      provider: 'local-interactive',
+      screens: screens.map(screen => ({ ...screen, html: generateHtmlMockup(screen) })),
+      count: screens.length
+    };
+  }
+
   async generateMockup(project, prompt = '') {
     const relevantRequirements = this.selectRelevantRequirements(project.requirements);
     const screens = this.buildScreenPlan(project, relevantRequirements);

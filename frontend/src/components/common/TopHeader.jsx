@@ -19,7 +19,15 @@ export default function TopHeader({
       <div className="header-breadcrumb">
         <span
           className="breadcrumb-text breadcrumb-brand"
-          style={{ cursor: onBack ? 'pointer' : 'default', fontWeight: 600, color: 'var(--primary)' }}
+          style={{
+            cursor: onBack ? 'pointer' : 'default',
+            fontWeight: 700,
+            background: 'linear-gradient(135deg, #4d8df7, #a78bfa)',
+            WebkitBackgroundClip: 'text',
+            WebkitTextFillColor: 'transparent',
+            backgroundClip: 'text',
+            fontSize: '0.8125rem'
+          }}
           onClick={onBack || undefined}
           title="ICASE Studio"
         >
@@ -55,21 +63,25 @@ export default function TopHeader({
               display: 'inline-flex',
               alignItems: 'center',
               gap: '6px',
-              padding: '4px 10px',
+              padding: '5px 12px',
               borderRadius: 'var(--radius-full)',
-              background: 'rgba(41, 82, 217, 0.1)',
-              border: '1px solid rgba(41, 82, 217, 0.25)',
+              background: 'rgba(77, 141, 247, 0.1)',
+              border: '1px solid rgba(77, 141, 247, 0.2)',
               color: 'var(--primary)',
               fontSize: '0.75rem',
               fontWeight: 600,
-              cursor: onActivityClick ? 'pointer' : 'default'
+              cursor: onActivityClick ? 'pointer' : 'default',
+              transition: 'all 0.2s ease',
+              boxShadow: '0 0 12px rgba(77, 141, 247, 0.1)'
             }}
             title="Ver progreso de procesamiento"
           >
             <RefreshCw size={12} className="spin" />
             <span>{activeActivity.label}</span>
             {activeActivity.progress && (
-              <span style={{ opacity: 0.8, fontWeight: 400 }}>({activeActivity.progress})</span>
+              <span style={{ opacity: 0.7, fontWeight: 400, fontFamily: 'var(--font-mono)', fontSize: '0.6875rem' }}>
+                ({activeActivity.progress})
+              </span>
             )}
           </button>
         )}
