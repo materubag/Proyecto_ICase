@@ -15,7 +15,9 @@
     "prisma:push": "prisma db push",
     "prisma:studio": "prisma studio",
     "test:integrity": "node --require ./tests/fixtures/offline.cjs --test tests/catalog_integrity.test.js",
-    "test:postgres": "node --test tests/analysis_postgres.integration.js"
+    "test:postgres": "node --test tests/analysis_postgres.integration.js",
+    "docs:check": "node --require ./tests/fixtures/offline.cjs --test tests/openapi.test.js",
+    "docs:sync": "node scripts/sync-docs.cjs"
   },
   "keywords": [
     "icase",
@@ -32,9 +34,11 @@
     "dotenv": "^16.4.5",
     "express": "^4.19.2",
     "multer": "^2.4.0",
-    "pdf-parse": "^2.4.5"
+    "pdf-parse": "^2.4.5",
+    "swagger-ui-express": "^5.0.1"
   },
   "devDependencies": {
+    "@apidevtools/swagger-parser": "^13.1.0",
     "nodemon": "^3.1.4",
     "prisma": "^5.19.1"
   }

@@ -21,7 +21,7 @@ test('normalization does not replace distinct occupational roles',()=>{
 });
 
 test('documented profiles survive local analysis with literal evidence and stable identities',async()=>{
-  const text=fs.readFileSync(require('node:path').resolve(__dirname,'../../docs/autron-audit/autron-source.txt'),'utf8');
+  const text=fs.readFileSync(require('node:path').resolve(__dirname,'fixtures/autron-source.txt'),'utf8');
   const declared=profiles(text,segmentText(text));
   assert.deepEqual(declared.map(a=>a.name),['Cliente','Recepción','Mecánico','Administrador']);
   const opt={providerOverride:'local',cache:false};
