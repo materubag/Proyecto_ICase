@@ -3,12 +3,15 @@ const versionHistoryService = require('./versionHistory.service');
 
 class ActorService {
   async getActorsByProject(projectId) {
-    return await this.consolidateProjectActors(projectId);
+    const actors = await prisma.actor.findMany({where:{projectId,isDeleted:false},orderBy:{codeId:'asc'}});
+    const requirements = await prisma.requirement.findMany({where:{projectId,isDeleted:false,status:{not:'REMOVED'}}});
+    return actors.map(a => ({...a, requirementCount:requirements.filter(r => (r.actorIds || []).includes(a.id)).length}));
   }
 
-  async consolidateProjectActors(projectId) {
+  async consolidateProjectActors(projectId, db = prisma) {
+    if (db === prisma) return prisma.$transaction(tx => this.consolidateProjectActors(projectId, tx));
     const deduplicationService = require('./analysis/deduplicationService');
-    const actors = await prisma.actor.findMany({
+    const actors = await db.actor.findMany({
       where: { projectId, isDeleted: false },
       orderBy: [{ reviewStatus: 'desc' }, { createdAt: 'asc' }]
     });
@@ -24,7 +27,7 @@ class ActorService {
 
     let idx = 1;
     for (const [key, group] of groups.entries()) {
-      const canonicalCode = `ACT-${String(idx).padStart(2, '0')}`;
+      const canonicalCode = group[0].codeId || `ACT-${String(idx).padStart(2, '0')}`;
       idx++;
 
       const primary = group[0];
@@ -41,16 +44,17 @@ class ActorService {
       }
 
       const allGroupNames = group.map(g => g.name);
-      const nextAliases = Array.from(new Set([...(primary.aliases || []), ...allGroupNames, displayName]));
+      const nextAliases = Array.from(new Set([...group.flatMap(g => g.aliases || []), ...allGroupNames, displayName]));
 
-      if (primary.codeId !== canonicalCode || primary.name !== displayName || (isAnyApproved && primary.reviewStatus !== 'APPROVED') || primary.description !== mergedDesc || (primary.aliases?.length || 0) < nextAliases.length) {
-        await prisma.actor.update({
+      if (group.length > 1 || primary.codeId !== canonicalCode || primary.name !== displayName || (isAnyApproved && primary.reviewStatus !== 'APPROVED') || primary.description !== mergedDesc || (primary.aliases?.length || 0) < nextAliases.length) {
+        await db.actor.update({
           where: { id: primary.id },
           data: {
             codeId: canonicalCode,
             name: displayName,
             description: mergedDesc || primary.description,
             aliases: nextAliases,
+            requirementIds: [...new Set(group.flatMap(g => g.requirementIds || []))],
             reviewStatus: isAnyApproved ? 'APPROVED' : primary.reviewStatus,
             status: isAnyApproved ? 'APPROVED' : primary.status
           }
@@ -60,13 +64,16 @@ class ActorService {
       if (group.length > 1) {
         const dupIds = group.slice(1).map(g => g.id);
 
+        const screens = await db.screen.findMany({where:{projectId}});
+        for (const screen of screens) { const ids = [...new Set((screen.actorIds || []).map(id => dupIds.includes(id) ? primary.id : id))]; if (JSON.stringify(ids) !== JSON.stringify(screen.actorIds)) await db.screen.update({where:{id:screen.id},data:{actorIds:ids}}); }
+
         // Re-point references in requirements
-        const reqs = await prisma.requirement.findMany({ where: { projectId } });
+        const reqs = await db.requirement.findMany({ where: { projectId } });
         for (const req of reqs) {
-          const hasDup = req.actorIds.some(id => dupIds.includes(id));
+          const hasDup = (req.actorIds || []).some(id => dupIds.includes(id));
           if (hasDup) {
             const updatedActorIds = Array.from(new Set(req.actorIds.map(id => dupIds.includes(id) ? primary.id : id)));
-            await prisma.requirement.update({
+            await db.requirement.update({
               where: { id: req.id },
               data: { actorIds: updatedActorIds }
             });
@@ -74,9 +81,10 @@ class ActorService {
         }
 
         // Re-point references in use cases
-        const ucs = await prisma.useCase.findMany({ where: { projectId } });
+        const ucs = await db.useCase.findMany({ where: { projectId } });
         for (const uc of ucs) {
-          let needsUpdate = false;
+          const actorIds = [...new Set((uc.actorIds || []).map(id => dupIds.includes(id) ? primary.id : id))];
+          let needsUpdate = JSON.stringify(actorIds) !== JSON.stringify(uc.actorIds);
           let pId = uc.primaryActorId;
           if (dupIds.includes(pId)) {
             pId = primary.id;
@@ -86,26 +94,26 @@ class ActorService {
           if (sec.some(id => dupIds.includes(id))) {
             const updatedSec = Array.from(new Set(sec.map(id => dupIds.includes(id) ? primary.id : id)));
             needsUpdate = true;
-            await prisma.useCase.update({
+            await db.useCase.update({
               where: { id: uc.id },
-              data: { primaryActorId: pId, secondaryActorIds: updatedSec }
+              data: { primaryActorId: pId, secondaryActorIds: updatedSec, actorIds }
             });
           } else if (needsUpdate) {
-            await prisma.useCase.update({
+            await db.useCase.update({
               where: { id: uc.id },
-              data: { primaryActorId: pId }
+              data: { primaryActorId: pId, actorIds }
             });
           }
         }
 
         // Remove duplicate records
-        await prisma.actor.deleteMany({
+        await db.actor.deleteMany({
           where: { id: { in: dupIds } }
         });
       }
     }
 
-    return await prisma.actor.findMany({
+    return await db.actor.findMany({
       where: { projectId, isDeleted: false },
       orderBy: { codeId: 'asc' }
     });
@@ -225,9 +233,10 @@ class ActorService {
   }
 
   async updateStatus(id, reviewStatus) {
-    return await prisma.actor.update({
-      where: { id },
-      data: { reviewStatus, status: reviewStatus }
+    return prisma.$transaction(async tx => {
+      const actor = await tx.actor.update({where:{id},data:{reviewStatus,status:reviewStatus}});
+      if(reviewStatus==='APPROVED')await require('./analysis/actorIdentity').refresh(tx,actor.projectId);
+      return actor;
     });
   }
 

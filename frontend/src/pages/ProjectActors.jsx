@@ -14,6 +14,14 @@ export default function ProjectActors({ project, onProjectUpdated }) {
   const [name, setName] = useState('');
   const [description, setDescription] = useState('');
   const [saving, setSaving] = useState(false);
+  const [regeneratingRelations,setRegeneratingRelations]=useState(false);
+  const [relationResult,setRelationResult]=useState(null);
+  const [relationError,setRelationError]=useState('');
+  async function regenerateRelations(){
+    setRegeneratingRelations(true);setRelationResult(null);setRelationError('');
+    try{const result=await actorsApi.regenerateRelations(project.id);setRelationResult(result);setIsOutdated(result.requirementsUpdated>0);await onProjectUpdated();}
+    catch(e){setRelationError(e.message);}finally{setRegeneratingRelations(false);}
+  }
 
   // View mode and Diagram states
   const [viewMode, setViewMode] = useState('list'); // 'list' | 'diagram'
@@ -213,6 +221,9 @@ export default function ProjectActors({ project, onProjectUpdated }) {
         </div>
 
         <div className="page-actions">
+          <button className="btn btn-outline btn-sm" disabled={regeneratingRelations||!actors.length} onClick={regenerateRelations}>
+            {regeneratingRelations?'Analizando relaciones…':'Regenerar relaciones entre actores y requisitos'}
+          </button>
           {viewMode === 'list' && (
             <div className="search-bar" style={{ width: '200px' }}>
               <span className="ms">search</span>
@@ -293,6 +304,14 @@ export default function ProjectActors({ project, onProjectUpdated }) {
         </div>
       </div>
 
+      {regeneratingRelations&&<p role="status" style={{padding:'12px'}}>La IA está comparando las responsabilidades y los requisitos. Puede tardar unos minutos.</p>}
+      {relationError&&<p role="alert" style={{padding:'12px',color:'var(--error)'}}>{relationError}</p>}
+      {relationResult&&<div role="status" style={{padding:'12px',maxHeight:'240px',overflowY:'auto'}}>
+        <p>{relationResult.linksAdded} vínculos añadidos en {relationResult.requirementsUpdated} requisitos. {relationResult.pending.length} requisitos funcionales pendientes.</p>
+        {relationResult.partial&&<p>Algunos lotes no pudieron analizarse. Puedes volver a regenerar para reintentarlos.</p>}
+        {relationResult.affectedUseCases>0&&<p>{relationResult.affectedUseCases} casos de uso requieren regeneración; el diagrama también debe actualizarse.</p>}
+        {relationResult.pending.length>0&&<details><summary>Ver requisitos pendientes y motivos</summary><ul>{relationResult.pending.map(r=><li key={r.id}><strong>{r.code}: {r.name}</strong> — {r.reason}</li>)}</ul></details>}
+      </div>}
       {viewMode === 'diagram' ? (
         <div style={{ flex: 1, minHeight: 0, display: 'flex', flexDirection: 'column', background: 'var(--surface)' }}>
           {diagramLoading || diagramGenerating ? (
@@ -421,7 +440,7 @@ export default function ProjectActors({ project, onProjectUpdated }) {
                 </div>
                 <div>
                   <span style={{ fontSize: '0.8125rem', color: 'var(--secondary)', fontWeight: 600 }}>
-                    {reqCountForActor(actor.codeId || actor.id)}
+                    {reqCountForActor(actor.id)}
                   </span>
                 </div>
                 <div style={{ display: 'flex', gap: '4px' }} onClick={e => e.stopPropagation()}>
@@ -479,7 +498,7 @@ export default function ProjectActors({ project, onProjectUpdated }) {
                     {selected.name}
                   </h2>
                   <p style={{ fontSize: '0.6875rem', color: 'var(--secondary)', marginTop: '3px' }}>
-                    {reqCountForActor(selected.codeId || selected.id)} requisito{reqCountForActor(selected.codeId || selected.id) !== 1 ? 's' : ''} asociado{reqCountForActor(selected.codeId || selected.id) !== 1 ? 's' : ''}
+                    {reqCountForActor(selected.id)} requisito{reqCountForActor(selected.id) !== 1 ? 's' : ''} asociado{reqCountForActor(selected.id) !== 1 ? 's' : ''}
                   </p>
                 </div>
               </div>
@@ -513,7 +532,7 @@ export default function ProjectActors({ project, onProjectUpdated }) {
 
                 {/* Associated requirements */}
                 {(() => {
-                  const actorReqs = requirements.filter(r => (r.actorIds || []).includes(selected.codeId || selected.id));
+                  const actorReqs = requirements.filter(r => (r.actorIds || []).includes(selected.id));
                   if (actorReqs.length === 0) return null;
                   return (
                     <div className="detail-section">

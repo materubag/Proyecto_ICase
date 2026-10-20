@@ -34,169 +34,17 @@ class DiagramContextBuilder {
   }
 
   buildUseCaseContext(project, projectName) {
-    const deduplicationService = require('../analysis/deduplicationService');
-    // Only approved actors, deduplicated and canonical
-    const approvedActors = (project.actors || []).filter(a => a.reviewStatus === 'APPROVED' || a.status === 'APPROVED');
-    const canonicalActors = deduplicationService.consolidateActors(approvedActors);
-    const actors = canonicalActors.map(a => ({
-      code: 'ACT_' + toSafeIdentifier(a.codeId || a.name, 'ACT').toUpperCase().slice(0, 15),
-      name: a.name.trim(),
-      description: toSafeLabel(a.description || '', 140)
-    }));
-
-    // Prioritize approved use cases
-    const useCases = (project.useCases || [])
-      .filter(uc => uc.reviewStatus === 'APPROVED' || uc.status === 'APPROVED')
-      .map((uc, i) => ({
-        code: 'UC_' + toSafeIdentifier(uc.code || uc.codeId || `CU_${i + 1}`, 'UC').toUpperCase(),
-        name: uc.name.trim(),
-        actor: uc.actor || 'Usuario',
-        description: toSafeLabel(uc.description || '', 140)
-      }));
-
-    // Relevant functional requirements via deduplicationService
-    const selectedReqs = deduplicationService.selectRelevantRequirements(project.requirements || [], 'USE_CASE', 25);
-    const functionalReqs = selectedReqs.map(r => ({
-      code: r.code || 'RF',
-      name: r.name.trim(),
-      description: toSafeLabel(r.description || '', 160)
-    }));
-
-    return {
-      diagramType: 'USE_CASE',
-      project: { name: projectName },
-      actors: actors.length > 0 ? actors : [{ code: 'ACT_USER', name: 'Usuario del Sistema', description: 'Operador principal' }],
-      useCases: useCases.length > 0 ? useCases : undefined,
-      functionalRequirements: functionalReqs
-    };
+    const actors=(project.actors || []).filter(a=>!a.isDeleted).map(a=>({id:a.id,code:a.codeId,name:a.name,description:a.description || ''}));
+    const useCases=(project.useCases || []).filter(c=>!c.isDeleted).map(c=>({id:c.id,code:c.code || c.codeId,name:c.name,description:c.description || '',actorIds:require('../analysis/actorIdentity').useCaseActors(c)}));
+    const functionalRequirements=(project.requirements || []).filter(r=>!r.isDeleted && r.type==='FUNCTIONAL').map(r=>({id:r.id,code:r.code,name:r.name,description:r.description || '',actorIds:r.actorIds || []}));
+    return {diagramType:'USE_CASE',project:{name:projectName},actors,useCases,functionalRequirements};
   }
 
   /**
    * Safe baseline attributes for domain entities when extracted data is sparse or missing.
    */
-  getBaselineAttributes(entityName) {
-    const norm = (entityName || '').toUpperCase().replace(/[^A-Z]/g, '');
-    if (norm.includes('CLIENTE')) {
-      return [
-        { name: 'id', type: 'int', isPk: true },
-        { name: 'nombre', type: 'string', isPk: false },
-        { name: 'telefono', type: 'string', isPk: false },
-        { name: 'email', type: 'string', isPk: false },
-        { name: 'direccion', type: 'string', isPk: false }
-      ];
-    }
-    if (norm.includes('VEHICULO') || norm.includes('AUTO') || norm.includes('CARRO')) {
-      return [
-        { name: 'id', type: 'int', isPk: true },
-        { name: 'placa', type: 'string', isPk: false },
-        { name: 'marca', type: 'string', isPk: false },
-        { name: 'modelo', type: 'string', isPk: false },
-        { name: 'anio', type: 'int', isPk: false },
-        { name: 'cliente_id', type: 'int', isPk: false, isFk: true }
-      ];
-    }
-    if (norm.includes('CITA')) {
-      return [
-        { name: 'id', type: 'int', isPk: true },
-        { name: 'fecha_hora', type: 'datetime', isPk: false },
-        { name: 'estado', type: 'string', isPk: false },
-        { name: 'motivo', type: 'string', isPk: false },
-        { name: 'cliente_id', type: 'int', isPk: false, isFk: true },
-        { name: 'vehiculo_id', type: 'int', isPk: false, isFk: true }
-      ];
-    }
-    if (norm.includes('ORDEN') || norm.includes('TRABAJO') || norm.includes('SERVICIOORDEN')) {
-      return [
-        { name: 'id', type: 'int', isPk: true },
-        { name: 'numero_orden', type: 'string', isPk: false },
-        { name: 'fecha_ingreso', type: 'datetime', isPk: false },
-        { name: 'estado', type: 'string', isPk: false },
-        { name: 'diagnostico', type: 'string', isPk: false },
-        { name: 'total', type: 'float', isPk: false },
-        { name: 'vehiculo_id', type: 'int', isPk: false, isFk: true },
-        { name: 'usuario_id', type: 'int', isPk: false, isFk: true }
-      ];
-    }
-    if (norm.includes('PRODUCTO') || norm.includes('REPUESTO') || norm.includes('PARTE')) {
-      return [
-        { name: 'id', type: 'int', isPk: true },
-        { name: 'codigo', type: 'string', isPk: false },
-        { name: 'nombre', type: 'string', isPk: false },
-        { name: 'categoria', type: 'string', isPk: false },
-        { name: 'precio', type: 'float', isPk: false },
-        { name: 'costo', type: 'float', isPk: false },
-        { name: 'stock', type: 'int', isPk: false }
-      ];
-    }
-    if (norm.includes('SERVICIO')) {
-      return [
-        { name: 'id', type: 'int', isPk: true },
-        { name: 'codigo', type: 'string', isPk: false },
-        { name: 'nombre', type: 'string', isPk: false },
-        { name: 'descripcion', type: 'string', isPk: false },
-        { name: 'precio_mano_obra', type: 'float', isPk: false }
-      ];
-    }
-    if (norm.includes('PROVEEDOR')) {
-      return [
-        { name: 'id', type: 'int', isPk: true },
-        { name: 'ruc_nit', type: 'string', isPk: false },
-        { name: 'razon_social', type: 'string', isPk: false },
-        { name: 'contacto', type: 'string', isPk: false },
-        { name: 'telefono', type: 'string', isPk: false },
-        { name: 'email', type: 'string', isPk: false }
-      ];
-    }
-    if (norm.includes('USUARIO') || norm.includes('EMPLEADO') || norm.includes('MECANICO') || norm.includes('OPERADOR')) {
-      return [
-        { name: 'id', type: 'int', isPk: true },
-        { name: 'nombre_completo', type: 'string', isPk: false },
-        { name: 'email', type: 'string', isPk: false },
-        { name: 'rol', type: 'string', isPk: false },
-        { name: 'estado', type: 'string', isPk: false }
-      ];
-    }
-    if (norm.includes('VENTA') || norm.includes('FACTURA') || norm.includes('PAGO')) {
-      return [
-        { name: 'id', type: 'int', isPk: true },
-        { name: 'numero_comprobante', type: 'string', isPk: false },
-        { name: 'fecha', type: 'datetime', isPk: false },
-        { name: 'monto_total', type: 'float', isPk: false },
-        { name: 'metodo_pago', type: 'string', isPk: false },
-        { name: 'cliente_id', type: 'int', isPk: false, isFk: true }
-      ];
-    }
-    if (norm.includes('INVENTARIO') || norm.includes('STOCK')) {
-      return [
-        { name: 'id', type: 'int', isPk: true },
-        { name: 'producto_id', type: 'int', isPk: false, isFk: true },
-        { name: 'cantidad_actual', type: 'int', isPk: false },
-        { name: 'stock_minimo', type: 'int', isPk: false },
-        { name: 'ubicacion', type: 'string', isPk: false }
-      ];
-    }
-    if (norm.includes('DETALLE')) {
-      return [
-        { name: 'id', type: 'int', isPk: true },
-        { name: 'cantidad', type: 'int', isPk: false },
-        { name: 'precio_unitario', type: 'float', isPk: false },
-        { name: 'subtotal', type: 'float', isPk: false }
-      ];
-    }
+  getBaselineAttributes() { return []; }
 
-    return [
-      { name: 'id', type: 'int', isPk: true },
-      { name: 'nombre', type: 'string', isPk: false },
-      { name: 'descripcion', type: 'string', isPk: false },
-      { name: 'estado', type: 'string', isPk: false },
-      { name: 'fecha_creacion', type: 'datetime', isPk: false }
-    ];
-  }
-
-  /**
-   * Sanitizes attributes: removes descriptive sentences (e.g. 'claridad_la_falla'),
-   * enforces ASCII identifiers, and guarantees a primary key.
-   */
   sanitizeEntityAttributes(rawAttributes, entityName) {
     const valid = [];
     const seenNames = new Set();
@@ -241,21 +89,10 @@ class DiagramContextBuilder {
       }
     }
 
-    // Guarantee at least one PK
-    if (!hasPk) {
-      if (valid.length > 0 && /^(id|codigo)/i.test(valid[0].name)) {
-        valid[0].isPk = true;
-      } else {
-        valid.unshift({ name: 'id', type: 'int', isPk: true, isFk: false });
-      }
-    }
-
     return valid;
   }
 
   buildERContext(project, projectName) {
-    const deduplicationService = require('../analysis/deduplicationService');
-
     // Extract approved entities
     const approvedEntities = (project.entities || []).filter(e => e.reviewStatus === 'APPROVED' || e.status === 'APPROVED');
     const entities = approvedEntities.map(e => {
@@ -290,7 +127,6 @@ class DiagramContextBuilder {
     const candidates = project.modelCandidates || [];
     const processes = candidates
       .filter(c => c.kind === 'PROCESS')
-      .slice(0, 15)
       .map(p => ({
         name: p.name,
         description: toSafeLabel(typeof p.content === 'string' ? p.content : p.content?.description || p.name, 140)
@@ -299,28 +135,42 @@ class DiagramContextBuilder {
     const businessRules = [
       ...(project.businessRules || []).map(b => ({ code: b.code || 'RN', description: toSafeLabel(b.description || b.name, 140) })),
       ...candidates.filter(c => c.kind === 'RULE').map(r => ({ code: 'RN', description: toSafeLabel(r.name, 140) }))
-    ].slice(0, 12);
+    ];
 
     const scopeObjectives = candidates
       .filter(c => c.kind === 'OBJECTIVE')
-      .slice(0, 8)
       .map(o => toSafeLabel(o.name, 120));
 
     const constraints = candidates
       .filter(c => c.kind === 'CONSTRAINT')
-      .slice(0, 6)
       .map(c => toSafeLabel(c.name, 120));
 
     const actors = (project.actors || [])
       .filter(a => a.reviewStatus === 'APPROVED' || a.status === 'APPROVED')
       .map(a => ({ name: a.name.trim(), role: toSafeLabel(a.description || 'Actor del sistema', 80) }));
 
-    const dataReqs = deduplicationService.selectRelevantRequirements(project.requirements || [], 'ER', 25)
-      .map(r => ({ code: r.code, text: toSafeLabel(r.description || r.name, 150) }));
+    const allReqs = (project.requirements || []).filter(r => !r.isDeleted && r.status !== 'REMOVED');
+    const functionalRequirements = allReqs
+      .filter(r => r.type === 'FUNCTIONAL' || !r.type)
+      .map(r => ({ code: r.code, name: r.name, statement: toSafeLabel(r.description || r.statement || r.name, 250) }));
+
+    const nonFunctionalRequirements = allReqs
+      .filter(r => r.type === 'NON_FUNCTIONAL')
+      .map(r => ({ code: r.code, name: r.name, statement: toSafeLabel(r.description || r.statement || r.name, 250) }));
+
+    const sourceSummaries = (project.sources || []).map(s => {
+      const text = s.currentVersion?.extractedText || '';
+      return {
+        name: s.name,
+        type: s.type,
+        snippet: text ? toSafeLabel(text.slice(0, 2000).replace(/\s+/g, ' '), 600) : ''
+      };
+    }).filter(s => s.snippet);
 
     return {
       diagramType: 'ER',
       project: { name: projectName },
+      sources: sourceSummaries,
       entities,
       relationships,
       processes,
@@ -328,14 +178,20 @@ class DiagramContextBuilder {
       scopeObjectives,
       constraints,
       actors,
-      dataRequirements: dataReqs,
+      dataRequirements: functionalRequirements,
+      functionalRequirements,
+      nonFunctionalRequirements,
       modelingGuidelines: {
         prohibitEmptyEntities: true,
         prohibitDescriptiveSentencePKs: true,
-        resolveManytoManyWithAssociativeEntity: true
+        resolveManytoManyWithAssociativeEntity: true,
+        mustCoverAllRequirements: true
       }
     };
   }
+
+  getComprehensiveDomainClasses() { return []; }
+  getComprehensiveDomainRelationships() { return []; }
 
   buildClassContext(project, projectName) {
     const candidates = project.modelCandidates || [];
@@ -444,9 +300,21 @@ class DiagramContextBuilder {
       }
     }
 
+    const sourceSummaries = (project.sources || []).map(s => {
+      const text = s.currentVersion?.extractedText || '';
+      return {
+        name: s.name,
+        type: s.type,
+        snippet: text ? toSafeLabel(text.slice(0, 2000).replace(/\s+/g, ' '), 600) : ''
+      };
+    }).filter(s => s.snippet);
+
     return {
       diagramType: 'CLASS',
+      sources: sourceSummaries,
       project: { name: projectName },
+      functionalRequirements: (project.requirements||[]).filter(r=>!r.isDeleted&&r.status!=='REMOVED'&&(r.type==='FUNCTIONAL'||!r.type)).map(r=>({id:r.id,code:r.code,name:r.name,description:r.description||r.statement||r.name})),
+      nonFunctionalRequirements: (project.requirements||[]).filter(r=>!r.isDeleted&&r.status!=='REMOVED'&&r.type==='NON_FUNCTIONAL').map(r=>({id:r.id,code:r.code,name:r.name,description:r.description||r.statement||r.name})),
       classes,
       relationships,
       domainProcesses: processes.slice(0, 10).map(p => p.name),
@@ -455,7 +323,9 @@ class DiagramContextBuilder {
       guidelines: {
         prohibitInfrastructureClasses: true,
         prohibitGenericProgrammingMethods: true,
-        requireRealDomainOperations: true
+        requireRealDomainOperations: true,
+        mustCoverAllFunctionalAndNonFunctionalRequirements: true,
+        defineClassBlockForEveryParticipatingClass: true
       }
     };
   }
@@ -491,100 +361,11 @@ class DiagramContextBuilder {
       return methods.slice(0, 4);
     }
 
-    // Default domain operations based on business role of entity
-    if (norm.includes('CLIENTE')) {
-      return [
-        { name: 'registrar', returnType: 'void', visibility: '+' },
-        { name: 'actualizarDatos', returnType: 'void', visibility: '+' },
-        { name: 'consultarHistorial', returnType: 'Historial', visibility: '+' }
-      ];
-    }
-    if (norm.includes('VEHICULO') || norm.includes('AUTO')) {
-      return [
-        { name: 'registrar', returnType: 'void', visibility: '+' },
-        { name: 'actualizarKilometraje', returnType: 'void', visibility: '+' },
-        { name: 'asignarPropietario', returnType: 'void', visibility: '+' }
-      ];
-    }
-    if (norm.includes('CITA')) {
-      return [
-        { name: 'agendar', returnType: 'void', visibility: '+' },
-        { name: 'reprogramar', returnType: 'void', visibility: '+' },
-        { name: 'cancelar', returnType: 'void', visibility: '+' }
-      ];
-    }
-    if (norm.includes('ORDEN') || norm.includes('TRABAJO')) {
-      return [
-        { name: 'crear', returnType: 'void', visibility: '+' },
-        { name: 'asignarMecanico', returnType: 'void', visibility: '+' },
-        { name: 'actualizarEstado', returnType: 'void', visibility: '+' },
-        { name: 'calcularTotal', returnType: 'Decimal', visibility: '+' }
-      ];
-    }
-    if (norm.includes('PRODUCTO') || norm.includes('REPUESTO')) {
-      return [
-        { name: 'actualizarStock', returnType: 'void', visibility: '+' },
-        { name: 'verificarDisponibilidad', returnType: 'Boolean', visibility: '+' }
-      ];
-    }
-    if (norm.includes('SERVICIO')) {
-      return [
-        { name: 'cotizar', returnType: 'Decimal', visibility: '+' },
-        { name: 'actualizarPrecio', returnType: 'void', visibility: '+' }
-      ];
-    }
-    if (norm.includes('VENTA') || norm.includes('FACTURA')) {
-      return [
-        { name: 'emitirComprobante', returnType: 'void', visibility: '+' },
-        { name: 'calcularTotal', returnType: 'Decimal', visibility: '+' },
-        { name: 'procesarPago', returnType: 'Boolean', visibility: '+' }
-      ];
-    }
-    if (norm.includes('INVENTARIO')) {
-      return [
-        { name: 'ingresarStock', returnType: 'void', visibility: '+' },
-        { name: 'descontarStock', returnType: 'void', visibility: '+' },
-        { name: 'alertaStockMinimo', returnType: 'Boolean', visibility: '+' }
-      ];
-    }
-
-    return [
-      { name: 'registrar', returnType: 'void', visibility: '+' },
-      { name: 'actualizar', returnType: 'void', visibility: '+' }
-    ];
+    return [];
   }
 
   buildFlowchartContext(project, projectName) {
-    const relevantReqs = deduplicationService.selectRelevantRequirements(
-      project.requirements || [],
-      'FLOWCHART',
-      15
-    ).map((r, i) => ({
-      id: `STEP_${i + 1}`,
-      code: r.code || `RF-${i + 1}`,
-      name: r.name.trim(),
-      description: toSafeLabel(r.description || '', 140)
-    }));
-
-    const approvedUseCases = (project.useCases || [])
-      .filter(uc => uc.reviewStatus === 'APPROVED' || uc.status === 'APPROVED')
-      .slice(0, 10)
-      .map((uc, i) => ({
-        id: `UC_${i + 1}`,
-        name: uc.name.trim(),
-        actor: uc.actor || 'Usuario',
-        description: toSafeLabel(uc.description || '', 120)
-      }));
-
-    return {
-      diagramType: 'FLOWCHART',
-      project: { name: projectName },
-      processName: `Flujo Operativo de ${projectName}`,
-      steps: relevantReqs.length > 0 ? relevantReqs : approvedUseCases,
-      ruleDecisions: [
-        { condition: '¿Datos válidos y completos?', onTrue: 'Continuar proceso', onFalse: 'Solicitar corrección' }
-      ]
-    };
+    return {diagramType:'FLOWCHART',project:{name:projectName},steps:(project.requirements||[]).filter(r=>!r.isDeleted&&r.status!=='REMOVED'&&r.type==='FUNCTIONAL').map(r=>({id:r.id,code:r.code,name:r.name,description:r.description||r.name})),ruleDecisions:[]};
   }
 
   buildNavigationContext(project, projectName) {
@@ -594,7 +375,7 @@ class DiagramContextBuilder {
     const screens = approvedScreens.map((s, idx) => {
       const safeId = 'SCR_' + toSafeIdentifier(s.name, `screen_${idx + 1}`).toUpperCase().slice(0, 30);
       return {
-        id: safeId,
+        id: s.id||safeId,
         code: s.codeId || 'SCR',
         name: s.name.trim(),
         displayName: s.name.trim(),
@@ -607,6 +388,8 @@ class DiagramContextBuilder {
     return {
       diagramType: 'NAVIGATION',
       project: { name: projectName },
+      functionalRequirements:(project.requirements||[]).filter(r=>!r.isDeleted&&r.status!=='REMOVED'&&r.type==='FUNCTIONAL').map(r=>({id:r.id,code:r.code,name:r.name,description:r.description||r.name})),
+      navigationNodes:(project.navigationNodes||[]).filter(n=>!n.isDeleted).map(n=>({id:n.id,name:n.name,parentId:n.parentId,route:n.route})),
       hierarchyTitle: `Árbol de Navegación de ${projectName}`,
       screens
     };

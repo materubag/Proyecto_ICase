@@ -59,7 +59,7 @@ function normalizeAIResponse(data) {
     actorMap.set(act.id.toLowerCase(), act);
     actorMap.set(act.name.toLowerCase(), act);
   });
-  const defaultActorId = data.actors[0].id;
+  const defaultActorId = null;
 
   // 3. Normalizar Requisitos
   data.requirements.forEach((req, idx) => {
@@ -93,12 +93,12 @@ function normalizeAIResponse(data) {
     // Normalizar referencias a actores
     if (Array.isArray(req.actorIds) && req.actorIds.length > 0) {
       req.actorIds = req.actorIds.map(ref => {
-        if (typeof ref !== 'string') return defaultActorId;
+        if (typeof ref !== 'string') return null;
         const matched = actorMap.get(ref) || actorMap.get(ref.toLowerCase().trim());
         return matched ? matched.id : ref;
       });
     } else {
-      req.actorIds = [defaultActorId];
+      req.actorIds = [];
     }
   });
 
@@ -238,7 +238,7 @@ function normalizeAIResponse(data) {
             { type: 'card', label: `Contenido de ${screenTitle}`, placeholder: 'Información y acciones del módulo' }
           ],
       requirementIds: [],
-      actorIds: [defaultActorId]
+      actorIds: []
     };
 
     data.screens.push(newScreen);

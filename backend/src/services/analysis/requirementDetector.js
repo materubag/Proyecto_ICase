@@ -30,7 +30,8 @@ class RequirementDetector {
       priority: rf.priority || 'HIGH',
       type: 'FUNCTIONAL',
       source: 'explicit',
-      sourceText: rf.text || rf.name
+      sourceText: rf.sourceText || rf.text || rf.name,
+      section: rf.section, start:rf.start, end:rf.end, page:rf.page
     }));
 
     const nonFunctionalRequirements = rnfList.map(rnf => ({
@@ -41,7 +42,8 @@ class RequirementDetector {
       priority: rnf.priority || 'MEDIUM',
       type: 'NON_FUNCTIONAL',
       source: 'explicit',
-      sourceText: rnf.text || rnf.name
+      sourceText: rnf.sourceText || rnf.text || rnf.name,
+      section:rnf.section, start:rnf.start, end:rnf.end, page:rnf.page
     }));
 
     const businessRules = rnList.map(rn => ({

@@ -12,8 +12,8 @@ module.exports = {
     const normalizedMap = new Map(); // NORMALIZE(name) -> entity.name
 
     for (const e of entities) {
-
-      const key = token(e.name);
+      let key = token(e.name);
+      if ([...nameToToken.values()].includes(key)) key += '_' + id(e.id || String(nameToToken.size));
       nameToToken.set(e.name, key);
       if (e.id) nameToToken.set(e.id, key);
       normalizedMap.set(normalize(e.name), e.name);
@@ -34,10 +34,7 @@ module.exports = {
         lines.push('    }');
       } else {
         // Entidad sin atributos — solo declarar el bloque vacio
-        lines.push('    ' + key + ' {');
-        lines.push('        string id PK');
-
-        lines.push('    }');
+        lines.push('    ' + key);
       }
     }
 
@@ -55,8 +52,7 @@ module.exports = {
     for (const r of relationships) {
       const card = cards[r.cardinality];
       if (!card) {
-        skipped.push(`cardinalidad desconocida: ${r.cardinality}`);
-        continue;
+        throw new Error(`Cardinalidad desconocida: ${r.cardinality}`);
       }
 
       // Resolver source

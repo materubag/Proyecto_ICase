@@ -1,3 +1,40 @@
+
+const ER_DEFAULT_ATTRIBUTES = {
+  USUARIO: ['int id PK', 'string nombre', 'string email', 'string password_hash', 'int rol_id FK'],
+  ROL: ['int id PK', 'string nombre', 'string permisos'],
+  CLIENTE: ['int id PK', 'string nombre', 'string telefono', 'string email', 'string direccion'],
+  VEHICULO: ['int id PK', 'int cliente_id FK', 'string placa', 'string marca', 'string modelo', 'int kilometraje'],
+  RECEPCION: ['int id PK', 'int vehiculo_id FK', 'datetime fecha_ingreso', 'int odometro', 'float combustible', 'string motivo_ingreso'],
+  RECEPCION_VEHICULO: ['int id PK', 'int vehiculo_id FK', 'datetime fecha_ingreso', 'int odometro', 'float combustible', 'string motivo_ingreso'],
+  CITA: ['int id PK', 'int cliente_id FK', 'datetime fecha_cita', 'string estado', 'string motivo'],
+  DIAGNOSTICO: ['int id PK', 'int vehiculo_id FK', 'datetime fecha', 'string observaciones', 'string estado'],
+  FALLA: ['int id PK', 'int diagnostico_id FK', 'string codigo_obd', 'string sistema', 'string componente', 'string severidad'],
+  FALLA_TECNICA: ['int id PK', 'int diagnostico_id FK', 'string codigo_obd', 'string sistema', 'string componente', 'string severidad'],
+  CODIGO_OBD: ['int id PK', 'string codigo', 'string descripcion', 'string solucion_sugerida'],
+  BASE_CONOCIMIENTO: ['int id PK', 'string titulo', 'string sintoma', 'string causa', 'string solucion'],
+  COTIZACION: ['int id PK', 'int vehiculo_id FK', 'float total', 'string estado', 'datetime fecha_decision'],
+  DETALLE_COTIZACION: ['int id PK', 'int cotizacion_id FK', 'int repuesto_id FK', 'int servicio_id FK', 'float precio', 'boolean autorizado'],
+  ORDEN_TRABAJO: ['int id PK', 'int cotizacion_id FK', 'int vehiculo_id FK', 'datetime fecha_inicio', 'string estado'],
+  DETALLE_ORDEN: ['int id PK', 'int orden_id FK', 'int producto_id FK', 'int cantidad', 'float precio_unitario'],
+  ACTIVIDAD_ORDEN: ['int id PK', 'int orden_id FK', 'string descripcion', 'datetime fecha_registro', 'string estado'],
+  ASIGNACION_MECANICO: ['int id PK', 'int orden_id FK', 'int usuario_id FK', 'datetime fecha_asignacion'],
+  SERVICIO: ['int id PK', 'string codigo', 'string descripcion', 'float precio_mano_obra', 'int duracion_estimada'],
+  CATALOGO_SERVICIO: ['int id PK', 'string codigo', 'string descripcion', 'float precio_mano_obra', 'int duracion_estimada'],
+  PRODUCTO: ['int id PK', 'string codigo', 'string nombre', 'float precio', 'float costo', 'int stock', 'int stock_minimo'],
+  REPUESTO: ['int id PK', 'string codigo', 'string nombre', 'float precio', 'float costo', 'int stock', 'int stock_minimo'],
+  MOVIMIENTO_INVENTARIO: ['int id PK', 'int producto_id FK', 'string tipo_movimiento', 'int cantidad', 'datetime fecha', 'int usuario_id FK'],
+  PROVEEDOR: ['int id PK', 'string nombre', 'string contacto', 'string telefono', 'string email'],
+  COMPRA: ['int id PK', 'int proveedor_id FK', 'datetime fecha', 'float total'],
+  COMPRA_PROVEEDOR: ['int id PK', 'int proveedor_id FK', 'datetime fecha', 'float total'],
+  DETALLE_COMPRA: ['int id PK', 'int compra_id FK', 'int producto_id FK', 'int cantidad', 'float costo_unitario'],
+  VENTA_DIRECTA: ['int id PK', 'int cliente_id FK', 'datetime fecha', 'float total', 'string metodo_pago'],
+  DETALLE_VENTA: ['int id PK', 'int venta_id FK', 'int producto_id FK', 'int cantidad', 'float precio'],
+  MANTENIMIENTO_PREVENTIVO: ['int id PK', 'int vehiculo_id FK', 'string criterio', 'int proximo_km', 'datetime proxima_fecha', 'string estado'],
+  EVIDENCIA_MULTIMEDIA: ['int id PK', 'int diagnostico_id FK', 'string url_archivo', 'string tipo', 'datetime fecha_subida'],
+  AUDITORIA: ['int id PK', 'int usuario_id FK', 'string operacion', 'string entidad_afectada', 'datetime fecha'],
+  NOTIFICACION: ['int id PK', 'int usuario_id FK', 'string mensaje', 'boolean leido', 'datetime fecha_envio']
+};
+
 /**
  * Mermaid Normalizer
  * Enforces robust, safe identifiers and syntax across all Mermaid diagram types.
@@ -104,7 +141,7 @@ function normalizeER(code) {
   if (!code || typeof code !== 'string') return 'erDiagram\n';
 
   const rawLines = code.split('\n');
-  const outputLines = ['erDiagram', '    direction TB'];
+    const outputLines = ['erDiagram'];
   let inEntityBlock = false;
   let currentEntity = null;
 
@@ -215,7 +252,71 @@ function normalizeER(code) {
     outputLines.push('    }');
   }
 
-  return outputLines.join('\n');
+  // Connect isolated ER entities if any exist to guarantee clean connected graphs
+  const definedEntities = new Set();
+  const connectedEntities = new Set();
+
+  for (const l of outputLines) {
+    const em = l.match(/^\s*([A-Za-z0-9_]+)\s*\{/);
+    if (em) definedEntities.add(em[1]);
+
+    const rm = l.match(/^\s*([A-Za-z0-9_]+)\s+([|{}o\-]+)\s+([A-Za-z0-9_]+)/);
+    if (rm) {
+      connectedEntities.add(rm[1]);
+      connectedEntities.add(rm[3]);
+    }
+  }
+
+  const possibleERHubs = ['ORDEN_TRABAJO', 'COTIZACION', 'VEHICULO', 'DIAGNOSTICO', 'USUARIO'];
+  const defaultERHub = possibleERHubs.find(h => definedEntities.has(h)) || Array.from(definedEntities)[0];
+
+  if (defaultERHub) {
+    for (const ent of definedEntities) {
+      if (!connectedEntities.has(ent) && ent !== defaultERHub) {
+        if (/SERVICIO/i.test(ent)) {
+          const targetHub = definedEntities.has('ORDEN_TRABAJO') ? 'ORDEN_TRABAJO' : (definedEntities.has('COTIZACION') ? 'COTIZACION' : defaultERHub);
+          outputLines.push(`    ${targetHub} ||--o{ ${ent} : "incluye"`);
+        } else if (/BASE_CONOCIMIENTO|CODIGO_OBD/i.test(ent)) {
+          const targetHub = definedEntities.has('DIAGNOSTICO') ? 'DIAGNOSTICO' : defaultERHub;
+          outputLines.push(`    ${targetHub} }o--o{ ${ent} : "consulta"`);
+        } else if (/MANTENIMIENTO/i.test(ent) && definedEntities.has('VEHICULO')) {
+          outputLines.push(`    VEHICULO ||--o{ ${ent} : "programa"`);
+        } else if (/NOTIFICACION|AUDITORIA/i.test(ent) && definedEntities.has('USUARIO')) {
+          outputLines.push(`    USUARIO ||--o{ ${ent} : "genera"`);
+        } else {
+          outputLines.push(`    ${defaultERHub} ||--o{ ${ent} : "relaciona"`);
+        }
+        connectedEntities.add(ent);
+      }
+    }
+  }
+
+  // Ensure every entity mentioned in relationships has an attribute block with PK
+  const declaredBlockEntities = new Set();
+  for (const l of outputLines) {
+    const em = l.match(/^\s*([A-Za-z0-9_]+)\s*\{/);
+    if (em) declaredBlockEntities.add(em[1]);
+  }
+
+  const synthesizedBlocks = [];
+  for (const ent of knownEntities) {
+    if (!declaredBlockEntities.has(ent)) {
+      const attrs = ER_DEFAULT_ATTRIBUTES[ent] || [
+        'int id PK',
+        'string nombre',
+        'string estado',
+        'datetime fecha_creacion'
+      ];
+      synthesizedBlocks.push(`    ${ent} {\n${attrs.map(a => `        ${a}`).join('\n')}\n    }`);
+      declaredBlockEntities.add(ent);
+    }
+  }
+
+  if (synthesizedBlocks.length > 0) {
+    outputLines.splice(1, 0, ...synthesizedBlocks);
+  }
+
+    return outputLines.join('\n');
 }
 
 /**
@@ -309,43 +410,103 @@ function normalizeClass(code) {
     }
 
     if (inClass) {
-      // Attribute or method inside class
-      // Visibility symbol
-      let vis = '+';
-      let rest = line;
-      if (/^[+\-#~]/.test(line)) {
-        vis = line[0];
-        rest = line.slice(1).trim();
-      }
+      // Handle comma-separated attributes on a single line (e.g. "+int id, +string nombre")
+      const subItems = line.includes('(') ? [line] : line.split(/[,;]/).map(s => s.trim()).filter(Boolean);
 
-      // Check if method: methodName() returnType
-      const methodMatch = rest.match(/^([a-zA-Z0-9_\u00C0-\u017F]+)\s*\((.*?)\)\s*(.*)$/);
-      if (methodMatch) {
-        const rawMethodName = methodMatch[1].trim();
-        // Section 21: DO NOT invent generic methods like getId(), toDTO(), validarReglas()
-        if (BANNED_GENERIC_METHODS.has(rawMethodName.toLowerCase())) {
-          continue;
+      for (const item of subItems) {
+        let vis = '+';
+        let rest = item;
+        if (/^[+\-#~]/.test(item)) {
+          vis = item[0];
+          rest = item.slice(1).trim();
         }
-        const methodName = toSafeIdentifier(rawMethodName, 'method');
-        const params = methodMatch[2].trim();
-        const retType = toSafeIdentifier(methodMatch[3] || 'void', 'type');
-        output.push(`    ${vis}${methodName}(${params}) ${retType}`);
-        continue;
-      }
 
-      // Attribute: Type name
-      const attrParts = rest.split(/\s+/);
-      if (attrParts.length >= 2) {
-        const type = normalizeDataType(attrParts[0]);
-        const name = toSafeIdentifier(attrParts[1], 'attr');
-        if (seenClassAttrs.has(name.toLowerCase())) continue; // Deduplicate
-        seenClassAttrs.add(name.toLowerCase());
-        output.push(`    ${vis}${type} ${name}`);
-      } else if (attrParts.length === 1) {
-        const name = toSafeIdentifier(attrParts[0], 'attr');
-        if (seenClassAttrs.has(name.toLowerCase())) continue; // Deduplicate
-        seenClassAttrs.add(name.toLowerCase());
-        output.push(`    ${vis}string ${name}`);
+        // Check if method (either prefix returnType "void registrar()" or UML suffix "registrar() void")
+        if (rest.includes('(')) {
+          const prefixMatch = rest.match(/^([a-zA-Z0-9_<>[\]]+)\s+([a-zA-Z0-9_\u00C0-\u017F]+)\s*\((.*?)\)\s*$/);
+          if (prefixMatch) {
+            const rawRet = prefixMatch[1].trim();
+            let rawMethodName = prefixMatch[2].trim();
+            let params = prefixMatch[3].trim();
+            const suffixParamMatch = rawMethodName.match(/^([a-zA-Z0-9]+)_(string|int|float|boolean|datetime|date|list)$/i);
+            if (suffixParamMatch && !params) {
+              rawMethodName = suffixParamMatch[1];
+              params = `${suffixParamMatch[2].toLowerCase()} valor`;
+            }
+            if (BANNED_GENERIC_METHODS.has(rawMethodName.toLowerCase())) continue;
+            const methodName = toSafeIdentifier(rawMethodName, 'method');
+            const retType = toSafeIdentifier(rawRet || 'void', 'type');
+            output.push(`    ${vis}${methodName}(${params}) ${retType}`);
+            continue;
+          }
+
+          const suffixMatch = rest.match(/^([a-zA-Z0-9_\u00C0-\u017F]+)\s*\((.*?)\)\s*(.*)$/);
+          if (suffixMatch) {
+            let rawMethodName = suffixMatch[1].trim();
+            let params = suffixMatch[2].trim();
+            const suffixParamMatch = rawMethodName.match(/^([a-zA-Z0-9]+)_(string|int|float|boolean|datetime|date|list)$/i);
+            if (suffixParamMatch && !params) {
+              rawMethodName = suffixParamMatch[1];
+              params = `${suffixParamMatch[2].toLowerCase()} valor`;
+            }
+            if (BANNED_GENERIC_METHODS.has(rawMethodName.toLowerCase())) continue;
+            const methodName = toSafeIdentifier(rawMethodName, 'method');
+            const retType = toSafeIdentifier(suffixMatch[3] || 'void', 'type');
+            output.push(`    ${vis}${methodName}(${params}) ${retType}`);
+            continue;
+          }
+        }
+
+        // Attribute: Type name (or recovering methods that lost parentheses like "void registrar" or "boolean autenticar_string")
+        const attrParts = rest.split(/\s+/);
+        if (attrParts.length >= 2) {
+          const isVoidPrefix = attrParts[0].toLowerCase() === 'void';
+          const isVerbMethod = /^(?:autenticar|recuperar|verificar|consultar|buscar|calcular|evaluar|solicitar|reprogramar|cancelar|confirmar|registrar|generar|iniciar|finalizar|clasificar|asociar|aplicar|actualizar|aprobar|rechazar|autorizar|desestimar|asignar|completar|reversar|emitir|procesar|configurar|enviar|marcar|cambiar|consolidar|examinar|identificar|adjuntar|ingresar|atender|programar)/i.test(attrParts[1]);
+
+          if (isVoidPrefix || isVerbMethod) {
+            let rawMethodName = attrParts[1];
+            let retType = isVoidPrefix ? 'void' : normalizeDataType(attrParts[0]);
+            let params = '';
+
+            const suffixParamMatch = rawMethodName.match(/^([a-zA-Z0-9]+)_(string|int|float|boolean|datetime|date|list)$/i);
+            if (suffixParamMatch) {
+              rawMethodName = suffixParamMatch[1];
+              params = `${suffixParamMatch[2].toLowerCase()} valor`;
+            }
+
+            const methodName = toSafeIdentifier(rawMethodName, 'method');
+            if (!BANNED_GENERIC_METHODS.has(methodName.toLowerCase())) {
+              output.push(`    ${vis}${methodName}(${params}) ${retType}`);
+              continue;
+            }
+          }
+
+          const type = normalizeDataType(attrParts[0]);
+          const name = toSafeIdentifier(attrParts[1], 'attr');
+          if (seenClassAttrs.has(name.toLowerCase())) continue;
+          seenClassAttrs.add(name.toLowerCase());
+          output.push(`    ${vis}${type} ${name}`);
+        } else if (attrParts.length === 1) {
+          const isSingleVerb = /^(?:autenticar|recuperar|verificar|consultar|buscar|calcular|evaluar|solicitar|reprogramar|cancelar|confirmar|registrar|generar|iniciar|finalizar|clasificar|asociar|aplicar|actualizar|aprobar|rechazar|autorizar|desestimar|asignar|completar|reversar|emitir|procesar|configurar|enviar|marcar|cambiar|consolidar|examinar|identificar|adjuntar|ingresar|atender|programar)/i.test(attrParts[0]);
+          if (isSingleVerb) {
+            let rawMethodName = attrParts[0];
+            let params = '';
+            const suffixParamMatch = rawMethodName.match(/^([a-zA-Z0-9]+)_(string|int|float|boolean|datetime|date|list)$/i);
+            if (suffixParamMatch) {
+              rawMethodName = suffixParamMatch[1];
+              params = `${suffixParamMatch[2].toLowerCase()} valor`;
+            }
+            const methodName = toSafeIdentifier(rawMethodName, 'method');
+            if (!BANNED_GENERIC_METHODS.has(methodName.toLowerCase())) {
+              output.push(`    ${vis}${methodName}(${params}) void`);
+              continue;
+            }
+          }
+          const name = toSafeIdentifier(attrParts[0], 'attr');
+          if (seenClassAttrs.has(name.toLowerCase())) continue;
+          seenClassAttrs.add(name.toLowerCase());
+          output.push(`    ${vis}string ${name}`);
+        }
       }
       continue;
     }
@@ -355,9 +516,9 @@ function normalizeClass(code) {
     // ClassA *-- ClassB
     // ClassA o-- ClassB
     // ClassA --> ClassB
-    const relMatch = line.match(/^(\S+)\s+(\S*[\-.<>|*o]+\S*)\s+(\S+)(?:\s*:\s*(.*))?$/);
+    const relMatch = line.match(/^(\S+)\s+(?:"([^"]*)"\s+)?(<\|--|--\|>|<\|\.\.|\.\.\|>|\*--|--\*|o--|--o|<--|-->|\.\.>|<\.\.|--|\.\.)\s+(?:"([^"]*)"\s+)?([^\s:]+)(?:\s*:\s*(.*))?$/);
     if (relMatch) {
-      const [, rawA, relOp, rawB, rawDesc] = relMatch;
+      const [, rawA, leftMultiplicity, relOp, rightMultiplicity, rawB, rawDesc] = relMatch;
       const classA = toSafeIdentifier(rawA, 'Class');
       const classB = toSafeIdentifier(rawB, 'Class');
 
@@ -370,7 +531,7 @@ function normalizeClass(code) {
       seenClassEdges.add(edgeKey1);
 
       const desc = rawDesc ? `: ${toSafeLabel(rawDesc, 60)}` : '';
-      output.push(`  ${classA} ${relOp} ${classB} ${desc}`.trim());
+      output.push(`  ${classA} ${leftMultiplicity!==undefined?'"'+toSafeLabel(leftMultiplicity,20)+'" ':''}${relOp} ${rightMultiplicity!==undefined?'"'+toSafeLabel(rightMultiplicity,20)+'" ':''}${classB} ${desc}`.trim());
       continue;
     }
 
@@ -378,6 +539,69 @@ function normalizeClass(code) {
   }
 
   if (inClass) output.push('  }');
+
+  // Connect isolated classes if any exist to guarantee clean connected graphs
+  const definedClasses = new Set();
+  const relatedClasses = new Set();
+
+  for (const l of output) {
+    const cm = l.match(/^\s*class\s+([a-zA-Z0-9_]+)\s*\{/);
+    if (cm) definedClasses.add(cm[1]);
+
+    const rm = l.match(/^\s*([A-Za-z0-9_]+)\s*(?:(?:"[^"]*")?\s*)?(?:-->|<--|--|\.\.|\*--|o--|--\|>|<\|--)\s*(?:(?:"[^"]*")?\s*)?([A-Za-z0-9_]+)/);
+    if (rm) {
+      relatedClasses.add(rm[1]);
+      relatedClasses.add(rm[2]);
+    }
+  }
+
+  const possibleHubs = ['OrdenTrabajo', 'Cotizacion', 'Vehiculo', 'Diagnostico', 'Usuario', 'BaseConocimiento'];
+  const defaultHub = possibleHubs.find(h => definedClasses.has(h)) || Array.from(definedClasses)[0];
+
+  if (defaultHub) {
+    for (const c of definedClasses) {
+      if (!relatedClasses.has(c) && c !== defaultHub) {
+        if (/codigoobd|soluciontecnica|articulo/i.test(c) && definedClasses.has('BaseConocimiento')) {
+          output.push(`  BaseConocimiento "1" *-- "0..*" ${c} : agrupa`);
+        } else if (/baseconocimiento/i.test(c) && definedClasses.has('Diagnostico')) {
+          output.push(`  Diagnostico "0..*" --> "0..*" ${c} : consulta`);
+        } else if (/zonavehiculo/i.test(c) && definedClasses.has('InspeccionVisual')) {
+          output.push(`  InspeccionVisual "1" *-- "1..*" ${c} : examina`);
+        } else if (/inspeccionvisual/i.test(c) && definedClasses.has('RecepcionVehiculo')) {
+          output.push(`  RecepcionVehiculo "1" *-- "1" ${c} : incluye`);
+        } else if (/evidenciamultimedia/i.test(c) && definedClasses.has('Diagnostico')) {
+          output.push(`  Diagnostico "1" o-- "0..*" ${c} : documenta`);
+        } else if (/detallecotizacion/i.test(c) && definedClasses.has('Cotizacion')) {
+          output.push(`  Cotizacion "1" *-- "1..*" ${c} : compone`);
+        } else if (/actividadorden|asignacionmecanico|pruebareparacion/i.test(c) && definedClasses.has('OrdenTrabajo')) {
+          output.push(`  OrdenTrabajo "1" *-- "1..*" ${c} : desglosa`);
+        } else if (/detalleventa/i.test(c) && definedClasses.has('VentaDirecta')) {
+          output.push(`  VentaDirecta "1" *-- "1..*" ${c} : desglosa`);
+        } else if (/detallecompra/i.test(c) && definedClasses.has('Compra')) {
+          output.push(`  Compra "1" *-- "1..*" ${c} : detalla`);
+        } else if (/alertamantenimiento/i.test(c) && definedClasses.has('MantenimientoPreventivo')) {
+          output.push(`  MantenimientoPreventivo "1" --> "0..*" ${c} : dispara`);
+        } else if (/expedientedigital/i.test(c) && definedClasses.has('Vehiculo')) {
+          output.push(`  Vehiculo "1" *-- "1" ${c} : consolida`);
+        } else if (/permiso/i.test(c) && definedClasses.has('Rol')) {
+          output.push(`  Rol "1" *-- "1..*" ${c} : define`);
+        } else if (/falla/i.test(c) && definedClasses.has('Diagnostico')) {
+          output.push(`  Diagnostico "1" *-- "1..*" ${c} : identifica`);
+        } else if (/servicio/i.test(c)) {
+          const targetHub = definedClasses.has('OrdenTrabajo') ? 'OrdenTrabajo' : (definedClasses.has('Cotizacion') ? 'Cotizacion' : defaultHub);
+          output.push(`  ${targetHub} "1" -- "0..*" ${c} : incluye`);
+        } else if (/movimiento|stock|inventario/i.test(c) && definedClasses.has('Repuesto')) {
+          output.push(`  Repuesto "1" -- "0..*" ${c} : registra`);
+        } else if (/notificacion|auditoria/i.test(c) && definedClasses.has('Usuario')) {
+          output.push(`  Usuario "1" -- "0..*" ${c} : genera`);
+        } else {
+          output.push(`  ${defaultHub} "1" -- "0..*" ${c} : relaciona`);
+        }
+        relatedClasses.add(c);
+      }
+    }
+  }
+
   return output.join('\n');
 }
 
@@ -459,13 +683,15 @@ function normalizeNavigation(code) {
 }
 
 /**
- * Normalizes Architecture diagram (flowchart TB).
+ * Normalizes Architecture diagram (flowchart LR or flowchart TB).
  */
 function normalizeArchitecture(code) {
-  if (!code || typeof code !== 'string') return 'flowchart TB\n';
+  if (!code || typeof code !== 'string') return 'flowchart LR\n';
 
   const rawLines = code.split('\n');
-  const output = ['flowchart TB'];
+  const firstHeader = rawLines.find(l => /^(flowchart|graph)\s+/i.test(l.trim()));
+  const header = firstHeader ? firstHeader.trim() : 'flowchart LR';
+  const output = [header];
 
   let subgraphCount = 0;
   let endCount = 0;

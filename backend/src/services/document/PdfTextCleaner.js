@@ -55,8 +55,8 @@ class PdfTextCleaner {
     text = text.replace(/([a-záéíóúüñA-ZÁÉÍÓÚÜÑ])-[\t ]*\n[\t ]*([a-záéíóúüñA-ZÁÉÍÓÚÜÑ])/g, '$1$2');
 
     // 8. Eliminar encabezados y pies de página recurrentes
-    text = text.replace(/^[ \t]*(?:NEXORA|AUTRON|SISTEMA WEB|PROPUESTA)[ \t·\-_–]+(?:SOLUCIONES DE SOFTWARE[ \t·\-_–]+)?(?:AUTRON)?[ \t·\-_–]*\d+[ \t]*$/gmi, '');
-    text = text.replace(/^[ \t]*NEXORA[ \t]+AUTRON[ \t]*$/gmi, '');
+    // Eliminar encabezados y pies de página recurrentes genéricos (e.g. títulos con números de página)
+    text = text.replace(/^[ \t]*(?:SISTEMA|PROPUESTA|DOCUMENTO|ESPECIFICACI[OÓ]N)[ \t·\-_–]+[A-Za-z0-9\s·\-_–]*\d+[ \t]*$/gmi, '');
 
     // 9. Eliminar números de página aislados en líneas individuales
     text = text.replace(/^[ \t]*(?:Página|Pág\.?|Page)?[ \t]*\d+[ \t]*$/gmi, '');

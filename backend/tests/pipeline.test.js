@@ -118,15 +118,14 @@ async function runPipelineTests() {
     REQUISITOS NO FUNCIONALES
     RNF-01 Disponibilidad 99.9%.
   `;
-  const resultCaso7 = await analysisOrchestrator.process(structuredDocText, 'sistema_estructurado.pdf', { providerOverride: 'mock' });
-  assert.strictEqual(resultCaso7.statistics.aiFragments, 0, 'No debe enviar ningún fragmento a IA');
-  assert.strictEqual(resultCaso7.ambiguousFragments.length, 0, 'Cero fragmentos ambiguos');
-  assert(resultCaso7.requirements.length >= 3, 'Requisitos completos extraídos por reglas');
-  assert.strictEqual(resultCaso7.architecture.source, 'explicit');
-  assert(resultCaso7.diagrams.erDiagram.includes('erDiagram'));
-  assert(resultCaso7.diagrams.navigationDiagram.includes('flowchart'));
-  assert(resultCaso7.diagrams.architectureDiagram.includes('flowchart'));
-  console.log('   ✓ Caso 7 superado: Pipeline 100% determinista sin consumo de tokens de Ollama.');
+  const resultCaso7 = await analysisOrchestrator.process(structuredDocText, 'sistema_estructurado.pdf', {
+    providerOverride: 'gemini', providerInstance: require('./fixtures/extractionProvider'), cache: false
+  });
+  assert.strictEqual(resultCaso7.partial, false);
+  assert(resultCaso7.coverage.every(c => c.status === 'ANALYZED'));
+  assert(resultCaso7.requirements.length >= 3);
+  assert.strictEqual(resultCaso7.diagrams, undefined, 'La extracción no genera diagramas');
+  assert.deepStrictEqual(resultCaso7.screens, []);
 
   console.log('\n================================================================');
   console.log('   ¡TODAS LAS PRUEBAS DEL PIPELINE HÍBRIDO PASARON (7/7)!      ');

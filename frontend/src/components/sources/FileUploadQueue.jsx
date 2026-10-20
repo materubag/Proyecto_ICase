@@ -1,3 +1,4 @@
+import { isPdf } from '../../utils/pdfFilePolicy';
 import React, { useState, useRef } from 'react';
 import {
   FileText,
@@ -14,7 +15,7 @@ import {
 
 /**
  * FileUploadQueue
- * Multi-file upload queue for PDFs and Audios.
+ * Multi-file upload queue for PDFs.
  * Displays files queued with explicit status badges, allows removing files,
  * and gives real file-by-file feedback without fake percentages.
  */
@@ -28,6 +29,7 @@ export default function FileUploadQueue({
 }) {
   const fileInputRef = useRef(null);
   const [dragActive, setDragActive] = useState(false);
+  const [uploadError,setUploadError]=useState('');
 
   const formatFileSize = (bytes) => {
     if (!bytes && bytes !== 0) return '';
@@ -38,13 +40,12 @@ export default function FileUploadQueue({
 
   const classifyFile = (file) => {
     const name = file.name.toLowerCase();
-    if (name.endsWith('.pdf')) return 'PDF';
-    const audioExts = ['.mp3', '.wav', '.m4a', '.ogg', '.webm', '.aac', '.flac', '.mp4'];
-    if (audioExts.some((ext) => name.endsWith(ext))) return 'AUDIO';
+    if (isPdf(file)) return 'PDF';
     return 'UNKNOWN';
   };
 
   const handleAddFiles = (newFileList) => {
+    setUploadError(Array.from(newFileList).some(file=>classifyFile(file)!=='PDF')?'Solo se permiten archivos PDF (.pdf).':'');
     const added = [];
     Array.from(newFileList).forEach((file) => {
       const type = classifyFile(file);
@@ -145,6 +146,7 @@ export default function FileUploadQueue({
 
   return (
     <div className="file-upload-queue-container" style={{ display: 'flex', flexDirection: 'column', gap: '14px' }}>
+      {uploadError && <p role="alert">{uploadError}</p>}
       {/* Dropzone */}
       <div
         onDrop={handleDrop}
@@ -166,7 +168,7 @@ export default function FileUploadQueue({
           ref={fileInputRef}
           type="file"
           multiple
-          accept=".pdf,application/pdf,audio/*,.mp3,.wav,.m4a,.ogg,.webm,.aac,.flac,.mp4"
+          accept=".pdf,application/pdf"
           hidden
           disabled={isProcessing}
           onChange={(e) => {
@@ -197,7 +199,7 @@ export default function FileUploadQueue({
               Arrastra archivos aquí o haz clic para seleccionar
             </strong>
             <p style={{ margin: '4px 0 0', fontSize: '0.8125rem', color: 'var(--secondary)' }}>
-              Permite múltiples documentos <strong>PDF</strong> y audios de entrevistas (<strong>MP3, WAV, M4A</strong>)
+              Solo se permiten documentos <strong>PDF</strong>
             </p>
           </div>
           <button

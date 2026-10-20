@@ -21,11 +21,13 @@ class CandidateService {
     const status = filters.status || 'PENDING_REVIEW';
     const kind = (filters.kind || filters.category || 'ALL').toUpperCase();
 
-    const reqWhere = { projectId };
+    const reqWhere = { projectId, type: { in: ['FUNCTIONAL', 'NON_FUNCTIONAL'] } };
+    if (kind === 'FUNCTIONAL' || kind === 'NON_FUNCTIONAL') reqWhere.type = kind;
     if (status !== 'ALL') reqWhere.status = status;
     if (filters.type && ['FUNCTIONAL', 'NON_FUNCTIONAL'].includes(filters.type)) reqWhere.type = filters.type;
     if (filters.origin) reqWhere.origin = filters.origin;
-    if (filters.sourceId) reqWhere.sourceId = filters.sourceId;
+    if (filters.sourceId) reqWhere.OR = [{ sourceId: filters.sourceId },
+      { evidence: { path: ['segments'], array_contains: [{ sourceId: filters.sourceId }] } }];
 
     let reqList = [];
     if (kind === 'ALL' || kind === 'REQUIREMENT' || kind === 'REQUISITOS' || kind === 'FUNCTIONAL' || kind === 'NON_FUNCTIONAL') {
@@ -53,7 +55,7 @@ class CandidateService {
         category: c.category,
         priority: c.priority,
         origin: c.origin,
-        confidence: c.confidence ?? 1.0,
+        confidence: c.confidence,
         status: c.status,
         rejectionReason: c.rejectionReason,
         evidence: c.evidence,
@@ -79,13 +81,14 @@ class CandidateService {
 
     // Consultar ModelCandidates (Actores, Procesos, Reglas, Tecnologías, Arquitectura, Entidades, etc.)
     let modelList = [];
-    const modelWhere = { projectId };
+    const modelWhere = { projectId, kind: {in:['ACTOR','BUSINESS_RULE','REQUIREMENT_DISCOVERY','REQUIREMENT_RELATION']} };
     if (status !== 'ALL') modelWhere.status = status;
     if (kind !== 'ALL' && kind !== 'REQUIREMENT' && kind !== 'REQUISITOS') {
       modelWhere.kind = kind;
     }
 
-    if (kind !== 'REQUIREMENT' && kind !== 'REQUISITOS') {
+    if (['ALL','ACTOR','ACTORES','BUSINESS_RULE','REQUIREMENT_DISCOVERY','REQUIREMENT_RELATION'].includes(kind)) {
+      if(kind==='ACTORES')modelWhere.kind='ACTOR';
       const models = await prisma.modelCandidate.findMany({
         where: modelWhere,
         orderBy: [{ status: 'asc' }, { kind: 'asc' }, { createdAt: 'desc' }]
@@ -100,13 +103,13 @@ class CandidateService {
           categoryGroup: this.mapKindToGroup(m.kind),
           temporaryCode: this.generateTemporaryCode(m.kind, m.name),
           title: m.name,
-          statement: m.content?.statement || m.content?.description || m.content?.summary || m.name,
+          statement: m.content?.statement || m.content?.description || m.content?.summary || m.content?.reason || m.name,
           originalStatement: m.name,
           type: m.kind,
           category: m.kind,
-          priority: 'MEDIUM',
+          priority: null,
           origin: m.origin || 'RULE',
-          confidence: m.confidence ?? (m.origin === 'INFERRED' ? 0.8 : 0.95),
+          confidence: m.confidence ?? null,
           status: m.status,
           rejectionReason: null,
           evidence: {
@@ -130,6 +133,8 @@ class CandidateService {
   mapKindToGroup(kind) {
     const k = (kind || '').toUpperCase();
     if (k === 'REQUIREMENT') return 'REQUISITOS';
+    if (k === 'REQUIREMENT_DISCOVERY') return 'CAPACIDADES POR VALIDAR';
+    if (k === 'REQUIREMENT_RELATION') return 'RELACIONES POR VALIDAR';
     if (k === 'ACTOR') return 'ACTORES';
     if (k === 'PROCESS') return 'PROCESOS';
     if (k === 'BUSINESS_RULE') return 'REGLAS DE NEGOCIO';
@@ -217,7 +222,8 @@ class CandidateService {
           priority,
           type,
           category,
-          qualityReport
+          qualityReport,
+          canonicalKey: require('./requirementIdentity').keyFor({ type, statement })
         },
         include: { source: true, sourceVersion: true }
       });
@@ -262,58 +268,15 @@ class CandidateService {
     });
 
     if (reqCandidate) {
-      if (reqCandidate.status === 'APPROVED' && reqCandidate.promotedRequirementId) {
-        const existingReq = await prisma.requirement.findUnique({ where: { id: reqCandidate.promotedRequirementId } });
-        return { candidate: reqCandidate, promotedItem: existingReq, kind: 'REQUIREMENT' };
-      }
 
       if (['CONFLICT', 'UPDATE'].includes(reqCandidate.evidence?.relationship?.relation) && reqCandidate.evidence?.relationship?.requirementId) {
         throw Object.assign(new Error('Este candidato propone un cambio a un requisito existente. Revísalo en Cambios.'), { code: 'IMPACT_CONFIRMATION_REQUIRED', statusCode: 409 });
       }
 
-      return require('../engineering/domain').transaction(async (tx) => {
-        const prefix = reqCandidate.type === 'NON_FUNCTIONAL' ? 'RNF' : 'RF';
-        const existingReqs = await tx.requirement.findMany({
-          where: { projectId: reqCandidate.projectId, code: { startsWith: prefix } },
-          select: { code: true }
-        });
+      return prisma.$transaction(async (tx) => {
+        return require('./extractionStore').promote(tx, reqCandidate);
+      }, { timeout: 20000 });
 
-        let maxNum = 0;
-        existingReqs.forEach(r => {
-          const match = r.code.match(/-(?:0)?(\d+)$/);
-          if (match) {
-            const num = parseInt(match[1], 10);
-            if (num > maxNum) maxNum = num;
-          }
-        });
-        const nextCode = `${prefix}-${String(maxNum + 1).padStart(2, '0')}`;
-
-        const requirement = await tx.requirement.create({
-          data: {
-            projectId: reqCandidate.projectId,
-            code: nextCode,
-            name: reqCandidate.title,
-            description: reqCandidate.statement,
-            type: reqCandidate.type === 'NON_FUNCTIONAL' ? 'NON_FUNCTIONAL' : 'FUNCTIONAL',
-            priority: reqCandidate.priority,
-            status: 'APPROVED',
-            qualityReport: reqCandidate.qualityReport || requirementQualityService.evaluate(reqCandidate)
-          }
-        });
-
-        const domain = require('../engineering/domain');
-        await require('../engineering/change.service').remember(tx, requirement);
-        for (const [kind, value] of [['Source', reqCandidate.sourceId], ['SourceVersion', reqCandidate.sourceVersionId], ['AudioSegment', reqCandidate.sourceSegmentId]]) {
-          if (value) await domain.link(tx, reqCandidate.projectId, kind, value, 'Requirement', requirement.id, 'EVIDENCE');
-        }
-
-        const updated = await tx.requirementCandidate.update({
-          where: { id },
-          data: { status: 'APPROVED', promotedRequirementId: requirement.id }
-        });
-
-        return { candidate: updated, requirement, promotedItem: requirement, kind: 'REQUIREMENT' };
-      });
     }
 
     // 2. Revisar si es ModelCandidate (Actores, Reglas, Procesos, etc.)
@@ -325,6 +288,7 @@ class CandidateService {
     }
 
     if (modelCandidate.status === 'APPROVED') {
+      if(modelCandidate.kind==='ACTOR')await prisma.$transaction(tx=>require('./actorIdentity').refresh(tx,modelCandidate.projectId));
       return { candidate: modelCandidate, kind: modelCandidate.kind, message: 'Ya aprobado previamente.' };
     }
 
@@ -333,8 +297,21 @@ class CandidateService {
       const { projectId, kind, name, content } = modelCandidate;
 
       switch (kind) {
+        case 'REQUIREMENT_RELATION': {
+          promotedItem=await require('./dependencyResolver').approveCandidate(tx,modelCandidate);
+          break;
+        }
+        case 'REQUIREMENT_DISCOVERY': {
+          const identity=require('./requirementIdentity');
+          const canonicalKey=identity.keyFor(content);
+          const candidate=await tx.requirementCandidate.upsert({where:{projectId_canonicalKey:{projectId,canonicalKey}},update:{},create:{projectId,canonicalKey,temporaryCode:content.id||'CANDIDATE',title:name,statement:content.statement,type:content.type,origin:'INFERRED',status:'PENDING_REVIEW',priority:null,evidence:require('./extractionStore').envelope(content)}});
+          promotedItem=(await require('./extractionStore').promote(tx,candidate)).promotedItem;
+          break;
+        }
         case 'ACTOR': {
           const deduplicationService = require('./deduplicationService');
+          const classification=require('./actorEvidence').classify({name,evidence:modelCandidate.evidence});
+          if(classification==='PROJECT_CONTEXT')throw Object.assign(new Error('Este candidato corresponde al contexto o proveedor del proyecto y no a un rol del sistema.'),{code:'PROJECT_CONTEXT_NOT_ACTOR',statusCode:422});
           const canonicalKey = deduplicationService.getActorCanonicalKey(name);
           const existingActors = await tx.actor.findMany({ where: { projectId, isDeleted: false } });
           const match = existingActors.find(a => deduplicationService.getActorCanonicalKey(a.name) === canonicalKey);
@@ -344,6 +321,8 @@ class CandidateService {
               data: {
                 reviewStatus: 'APPROVED',
                 status: 'APPROVED',
+                evidence: modelCandidate.evidence,
+                aliases: [...new Set([...(match.aliases || []), name])],
                 description: match.description && content?.description && !match.description.includes(content.description)
                   ? `${match.description} · ${content.description}`.slice(0, 500)
                   : (match.description || content?.description || `Actor ${name}`)
@@ -357,6 +336,8 @@ class CandidateService {
                 codeId: `ACT-${String(count).padStart(2, '0')}`,
                 name: deduplicationService.getPreferredActorDisplayName(name, canonicalKey),
                 description: content?.description || `Actor ${name}`,
+                evidence: modelCandidate.evidence,
+                aliases: [name],
                 status: 'APPROVED',
                 reviewStatus: 'APPROVED'
               }
@@ -369,7 +350,8 @@ class CandidateService {
             data: {
               projectId,
               name,
-              description: content?.description || name,
+              description: content?.description || content?.statement || name,
+              evidence: content?.evidence || modelCandidate.evidence || [],
               status: 'APPROVED'
             }
           });
@@ -487,6 +469,8 @@ class CandidateService {
         }
       });
 
+      if(kind==='ACTOR')await require('./actorIdentity').refresh(tx,projectId,[updated]);
+
       return {
         candidate: updated,
         promotedItem,
@@ -512,6 +496,7 @@ class CandidateService {
 
     const model = await prisma.modelCandidate.findUnique({ where: { id } });
     if (model) {
+      if(model.kind==='REQUIREMENT_RELATION'&&model.status!=='PENDING_REVIEW')throw Object.assign(new Error('La propuesta ya fue revisada.'),{statusCode:409,code:'VERSION_CONFLICT'});
       return prisma.modelCandidate.update({
         where: { id },
         data: { status: 'REJECTED' }
@@ -570,11 +555,11 @@ class CandidateService {
   async getStats(projectId) {
     const [reqs, models] = await Promise.all([
       prisma.requirementCandidate.findMany({
-        where: { projectId },
+        where: { projectId, type: { in: ['FUNCTIONAL', 'NON_FUNCTIONAL'] } },
         select: { id: true, type: true, status: true, origin: true, qualityReport: true, evidence: true }
       }),
       prisma.modelCandidate.findMany({
-        where: { projectId },
+        where: { projectId, kind: {in:['ACTOR','BUSINESS_RULE','REQUIREMENT_DISCOVERY','REQUIREMENT_RELATION']} },
         select: { id: true, kind: true, status: true, origin: true }
       })
     ]);

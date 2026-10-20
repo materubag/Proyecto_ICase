@@ -38,6 +38,7 @@ async function generate(projectId, type, artifactId) {
   if (!registry.has(type)) d.fail('INVALID_ARTIFACT_TYPE', undefined, 400);
   return d.transaction(async tx => {
     await d.project(tx, projectId);
+    await require('../analysis/catalogIntegrity').assertProject(tx,projectId);
     const content = await snapshot(tx, projectId, type);
     const artifact = artifactId ? await d.element(tx, projectId, 'Artifact', artifactId) : await tx.artifact.upsert({ where: { projectId_type_name: { projectId, type, name: type } }, update: {}, create: { projectId, type, name: type } });
     if (artifact.type !== type) d.fail('INVALID_ARTIFACT_TYPE', undefined, 400);
@@ -54,6 +55,7 @@ async function review(projectId, id, input) {
     if (input.status === 'REJECTED') return tx.artifactVersion.update({ where: { id }, data: { status: 'REJECTED' } });
     if (input.status === 'ERROR') return tx.artifactVersion.update({ where: { id }, data: { status: 'ERROR', validationStatus: 'ERROR', technicalError: String(input.error || 'INVALID_MERMAID').slice(0, 2000) } });
     if (input.status !== 'APPROVED') d.fail('INVALID_STATUS', undefined, 400);
+    await require('../analysis/catalogIntegrity').assertProject(tx,projectId);
     if (v.artifact.revision !== v.version) d.fail('VERSION_CONFLICT', 'Solo puede aprobarse la última versión candidata.');
     if (v.renderedContent && input.renderedSuccessfully !== true) d.fail('INVALID_MERMAID', 'Valida y renderiza el diagrama antes de aprobarlo.', 400);
     for (const dep of v.structuredContent.dependencies || []) {

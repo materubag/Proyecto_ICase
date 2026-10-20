@@ -7,13 +7,15 @@
     "test:e2e": "playwright test",
     "dev": "vite --host 0.0.0.0",
     "build": "vite build",
-    "preview": "vite preview --host 0.0.0.0"
+    "preview": "vite preview --host 0.0.0.0",
+    "docs:screenshots": "node scripts/capture-docs.mjs"
   },
   "dependencies": {
     "lucide-react": "^0.441.0",
     "mermaid": "^10.9.1",
     "react": "^18.3.1",
-    "react-dom": "^18.3.1"
+    "react-dom": "^18.3.1",
+    "dagre-d3-es": "^7.0.13"
   },
   "devDependencies": {
     "@playwright/test": "^1.63.0",

@@ -1,3 +1,4 @@
+import { readApiResponse } from './responseReader';
 const API_BASE = '/api/projects';
 
 export const diagramsApi = {
@@ -6,9 +7,9 @@ export const diagramsApi = {
    */
   async getAvailability(projectId) {
     const res = await fetch(`${API_BASE}/${projectId}/diagrams/availability`);
-    const json = await res.json();
+    const json = await readApiResponse(res);
     if (!res.ok || !json.success) {
-      throw new Error(json.error || 'Error al obtener disponibilidad de diagramas');
+      throw new Error((typeof json.error === 'string' ? json.error : json.error?.message) || 'Error al obtener disponibilidad de diagramas');
     }
     return json.data;
   },
@@ -18,9 +19,9 @@ export const diagramsApi = {
    */
   async getDiagram(projectId, type) {
     const res = await fetch(`${API_BASE}/${projectId}/diagrams/${type}`);
-    const json = await res.json();
+    const json = await readApiResponse(res);
     if (!res.ok || !json.success) {
-      throw new Error(json.error || `Error al obtener diagrama ${type}`);
+      throw new Error((typeof json.error === 'string' ? json.error : json.error?.message) || `Error al obtener diagrama ${type}`);
     }
     return json.data;
   },
@@ -35,9 +36,9 @@ export const diagramsApi = {
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ type, force: isForce })
     });
-    const json = await res.json();
+    const json = await readApiResponse(res);
     if (!res.ok || !json.success) {
-      const err = new Error(json.error || `Error al generar diagrama ${type}`);
+      const err = new Error((typeof json.error === 'string' ? json.error : json.error?.message) || `Error al generar diagrama ${type}`);
       err.code = json.code;
       err.details = json.details;
       throw err;
@@ -55,9 +56,9 @@ export const diagramsApi = {
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ types, force: isForce })
     });
-    const json = await res.json();
+    const json = await readApiResponse(res);
     if (!res.ok || !json.success) {
-      throw new Error(json.error || 'Error al generar diagramas seleccionados');
+      throw new Error((typeof json.error === 'string' ? json.error : json.error?.message) || 'Error al generar diagramas seleccionados');
     }
     return json.data;
   },
@@ -71,9 +72,9 @@ export const diagramsApi = {
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ code, crossCompareCode })
     });
-    const json = await res.json();
+    const json = await readApiResponse(res);
     if (!res.ok || !json.success) {
-      throw new Error(json.error || `Error al validar diagrama ${type}`);
+      throw new Error((typeof json.error === 'string' ? json.error : json.error?.message) || `Error al validar diagrama ${type}`);
     }
     return json.data;
   },
@@ -87,9 +88,9 @@ export const diagramsApi = {
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ code })
     });
-    const json = await res.json();
+    const json = await readApiResponse(res);
     if (!res.ok || !json.success) {
-      throw new Error(json.error || `Error al guardar diagrama ${type}`);
+      throw new Error((typeof json.error === 'string' ? json.error : json.error?.message) || `Error al guardar diagrama ${type}`);
     }
     return json.data;
   },
@@ -103,9 +104,9 @@ export const diagramsApi = {
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ erCode, classCode })
     });
-    const json = await res.json();
+    const json = await readApiResponse(res);
     if (!res.ok || !json.success) {
-      throw new Error(json.error || 'Error en validación cruzada E/R vs POO');
+      throw new Error((typeof json.error === 'string' ? json.error : json.error?.message) || 'Error en validación cruzada E/R vs POO');
     }
     return json.data;
   }

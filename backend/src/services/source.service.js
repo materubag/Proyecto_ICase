@@ -137,10 +137,12 @@ class SourceService {
       // Comprobar si ya existe la misma versión exacta por hash
       const existingVersion = await prisma.sourceVersion.findFirst({
         where: { fileHash, source: { projectId } },
-        select: { sourceId: true }
+        select: { id:true,sourceId: true,metadata:true },
+        orderBy:{createdAt:'desc'}
       });
+      const existingSource=existingVersion?await this.getById(existingVersion.sourceId):null;
 
-      if (existingVersion) {
+      if (existingVersion&&existingSource.currentVersionId===existingVersion.id&&existingVersion.metadata?.pdfExtractionVersion===require('./document/PdfExtractor').PDF_EXTRACTION_VERSION) {
         duplicateFiles++;
         if (filePath && fs.existsSync(filePath)) {
           await fs.promises.unlink(filePath).catch(() => {});
@@ -148,12 +150,12 @@ class SourceService {
         results.push({
           duplicate: true,
           message: 'El documento ya existe en el proyecto (SHA-256 coincidente).',
-          source: await this.getById(existingVersion.sourceId)
+          source: existingSource
         });
         continue;
       }
 
-      const sameName = await prisma.source.findFirst({
+      const sameName = existingSource || await prisma.source.findFirst({
         where: { projectId, name },
         orderBy: { updatedAt: 'desc' }
       });
@@ -201,6 +203,8 @@ class SourceService {
             normalizedText: extraction.normalizedText,
             metadata: {
               pageCount: extraction.pageCount,
+              rawLayoutText: extraction.rawLayoutText || null,
+              pdfExtractionVersion:extraction.pdfExtractionVersion,
               pagesWithoutText: extraction.pagesWithoutText || []
             },
             previousVersionId: sameName?.currentVersionId || null

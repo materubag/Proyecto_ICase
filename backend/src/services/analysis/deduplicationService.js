@@ -95,14 +95,15 @@ class DeduplicationService {
       clean = clean.slice(0, -1);
     }
 
-    // Role-specific aliases mapping
-    if (/admin|administrad/i.test(clean)) return 'administrador';
-    if (/client|usuario\s+final|comprador/i.test(clean)) return 'cliente';
-    if (/mecanic|tecnic|operario/i.test(clean)) return 'mecanico';
-    if (/recepci|asistente|secretari|cajer/i.test(clean)) return 'recepcion';
-    if (/gerente|director|jefe/i.test(clean)) return 'gerente';
-    if (/auditor|supervisor/i.test(clean)) return 'auditor';
-
+    // Only spelling/gender variants of the same declared role are equivalent.
+    if (/^administrador(?:a)?$/.test(clean)) return 'administrador';
+    if (/^client(?:e)?$/.test(clean)) return 'cliente';
+    if (/^operador(?:a)?$/.test(clean)) return 'operador';
+    if (/^auditor(?:a)?$/.test(clean)) return 'auditor';
+    if (/^gestor(?:a)?$/.test(clean)) return 'gestor';
+    if (/^supervisor(?:a)?$/.test(clean)) return 'supervisor';
+    if (/^usuari[oa]$/.test(clean)) return 'usuario';
+    if (/^tecnic[oa]$/.test(clean)) return 'tecnico';
     return clean;
   }
 
@@ -112,13 +113,12 @@ class DeduplicationService {
   getPreferredActorDisplayName(rawName, canonicalKey) {
     if (canonicalKey === 'administrador') return 'Administrador';
     if (canonicalKey === 'cliente') return 'Cliente';
-    if (canonicalKey === 'mecanico') return 'Mecánico';
-    if (canonicalKey === 'recepcion') return 'Recepción';
-    if (canonicalKey === 'gerente') return 'Gerente';
-    if (canonicalKey === 'auditor') return 'Auditor';
-
-    // Capitalize properly
-    return rawName.charAt(0).toUpperCase() + rawName.slice(1);
+    if (!rawName && !canonicalKey) return 'Usuario';
+    const base = (rawName || canonicalKey).trim();
+    return base
+      .split(/\s+/)
+      .map(w => w.charAt(0).toUpperCase() + w.slice(1).toLowerCase())
+      .join(' ');
   }
 
   /**
@@ -147,7 +147,9 @@ class DeduplicationService {
 
     // Merge incoming actors
     actors.forEach(act => {
-      const key = this.getActorCanonicalKey(act.name);
+      const aliasKeys=(act.aliases||[]).map(alias=>this.getActorCanonicalKey(alias));
+      const matches=[...canonicalMap.keys()].filter(key=>aliasKeys.includes(key));
+      const key = matches.length===1?matches[0]:this.getActorCanonicalKey(act.name);
       const displayName = this.getPreferredActorDisplayName(act.name, key);
 
       if (!canonicalMap.has(key)) {
@@ -239,19 +241,22 @@ class DeduplicationService {
     if (!text) return null;
     const lower = this.normalizeText(text);
 
+    // Conceptos transversales de sistemas de información
     if (/\b(?:usuario|usuarios|cuenta|cuentas|perfil|perfiles)\b/i.test(lower)) return 'usuario';
-    if (/\b(?:vehiculo|vehiculos|auto|automovil|automoviles|coche|coches)\b/i.test(lower)) return 'vehiculo';
-    if (/\b(?:cliente|clientes)\b/i.test(lower)) return 'cliente';
-    if (/\b(?:mecanico|mecanicos|tecnico|tecnicos)\b/i.test(lower)) return 'mecanico';
-    if (/\b(?:cita|citas|agenda|disponibilidad)\b/i.test(lower)) return 'cita';
-    if (/\b(?:cotizacion|cotizaciones|presupuesto|presupuestos)\b/i.test(lower)) return 'cotizacion';
-    if (/\b(?:orden|ordenes|servicio|servicios|mantenimiento)\b/i.test(lower)) return 'orden_servicio';
-    if (/\b(?:diagnostico|diagnosticos|falla|fallas|averia|averias|obd)\b/i.test(lower)) return 'diagnostico';
-    if (/\b(?:repuesto|repuestos|material|materiales|inventario|stock)\b/i.test(lower)) return 'repuesto_inventario';
-    if (/\b(?:factura|facturas|pago|pagos|cobro|cobros)\b/i.test(lower)) return 'factura_pago';
-    if (/\b(?:reporte|reportes|dashboard|estadistica|estadisticas)\b/i.test(lower)) return 'reporte';
-    if (/\b(?:expediente|expedientes|historial)\b/i.test(lower)) return 'expediente_historial';
-    if (/\b(?:rol|roles|permiso|permisos)\b/i.test(lower)) return 'roles_permisos';
+    if (/\b(?:rol|roles|permiso|permisos|acceso|accesos)\b/i.test(lower)) return 'roles_permisos';
+    if (/\b(?:sesion|sesiones|autenticacion|login)\b/i.test(lower)) return 'sesion_acceso';
+    if (/\b(?:reporte|reportes|dashboard|estadistica|estadisticas|indicador|indicadores)\b/i.test(lower)) return 'reporte_indicadores';
+    if (/\b(?:notificacion|notificaciones|alerta|alertas|aviso|avisos)\b/i.test(lower)) return 'notificacion_alerta';
+    if (/\b(?:configuracion|configuraciones|parametro|parametros)\b/i.test(lower)) return 'configuracion';
+    if (/\b(?:auditoria|bitacora|log|historial|trazabilidad)\b/i.test(lower)) return 'auditoria_historial';
+    if (/\b(?:pago|pagos|cobro|cobros|factura|facturas|transaccion|transacciones)\b/i.test(lower)) return 'pago_transaccion';
+    if (/\b(?:documento|documentos|archivo|archivos|expediente|expedientes)\b/i.test(lower)) return 'documento_archivo';
+
+    // Extracción dinámica del término más significativo
+    const words = lower.split(/\s+/).filter(w => w.length > 3 && !STOP_WORDS.has(w));
+    if (words.length > 0) {
+      return this.stem(words[0]);
+    }
 
     return null;
   }
@@ -267,10 +272,16 @@ class DeduplicationService {
     let actorKey = null;
     if (/\b(?:administrador|admin)\b/i.test(norm)) actorKey = 'administrador';
     else if (/\b(?:cliente|comprador)\b/i.test(norm)) actorKey = 'cliente';
-    else if (/\b(?:mecanico|tecnico)\b/i.test(norm)) actorKey = 'mecanico';
-    else if (/\b(?:recepcion|recepcionista|secretaria)\b/i.test(norm)) actorKey = 'recepcion';
-    else if (/\b(?:usuario|operador)\b/i.test(norm)) actorKey = 'usuario';
-    else actorKey = 'sistema';
+    else if (/\b(?:operador|encargado|gestor|supervisor)\b/i.test(norm)) actorKey = 'operador';
+    else if (/\b(?:usuario|persona|empleado)\b/i.test(norm)) actorKey = 'usuario';
+    else {
+      const actorMatch = norm.match(/(?:(?:el|la|los|las)\s+([a-z0-9]{3,20})\s+(?:debe|puede|podra|debera))|(?:permitir\s+(?:a|al)\s+([a-z0-9]{3,20}))/i);
+      if (actorMatch) {
+        actorKey = this.getActorCanonicalKey(actorMatch[1] || actorMatch[2]);
+      } else {
+        actorKey = 'sistema';
+      }
+    }
 
     // 2. Detect action
     const actionKey = this.getActionCanonicalKey(statement);
@@ -329,10 +340,16 @@ class DeduplicationService {
       const statement = (cand.statement || cand.description || cand.name || '').trim();
       if (!statement || statement.length < 10) continue;
 
+      const candidateCode = (cand.code || cand.temporaryCode || '').trim().toUpperCase();
+      const isExplicit = cand.origin === 'EXPLICIT' || cand.source === 'explicit' || /^(?:C)?RN?F-\d+$/i.test(candidateCode);
+      const normalizedStatement = this.normalizeText(statement);
+
       // First check if this candidate matches an already approved requirement in the project
-      const matchedApproved = existingApproved.find(app =>
-        this.isSemanticEquivalent({ statement }, { statement: app.description || app.name })
-      );
+      const matchedApproved = existingApproved.find(app => {
+        const approvedCode = (app.code || '').trim().toUpperCase();
+        if (isExplicit) return candidateCode && approvedCode === candidateCode;
+        return this.isSemanticEquivalent({ statement }, { statement: app.description || app.name });
+      });
 
       if (matchedApproved) {
         // Trace source to the existing approved requirement, do not create duplicate!
@@ -342,7 +359,13 @@ class DeduplicationService {
       // Check if this candidate matches an existing group
       let matchedGroup = null;
       for (const g of groups) {
-        if (this.isSemanticEquivalent({ statement }, { statement: g.canonical.statement })) {
+        const groupCode = (g.canonical.code || g.canonical.temporaryCode || '').trim().toUpperCase();
+        const groupIsExplicit = g.canonical.origin === 'EXPLICIT' || g.canonical.source === 'explicit' || /^(?:C)?RN?F-\d+$/i.test(groupCode);
+        const sameExplicitCode = isExplicit && groupIsExplicit && candidateCode && groupCode === candidateCode;
+        const sameStatement = normalizedStatement === this.normalizeText(g.canonical.statement);
+        const equivalentInferred = !isExplicit && !groupIsExplicit && this.isSemanticEquivalent({ statement }, { statement: g.canonical.statement });
+
+        if ((sameExplicitCode && sameStatement) || (sameStatement && !(isExplicit && groupIsExplicit && candidateCode!==groupCode)) || equivalentInferred) {
           matchedGroup = g;
           break;
         }
@@ -353,11 +376,11 @@ class DeduplicationService {
         temporaryCode: cand.temporaryCode || cand.code || null,
         statement,
         originalStatement: cand.originalStatement || statement,
-        sourceFile: cand.evidence?.sourceFile || cand.source?.name || 'Documento',
+        sourceFile: cand.evidence?.sourceFile || cand.source?.name || cand.sourceFile || 'Documento',
         sourceId: cand.sourceId || null,
         sourceVersionId: cand.sourceVersionId || null,
         method: cand.origin || 'EXTRACTED',
-        confidence: cand.confidence ?? 1.0
+        confidence: cand.confidence ?? null
       };
 
       if (matchedGroup) {
@@ -393,7 +416,8 @@ class DeduplicationService {
                     g.canonical.type === 'RNF' ||
                     (g.canonical.temporaryCode && g.canonical.temporaryCode.startsWith('CRNF'));
 
-      const code = isRNF
+      const originalCode=g.canonical.code || g.canonical.temporaryCode;
+      const code = /^(?:C)?RN?F-\d+$/i.test(originalCode||'') ? originalCode : isRNF
         ? `RNF-${String(rnfCounter++).padStart(2, '0')}`
         : `RF-${String(rfCounter++).padStart(2, '0')}`;
 
@@ -404,7 +428,7 @@ class DeduplicationService {
         type: isRNF ? 'NON_FUNCTIONAL' : 'FUNCTIONAL',
         sources: g.sources,
         redundancyCount: g.redundancyCount,
-        status: 'PENDING'
+        status: (g.canonical?.status && g.canonical.status !== 'PENDING') ? g.canonical.status : 'PENDING_REVIEW'
       };
     });
 
@@ -546,12 +570,12 @@ class DeduplicationService {
         case 'USE_CASE':
           if (/registrar|crear|consultar|gestionar|solicitar|aprobar|emitir|generar|cancelar|asignar/i.test(text)) score += 4;
           if (req.actorIds && req.actorIds.length > 0) score += 3;
-          if (/usuario|cliente|mecanico|recepcion|admin/i.test(text)) score += 2;
+          if (/usuario|cliente|administrador|operador|gestor|tecnico|responsable/i.test(text)) score += 2;
           break;
 
         case 'ER':
           if (/entidad|tabla|relaci|datos|campo|atributo|clave|id|codigo/i.test(text)) score += 4;
-          if (/vehiculo|orden|cliente|producto|servicio|cita|factura|repuesto|inventario/i.test(text)) score += 3;
+          if (/registro|documento|transaccion|item|catalogo|detalle|movimiento|solicitud|comprobante|historial/i.test(text)) score += 3;
           if (/tiene|posee|asociad|pertenece|registra|contiene/i.test(text)) score += 3;
           break;
 

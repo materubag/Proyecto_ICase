@@ -2,222 +2,285 @@ import React, { useState, useEffect, useMemo } from 'react';
 import MockupRenderer from '../components/mockup-renderer/MockupRenderer';
 import DiagramViewport from '../components/common/DiagramViewport';
 import Modal from '../components/common/Modal';
+import { screenOptions, getScreenCategories, SCREEN_CATEGORIES } from '../utils/mockupScreenOptions';
+import { engineering } from '../api/engineering.api';
+import { projectsApi } from '../api/projects.api';
 import { mockupApi } from '../api/mockup.api';
-import { screensApi } from '../api/screens.api';
 
-export default function ProjectPrototype({
-  project,
-  onProjectUpdated,
-  mockupGeneration = null,
-  onStartGeneration = null,
-  onClearFeedback = null
-}) {
-  const [screens, setScreens] = useState(project.screens || []);
-  const [selectedScreenId, setSelectedScreenId] = useState(project.screens?.[0]?.id || null);
-  const [selectedForStitch, setSelectedForStitch] = useState([]);
-  const [isModalOpen, setIsModalOpen] = useState(false);
-  
-  // Estados locales como fallback si no se inyecta mockupGeneration
-  const [localIsGenerating, setLocalIsGenerating] = useState(false);
-  const [localGeneratingMode, setLocalGeneratingMode] = useState('stitch'); // 'stitch' | 'local'
-  const [localGenerationError, setLocalGenerationError] = useState(null);
-  const [localGenerationSuccess, setLocalGenerationSuccess] = useState(null);
-  const [elapsedSeconds, setElapsedSeconds] = useState(0);
+export default function ProjectPrototype({ project, onProjectUpdated, mockupGeneration = null, onStartGeneration = null }) {
+  const STORAGE_KEY = `icase_mockup_generating_${project.id}`;
 
-  const [customPrompt, setCustomPrompt] = useState('');
-  const [searchTerm, setSearchTerm] = useState('');
+  // 1. Estados
+  const [detailsScreen, setDetailsScreen] = useState(null);
+  const [loadingMockups, setLoadingMockups] = useState(true);
+  const [localNodes, setLocalNodes] = useState(null);
+  const [selectedCategory, setSelectedCategory] = useState('all');
+  const categories = useMemo(() => getScreenCategories(project), [project]);
+  const availableScreens = screenOptions({ ...project, navigationNodes: localNodes || project.navigationNodes });
+  const [selectedNodeIds, setSelectedNodeIds] = useState([]);
+  const [generatedScreens, setGeneratedScreens] = useState([]);
+  const [isGenerating, setIsGenerating] = useState(() => {
+    try {
+      const raw = localStorage.getItem(`icase_mockup_generating_${project.id}`);
+      if (raw) {
+        const parsed = JSON.parse(raw);
+        if (Date.now() - (parsed.startedAt || 0) < 900000) return true;
+        localStorage.removeItem(`icase_mockup_generating_${project.id}`);
+      }
+    } catch (e) {}
+    return false;
+  });
+  const [elapsedSeconds, setElapsedSeconds] = useState(() => {
+    try {
+      const raw = localStorage.getItem(`icase_mockup_generating_${project.id}`);
+      if (raw) {
+        const parsed = JSON.parse(raw);
+        if (parsed.startedAt) return Math.max(0, Math.floor((Date.now() - parsed.startedAt) / 1000));
+      }
+    } catch (e) {}
+    return 0;
+  });
+  const [generationError, setGenerationError] = useState(null);
+
+  useEffect(() => {
+    if (!mockupGeneration || mockupGeneration.projectId !== project.id) return;
+    setIsGenerating(mockupGeneration.isGenerating);
+    if (mockupGeneration.error) {
+      setGenerationError(mockupGeneration.error.message || String(mockupGeneration.error));
+    }
+  }, [mockupGeneration, project.id]);
+
+  const screens = generatedScreens.length > 0 ? generatedScreens : (project.screens || []);
+  const [selectedScreenId, setSelectedScreenId] = useState(null);
+  const [selectorOpen, setSelectorOpen] = useState(!(project.screens || []).length);
   const [viewMode, setViewMode] = useState('render'); // 'render' | 'sketch' | 'structure' | 'relations' | 'html'
 
-  // Resolver estados activos (globales o locales)
-  const isGenerating = Boolean(
-    mockupGeneration
-      ? (mockupGeneration.isGenerating && mockupGeneration.projectId === project.id)
-      : localIsGenerating
-  );
-  const generatingMode = mockupGeneration?.mode || localGeneratingMode;
-  const generationError = mockupGeneration?.error || localGenerationError;
-  const generationSuccess = mockupGeneration?.success || localGenerationSuccess;
+  // Sistema de Diseño Unificado (Design System & App Shell)
+  const [themeConfig, setThemeConfig] = useState({
+    color: 'indigo', // 'indigo' | 'blue' | 'emerald' | 'violet' | 'slate'
+    layout: 'sidebar', // 'sidebar' | 'topbar'
+    showShell: true // true = aplicación completa unificada, false = solo tarjeta de vista
+  });
 
-  // Contador de segundos transcurridos mientras se genera
+  // Cronómetro en vivo mientras genera
   useEffect(() => {
-    let interval;
-    if (isGenerating) {
-      const startTime = mockupGeneration?.startTime || Date.now();
-      setElapsedSeconds(Math.max(0, Math.floor((Date.now() - startTime) / 1000)));
-      interval = setInterval(() => {
-        setElapsedSeconds(Math.max(0, Math.floor((Date.now() - startTime) / 1000)));
-      }, 1000);
-    } else {
+    if (!isGenerating) {
       setElapsedSeconds(0);
+      return;
     }
-    return () => clearInterval(interval);
-  }, [isGenerating, mockupGeneration?.startTime]);
+    const timer = setInterval(() => {
+      setElapsedSeconds(prev => prev + 1);
+    }, 1000);
+    return () => clearInterval(timer);
+  }, [isGenerating]);
 
-  // Cargar pantallas desde API o proyecto
-  useEffect(() => {
-    loadScreens();
-  }, [project.id]);
+  // 2. Funciones auxiliares
+  const handleSelectCore = () => {
+    const coreIds = availableScreens.filter(s => s.isCore).map(s => s.id);
+    setSelectedNodeIds(coreIds);
+  };
 
-  // Sincronizar pantallas cuando el proyecto se actualice en background
-  useEffect(() => {
-    if (Array.isArray(project.screens) && project.screens.length > 0) {
-      setScreens(project.screens);
-      // Si la pantalla seleccionada no tiene HTML y alguna sí tiene, seleccionar la primera con HTML
-      const current = project.screens.find(s => s.id === selectedScreenId);
-      if (!current?.html) {
-        const withHtml = project.screens.find(s => s.html);
-        if (withHtml) {
-          setSelectedScreenId(withHtml.id);
-        }
-      }
+  const handleSelectCategory = () => {
+    if (selectedCategory === 'all') {
+      setSelectedNodeIds(availableScreens.map(s => s.id));
+    } else {
+      const catIds = availableScreens.filter(s => s.category === selectedCategory).map(s => s.id);
+      setSelectedNodeIds(prev => Array.from(new Set([...prev, ...catIds])));
     }
-  }, [project.screens]);
+  };
 
-  async function loadScreens() {
-    try {
-      const res = await screensApi.getByProject(project.id);
-      const list = res?.data || res || [];
-      if (Array.isArray(list) && list.length > 0) {
-        setScreens(list);
-        // Inicializar seleccionadas
-        const alreadySelected = list.filter(s => s.selectedForGeneration !== false).map(s => s.id);
-        setSelectedForStitch(alreadySelected.length > 0 ? alreadySelected : list.map(s => s.id));
-        if (!selectedScreenId || !list.some(s => s.id === selectedScreenId)) {
-          setSelectedScreenId(list[0].id);
-        }
-      } else if (project.screens && project.screens.length > 0) {
-        setScreens(project.screens);
-        setSelectedForStitch(project.screens.map(s => s.id));
-        if (!selectedScreenId) setSelectedScreenId(project.screens[0].id);
-      }
-    } catch (err) {
-      console.warn('Error loading screens:', err);
-      if (project.screens && project.screens.length > 0) {
-        setScreens(project.screens);
-        setSelectedForStitch(project.screens.map(s => s.id));
-        if (!selectedScreenId) setSelectedScreenId(project.screens[0].id);
-      }
-    }
+  const handleSelectAll = () => {
+    setSelectedNodeIds(availableScreens.map(s => s.id));
+  };
+
+  const handleClearSelection = () => {
+    setSelectedNodeIds([]);
+  };
+
+  function setSelectedNodeIdReset() {
+    setSelectedNodeIds([]);
+    setSelectedScreenId(null);
   }
 
-  // Asegurar selección de pantalla activa si cambian las pantallas
+  const handleCancelGenerating = () => {
+    setIsGenerating(false);
+    localStorage.removeItem(STORAGE_KEY);
+  };
+
+  // 3. Efectos
+  useEffect(() => {
+    setSelectedNodeIdReset();
+    setLocalNodes(null);
+  }, [project.id]);
+
+  // Carga inicial de pantallas guardadas (no resetea isGenerating si el usuario inició una generación)
+  useEffect(() => {
+    let active = true;
+    setLoadingMockups(true);
+    mockupApi.list(project.id)
+      .then(result => {
+        if (!active) return;
+        const stored = result.screens || [];
+        setGeneratedScreens(stored);
+        if (stored.length) {
+          setSelectorOpen(false);
+          setSelectedScreenId(prev => prev || stored[0]?.id || null);
+        }
+      })
+      .catch(error => {
+        if (active) setGenerationError('No se pudieron cargar los mockups guardados: ' + error.message);
+      })
+      .finally(() => {
+        if (active) setLoadingMockups(false);
+      });
+    return () => { active = false; };
+  }, [project.id]);
+
+  // Polling si se está generando en segundo plano
+  useEffect(() => {
+    if (!isGenerating) return;
+    const interval = setInterval(() => {
+      // Validar si excedió el timeout de 15 minutos
+      try {
+        const raw = localStorage.getItem(STORAGE_KEY);
+        if (raw) {
+          const parsed = JSON.parse(raw);
+          if (Date.now() - (parsed.startedAt || 0) > 900000) {
+            setIsGenerating(false);
+            localStorage.removeItem(STORAGE_KEY);
+            setGenerationError('La generación en n8n superó el tiempo máximo de 15 minutos.');
+            return;
+          }
+        }
+      } catch (e) {}
+
+      mockupApi.list(project.id)
+        .then(result => {
+          const stored = result.screens || [];
+          if (!stored.length) return;
+          try {
+            const raw = localStorage.getItem(STORAGE_KEY);
+            if (raw) {
+              const meta = JSON.parse(raw);
+              const prevVersions = meta.prevVersions || {};
+              // Detectar si alguna pantalla seleccionada tiene una versión más nueva
+              const hasNewVersion = stored.some(s => {
+                const prevVer = prevVersions[s.id] || 0;
+                return (s.version || 1) > prevVer;
+              });
+              if (hasNewVersion) {
+                setGeneratedScreens(stored);
+                setSelectorOpen(false);
+                setIsGenerating(false);
+                localStorage.removeItem(STORAGE_KEY);
+                setSelectedScreenId(stored[0]?.id || null);
+              }
+            }
+          } catch (e) {}
+        })
+        .catch(err => {
+          console.warn('[Mockup] Polling list error:', err.message);
+        });
+    }, 2500);
+
+    return () => clearInterval(interval);
+  }, [isGenerating, project.id, STORAGE_KEY]);
+
   useEffect(() => {
     if (screens.length > 0 && (!selectedScreenId || !screens.some(s => s.id === selectedScreenId))) {
       setSelectedScreenId(screens[0].id);
     }
-  }, [screens]);
+  }, [screens, selectedScreenId]);
 
-  // Alternar selección de una pantalla para Google Stitch
-  function toggleScreenForStitch(screenId, e) {
-    if (e) e.stopPropagation();
-    setSelectedForStitch(prev => {
-      if (prev.includes(screenId)) {
-        return prev.filter(id => id !== screenId);
-      } else {
-        return [...prev, screenId];
-      }
-    });
-  }
-
-  function handleSelectAll() {
-    setSelectedForStitch(screens.map(s => s.id));
-  }
-
-  function handleDeselectAll() {
-    setSelectedForStitch([]);
-  }
-
-  function dismissError() {
-    if (onClearFeedback) onClearFeedback();
-    setLocalGenerationError(null);
-  }
-
-  function dismissSuccess() {
-    if (onClearFeedback) onClearFeedback();
-    setLocalGenerationSuccess(null);
-  }
-
-  // Ejecutar generación (Google Stitch o Local)
-  async function handleGenerate(mode = 'stitch') {
+  // 4. Manejo de generacion
+  async function handleGenerateMockup() {
     if (isGenerating) return;
-    if (selectedForStitch.length === 0) {
-      setLocalGenerationError('Por favor selecciona al menos una pantalla para generar con Google Stitch.');
-      setIsModalOpen(true);
-      return;
+
+    let targetNodeIds = [...selectedNodeIds];
+    if (!targetNodeIds.length) {
+      const coreIds = availableScreens.filter(s => s.isCore || s.category === 'workshop').map(s => s.id);
+      targetNodeIds = coreIds.length ? coreIds : availableScreens.map(s => s.id);
+      setSelectedNodeIds(targetNodeIds);
     }
 
-    const promptText = customPrompt.trim()
-      ? customPrompt
-      : 'Quiero un estilo claro y no muy sobrecargado';
-
-    // Si tenemos manejador global persistente, delegamos a él
-    if (onStartGeneration) {
-      try {
-        setIsModalOpen(false);
-        if (onClearFeedback) onClearFeedback();
-        const res = await onStartGeneration(project.id, promptText, selectedForStitch, mode);
-        const nextScreens = res?.screens || res?.data?.screens || [];
-        if (nextScreens.length > 0) {
-          setScreens(nextScreens);
-          const firstGen = nextScreens.find(s => selectedForStitch.includes(s.id) && s.html) || nextScreens[0];
-          if (firstGen) setSelectedScreenId(firstGen.id);
-        }
-      } catch (err) {
-        console.warn('Error en onStartGeneration:', err);
-      }
-      return;
-    }
-
-    // Fallback local independiente
     try {
-      setLocalIsGenerating(true);
-      setLocalGeneratingMode(mode);
-      setLocalGenerationError(null);
-      setLocalGenerationSuccess(null);
-
-      const result = await mockupApi.generateMockup(
-        project.id,
-        promptText,
-        selectedForStitch,
-        mode
-      );
-
-      const nextScreens = result?.screens || result?.data?.screens || result?.data?.allScreens || [];
-      if (nextScreens.length === 0) {
-        throw new Error('El backend no devolvió pantallas generadas.');
-      }
-
-      setScreens(nextScreens);
-      const firstGenerated = nextScreens.find(s => selectedForStitch.includes(s.id) && s.html) || nextScreens[0];
-      if (firstGenerated) {
-        setSelectedScreenId(firstGenerated.id);
-      }
-
-      setLocalGenerationSuccess(
-        mode === 'stitch'
-          ? `¡Se generaron exitosamente ${selectedForStitch.length} pantalla(s) con Google Stitch!`
-          : `¡Se generaron exitosamente ${selectedForStitch.length} pantalla(s) con el motor local!`
-      );
-      setIsModalOpen(false);
-
-      if (onProjectUpdated) {
-        await onProjectUpdated();
-      }
-    } catch (error) {
-      console.error('Error generando mockups:', error);
-      const isTimeout = error.message?.includes('504') || error.message?.includes('timeout') || error.message?.includes('tiempo límite');
-      setLocalGenerationError({
-        message: error.message || 'No se pudo generar el prototipo.',
-        isTimeout
+      const prevVersions = {};
+      screens.forEach(s => {
+        if (s.id) prevVersions[s.id] = s.version || 1;
       });
+
+      setIsGenerating(true);
+      setElapsedSeconds(0);
+      localStorage.setItem(STORAGE_KEY, JSON.stringify({
+        startedAt: Date.now(),
+        targetCount: targetNodeIds.length,
+        prevVersions
+      }));
+      setGenerationError(null);
+
+      const selected = availableScreens.filter(n => targetNodeIds.includes(n.id));
+      const ids = [];
+      for (const node of selected) {
+        if (!node.proposed) {
+          ids.push(node.id);
+          continue;
+        }
+        const candidate = await engineering(project.id, '/models', {
+          kind: 'NavigationNode',
+          name: node.name,
+          content: {
+            name: node.name,
+            route: node.route,
+            platform: node.platform,
+            parentId: null,
+            actorIds: [],
+            useCaseIds: []
+          },
+          requirementIds: node.requirementIds
+        });
+        const promoted = await engineering(project.id, '/models/' + candidate.id, { status: 'APPROVED' }, 'PATCH');
+        ids.push(promoted.promotedId);
+      }
+
+      const updated = await projectsApi.getById(project.id);
+      setLocalNodes(updated.navigationNodes || []);
+      setSelectedNodeIds(ids);
+      await onProjectUpdated?.();
+
+      const prompt = `Generar un prototipo visual para: ${project.systemDescription || project.description || project.name}`;
+      const result = onStartGeneration
+        ? await onStartGeneration(project.id, prompt, ids)
+        : await mockupApi.generateMockup(
+            project.id,
+            prompt,
+            ids
+          );
+
+      const nextScreens = result?.screens || result?.data?.screens || [];
+      if (nextScreens.length === 0) throw new Error('El backend no devolvió pantallas para mostrar.');
+
+      const normalized = nextScreens.map((screen, index) => ({
+        ...screen,
+        id: screen.id || availableScreens.find(n => n.route === screen.route || n.name === screen.name)?.id || 'generated-' + index
+      }));
+
+      setGeneratedScreens(previous => [
+        ...previous.filter(old => !normalized.some(n => n.route === old.route || n.id === old.id)),
+        ...normalized
+      ]);
+      setSelectedScreenId(normalized[0]?.id || null);
+      setSelectorOpen(false);
+    } catch (error) {
+      setGenerationError(error.message || 'No se pudo generar el prototipo.');
     } finally {
-      setLocalIsGenerating(false);
+      setIsGenerating(false);
+      localStorage.removeItem(STORAGE_KEY);
     }
   }
 
   const currentScreen = screens.find(s => s.id === selectedScreenId) || screens[0];
 
-  // Diagrama de relaciones entre pantallas
+  // Generate Mermaid diagram for screen relations / navigation tree
   const screenRelationsDiagram = useMemo(() => {
     let code = `graph TD\n`;
     code += `  %% Estilos para el Mapa de Navegación\n`;
@@ -241,52 +304,22 @@ export default function ProjectPrototype({
     return code;
   }, [screens]);
 
-  // Filtrar pantallas en el modal de selección
-  const filteredScreens = useMemo(() => {
-    if (!searchTerm.trim()) return screens;
-    const term = searchTerm.toLowerCase();
-    return screens.filter(s =>
-      s.name?.toLowerCase().includes(term) ||
-      s.route?.toLowerCase().includes(term) ||
-      s.description?.toLowerCase().includes(term)
-    );
-  }, [screens, searchTerm]);
-
   return (
     <div style={{ display: 'flex', flexDirection: 'column', height: '100%', overflow: 'hidden' }}>
-      {/* Command Bar Header */}
+      {/* Command bar */}
       <div className="full-page-header">
         <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
           <div>
-            <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-              <h2 className="page-title" style={{ fontSize: '1.125rem', margin: 0 }}>
-                Mockups & Prototipos
-              </h2>
-              <span
-                style={{
-                  display: 'inline-flex',
-                  alignItems: 'center',
-                  gap: '4px',
-                  background: 'linear-gradient(135deg, rgba(37,99,235,0.12), rgba(124,58,237,0.12))',
-                  border: '1px solid rgba(37,99,235,0.25)',
-                  color: '#2563eb',
-                  padding: '2px 8px',
-                  borderRadius: '12px',
-                  fontSize: '0.6875rem',
-                  fontWeight: 600
-                }}
-              >
-                <span className="ms ms-xs">auto_awesome</span>
-                Google Stitch
-              </span>
-            </div>
+            <h2 className="page-title" style={{ fontSize: '1.125rem' }}>
+              Prototipos de la Aplicación (Sketch & Mockup)
+            </h2>
             <span style={{ fontSize: '0.75rem', color: 'var(--secondary)' }}>
-              {screens.length} pantalla{screens.length !== 1 ? 's' : ''} disponibles · {selectedForStitch.length} seleccionada{selectedForStitch.length !== 1 ? 's' : ''} para generación
+              {screens.length} pantalla{screens.length !== 1 ? 's' : ''} · Visualización, relaciones entre pantallas y estructura de organización
             </span>
           </div>
         </div>
 
-        <div className="page-actions" style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+        <div className="page-actions">
           {screens.length > 0 && (
             <div className="view-toggle">
               <button
@@ -306,9 +339,9 @@ export default function ProjectPrototype({
               <button
                 className={`view-toggle-btn ${viewMode === 'structure' ? 'active' : ''}`}
                 onClick={() => setViewMode('structure')}
-                title="Estructura de organización de la información"
+                title="Estructura de organización de la información de la vista"
               >
-                <span className="ms ms-xs">view_quilt</span><span>Estructura</span>
+                <span className="ms ms-xs">view_quilt</span><span>Estructura de Información</span>
               </button>
               <button
                 className={`view-toggle-btn ${viewMode === 'relations' ? 'active' : ''}`}
@@ -320,315 +353,334 @@ export default function ProjectPrototype({
               <button
                 className={`view-toggle-btn ${viewMode === 'html' ? 'active' : ''}`}
                 onClick={() => setViewMode('html')}
-                title="Ver código HTML generado"
               >
                 <span className="ms ms-xs">code</span><span>HTML</span>
               </button>
             </div>
           )}
 
-          {/* Botón Seleccionar Pantallas */}
-          <button
-            type="button"
-            className="btn btn-outline btn-sm"
-            onClick={() => setIsModalOpen(true)}
-            style={{ display: 'inline-flex', alignItems: 'center', gap: '6px' }}
-          >
-            <span className="ms ms-xs">checklist</span>
-            <span>Seleccionar Pantallas</span>
-            <span
-              style={{
-                background: 'var(--primary)',
-                color: '#ffffff',
-                borderRadius: '10px',
-                padding: '1px 6px',
-                fontSize: '0.6875rem',
-                fontWeight: 700
-              }}
-            >
-              {selectedForStitch.length}
-            </span>
-          </button>
-
-          {/* Botón Generar con Google Stitch */}
-          <button
-            type="button"
-            className="btn btn-primary btn-sm"
-            onClick={() => handleGenerate('stitch')}
-            disabled={isGenerating || selectedForStitch.length === 0}
-            style={{
-              background: 'linear-gradient(135deg, #1d4ed8, #4338ca)',
-              border: 'none',
-              boxShadow: '0 2px 8px rgba(37,99,235,0.3)',
-              display: 'inline-flex',
-              alignItems: 'center',
-              gap: '6px'
-            }}
-          >
-            {isGenerating && generatingMode === 'stitch' ? (
-              <>
-                <span className="ms ms-sm spin">autorenew</span>
-                <span>Generando en Stitch...</span>
-              </>
+          <button className="btn btn-primary btn-sm" onClick={handleGenerateMockup} disabled={isGenerating}>
+            {isGenerating ? (
+              <><span className="ms ms-sm spin">progress_activity</span><span>Generando con Stitch ({Math.floor(elapsedSeconds / 60)}m {elapsedSeconds % 60 < 10 ? '0' : ''}{elapsedSeconds % 60}s)...</span></>
             ) : (
-              <>
-                <span className="ms ms-sm">auto_awesome</span>
-                <span>Generar con Google Stitch ({selectedForStitch.length})</span>
-              </>
+              <><span className="ms ms-sm">auto_awesome</span><span>Generar con Stitch</span></>
             )}
           </button>
         </div>
       </div>
 
-      {/* Banner de Estado de Carga con Contador de Tiempo */}
-      {isGenerating && (
-        <div
-          style={{
-            margin: '12px 24px 0',
-            padding: '12px 16px',
-            background: 'linear-gradient(90deg, #eff6ff, #f5f3ff)',
-            border: '1px solid #bfdbfe',
-            borderRadius: '8px',
-            display: 'flex',
-            alignItems: 'center',
-            gap: '12px',
-            boxShadow: '0 2px 8px rgba(37,99,235,0.08)'
-          }}
-        >
-          <span className="ms ms-md spin" style={{ color: '#2563eb' }}>sync</span>
-          <div style={{ flex: 1 }}>
-            <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap' }}>
-              <strong style={{ fontSize: '0.875rem', color: '#1e3a8a' }}>
-                {generatingMode === 'stitch'
-                  ? 'Conectando con Google Stitch mediante n8n...'
-                  : 'Generando prototipos interactivos locales...'}
-              </strong>
-              {elapsedSeconds > 0 && (
-                <span
-                  style={{
-                    background: '#dbeafe',
-                    color: '#1d4ed8',
-                    padding: '1px 8px',
-                    borderRadius: '12px',
-                    fontSize: '0.75rem',
-                    fontWeight: 600,
-                    fontFamily: 'monospace'
-                  }}
-                >
-                  ⏱️ {elapsedSeconds}s transcurridos
-                </span>
-              )}
-            </div>
-            <span style={{ fontSize: '0.75rem', color: '#3b82f6', display: 'block', marginTop: '2px' }}>
-              Enviando {selectedForStitch.length} pantalla(s) seleccionadas. Puedes cambiar de pestaña libremente; el proceso continuará ejecutándose hasta recibir respuesta.
+      <section style={{flexShrink:0,padding:'16px 24px',borderBottom:'1px solid var(--border-default)',background:'var(--surface-container-lowest)'}}>
+        <div style={{display:'flex',alignItems:'center',justifyContent:'space-between',gap:12,flexWrap:'wrap'}}>
+          <div style={{display:'flex',alignItems:'center',gap:10}}>
+            <strong style={{fontSize:14}}>Pantallas para Prototipo</strong>
+            <span style={{fontSize:12,color:'var(--secondary)',background:'var(--surface-container-low)',padding:'2px 8px',borderRadius:6}}>
+              {selectedNodeIds.length} de {availableScreens.length} seleccionadas
             </span>
           </div>
-        </div>
-      )}
-
-      {/* Alerta de Error / Timeout 504 */}
-      {generationError && (
-        <div
-          className="alert alert-danger"
-          style={{
-            margin: '12px 24px 0',
-            display: 'flex',
-            flexDirection: 'column',
-            gap: '8px'
-          }}
-        >
-          <div style={{ display: 'flex', alignItems: 'flex-start', gap: '8px' }}>
-            <span className="ms ms-sm" style={{ marginTop: '2px' }}>error_outline</span>
-            <div style={{ flex: 1 }}>
-              <strong>Error en la generación:</strong>
-              <p style={{ margin: '4px 0 0', fontSize: '0.8125rem' }}>
-                {typeof generationError === 'string' ? generationError : generationError.message}
-              </p>
-            </div>
-            <button
-              className="btn btn-ghost btn-xs"
-              onClick={dismissError}
-              style={{ padding: '2px' }}
-            >
-              <span className="ms ms-xs">close</span>
+          <div style={{display:'flex',gap:6,alignItems:'center',flexWrap:'wrap'}}>
+            <button type="button" className="btn btn-outline btn-xs" onClick={handleSelectCore} title="Selecciona las pantallas Core prioritarias">
+              <span className="ms ms-xs">target</span><span>Pantallas Core</span>
+            </button>
+            {selectedCategory !== 'all' && (
+              <button type="button" className="btn btn-outline btn-xs" onClick={handleSelectCategory} title="Selecciona todas las pantallas del actor actual">
+                <span className="ms ms-xs">checklist</span><span>Actor ({categories.find(c=>c.id===selectedCategory)?.label || 'Actual'})</span>
+              </button>
+            )}
+            <button type="button" className="btn btn-outline btn-xs" onClick={handleSelectAll}>
+              <span className="ms ms-xs">select_all</span><span>Todas ({availableScreens.length})</span>
+            </button>
+            <button type="button" className="btn btn-ghost btn-xs" onClick={handleClearSelection} disabled={!selectedNodeIds.length}>
+              <span className="ms ms-xs">clear</span><span>Limpiar</span>
+            </button>
+            <button type="button" className="btn btn-primary btn-sm" aria-expanded={selectorOpen} onClick={()=>setSelectorOpen(v=>!v)}>
+              <span className="ms ms-xs">{selectorOpen ? 'expand_less' : 'tune'}</span>
+              <span>{selectorOpen ? 'Ocultar catálogo' : 'Elegir pantallas'}</span>
             </button>
           </div>
-
-          {/* Opciones de resolución ante Timeout 504 o fallas */}
-          {generationError.isTimeout && (
-            <div
-              style={{
-                marginTop: '4px',
-                paddingTop: '8px',
-                borderTop: '1px solid rgba(239, 68, 68, 0.2)',
-                display: 'flex',
-                alignItems: 'center',
-                gap: '8px',
-                flexWrap: 'wrap'
-              }}
-            >
-              <span style={{ fontSize: '0.75rem', color: '#991b1b' }}>
-                El webhook de Google Stitch demoró más de 120s en responder. Puedes reintentar o generar los mockups de inmediato con el motor local:
-              </span>
+        </div>
+        {selectorOpen && (
+          <div style={{marginTop:14}}>
+            {/* Category tabs */}
+            <div style={{display:'flex',gap:6,marginBottom:12,borderBottom:'1px solid var(--border-default)',paddingBottom:8,overflowX:'auto'}}>
               <button
                 type="button"
-                className="btn btn-primary btn-xs"
-                onClick={() => handleGenerate('stitch')}
-                disabled={isGenerating}
-                style={{ fontSize: '0.75rem' }}
+                className={`btn btn-xs ${selectedCategory === 'all' ? 'btn-primary' : 'btn-ghost'}`}
+                onClick={() => setSelectedCategory('all')}
               >
-                <span className="ms ms-xs">replay</span> Reintentar Stitch
+                Todas ({availableScreens.length})
               </button>
-              <button
-                type="button"
-                className="btn btn-outline btn-xs"
-                onClick={() => handleGenerate('local')}
-                disabled={isGenerating}
-                style={{ fontSize: '0.75rem', background: '#ffffff' }}
-              >
-                <span className="ms ms-xs">bolt</span> Generar con Motor Local (Inmediato)
-              </button>
+              {categories.map(cat => {
+                const catScreens = availableScreens.filter(s => s.category === cat.id);
+                const count = catScreens.length;
+                const catIds = catScreens.map(s => s.id);
+                const isAllSelected = catIds.length > 0 && catIds.every(id => selectedNodeIds.includes(id));
+                return (
+                  <button
+                    key={cat.id}
+                    type="button"
+                    className={`btn btn-xs ${selectedCategory === cat.id ? 'btn-primary' : 'btn-ghost'}`}
+                    onClick={() => setSelectedCategory(cat.id)}
+                    style={{display:'flex',alignItems:'center',gap:4}}
+                  >
+                    <span className="ms ms-xs">{cat.icon}</span>
+                    <span>{cat.label} ({count})</span>
+                    {isAllSelected && <span style={{fontSize:10,color:'#10b981'}}>✓</span>}
+                  </button>
+                );
+              })}
             </div>
-          )}
+
+            {/* Screens Grid */}
+            <div style={{display:'grid',gridTemplateColumns:'repeat(auto-fit,minmax(270px,1fr))',gap:10,maxHeight:260,overflowY:'auto',paddingRight:4}}>
+              {availableScreens
+                .filter(node => selectedCategory === 'all' || node.category === selectedCategory)
+                .map(node => {
+                  const isChecked = selectedNodeIds.includes(node.id);
+                  return (
+                    <div
+                      key={node.id}
+                      style={{
+                        display:'flex',
+                        flexDirection:'column',
+                        justifyContent:'space-between',
+                        padding:'10px 12px',
+                        border: isChecked ? '1.5px solid var(--primary)' : '1px solid var(--border-default)',
+                        borderRadius: 8,
+                        background: isChecked ? 'rgba(37,99,235,0.04)' : 'var(--surface-container-lowest)',
+                        transition: 'all 0.15s ease'
+                      }}
+                    >
+                      <div style={{display:'flex',alignItems:'flex-start',gap:10}}>
+                        <input
+                          type="checkbox"
+                          disabled={isGenerating}
+                          checked={isChecked}
+                          onChange={event => setSelectedNodeIds(ids => event.target.checked ? [...ids, node.id] : ids.filter(id => id !== node.id))}
+                          style={{marginTop:3,cursor:'pointer'}}
+                        />
+                        <div style={{flex:1,minWidth:0}}>
+                          <div style={{fontSize:13,fontWeight:600,color:'var(--on-surface)',lineHeight:1.3}}>
+                            {node.name}
+                          </div>
+                          <div style={{display:'flex',alignItems:'center',gap:6,marginTop:4,flexWrap:'wrap'}}>
+                            <code style={{fontSize:11,color:'var(--primary)',background:'rgba(37,99,235,0.08)',padding:'1px 5px',borderRadius:4}}>
+                              {node.route}
+                            </code>
+                            <span style={{fontSize:11,color:'var(--secondary)'}}>
+                              {node.functionalities?.length || 0} RF{node.functionalities?.length === 1 ? '' : 's'}
+                            </span>
+                            {node.isCore && (
+                              <span style={{fontSize:10,background:'#fef3c7',color:'#b45309',fontWeight:600,padding:'1px 5px',borderRadius:4}}>
+                                Core
+                              </span>
+                            )}
+                            {node.actorName && (
+                              <span style={{fontSize:10,background:'rgba(2,132,199,0.08)',color:'var(--primary)',fontWeight:500,padding:'1px 5px',borderRadius:4}}>
+                                {node.actorName}
+                              </span>
+                            )}
+                          </div>
+                        </div>
+                      </div>
+                      <div style={{display:'flex',justifyContent:'flex-end',marginTop:8}}>
+                        <button type="button" className="btn btn-ghost btn-xs" onClick={() => setDetailsScreen(node)} style={{fontSize:11,padding:'2px 6px'}}>
+                          Ver detalles
+                        </button>
+                      </div>
+                    </div>
+                  );
+                })}
+            </div>
+          </div>
+        )}
+      </section>
+      <Modal isOpen={!!detailsScreen} onClose={()=>setDetailsScreen(null)} title={detailsScreen?.name||'Pantalla'}>
+        <p>{detailsScreen?.description}</p><small>{detailsScreen?.route}</small>
+        <h4>Funcionalidades</h4><ul>{detailsScreen?.functionalities.map(item=><li key={item.id}><strong>{item.code}</strong>: {item.text}</li>)}</ul>
+      </Modal>
+      {/* Error */}
+      {generationError && (
+        <div className="alert alert-danger" style={{ margin: '12px 24px 0' }}>
+          <span className="ms ms-sm">error_outline</span>
+          <span>{generationError}</span>
         </div>
       )}
 
-      {/* Alerta de Éxito */}
-      {generationSuccess && (
-        <div
-          className="alert alert-success"
-          style={{
-            margin: '12px 24px 0',
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'space-between'
-          }}
-        >
-          <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-            <span className="ms ms-sm">check_circle</span>
-            <span>{generationSuccess}</span>
+      {isGenerating && (
+        <div style={{ margin: '14px 24px 0', padding: '14px 18px', borderRadius: 8, background: '#eff6ff', border: '1px solid #3b82f6', display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12 }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+            <span className="ms ms-md spin" style={{ color: '#2563eb', fontSize: 24 }}>progress_activity</span>
+            <div>
+              <div style={{ fontWeight: 600, color: '#1d4ed8', fontSize: 13 }}>
+                Generando pantallas con Google Stitch ({Math.floor(elapsedSeconds / 60)}m {elapsedSeconds % 60 < 10 ? '0' : ''}{elapsedSeconds % 60}s)
+              </div>
+              <div style={{ fontSize: 12, color: '#475569', marginTop: 2 }}>
+                Google Stitch está construyendo el código HTML interactivo en alta fidelidad y en paralelo. Puedes cambiar de pestaña o esperar aquí; el progreso no se perderá.
+              </div>
+            </div>
           </div>
-          <button
-            className="btn btn-ghost btn-xs"
-            onClick={dismissSuccess}
-            style={{ padding: '2px' }}
-          >
-            <span className="ms ms-xs">close</span>
+          <button type="button" className="btn btn-outline btn-xs" onClick={handleCancelGenerating} style={{ borderColor: '#93c5fd', color: '#1e40af', background: '#fff' }}>
+            Cancelar espera
           </button>
         </div>
       )}
 
-      {/* Empty State */}
-      {screens.length === 0 ? (
+      {loadingMockups ? (
+        <div className="page-scrollable" style={{display:'flex',alignItems:'center',justifyContent:'center',minHeight:240}}>
+          <div style={{display:'flex',flexDirection:'column',alignItems:'center',gap:10}}>
+            <span className="ms ms-lg spin" style={{color:'var(--primary)'}}>autorenew</span>
+            <span style={{color:'var(--secondary)',fontSize:13}}>Cargando prototipos guardados...</span>
+          </div>
+        </div>
+      ) : isGenerating && screens.length === 0 ? (
         <div className="page-scrollable">
-          <div
-            className="empty-state"
-            style={{
-              border: '1px dashed var(--outline-variant)',
-              borderRadius: 'var(--radius-lg)',
-              margin: '24px'
-            }}
-          >
-            <div className="empty-state-icon">
-              <span className="ms ms-xl">devices</span>
-            </div>
-            <p className="empty-state-title">Sin pantallas registradas</p>
+          <div className="empty-state" style={{ border: '1px solid rgba(37,99,235,0.3)', borderRadius: 'var(--radius-lg)', background: 'rgba(37,99,235,0.03)' }}>
+            <div className="empty-state-icon"><span className="ms ms-xl spin" style={{color:'var(--primary)'}}>autorenew</span></div>
+            <p className="empty-state-title" style={{color:'var(--primary)'}}>Construyendo prototipos de la aplicación con Google Stitch</p>
             <p className="empty-state-desc">
-              Importa o analiza documentos en la pestaña Resumen para extraer las pantallas del sistema, o pulsa generar para crearlas con Google Stitch.
+              Generando vistas de alta fidelidad, componentes y código HTML interactivo a partir de los requerimientos seleccionados...
             </p>
-            <button
-              className="btn btn-primary btn-sm"
-              onClick={() => handleGenerate('stitch')}
-              disabled={isGenerating}
-            >
+          </div>
+        </div>
+      ) : screens.length === 0 ? (
+        <div className="page-scrollable">
+          <div className="empty-state" style={{ border: '1px dashed var(--outline-variant)', borderRadius: 'var(--radius-lg)' }}>
+            <div className="empty-state-icon"><span className="ms ms-xl">devices</span></div>
+            <p className="empty-state-title">Sin pantallas generadas</p>
+            <p className="empty-state-desc">
+              Selecciona las pantallas de la lista superior y pulsa Generar con Stitch.
+            </p>
+            <button className="btn btn-primary btn-sm" onClick={handleGenerateMockup} disabled={isGenerating}>
               <span className="ms ms-sm">auto_awesome</span>
-              <span>{isGenerating ? 'Generando en Stitch...' : 'Generar pantallas con Google Stitch'}</span>
+              <span>{isGenerating ? 'Generando...' : 'Generar con Stitch'}</span>
             </button>
           </div>
         </div>
       ) : (
         <>
-          {/* Screen Tabs Bar con checkboxes interactivos */}
-          {viewMode !== 'relations' && (
-            <div className="screen-selector" style={{ alignItems: 'center' }}>
-              <div style={{ display: 'flex', alignItems: 'center', gap: '4px', flex: 1, overflowX: 'auto' }}>
-                {screens.map(screen => {
-                  const isCheckedForStitch = selectedForStitch.includes(screen.id);
-                  const isScreenActive = selectedScreenId === screen.id;
-                  const hasHtml = Boolean(screen.html);
+          {/* Control Bar: Sistema de Diseño Unificado */}
+          <div style={{
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'space-between',
+            padding: '10px 24px',
+            backgroundColor: 'var(--surface-container-low)',
+            borderBottom: '1px solid var(--border-default)',
+            fontSize: '0.8rem',
+            flexWrap: 'wrap',
+            gap: '12px'
+          }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+              <span className="ms ms-xs" style={{ color: 'var(--primary)' }}>auto_fix_high</span>
+              <strong style={{ fontSize: '0.8rem', color: 'var(--on-surface)' }}>Diseño Unificado de la Aplicación:</strong>
+              
+              {/* Presets de Color */}
+              <div style={{ display: 'flex', alignItems: 'center', gap: '4px', marginLeft: '6px' }}>
+                {[
+                  { id: 'indigo', label: 'Índigo', color: '#4f46e5' },
+                  { id: 'blue', label: 'Azul', color: '#2563eb' },
+                  { id: 'emerald', label: 'Esmeralda', color: '#059669' },
+                  { id: 'violet', label: 'Violeta', color: '#7c3aed' },
+                  { id: 'slate', label: 'Slate', color: '#0f172a' }
+                ].map(th => (
+                  <button
+                    key={th.id}
+                    type="button"
+                    title={`Aplicar paleta ${th.label}`}
+                    onClick={() => setThemeConfig(prev => ({ ...prev, color: th.id }))}
+                    style={{
+                      display: 'flex',
+                      alignItems: 'center',
+                      gap: '4px',
+                      padding: '3px 8px',
+                      borderRadius: '12px',
+                      fontSize: '0.725rem',
+                      fontWeight: themeConfig.color === th.id ? 600 : 400,
+                      border: themeConfig.color === th.id ? `2px solid ${th.color}` : '1px solid var(--border-default)',
+                      backgroundColor: themeConfig.color === th.id ? 'var(--surface)' : 'transparent',
+                      color: 'var(--on-surface)',
+                      cursor: 'pointer'
+                    }}
+                  >
+                    <span style={{ width: '8px', height: '8px', borderRadius: '50%', backgroundColor: th.color, display: 'inline-block' }} />
+                    <span>{th.label}</span>
+                  </button>
+                ))}
+              </div>
+            </div>
 
-                  return (
-                    <div
-                      key={screen.id}
-                      className={`screen-tab ${isScreenActive ? 'active' : ''}`}
-                      onClick={() => setSelectedScreenId(screen.id)}
-                      style={{ position: 'relative', userSelect: 'none' }}
-                    >
-                      {/* Checkbox selector rápido para Stitch */}
-                      <span
-                        onClick={(e) => toggleScreenForStitch(screen.id, e)}
-                        title={isCheckedForStitch ? 'Deseleccionar de Google Stitch' : 'Seleccionar para Google Stitch'}
-                        style={{
-                          cursor: 'pointer',
-                          display: 'inline-flex',
-                          alignItems: 'center',
-                          color: isCheckedForStitch ? '#2563eb' : '#94a3b8'
-                        }}
-                      >
-                        <span className="ms ms-xs">
-                          {isCheckedForStitch ? 'check_box' : 'check_box_outline_blank'}
-                        </span>
-                      </span>
-
-                      <span style={{ fontWeight: isScreenActive ? 600 : 500 }}>
-                        {screen.name}
-                      </span>
-
-                      {/* Badge de estado del prototipo */}
-                      {hasHtml ? (
-                        <span
-                          title="Prototipo generado disponible"
-                          style={{
-                            width: '7px',
-                            height: '7px',
-                            borderRadius: '50%',
-                            backgroundColor: '#10b981',
-                            display: 'inline-block'
-                          }}
-                        />
-                      ) : (
-                        <span
-                          title="Sin prototipo generado aún"
-                          style={{
-                            width: '7px',
-                            height: '7px',
-                            borderRadius: '50%',
-                            backgroundColor: '#f59e0b',
-                            display: 'inline-block'
-                          }}
-                        />
-                      )}
-                    </div>
-                  );
-                })}
+            {/* Layout Mode y Toggle Shell */}
+            <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+              <div style={{ display: 'flex', backgroundColor: 'var(--surface)', borderRadius: '6px', border: '1px solid var(--border-default)', padding: '2px' }}>
+                <button
+                  type="button"
+                  onClick={() => setThemeConfig(prev => ({ ...prev, layout: 'sidebar' }))}
+                  style={{
+                    padding: '3px 8px',
+                    borderRadius: '4px',
+                    fontSize: '0.725rem',
+                    border: 'none',
+                    cursor: 'pointer',
+                    fontWeight: themeConfig.layout === 'sidebar' ? 600 : 400,
+                    backgroundColor: themeConfig.layout === 'sidebar' ? 'var(--primary)' : 'transparent',
+                    color: themeConfig.layout === 'sidebar' ? '#ffffff' : 'var(--secondary)'
+                  }}
+                >
+                  Sidebar Lateral
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setThemeConfig(prev => ({ ...prev, layout: 'topbar' }))}
+                  style={{
+                    padding: '3px 8px',
+                    borderRadius: '4px',
+                    fontSize: '0.725rem',
+                    border: 'none',
+                    cursor: 'pointer',
+                    fontWeight: themeConfig.layout === 'topbar' ? 600 : 400,
+                    backgroundColor: themeConfig.layout === 'topbar' ? 'var(--primary)' : 'transparent',
+                    color: themeConfig.layout === 'topbar' ? '#ffffff' : 'var(--secondary)'
+                  }}
+                >
+                  Navbar Superior
+                </button>
               </div>
 
-              {/* Botón flotante para abrir modal de selección completa */}
+              {/* Toggle de Marco Completo */}
               <button
                 type="button"
-                className="btn btn-ghost btn-xs"
-                onClick={() => setIsModalOpen(true)}
-                title="Gestionar selección de pantallas para Google Stitch"
-                style={{ marginLeft: '8px', color: 'var(--primary)', flexShrink: 0 }}
+                onClick={() => setThemeConfig(prev => ({ ...prev, showShell: !prev.showShell }))}
+                className="btn btn-outline btn-xs"
+                style={{ fontSize: '0.725rem', display: 'flex', alignItems: 'center', gap: '4px' }}
+                title="Alternar entre ver la aplicación completa con navegación o solo la tarjeta"
               >
-                <span className="ms ms-xs">settings</span>
-                <span>Configurar Selección</span>
+                <span className="ms ms-xs">{themeConfig.showShell ? 'check_box' : 'check_box_outline_blank'}</span>
+                <span>Marco Unificado ({themeConfig.showShell ? 'Activo' : 'Inactivo'})</span>
               </button>
+            </div>
+          </div>
+
+          {/* Screen selector tabs */}
+          {viewMode !== 'relations' && (
+            <div className="screen-selector" style={{flexShrink:0}}>
+              {screens.map(screen => (
+                <button
+                  key={screen.id}
+                  className={`screen-tab ${selectedScreenId === screen.id ? 'active' : ''}`}
+                  onClick={() => setSelectedScreenId(screen.id)}
+                >
+                  <span className="ms ms-xs">monitor</span>
+                  <span>{screen.name}</span>
+                  {screen.route && (
+                    <span style={{ fontSize: '0.6875rem', opacity: 0.7 }}>{screen.route}</span>
+                  )}
+                </button>
+              ))}
             </div>
           )}
 
-          {/* Área de Visualización */}
-          <div className="page-scrollable" style={{ padding: '20px 24px' }}>
+          {/* Content */}
+          <div className="page-scrollable" style={{ padding: '20px 24px', flex:1, minHeight:0 }}>
             {viewMode === 'structure' ? (
               <div>
                 <div style={{ marginBottom: '16px' }}>
@@ -646,7 +698,7 @@ export default function ProjectPrototype({
                       <span className="ms ms-xs">web</span> 1. Cabecera (Header)
                     </strong>
                     <p style={{ fontSize: '0.8125rem', color: 'var(--secondary)', margin: '6px 0 0', lineHeight: 1.4 }}>
-                      Identidad institucional, logo del sistema, título de la pantalla activa ({currentScreen?.name}), buscador global y panel de usuario.
+                      Identidad institucional, logo del sistema, título de la pantalla activa ({currentScreen?.name}), buscador global y panel de usuario con avatar y rol.
                     </p>
                   </div>
 
@@ -655,7 +707,7 @@ export default function ProjectPrototype({
                       <span className="ms ms-xs">menu</span> 2. Navegación (Sidebar / Menú)
                     </strong>
                     <p style={{ fontSize: '0.8125rem', color: 'var(--secondary)', margin: '6px 0 0', lineHeight: 1.4 }}>
-                      Árbol de navegación con enlaces a las vistas principales ({screens.map(s => s.name).join(', ')}), badges y acciones rápidas.
+                      Árbol de navegación con enlaces a las vistas principales ({screens.map(s => s.name).join(', ')}), badges de notificación y botón de repliegue.
                     </p>
                   </div>
 
@@ -664,25 +716,32 @@ export default function ProjectPrototype({
                       <span className="ms ms-xs">dashboard</span> 3. Área Central de Trabajo
                     </strong>
                     <p style={{ fontSize: '0.8125rem', color: 'var(--secondary)', margin: '6px 0 0', lineHeight: 1.4 }}>
-                      Muestra los datos primarios de la pantalla: tablas de datos, tarjetas de indicadores, formularios o gráficos interactivos.
+                      Muestra los datos primarios de la pantalla: tablas de datos, tarjetas de indicadores (KPIs), filtros dinámicos y estados de carga.
                     </p>
                   </div>
 
-                  <div className="info-card" style={{ borderLeft: '4px solid var(--tertiary)' }}>
+                  <div className="info-card" style={{ borderLeft: '4px solid #9333ea' }}>
                     <strong style={{ fontSize: '0.875rem', display: 'flex', alignItems: 'center', gap: '6px' }}>
                       <span className="ms ms-xs">touch_app</span> 4. Interacción & Formularios
                     </strong>
                     <p style={{ fontSize: '0.8125rem', color: 'var(--secondary)', margin: '6px 0 0', lineHeight: 1.4 }}>
-                      Controles de formulario con validación, botones de acción primaria ("Guardar", "Confirmar") y notificaciones de estado.
+                      Formularios con validaciones en tiempo real, modales de confirmación, botones de acción primaria ("Guardar", "Registrar") y avisos de estado.
                     </p>
                   </div>
                 </div>
 
+                {/* Live Preview with wireframe overlay */}
                 <div style={{ background: 'var(--surface-container-lowest)', padding: '16px', borderRadius: 'var(--radius-md)', border: '1px solid var(--outline-variant)' }}>
                   <span style={{ fontSize: '0.75rem', color: 'var(--secondary)', textTransform: 'uppercase', fontWeight: 600, display: 'block', marginBottom: '8px' }}>
                     Previsualización de la Pantalla:
                   </span>
-                  <MockupRenderer screen={currentScreen} />
+                  <MockupRenderer
+                    screen={currentScreen}
+                    project={project}
+                    allScreens={screens}
+                    onSelectScreen={setSelectedScreenId}
+                    themeConfig={themeConfig}
+                  />
                 </div>
               </div>
             ) : viewMode === 'relations' ? (
@@ -692,7 +751,7 @@ export default function ProjectPrototype({
                     Relación entre Pantallas y Árbol de Navegación
                   </h3>
                   <p style={{ fontSize: '0.8125rem', color: 'var(--secondary)', margin: '2px 0 0' }}>
-                    Diagrama que muestra cómo los usuarios transitan entre las diferentes vistas del sistema.
+                    Diagrama que muestra cómo los usuarios navegan y transitan entre cada una de las vistas del sistema.
                   </p>
                 </div>
 
@@ -710,289 +769,36 @@ export default function ProjectPrototype({
                   <span><strong>Modo Sketch / Wireframe:</strong> Renderizado de baja fidelidad en escala de grises para validar la distribución de bloques sin distracción de color.</span>
                 </div>
                 <div style={{ filter: 'grayscale(1) contrast(1.15)', border: '2px dashed #94a3b8', borderRadius: '8px', padding: '10px', background: '#fafafa' }}>
-                  <MockupRenderer screen={currentScreen} />
+                  <MockupRenderer
+                    screen={currentScreen}
+                    project={project}
+                    allScreens={screens}
+                    onSelectScreen={setSelectedScreenId}
+                    themeConfig={themeConfig}
+                  />
                 </div>
               </div>
             ) : viewMode === 'html' ? (
               <div>
-                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '8px' }}>
-                  <p className="detail-section-label" style={{ margin: 0 }}>
-                    HTML de Google Stitch — {currentScreen?.name}
-                  </p>
-                  {currentScreen?.htmlUrl && (
-                    <a
-                      href={currentScreen.htmlUrl}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      className="btn btn-outline btn-xs"
-                    >
-                      <span className="ms ms-xs">open_in_new</span> Abrir enlace HTML
-                    </a>
-                  )}
-                </div>
-                <pre
-                  className="code-viewer"
-                  style={{
-                    background: '#0f172a',
-                    color: '#f8fafc',
-                    padding: '16px',
-                    borderRadius: '8px',
-                    fontSize: '0.75rem',
-                    overflowX: 'auto',
-                    maxHeight: '600px'
-                  }}
-                >
-                  {currentScreen?.html || 'Esta pantalla aún no tiene HTML generado por Google Stitch.'}
+                <p className="detail-section-label" style={{ marginBottom: '8px' }}>
+                  HTML — {currentScreen?.name}
+                </p>
+                <pre className="code-viewer" style={{ background: '#f8fafc', color: 'var(--on-surface)' }}>
+                  {currentScreen?.html || 'Esta pantalla no contiene HTML.'}
                 </pre>
               </div>
             ) : (
-              <MockupRenderer screen={currentScreen} />
+              <MockupRenderer
+                screen={currentScreen}
+                project={project}
+                allScreens={screens}
+                onSelectScreen={setSelectedScreenId}
+                themeConfig={themeConfig}
+              />
             )}
           </div>
         </>
       )}
-
-      {/* Modal de Selección de Pantallas para Google Stitch */}
-      <Modal
-        isOpen={isModalOpen}
-        onClose={() => setIsModalOpen(false)}
-        title="Seleccionar Pantallas para Google Stitch"
-        footer={
-          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', width: '100%' }}>
-            <span style={{ fontSize: '0.8125rem', color: 'var(--secondary)' }}>
-              <strong>{selectedForStitch.length}</strong> de {screens.length} pantalla(s) seleccionadas
-            </span>
-            <div style={{ display: 'flex', gap: '8px' }}>
-              <button
-                type="button"
-                className="btn btn-outline btn-sm"
-                onClick={() => setIsModalOpen(false)}
-              >
-                Cancelar
-              </button>
-              <button
-                type="button"
-                className="btn btn-primary btn-sm"
-                onClick={() => handleGenerate('stitch')}
-                disabled={isGenerating || selectedForStitch.length === 0}
-                style={{
-                  background: 'linear-gradient(135deg, #1d4ed8, #4338ca)',
-                  border: 'none',
-                  display: 'inline-flex',
-                  alignItems: 'center',
-                  gap: '6px'
-                }}
-              >
-                <span className="ms ms-sm">auto_awesome</span>
-                <span>Generar con Google Stitch ({selectedForStitch.length})</span>
-              </button>
-            </div>
-          </div>
-        }
-      >
-        <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
-          {/* Banner descriptivo Google Stitch */}
-          <div
-            style={{
-              padding: '12px 14px',
-              borderRadius: '8px',
-              background: 'linear-gradient(135deg, rgba(37,99,235,0.06), rgba(124,58,237,0.06))',
-              border: '1px solid rgba(37,99,235,0.18)',
-              display: 'flex',
-              alignItems: 'flex-start',
-              gap: '10px'
-            }}
-          >
-            <span className="ms ms-md" style={{ color: '#2563eb', marginTop: '2px' }}>
-              auto_awesome
-            </span>
-            <div style={{ fontSize: '0.8125rem', color: '#1e293b', lineHeight: 1.45 }}>
-              <strong>Generación con Google Stitch:</strong> Selecciona las pantallas que deseas enviar a Google Stitch.
-              El webhook orquestará la creación de interfaces interactivas con tablas, formularios y estilos empresariales.
-            </div>
-          </div>
-
-          {/* Advertencia preventiva de timeout para lotes grandes */}
-          {selectedForStitch.length > 3 && (
-            <div
-              style={{
-                padding: '8px 12px',
-                borderRadius: '6px',
-                background: '#fffbeb',
-                border: '1px solid #fde68a',
-                display: 'flex',
-                alignItems: 'center',
-                gap: '8px',
-                fontSize: '0.75rem',
-                color: '#92400e'
-              }}
-            >
-              <span className="ms ms-xs" style={{ color: '#d97706' }}>info</span>
-              <span>
-                <strong>Recomendación:</strong> Has seleccionado {selectedForStitch.length} pantallas. Como Google Stitch tarda ~20-30s por pantalla, se recomienda generar en lotes de <strong>1 a 3 pantallas</strong> a la vez para evitar que el webhook de ngrok/n8n alcance el tiempo límite (120s timeout 504).
-              </span>
-            </div>
-          )}
-
-          {/* Barra de Filtro y Selección Rápida */}
-          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: '10px', flexWrap: 'wrap' }}>
-            <div style={{ position: 'relative', flex: 1, minWidth: '220px' }}>
-              <input
-                type="text"
-                className="form-control"
-                placeholder="Buscar pantalla por nombre o ruta..."
-                value={searchTerm}
-                onChange={(e) => setSearchTerm(e.target.value)}
-                style={{ paddingLeft: '32px', fontSize: '0.8125rem' }}
-              />
-              <span
-                className="ms ms-xs"
-                style={{
-                  position: 'absolute',
-                  left: '10px',
-                  top: '50%',
-                  transform: 'translateY(-50%)',
-                  color: '#94a3b8'
-                }}
-              >
-                search
-              </span>
-            </div>
-
-            <div style={{ display: 'flex', gap: '6px' }}>
-              <button
-                type="button"
-                className="btn btn-outline btn-xs"
-                onClick={handleSelectAll}
-              >
-                Seleccionar todas
-              </button>
-              <button
-                type="button"
-                className="btn btn-outline btn-xs"
-                onClick={handleDeselectAll}
-              >
-                Deseleccionar todas
-              </button>
-            </div>
-          </div>
-
-          {/* Listado de Pantallas con Checkboxes */}
-          <div
-            style={{
-              maxHeight: '340px',
-              overflowY: 'auto',
-              border: '1px solid var(--border-default)',
-              borderRadius: '8px',
-              padding: '6px'
-            }}
-          >
-            {filteredScreens.length === 0 ? (
-              <div style={{ textAlign: 'center', padding: '24px', color: 'var(--secondary)', fontSize: '0.8125rem' }}>
-                No se encontraron pantallas que coincidan con la búsqueda.
-              </div>
-            ) : (
-              filteredScreens.map(scr => {
-                const isChecked = selectedForStitch.includes(scr.id);
-                const hasHtml = Boolean(scr.html);
-
-                return (
-                  <div
-                    key={scr.id}
-                    onClick={() => toggleScreenForStitch(scr.id)}
-                    style={{
-                      display: 'flex',
-                      alignItems: 'flex-start',
-                      gap: '12px',
-                      padding: '10px 12px',
-                      borderRadius: '6px',
-                      background: isChecked ? 'rgba(37, 99, 235, 0.04)' : '#ffffff',
-                      border: isChecked ? '1px solid rgba(37, 99, 235, 0.25)' : '1px solid transparent',
-                      cursor: 'pointer',
-                      transition: 'all 0.15s ease',
-                      marginBottom: '4px'
-                    }}
-                  >
-                    <input
-                      type="checkbox"
-                      checked={isChecked}
-                      onChange={() => {}} // Manejado por onClick del contenedor
-                      style={{ marginTop: '3px', cursor: 'pointer' }}
-                    />
-                    <div style={{ flex: 1 }}>
-                      <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                        <span style={{ fontWeight: 600, fontSize: '0.875rem', color: '#0f172a' }}>
-                          {scr.name}
-                        </span>
-                        <code
-                          style={{
-                            fontSize: '0.7rem',
-                            padding: '1px 6px',
-                            background: '#f1f5f9',
-                            borderRadius: '4px',
-                            color: '#475569'
-                          }}
-                        >
-                          {scr.route || '/'}
-                        </code>
-                        {hasHtml ? (
-                          <span
-                            style={{
-                              marginLeft: 'auto',
-                              fontSize: '0.6875rem',
-                              padding: '2px 8px',
-                              borderRadius: '10px',
-                              background: '#dcfce7',
-                              color: '#15803d',
-                              fontWeight: 600
-                            }}
-                          >
-                            ✓ Prototipo listo
-                          </span>
-                        ) : (
-                          <span
-                            style={{
-                              marginLeft: 'auto',
-                              fontSize: '0.6875rem',
-                              padding: '2px 8px',
-                              borderRadius: '10px',
-                              background: '#fef3c7',
-                              color: '#b45309',
-                              fontWeight: 600
-                            }}
-                          >
-                            Pendiente
-                          </span>
-                        )}
-                      </div>
-                      {scr.description && (
-                        <p style={{ margin: '4px 0 0', fontSize: '0.75rem', color: '#64748b', lineHeight: 1.35 }}>
-                          {scr.description}
-                        </p>
-                      )}
-                    </div>
-                  </div>
-                );
-              })
-            )}
-          </div>
-
-          {/* Campo opcional de instrucciones personalizadas para Stitch */}
-          <div>
-            <label style={{ fontSize: '0.75rem', fontWeight: 600, color: 'var(--on-surface)', display: 'block', marginBottom: '4px' }}>
-              Instrucciones de diseño opcionales para Google Stitch:
-            </label>
-            <textarea
-              className="form-control"
-              placeholder="Ej. Estilo minimalista, paleta azul corporativa, tablas con buscador y botones de exportación..."
-              value={customPrompt}
-              onChange={(e) => setCustomPrompt(e.target.value)}
-              rows={2}
-              style={{ fontSize: '0.8125rem' }}
-            />
-          </div>
-        </div>
-      </Modal>
     </div>
   );
 }

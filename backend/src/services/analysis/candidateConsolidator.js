@@ -147,6 +147,8 @@ class CandidateConsolidator {
    */
   convertNeedToRequirementCandidate(need, temporaryCode) {
     if (!need || !need.description) return null;
+    if (require('./statementClassifier').classify(need.description, need) === 'OBJECTIVE') return null;
+    if (!need.type && require('./statementClassifier').classify(need.description,need) === 'UNKNOWN') return null;
 
     // 1. Limpieza de viñetas, guiones y numeraciones iniciales
     let cleanText = need.description
@@ -158,7 +160,7 @@ class CandidateConsolidator {
     cleanText = cleanText.replace(/\.\.+$/, '.').trim();
 
     // 2. Filtro estricto de metadatos, portada, contactos y tablas
-    const isBoilerplate = /^(?:PROPUESTA\s+(?:T[EÉ]CNICA|ECON[OÓ]MICA|CREADA)|DATOS\s+GENERALES|IDENTIFICACI[OÓ]N|Empresa\s+proponente|Soluci[oó]n\s+AUTRON|Sector\s+Taller|Modalidad\s+Plataforma|EQUIPO\s+RESPONSABLE|DATOS\s+DE\s+CONTACTO|COSTOS\s+OPERATIVOS|TOTAL\s+ESTIMADO|Tarifa\s+Subtotal|SOLUCIONES\s+DE\s+SOFTWARE|CONTROL\s+INTELIGENTE|NEXORA)/i.test(cleanText) ||
+    const isBoilerplate = /^(?:PROPUESTA\s+(?:T[EÉ]CNICA|ECON[OÓ]MICA|CREADA)|DATOS\s+GENERALES|IDENTIFICACI[OÓ]N|Empresa\s+proponente|EQUIPO\s+RESPONSABLE|DATOS\s+DE\s+CONTACTO|COSTOS\s+OPERATIVOS|TOTAL\s+ESTIMADO|Tarifa\s+Subtotal|SOLUCIONES\s+DE\s+SOFTWARE)/i.test(cleanText) ||
       /^(?:Cliente|Administrador|Mec[aá]nico|Recepci[oó]n)\s*:/i.test(cleanText) ||
       /^(?:Usuarios|Clientes|Citas|Recepci[oó]n|Diagn[oó]stico|Base|Servicios|Cotizaciones|[OÓ]rdenes|Inventario|Historial|Dashboard)\s+(?:y\s+|de\s+|con\s+)?(?:seguridad|veh[ií]culos|repuestos|ventas|reportes)/i.test(cleanText);
 
@@ -169,7 +171,7 @@ class CandidateConsolidator {
     // 3. Formulación gramatical correcta en español
     let statement = cleanText;
 
-    if (/^(?:El\s+sistema\s+(?:deber[aá]|permitir[aá]|podr[aá]|debe)|El\s+(?:usuario|cliente|administrador|mec[aá]nico)\s+(?:podr[aá]|deber[aá])|Cada\s+|Toda\s+|Una\s+|No\s+se\s+)/i.test(statement)) {
+    if (/^(?:El\s+sistema\s+(?:deber[aá]|permitir[aá]|podr[aá]|debe)|El\s+[a-záéíóúñ]+\s+(?:podr[aá]|deber[aá]|debe|puede)|Cada\s+|Toda\s+|Una\s+|No\s+se\s+)/i.test(statement)) {
       statement = statement.charAt(0).toUpperCase() + statement.slice(1);
       if (!statement.endsWith('.')) statement += '.';
     } else {
@@ -211,6 +213,8 @@ class CandidateConsolidator {
       status: 'PENDING_REVIEW',
       evidence: {
         text: need.evidence || need.description,
+        section: need.section || need.metadata?.section || null,
+        context: need.context || need.metadata || null,
         type: 'SEMANTIC_INFERENCE'
       }
     };
@@ -240,6 +244,7 @@ class CandidateConsolidator {
     sourceVersionId,
     sourceSegmentId = null
   }) {
+    const objectives = [];
     const needCandidates = [];
     const requirementCandidates = [];
 
@@ -253,6 +258,7 @@ class CandidateConsolidator {
     for (const explicit of explicitRequirements) {
       const code = explicit.code || `CRF-${String(rfCounter++).padStart(2, '0')}`;
       const statement = explicit.description || explicit.name || '';
+      if (require('./statementClassifier').classify(statement, explicit) === 'OBJECTIVE') { objectives.push({kind:'OBJECTIVE',statement,evidence:explicit.evidence || explicit.sourceText || statement,section:explicit.section,sourceId,sourceVersionId}); continue; }
       const type = explicit.type === 'NON_FUNCTIONAL' ? 'NON_FUNCTIONAL' : 'FUNCTIONAL';
 
       const rel = this.detectRelationship({ statement }, existingCandidates);
@@ -292,6 +298,7 @@ class CandidateConsolidator {
       const needs = semResult.needs || [];
 
       for (const need of needs) {
+        if (require('./statementClassifier').classify(need.description, need) === 'OBJECTIVE') { objectives.push({kind:'OBJECTIVE',statement:need.description,evidence:need.evidence || need.description,section:need.section,sourceId,sourceVersionId}); continue; }
         const needObj = {
           projectId,
           sourceId,
@@ -369,6 +376,7 @@ class CandidateConsolidator {
     });
 
     return {
+      objectives,
       needCandidates,
       requirementCandidates: canonicalRequirements,
       summary: {

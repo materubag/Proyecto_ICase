@@ -28,17 +28,42 @@ export default function ProjectModel({ project, onProjectUpdated, initialTab = '
   const [crossValLoading, setCrossValLoading] = useState(false);
   const [crossValReport, setCrossValReport] = useState(null);
 
+  const ER_GEN_KEY = `icase_er_gen_${project.id}`;
+  const CLASS_GEN_KEY = `icase_class_gen_${project.id}`;
+
   // Project data states
   const [classes, setClasses] = useState(project.classModels || []);
   const [classDiagramCode, setClassDiagramCode] = useState('');
   const [loadingClasses, setLoadingClasses] = useState(false);
-  const [generatingClasses, setGeneratingClasses] = useState(false);
+  const [generatingClasses, setGeneratingClasses] = useState(() => {
+    try {
+      const raw = localStorage.getItem(`icase_class_gen_${project.id}`);
+      if (raw && Date.now() - parseInt(raw, 10) < 180000) return true;
+    } catch (e) {}
+    return false;
+  });
   const [classIsOutdated, setClassIsOutdated] = useState(false);
 
   // ER Diagram states
   const [erStoredCode, setErStoredCode] = useState('');
-  const [generatingER, setGeneratingER] = useState(false);
+  const [generatingER, setGeneratingER] = useState(() => {
+    try {
+      const raw = localStorage.getItem(`icase_er_gen_${project.id}`);
+      if (raw && Date.now() - parseInt(raw, 10) < 180000) return true;
+    } catch (e) {}
+    return false;
+  });
+  const [generationError, setGenerationError] = useState('');
   const [erIsOutdated, setErIsOutdated] = useState(false);
+
+  // Polling si se está generando en segundo plano y el usuario cambia de pestaña
+  useEffect(() => {
+    if (!generatingER && !generatingClasses) return;
+    const interval = setInterval(() => {
+      loadDiagrams();
+    }, 2500);
+    return () => clearInterval(interval);
+  }, [generatingER, generatingClasses]);
 
   // Edit Class Modal (Governance)
   const [editClassModalOpen, setEditClassModalOpen] = useState(false);
@@ -163,6 +188,8 @@ export default function ProjectModel({ project, onProjectUpdated, initialTab = '
   async function handleGenerateER(force = false) {
     try {
       setGeneratingER(true);
+      localStorage.setItem(ER_GEN_KEY, Date.now().toString());
+      setGenerationError('');
       const isForce = typeof force === 'object' ? Boolean(force.force) : Boolean(force);
       const res = await diagramsApi.generateDiagram(project.id, 'ER', isForce);
       const newCode = res?.code || res?.mermaidCode || res?.diagram?.mermaidCode || res?.artifact?.mermaidCode;
@@ -177,15 +204,18 @@ export default function ProjectModel({ project, onProjectUpdated, initialTab = '
       }
       if (onProjectUpdated) await onProjectUpdated();
     } catch (err) {
-      alert(`Error al generar diagrama E/R: ${err.message}`);
+      setGenerationError(err.message);
     } finally {
       setGeneratingER(false);
+      localStorage.removeItem(ER_GEN_KEY);
     }
   }
 
   async function handleGenerateClassDiagram(force = true) {
     try {
       setGeneratingClasses(true);
+      localStorage.setItem(CLASS_GEN_KEY, Date.now().toString());
+      setGenerationError('');
       const isForce = typeof force === 'object' ? Boolean(force.force) : Boolean(force);
       const res = await diagramsApi.generateDiagram(project.id, 'CLASS', isForce);
       const newCode = res?.code || res?.mermaidCode || res?.diagram?.mermaidCode || res?.artifact?.mermaidCode;
@@ -201,9 +231,10 @@ export default function ProjectModel({ project, onProjectUpdated, initialTab = '
       await loadClasses();
       if (onProjectUpdated) await onProjectUpdated();
     } catch (err) {
-      alert(`Error al generar diagrama de clases: ${err.message}`);
+      setGenerationError(err.message);
     } finally {
       setGeneratingClasses(false);
+      localStorage.removeItem(CLASS_GEN_KEY);
     }
   }
 
@@ -329,13 +360,13 @@ export default function ProjectModel({ project, onProjectUpdated, initialTab = '
           <div className="vdivider" />
           <div style={{ display: 'flex', gap: '12px' }}>
             <span style={{ fontSize: '0.8125rem', color: 'var(--secondary)' }}>
-              <strong style={{ color: 'var(--on-surface)', fontWeight: 600 }}>{entities.length}</strong> entidades
+              <strong style={{ color: 'var(--on-surface)', fontWeight: 600 }}>{erValidation?.stats?.entitiesCount ?? entities.length}</strong> entidades
             </span>
             <span style={{ fontSize: '0.8125rem', color: 'var(--secondary)' }}>
-              <strong style={{ color: 'var(--on-surface)', fontWeight: 600 }}>{relationships.length}</strong> relaciones
+              <strong style={{ color: 'var(--on-surface)', fontWeight: 600 }}>{currentValidation?.stats?.relationshipsCount ?? relationships.length}</strong> relaciones
             </span>
             <span style={{ fontSize: '0.8125rem', color: 'var(--secondary)' }}>
-              <strong style={{ color: 'var(--on-surface)', fontWeight: 600 }}>{classes.length}</strong> clases
+              <strong style={{ color: 'var(--on-surface)', fontWeight: 600 }}>{classValidation?.stats?.classesCount ?? classes.length}</strong> clases
             </span>
           </div>
         </div>
@@ -486,6 +517,7 @@ export default function ProjectModel({ project, onProjectUpdated, initialTab = '
         </div>
       </div>
 
+      {generationError && <div role="alert" style={{padding:'12px 24px',background:'#fef2f2',color:'#991b1b'}}>{generationError}<button className="btn btn-ghost btn-sm" onClick={()=>setGenerationError('')}>Cerrar</button></div>}
       {/* Main Content Area */}
       <div className="page-scrollable" style={{ padding: '20px 24px', flex: 1, overflowY: 'auto' }}>
 
@@ -509,7 +541,7 @@ export default function ProjectModel({ project, onProjectUpdated, initialTab = '
                   {currentValidation.isValid ? 'check_circle' : 'cancel'}
                 </span>
                 <strong style={{ fontSize: '0.875rem', color: currentValidation.isValid ? '#15803d' : '#b91c1c' }}>
-                  {currentValidation.isValid ? '✓ Mermaid válido' : '✕ Mermaid inválido'}
+                  {currentValidation.isValid ? 'Codigo valido; diseno pendiente de revision' : 'Codigo invalido'}
                 </strong>
               </div>
 

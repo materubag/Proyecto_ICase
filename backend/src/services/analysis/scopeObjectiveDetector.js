@@ -151,7 +151,7 @@ class ScopeObjectiveDetector {
       const names = teamSec.content
         .split('\n')
         .map(l => l.trim())
-        .filter(l => l.length > 5 && !/EQUIPO|NEXORA/i.test(l));
+        .filter(l => l.length > 5 && !/EQUIPO|RESPONSABLE|CONTACTO/i.test(l));
       names.forEach(line => {
         // En LaTeX dos nombres en la misma línea separados por espacios amplios
         const parts = line.split(/\s{3,}/).map(p => p.trim()).filter(p => p.length > 5);

@@ -1,3 +1,4 @@
+import { isPdf } from '../utils/pdfFilePolicy';
 import React, { useState, useRef } from 'react';
 import {
   FileUp,
@@ -111,7 +112,7 @@ export default function DocumentImportModal({
     const selected = e.target.files?.[0];
     if (!selected) return;
 
-    if (!selected.name.toLowerCase().endsWith('.pdf')) {
+    if (!isPdf(selected)) {
       setErrorMessage('Por favor seleccione únicamente un archivo con formato PDF (.pdf).');
       setStatus('error');
       return;
@@ -127,7 +128,7 @@ export default function DocumentImportModal({
   function handleDrop(e) {
     e.preventDefault();
     const dropped = e.dataTransfer?.files?.[0];
-    if (dropped && dropped.name.toLowerCase().endsWith('.pdf')) {
+    if (dropped && isPdf(dropped)) {
       setFile(dropped);
       setStatus('idle');
       setErrorMessage(null);

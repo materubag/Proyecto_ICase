@@ -173,26 +173,10 @@ export default function AudioTranscriptionViewer({
             <span>Ocurrió un error al procesar la transcripción de audio</span>
           </div>
           <p style={{ margin: '6px 0 10px 0', fontSize: '0.82rem', color: 'var(--on-surface)' }}>
-            La fuente fue conservada. Puedes adjuntar el archivo de audio nuevamente para reintentar la transcripción.
+            La fuente historica se conserva para consulta. La carga actual admite exclusivamente PDF.
           </p>
 
-          <form onSubmit={handleRetrySubmit} style={{ display: 'flex', gap: '10px', alignItems: 'center', flexWrap: 'wrap' }}>
-            <input
-              type="file"
-              accept="audio/*,.mp3,.wav,.m4a,.ogg,.webm,.mp4"
-              onChange={(e) => setRetryFile(e.target.files?.[0] || null)}
-              style={{ fontSize: '0.8rem' }}
-            />
-            <button
-              type="submit"
-              className="btn btn-primary btn-sm"
-              disabled={!retryFile || retrying}
-              style={{ display: 'inline-flex', alignItems: 'center', gap: '6px' }}
-            >
-              <RotateCcw size={14} className={retrying ? 'spin' : ''} />
-              {retrying ? 'Reintentando...' : 'Reintentar transcripción'}
-            </button>
-          </form>
+
           {retryError && <div style={{ fontSize: '0.8rem', marginTop: '6px', color: '#b42318' }}>{retryError}</div>}
         </div>
       )}

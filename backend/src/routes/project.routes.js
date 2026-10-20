@@ -23,6 +23,7 @@ const { sourceUpload } = require('../middleware/pdfUpload.middleware');
 // Multer memory storage para subida de múltiples archivos (documentos y audios)
 const uploadMulti = multer({
   storage: multer.memoryStorage(),
+  fileFilter: require('../utils/pdfFilePolicy').fileFilter,
   limits: { fileSize: 35 * 1024 * 1024 } // 35 MB por archivo
 });
 
@@ -41,14 +42,25 @@ router.post('/:projectId/requirements', (req, res, next) => requirementControlle
 
 // Nested Project Actors
 router.get('/:projectId/actors', (req, res, next) => actorController.getByProject(req, res, next));
+router.post('/:projectId/actor-relations/regenerate', async (req,res,next)=>{
+  try{const service=require('../services/analysis/actorRelationRegeneration');await service.prepare(req.params.projectId);res.status(202).json({success:true,data:service.jobs.start({projectId:req.params.projectId,sourceId:req.params.projectId})});}catch(e){next(e);}
+});
+router.get('/:projectId/actor-relations/jobs/:jobId', (req,res)=>{
+  const job=require('../services/analysis/actorRelationRegeneration').jobs.get(req.params.projectId,req.params.jobId);
+  if(!job)return res.status(404).json({success:false,error:{message:'La tarea no está disponible; vuelve a regenerar las relaciones.'}});
+  res.json({success:true,data:job});
+});
 router.post('/:projectId/actors', (req, res, next) => actorController.create(req, res, next));
 router.post('/:projectId/actors/approve-all', async (req, res, next) => {
   try {
     const { projectId } = req.params;
     const prisma = require('../config/prisma');
-    const updated = await prisma.actor.updateMany({
-      where: { projectId },
-      data: { reviewStatus: 'APPROVED', status: 'APPROVED' }
+    const updated = await prisma.$transaction(async tx => {
+      const actors=await tx.actor.findMany({where:{projectId,isDeleted:false}});
+      const eligible=actors.filter(a=>require('../services/analysis/actorEvidence').classify(a)==='ROLE');
+      const result=await tx.actor.updateMany({where:{projectId,id:{in:eligible.map(a=>a.id)}},data:{reviewStatus:'APPROVED',status:'APPROVED'}});
+      await require('../services/analysis/actorIdentity').refresh(tx,projectId);
+      return result;
     });
     res.json({ success: true, count: updated.count });
   } catch (err) { next(err); }
@@ -78,8 +90,18 @@ router.post('/:projectId/entities/approve-all', async (req, res, next) => {
     });
     await prisma.entityRelationship.updateMany({
       where: { projectId },
-      data: { reviewStatus: 'APPROVED', status: 'APPROVED' }
+      data: { status: 'APPROVED' }
     });
+    const entities = await prisma.entity.findMany({
+      where: { projectId },
+      select: { id: true }
+    });
+    if (entities.length > 0) {
+      await prisma.entityAttribute.updateMany({
+        where: { entityId: { in: entities.map(e => e.id) } },
+        data: { status: 'APPROVED' }
+      });
+    }
     res.json({ success: true, count: updated.count });
   } catch (err) { next(err); }
 });
@@ -112,7 +134,7 @@ router.get('/:projectId/history', (req, res, next) => versionHistoryController.g
 // Project Sources
 router.get('/:projectId/sources', (req, res, next) => sourceController.list(req, res, next));
 router.post('/:projectId/sources', sourceUpload.array('files', 20), (req, res, next) => sourceController.upload(req, res, next));
-router.post('/:projectId/sources/audio', audioUpload.single('file'), (req, res, next) => sourceController.uploadAudio(req, res, next));
+router.post('/:projectId/sources/audio', require('../utils/pdfFilePolicy').pdfOnly);
 
 // Project Candidates & Approval Center
 router.get('/:projectId/candidates', (req, res, next) => candidateController.listByProject(req, res, next));
@@ -128,6 +150,7 @@ router.post('/:projectId/analyze', (req, res, next) => aiController.analyze(req,
 router.post('/:projectId/import-analysis', (req, res, next) => documentController.importAnalysis(req, res, next));
 
 // Mockup Generation for Project (n8n prepared legacy)
+router.get('/:projectId/mockup', (req,res,next)=>mockupController.list(req,res,next));
 router.post('/:projectId/mockup', (req, res, next) => mockupController.generate(req, res, next));
 
 // Generación Inteligente de Diagramas Mermaid (Gemini + Validación + Fallback)
@@ -137,5 +160,64 @@ router.post('/:projectId/diagrams/generate', (req, res, next) => diagramControll
 router.post('/:projectId/diagrams/:type/validate', (req, res, next) => diagramController.validate(req, res, next));
 router.put('/:projectId/diagrams/:type', (req, res, next) => diagramController.updateDiagram(req, res, next));
 router.post('/:projectId/diagrams/cross-validate', (req, res, next) => diagramController.crossValidate(req, res, next));
+
+// Arquitectura del Proyecto (Consulta y Edición)
+router.get('/:projectId/architecture', async (req, res, next) => {
+  try {
+    const { projectId } = req.params;
+    const prisma = require('../config/prisma');
+    let arch = await prisma.architecture.findFirst({
+      where: { projectId },
+      orderBy: { createdAt: 'desc' },
+      include: { components: true }
+    });
+    res.json({ success: true, data: arch });
+  } catch (err) { next(err); }
+});
+
+router.put('/:projectId/architecture', async (req, res, next) => {
+  try {
+    const { projectId } = req.params;
+    const { style, frontend, backend, database, softwareDiagram, deploymentDiagram } = req.body;
+    const prisma = require('../config/prisma');
+    let arch = await prisma.architecture.findFirst({
+      where: { projectId },
+      orderBy: { createdAt: 'desc' }
+    });
+    if (arch) {
+      arch = await prisma.architecture.update({
+        where: { id: arch.id },
+        data: {
+          ...(style !== undefined && { style }),
+          ...(frontend !== undefined && { frontend }),
+          ...(backend !== undefined && { backend }),
+          ...(database !== undefined && { database }),
+          ...(softwareDiagram !== undefined && { softwareDiagram }),
+          ...(deploymentDiagram !== undefined && { deploymentDiagram }),
+          status: 'APPROVED',
+          reviewStatus: 'APPROVED',
+          revision: arch.revision + 1
+        },
+        include: { components: true }
+      });
+    } else {
+      arch = await prisma.architecture.create({
+        data: {
+          projectId,
+          style: style || 'Arquitectura en 3 Capas (Presentación, Servicios y Datos)',
+          frontend: frontend || 'React',
+          backend: backend || 'Node.js + Express',
+          database: database || 'PostgreSQL',
+          softwareDiagram,
+          deploymentDiagram,
+          status: 'APPROVED',
+          reviewStatus: 'APPROVED'
+        },
+        include: { components: true }
+      });
+    }
+    res.json({ success: true, data: arch });
+  } catch (err) { next(err); }
+});
 
 module.exports = router;

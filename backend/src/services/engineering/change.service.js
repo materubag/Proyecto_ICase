@@ -24,7 +24,7 @@ async function propose(projectId, input) {
     const current = await d.element(tx, projectId, elementType, input.elementId);
     if (elementType === 'Artifact') d.fail('CHANGE_REQUEST_INVALID', 'Usa versiones para modificar artefactos.', 400);
     let data;
-    if (input.type === 'DELETE') data = { status: 'REMOVED' };
+    if (input.type === 'DELETE') data = { status: 'REMOVED', ...(elementType==='Requirement'?{isDeleted:true}:{}) };
     else if (elementType === 'Requirement') {
       let proposed = input.proposedState || {};
       if (input.type === 'RESTORE') {
@@ -33,6 +33,7 @@ async function propose(projectId, input) {
         proposed = old.content;
       }
       data = requirementData(proposed, current);
+      if(input.type==='RESTORE')data.isDeleted=false;
     } else {
       if (input.type === 'RESTORE') d.fail('CHANGE_REQUEST_INVALID', 'Restauración disponible para requisitos y artefactos.', 400);
       const allowed = { Actor: ['name', 'description'], Entity: ['name', 'description'], BusinessRule: ['name', 'description'], Technology: ['name', 'version', 'category'], UseCase: ['name', 'description'], NavigationNode: ['name', 'route', 'platform'], EntityRelationship: ['description', 'cardinality'], EntityAttribute: ['name', 'type', 'isPk'], Architecture: ['style'] }[elementType];
@@ -64,7 +65,7 @@ async function review(projectId, id, input) {
     if (d.hash(impact) !== d.hash(change.impact)) d.fail('VERSION_CONFLICT', 'Cambió el impacto. Crea una nueva solicitud.');
     if (change.elementType === 'Requirement') await remember(tx, current);
     await tx.changeRequest.update({ where: { id }, data: { status: 'APPROVED' } });
-    const updated = await tx[d.delegates[change.elementType]].update({ where: { id: current.id }, data: { ...change.proposedState, revision: { increment: 1 } } });
+    const updated = await tx[d.delegates[change.elementType]].update({ where: { id: current.id }, data: { ...change.proposedState, ...(change.elementType==='Requirement'&&change.type==='DELETE'?{isDeleted:true}:{}), ...(change.elementType==='Requirement'&&change.type==='RESTORE'?{isDeleted:false}:{}), revision: { increment: 1 } } });
     if (change.elementType === 'Requirement') await remember(tx, updated, id, change.basedOnVersionId);
     if (change.sourceCandidateId && change.elementType === 'Requirement') {
       const c = await tx.requirementCandidate.findFirst({ where: { id: change.sourceCandidateId, projectId, status: 'PENDING_REVIEW' } });

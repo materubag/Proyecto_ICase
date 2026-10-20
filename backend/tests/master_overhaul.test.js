@@ -10,7 +10,7 @@ async function runMasterOverhaulTests() {
   console.log('================================================================\n');
 
   // TEST 1: Requisitos 3 equivalentes -> 1 canónico con trazabilidad
-  console.log('[TEST 1] Requisitos: 3 equivalentes -> 1 canónico con trazabilidad de fuentes');
+  console.log('[TEST 1] Requisitos explícitos: conservar códigos y descripciones distintos con trazabilidad');
   const candidates = [
     {
       id: 'cand-1',
@@ -36,22 +36,19 @@ async function runMasterOverhaulTests() {
   ];
 
   const { canonicalRequirements, extractionStats } = deduplicationService.groupAndConsolidateRequirements(candidates);
-  assert.strictEqual(canonicalRequirements.length, 1, 'Debe consolidar los 3 requisitos equivalentes en exactamente 1 canónico');
-  const canonical = canonicalRequirements[0];
-  assert.strictEqual(canonical.status, 'PENDING', 'El requisito canónico debe entrar como PENDING');
-  assert.ok(Array.isArray(canonical.sources), 'Debe contener el array de sources');
-  assert.strictEqual(canonical.sources.length, 3, 'Debe conservar las 3 fuentes originales');
-  const sourceCodes = canonical.sources.map(s => s.temporaryCode);
-  assert.ok(sourceCodes.includes('RF-001') && sourceCodes.includes('RF-027') && sourceCodes.includes('RF-054'), 'Trazabilidad de códigos original');
-  assert.strictEqual(extractionStats.duplicatesGrouped, 2, 'Debe registrar 2 duplicados consolidados en las métricas');
-  console.log('  -> PASS: 3 candidatos agrupados correctamente en 1 canónico con sus 3 fuentes.\n');
+  // Explicit codes designate separate source records. Synonyms do not authorize merging them.
+  assert.strictEqual(canonicalRequirements.length, 3);
+  assert.deepStrictEqual(canonicalRequirements.map(r=>r.code), candidates.map(r=>r.code));
+  assert.deepStrictEqual(canonicalRequirements.map(r=>r.statement), candidates.map(r=>r.statement));
+  assert.strictEqual(canonicalRequirements.flatMap(r=>r.sources).length, 3);
+  assert.strictEqual(extractionStats.duplicatesGrouped, 0);
 
   // TEST 2: Actores (Administrador, Administrador/a, Admin -> 1 actor)
   console.log('[TEST 2] Actores: Normalización y canonicalización con aliases');
   const rawActors = [
     { id: 'act-1', codeId: 'ACT-01', name: 'Administrador' },
     { id: 'act-2', codeId: 'ACT-02', name: 'Administrador/a' },
-    { id: 'act-3', codeId: 'ACT-03', name: 'Admin' },
+    { id: 'act-3', codeId: 'ACT-03', name: 'Admin', aliases: ['Administrador'] },
     { id: 'act-4', codeId: 'ACT-04', name: 'Cliente' },
     { id: 'act-5', codeId: 'ACT-05', name: 'Mecánico' }
   ];

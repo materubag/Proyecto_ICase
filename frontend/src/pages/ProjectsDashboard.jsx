@@ -95,9 +95,6 @@ export default function ProjectsDashboard({ onOpenProject }) {
     )
   );
 
-  // Compute global KPI stats
-  const totalReqs = projects.reduce((sum, p) => sum + (p._count?.requirements ?? 0), 0);
-  const totalActors = projects.reduce((sum, p) => sum + (p._count?.actors ?? 0), 0);
   const inProgressCount = projects.filter(p => p.status === 'IN_PROGRESS').length;
   const completedCount = projects.filter(p => p.status === 'COMPLETED').length;
 
@@ -165,45 +162,6 @@ export default function ProjectsDashboard({ onOpenProject }) {
         </div>
       </div>
 
-      {/* ── KPI Summary Cards ── */}
-      <div className="kpi-grid">
-        <div className="kpi-card">
-          <div className="kpi-icon-wrap kpi-icon-blue">
-            <span className="ms">folder_special</span>
-          </div>
-          <div className="kpi-info">
-            <span className="kpi-value">{projects.length}</span>
-            <span className="kpi-label">Proyectos</span>
-          </div>
-        </div>
-        <div className="kpi-card">
-          <div className="kpi-icon-wrap kpi-icon-violet">
-            <span className="ms">checklist</span>
-          </div>
-          <div className="kpi-info">
-            <span className="kpi-value">{totalReqs}</span>
-            <span className="kpi-label">Requisitos</span>
-          </div>
-        </div>
-        <div className="kpi-card">
-          <div className="kpi-icon-wrap kpi-icon-emerald">
-            <span className="ms">groups</span>
-          </div>
-          <div className="kpi-info">
-            <span className="kpi-value">{totalActors}</span>
-            <span className="kpi-label">Actores</span>
-          </div>
-        </div>
-        <div className="kpi-card">
-          <div className="kpi-icon-wrap kpi-icon-amber">
-            <span className="ms">trending_up</span>
-          </div>
-          <div className="kpi-info">
-            <span className="kpi-value">{inProgressCount}</span>
-            <span className="kpi-label">En progreso</span>
-          </div>
-        </div>
-      </div>
 
       {/* Error */}
       {error && (

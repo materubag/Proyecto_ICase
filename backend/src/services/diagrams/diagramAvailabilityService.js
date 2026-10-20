@@ -144,6 +144,9 @@ class DiagramAvailabilityService {
     }
 
     const erOutdated = checkIsOutdated(erArtifact.generatedAt, [...approvedEntities, ...approvedRel]);
+    if(erStatus==='INSUFFICIENT'&&['openai','gemini'].includes(require('../../config/env').AI_PROVIDER)&&requirements.some(r=>!r.isDeleted&&r.status!=='REMOVED'&&r.type==='FUNCTIONAL')){
+      erStatus='PARTIAL';erMissing.push('Se generará un modelo propuesto a partir de los requisitos; revisar sus entidades y cardinalidades.');
+    }
 
     // 3. CLASS (Diagrama de clases)
     const classArtifact = getArtifactInfo('CLASS');
@@ -166,6 +169,9 @@ class DiagramAvailabilityService {
     }
 
     const classOutdated = checkIsOutdated(classArtifact.generatedAt, [...approvedClasses, ...approvedEntities]);
+    if(classStatus==='INSUFFICIENT'&&['openai','gemini'].includes(require('../../config/env').AI_PROVIDER)&&requirements.some(r=>!r.isDeleted&&r.status!=='REMOVED'&&r.type==='FUNCTIONAL')){
+      classStatus='PARTIAL';classMissing.push('Se generará un modelo UML propuesto desde los requisitos; revisar responsabilidades y relaciones.');
+    }
 
     // 4. FLOWCHART (Diagrama de Flujo de Procesos)
     const flowchartArtifact = getArtifactInfo('FLOWCHART');
@@ -201,6 +207,9 @@ class DiagramAvailabilityService {
     }
 
     const navOutdated = checkIsOutdated(navArtifact.generatedAt, [...approvedScreens, ...navigationNodes]);
+    if(navStatus==='INSUFFICIENT'&&['openai','gemini'].includes(require('../../config/env').AI_PROVIDER)&&requirements.some(r=>!r.isDeleted&&r.status!=='REMOVED'&&r.type==='FUNCTIONAL')){
+      navStatus='PARTIAL';navMissing.push('Se propondrá una jerarquía de navegación desde los requisitos, sin inferir permisos.');
+    }
 
     // 6. ARCHITECTURE (Arquitectura)
     const archArtifact = getArtifactInfo('ARCHITECTURE');
@@ -221,6 +230,9 @@ class DiagramAvailabilityService {
       archMissing.push('Se identificaron tecnologías, pero faltan componentes o relaciones en capas');
     }
 
+    if(archStatus==='INSUFFICIENT' && requirements.some(r=>r.status==='APPROVED'&&r.type==='FUNCTIONAL')) {
+      archStatus='PARTIAL';archMissing.length=0;archMissing.push('Se puede proponer una arquitectura logica desde requisitos; tecnologias y despliegue por confirmar.');
+    }
     const archOutdated = checkIsOutdated(archArtifact.generatedAt, [
       ...(arch ? [arch] : []),
       ...approvedComponents,

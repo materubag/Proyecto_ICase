@@ -40,12 +40,19 @@ module.exports = {
 
   // Configuración OpenAI (Opcional - nunca obligatorio para el flujo principal)
   OPENAI_API_KEY: process.env.OPENAI_API_KEY || '',
-  OPENAI_MODEL: process.env.OPENAI_MODEL || 'gpt-4o',
+  OPENAI_MODEL: process.env.OPENAI_MODEL || 'gpt-5.6-luna',
+  OPENAI_REASONING_EFFORT: process.env.OPENAI_REASONING_EFFORT || 'high',
 
-  // Configuración n8n (Exclusivo para Mockups)
+  // Configuración n8n y Google Stitch (Mockups)
   N8N_BASE_URL: process.env.N8N_BASE_URL || '',
   N8N_MOCKUP_WEBHOOK: process.env.N8N_MOCKUP_WEBHOOK || '',
-  N8N_TIMEOUT: parseInt(process.env.N8N_TIMEOUT || '120000', 10),
+  GOOGLE_STITCH_API_KEY: process.env.GOOGLE_STITCH_API_KEY || '',
+  STITCH_CONCURRENCY: parseInt(process.env.STITCH_CONCURRENCY || '4', 10),
+  MOCKUP_PROVIDER: process.env.MOCKUP_PROVIDER || 'stitch',
+  N8N_TIMEOUT: (() => {
+    const val = parseInt(process.env.N8N_TIMEOUT || '900000', 10);
+    return val < 10000 ? val * 1000 : val;
+  })(),
   MOCKUP_MAX_REQUIREMENTS: parseInt(process.env.MOCKUP_MAX_REQUIREMENTS || '12', 10),
 
   // Configuración de Análisis Inteligente de Requisitos

@@ -61,7 +61,7 @@ async function chat(projectId, input) {
   }
   const context = [];
   for (const r of requirements) {
-    const origin = await d.prisma.requirementCandidate.findUnique({ where: { promotedRequirementId: r.id }, include: { source: true, sourceSegment: true } });
+    const origin = await d.prisma.requirementCandidate.findFirst({ where: { promotedRequirementId: r.id }, include: { source: true, sourceSegment: true } });
     context.push({ code: r.code, id: r.id, description: r.description, source: origin?.source?.name, segment: origin?.sourceSegment, impact: await impact.analyze(projectId, 'Requirement', r.id) });
   }
   if (input.proposeChange === true) {

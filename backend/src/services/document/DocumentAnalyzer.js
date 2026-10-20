@@ -26,7 +26,7 @@ class DocumentAnalyzer {
     const sections = sectionDetector.detectSections(cleanedText);
 
     // 4. Extracción basada en reglas deterministas (RF, RNF, Actores, Reglas, Entidades, etc.)
-    const rules = ruleBasedExtractor.extract(cleanedText, sections, {
+    const rules = ruleBasedExtractor.extract(extracted.extractedText, sectionDetector.detectSections(extracted.extractedText), {
       fileName: extracted.fileName || fileName,
       pageCount: extracted.pageCount
     });
@@ -72,7 +72,7 @@ class DocumentAnalyzer {
       dependencies: rules.dependencies,
       architecture: rules.architecture,
       contextSections: rules.contextSections,
-      rawText: cleanedText,
+      rawText: extracted.extractedText,
       normalizedText: norm.normalizedText,
       technologyCatalog: techCatalog,
       architectureCatalog: archCatalog,
@@ -80,7 +80,9 @@ class DocumentAnalyzer {
       fileName: extracted.fileName || fileName,
       pageCount: extracted.pageCount,
       textLength: cleanedText.length,
-      extractedText: cleanedText,
+      extractedText: extracted.extractedText,
+      rawLayoutText: extracted.rawLayoutText,
+      pdfExtractionVersion:extracted.extractionVersion,
       detectedSections: sections.map(s => ({
         title: s.title,
         category: s.category,
@@ -210,7 +212,7 @@ class DocumentAnalyzer {
           }
         ];
 
-    const defaultActorId = actors[0].id;
+    const defaultActorId = null;
 
     // 2. Requisitos Funcionales y No Funcionales (source: 'pdf')
     const reqs = [];
@@ -226,7 +228,7 @@ class DocumentAnalyzer {
         description: (rf.description || rf.name || rf.text || '').trim(),
         type: 'FUNCTIONAL',
         priority: rf.priority || 'HIGH',
-        actorIds: [defaultActorId],
+        actorIds: [],
         dependencies: rf.dependencies || [],
         source: 'pdf',
         aiAnalysis: {
@@ -392,26 +394,10 @@ class DocumentAnalyzer {
    * @param {string} [providerOverride]
    * @returns {Promise<Object>} Metamodelo estructurado canónico
    */
-  async analyzeWithAI(extractionData, providerOverride) {
-    const analysisOrchestrator = require('../analysis/analysisOrchestrator');
-    const docName = extractionData.document?.name || extractionData.fileName || 'documento.pdf';
-    const providerName = providerOverride || env.AI_PROVIDER || 'mock';
-
-    console.log(`[DocumentAnalyzer] Ejecutando pipeline híbrido para '${docName}' con proveedor: [${providerName}]`);
-
-    try {
-      const orchestratorResult = await analysisOrchestrator.process(extractionData, docName, { providerOverride: providerName });
-      const normalizedResult = normalizeAIResponse(orchestratorResult);
-      const validation = validateAIResponse(normalizedResult);
-      if (!validation.isValid) {
-        console.warn('[DocumentAnalyzer] Validación canónica no superada:', validation.error, 'Aplicando fallback.');
-        return this.buildDeterministicMetamodel(extractionData, `Validación: ${validation.error}`);
-      }
-      return normalizedResult;
-    } catch (err) {
-      console.warn(`[DocumentAnalyzer] Error en orchestrator (${err.message}). Activando fallback determinista.`);
-      return this.buildDeterministicMetamodel(extractionData, `Error: ${err.message}`);
-    }
+  async analyzeWithAI(extractionData, providerOverride, modelOverride) {
+    return require('../analysis/analysisOrchestrator').process(extractionData,
+      extractionData.document?.name || extractionData.fileName || 'documento.pdf',
+      { providerOverride, modelOverride });
   }
 
   /**
@@ -474,7 +460,7 @@ class DocumentAnalyzer {
         return {
           ...req,
           priority: aiReq.priority || req.priority,
-          actorIds: actorIds.length > 0 ? actorIds : [defaultActorId],
+          actorIds,
           dependencies: Array.isArray(aiReq.dependencies) ? aiReq.dependencies : req.dependencies,
           aiAnalysis: {
             ambiguities,
@@ -496,7 +482,7 @@ class DocumentAnalyzer {
           description: (aiReq.description || aiReq.name || '').trim(),
           type: code.startsWith('RNF') ? 'NON_FUNCTIONAL' : 'FUNCTIONAL',
           priority: aiReq.priority || 'MEDIUM',
-          actorIds: [defaultActorId],
+          actorIds: [],
           dependencies: Array.isArray(aiReq.dependencies) ? aiReq.dependencies : [],
           source: 'ai',
           aiAnalysis: {

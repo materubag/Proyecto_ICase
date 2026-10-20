@@ -220,6 +220,7 @@ export default function ProjectDetail({
         {(activeTab === 'modeling' || activeTab === 'diagrams' || activeTab === 'model' || activeTab === 'usecases') && (
           <ProjectModeling
             project={project}
+            onProjectUpdated={onProjectUpdated}
             initialSubTab={activeTab === 'usecases' ? 'usecases' : 'er'}
           />
         )}

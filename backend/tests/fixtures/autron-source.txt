@@ -1,0 +1,486 @@
+[PÁGINA 1]
+PROPUESTA TÉCNICA Y ECONÓMICA
+SISTEMA WEB PARA LA
+GESTIÓN INTEGRAL DE UN
+TALLER AUTOMOTRIZ
+AUTRON
+CONTROL INTELIGENTE
+PROPUESTA CREADA POR
+NEXORA
+--- [SALTO_PAGINA] ---
+[PÁGINA 2]
+NEXORA AUTRON
+IDENTIFICACIÓN DE LA PROPUESTA
+I. DATOS GENERALES
+Empresa proponente Nexora
+Solución AUTRON
+Tipo de solución Aplicación web integral
+Sector Taller automotriz
+Cobertura Gestión operativa, técnica e inventario
+Modalidad Plataforma web responsiva
+1. INTRODUCCIÓN
+Los talleres automotrices administran información crítica relacionada con clientes,
+vehículos, citas, diagnósticos, reparaciones, repuestos, inventario, cotizaciones y
+mantenimientos. Cuando estos procesos se manejan mediante registros físicos, hojas
+de cálculo, mensajes o aplicaciones aisladas, se dificulta mantener la trazabilidad del
+vehículo y ofrecer al cliente información clara sobre el estado y el costo de una reparación.
+Nexora presenta AUTRON, una aplicación web integral que centraliza la operación del
+taller y mantiene un expediente digital por vehículo. En este expediente será posible
+consultar el historial de reparaciones y mantenimientos, diagnósticos, códigos de avería,
+cotizaciones, repuestos utilizados y kilometraje registrado en cada intervención.
+AUTRON integra un portal para clientes y un entorno operativo para mecánicos,
+personal de recepción y administradores. El diagnóstico visual del vehículo utiliza una
+representación gráfica interactiva para señalar las zonas con fallas y relacionarlas con
+evidencias, códigos OBD, repuestos y servicios recomendados.
+NEXORA · SOLUCIONES DE SOFTWARE AUTRON · 2
+--- [SALTO_PAGINA] ---
+[PÁGINA 3]
+NEXORA AUTRON
+2.1 OBJETIVO GENERAL · 2.2 OBJETIVOS ESPECÍFICOS
+2. OBJETIVOS
+2.1 OBJETIVO GENERAL
+Desarrollar e implementar AUTRON, una aplicación web integral para la gestión de
+un taller automotriz que centralice la operación, preserve la trazabilidad del vehículo y
+coordine los procesos de clientes, recepción, mecánica, inventario y administración.
+2.2 OBJETIVOS ESPECÍFICOS
+1. Centralizar las citas, la recepción, los diagnósticos, las cotizaciones, las órdenes de
+trabajo, el inventario y los mantenimientos.
+2. Mantener un expediente digital por vehículo con historial técnico, kilometraje,
+evidencias y repuestos utilizados.
+3. Integrar las autorizaciones del cliente, la ejecución de los trabajos y el consumo de
+inventario dentro de un mismo flujo operativo.
+4. Proporcionar información actualizada sobre el avance de la reparación de acuerdo con
+el perfil de cada usuario.
+5. Gestionar productos, repuestos, movimientos de inventario y alertas de existencias
+mínimas.
+6. Proteger la información mediante autenticación, roles, permisos, auditoría y respaldos
+periódicos.
+7. Establecer mecanismos de soporte, mantenimiento y garantía para la continuidad de
+la solución.
+8. Generar indicadores y reportes que faciliten el seguimiento operativo y la toma de
+decisiones.
+RESULTADO ESPERADO
+La primera versión funcional cubrirá el ciclo completo desde la solicitud de una cita
+o la recepción del vehículo hasta el cierre de la orden de trabajo y la actualización del
+historial técnico.
+NEXORA · SOLUCIONES DE SOFTWARE AUTRON · 3
+--- [SALTO_PAGINA] ---
+[PÁGINA 4]
+NEXORA AUTRON
+3.1 INCLUIDO EN EL ALCANCE · 3.2 FUERA DEL ALCANCE INICIAL
+3. ALCANCE
+El proyecto comprenderá el análisis, diseño, desarrollo e implementación de una
+aplicación web responsiva para la gestión de un taller automotriz. La primera versión
+cubrirá el ciclo comprendido desde la solicitud de una cita o la recepción del vehículo hasta
+la finalización de la orden de trabajo y la actualización de su historial técnico.
+3.1 INCLUIDO EN EL ALCANCE
+• Autenticación, usuarios, roles y
+permisos.
+• Gestión de clientes y vehículos.
+• Agenda y gestión de citas.
+• Recepción e inspección inicial.
+• Diagnóstico técnico y mapa visual.
+• Registro de códigos OBD y averías.
+• Catálogo de servicios.
+• Cotizaciones y aprobación del cliente.
+• Órdenes de trabajo y seguimiento.
+• Inventario, repuestos, proveedores y
+ventas.
+• Historial de reparaciones y
+mantenimientos.
+• Base de conocimiento técnica.
+• Notificaciones internas.
+• Dashboard y reportes básicos.
+3.2 FUERA DEL ALCANCE
+INICIAL
+• Diagnóstico autónomo del vehículo.
+• Integración directa con todas las
+marcas y modelos de escáner OBD.
+• Modelo tridimensional completo de
+cada vehículo.
+• Facturación electrónica gubernamental
+y contabilidad completa.
+• Integración con WhatsApp o pasarelas
+de pago en la primera versión.
+• Gestión avanzada de herramientas
+físicas y maquinaria del taller.
+NEXORA · SOLUCIONES DE SOFTWARE AUTRON · 4
+--- [SALTO_PAGINA] ---
+[PÁGINA 5]
+NEXORA AUTRON
+DIAGNÓSTICO DE LA OPERACIÓN
+4. SITUACIÓN ACTUAL Y PROBLEMA
+A SOLUCIONAR
+4.1 SITUACIÓN ACTUAL
+La operación requiere centralizar los procesos de atención al cliente, registro de
+vehículos, citas, diagnósticos, cotizaciones, reparaciones e inventario. Cuando estas
+actividades se administran mediante registros separados, mensajes, llamadas u hojas
+de cálculo, resulta difícil consultar de inmediato el historial de un vehículo y mantener
+trazabilidad sobre el diagnóstico, la autorización y el avance de la reparación.
+4.2 PROBLEMA PRINCIPAL
+La ausencia de una plataforma centralizada dificulta la trazabilidad del
+mantenimiento automotriz y la coordinación entre cliente, recepción, mecánico e
+inventario. Las cotizaciones y autorizaciones pueden quedar registradas de manera
+informal, mientras que el consumo de repuestos no siempre actualiza oportunamente
+las existencias.
+4.3 PROBLEMAS ESPECÍFICOS IDENTIFICADOS
+Problema Consecuencia Respuesta del sistema
+Historial disperso Dificultad para conocer
+intervenciones anteriores. Expediente digital por vehículo.
+Citas manuales Cruces de horarios y falta de
+seguimiento.
+Agenda digital con
+disponibilidad.
+Diagnóstico poco
+visible
+El cliente no comprende con
+claridad la falla.
+Mapa visual de zonas afectadas
+y evidencias.
+Cotizaciones
+informales Falta de evidencia de aprobación. Aprobación o rechazo digital
+registrado.
+Órdenes sin
+trazabilidad
+Desconocimiento del avance de la
+reparación.
+Estados y seguimiento de la
+orden.
+Inventario separado Diferencias entre el stock real y el
+registrado.
+Descuento automático de
+repuestos.
+Conocimiento
+disperso
+Dependencia de la experiencia
+individual.
+Base de conocimiento de averías
+y casos.
+Mantenimiento
+reactivo Olvido de servicios periódicos. Recordatorios por fecha o
+kilometraje.
+NEXORA · SOLUCIONES DE SOFTWARE AUTRON · 5
+--- [SALTO_PAGINA] ---
+[PÁGINA 6]
+NEXORA AUTRON
+5.1 REQUISITOS FUNCIONALES · RF-01 A RF-12
+5. PROPUESTA TÉCNICA
+AUTRON se implementará como una aplicación web modular, responsiva y basada en
+una arquitectura cliente–servidor. El sistema mantendrá una base de datos centralizada y
+expondrá sus servicios mediante una API. La interfaz se adaptará a los perfiles de Cliente,
+Mecánico, Recepción y Administrador.
+5.1 REQUISITOS FUNCIONALES
+Código Requisito funcional
+RF-01 Registrar usuarios, autenticar su identidad y recuperar el acceso.
+RF-02 Administrar roles y permisos para Cliente, Mecánico, Recepción y Administrador.
+RF-03 Registrar y actualizar la información de los clientes.
+RF-04 Registrar uno o varios vehículos por cliente.
+RF-05 Mantener un expediente digital por vehículo.
+RF-06 Permitir al cliente solicitar, consultar, reprogramar o cancelar citas según
+disponibilidad.
+RF-07 Registrar recepción, kilometraje, combustible, motivo de ingreso, observaciones y
+evidencias.
+RF-08 Crear diagnósticos asociados con un vehículo y registrar una o varias fallas.
+RF-09 Clasificar fallas por sistema, componente, descripción y severidad.
+RF-10 Representar visualmente las zonas del vehículo con estados normal, revisión, falla o
+falla crítica.
+RF-11 Registrar códigos de avería OBD asociados con el diagnóstico.
+RF-12 Adjuntar fotografías y observaciones al diagnóstico.
+TRAZABILIDAD TÉCNICA
+Cada diagnóstico deberá conservar su relación con el vehículo, el kilometraje, las
+evidencias, el responsable y la fecha de registro.
+NEXORA · SOLUCIONES DE SOFTWARE AUTRON · 6
+--- [SALTO_PAGINA] ---
+[PÁGINA 7]
+NEXORA AUTRON
+RF-13 A RF-24
+5.1 REQUISITOS FUNCIONALES
+Código Requisito funcional
+RF-13 Mantener un catálogo de servicios con descripción, precio de mano de obra y duración
+estimada.
+RF-14 Generar cotizaciones con servicios, repuestos, materiales, cantidades, precios,
+impuestos y total.
+RF-15 Permitir al cliente aprobar, aprobar parcialmente o rechazar una cotización.
+RF-16 Registrar la fecha, el estado y el usuario responsable de la decisión sobre una
+cotización.
+RF-17 Generar una orden de trabajo a partir de los ítems autorizados.
+RF-18 Asignar uno o varios mecánicos a una orden de trabajo.
+RF-19 Registrar actividades, repuestos utilizados, observaciones, pruebas y estado de la
+reparación.
+RF-20 Permitir al cliente consultar el progreso de la reparación.
+RF-21 Registrar productos y repuestos con código, categoría, marca, costo, precio, stock y
+stock mínimo.
+RF-22 Registrar entradas, salidas y ajustes de inventario.
+RF-23 Descontar automáticamente del inventario los repuestos consumidos en una orden o
+venta.
+RF-24 Generar alertas de bajo stock.
+La autorización del cliente será un punto de control obligatorio: solo los servicios
+y repuestos aprobados podrán incorporarse automáticamente a la orden de trabajo.
+NEXORA · SOLUCIONES DE SOFTWARE AUTRON · 7
+--- [SALTO_PAGINA] ---
+[PÁGINA 8]
+NEXORA AUTRON
+RF-25 A RF-34
+5.1 REQUISITOS FUNCIONALES
+Código Requisito funcional
+RF-25 Permitir ventas directas de repuestos sin necesidad de una orden de trabajo.
+RF-26 Registrar proveedores y compras básicas de inventario.
+RF-27 Mantener el historial de reparaciones, mantenimientos, diagnósticos, repuestos y
+kilometraje de cada vehículo.
+RF-28 Configurar mantenimientos preventivos por tiempo, kilometraje o ambos criterios.
+RF-29 Generar avisos de mantenimientos próximos según la fecha o el kilometraje
+registrado.
+RF-30 Mantener una base de conocimiento de códigos OBD, síntomas, causas, soluciones y
+casos resueltos.
+RF-31 Permitir búsquedas en la base de conocimiento por código, síntoma, componente o
+descripción.
+RF-32 Mostrar indicadores de citas, órdenes, ingresos, servicios, inventario y fallas
+frecuentes.
+RF-33 Generar reportes filtrables por período.
+RF-34 Registrar las operaciones críticas para auditoría.
+PERFILES CONTEMPLADOS
+• Cliente: gestiona citas, revisa cotizaciones y consulta el avance.
+• Recepción: registra ingresos, coordina la agenda y mantiene datos operativos.
+• Mecánico: documenta diagnósticos, actividades, pruebas y repuestos utilizados.
+• Administrador: configura usuarios, permisos, catálogos, inventario e indicadores.
+NEXORA · SOLUCIONES DE SOFTWARE AUTRON · 8
+--- [SALTO_PAGINA] ---
+[PÁGINA 9]
+NEXORA AUTRON
+CALIDAD, SEGURIDAD Y OPERACIÓN
+5.2 REQUISITOS NO FUNCIONALES
+Código Requisito no funcional
+RNF-01 Funcionar en navegadores web modernos y ofrecer una interfaz responsiva.
+RNF-02 Responder las operaciones habituales en aproximadamente un segundo bajo
+condiciones normales.
+RNF-03 Almacenar las contraseñas mediante algoritmos seguros de hashing.
+RNF-04 Utilizar HTTPS para la comunicación en el ambiente de producción.
+RNF-05 Controlar el acceso a funciones e información mediante roles y permisos.
+RNF-06 Validar los datos antes de almacenarlos.
+RNF-07 Preservar la integridad entre órdenes, cotizaciones, inventario y vehículos.
+RNF-08 Realizar respaldos periódicos y establecer un procedimiento básico de recuperación.
+RNF-09 Ofrecer una interfaz comprensible para usuarios sin conocimientos técnicos
+avanzados.
+RNF-10 Mantener un diseño modular que facilite el crecimiento y el mantenimiento.
+RNF-11 Proteger la información personal y técnica frente a accesos no autorizados.
+RNF-12 Optimizar imágenes y recursos gráficos para lograr una carga eficiente.
+CRITERIO DE RENDIMIENTO
+La referencia de un segundo corresponde a operaciones habituales bajo
+condiciones normales. La capacidad final deberá comprobarse con el volumen de
+usuarios, registros y evidencias definido durante el levantamiento.
+NEXORA · SOLUCIONES DE SOFTWARE AUTRON · 9
+--- [SALTO_PAGINA] ---
+[PÁGINA 10]
+NEXORA AUTRON
+5.4 MÓDULOS A DESARROLLAR
+5.3 REGLAS DE NEGOCIO
+PRINCIPALES
+5.3 REGLAS DE NEGOCIO PRINCIPALES
+• Un cliente puede registrar varios vehículos; cada vehículo debe asociarse con un cliente
+responsable.
+• Toda orden de trabajo debe vincularse con un vehículo.
+• No se ejecutará un trabajo con costo adicional sin autorización del cliente.
+• Una cotización podrá aprobarse total o parcialmente; solo los ítems autorizados pasarán a la
+orden.
+• Los repuestos usados quedarán registrados en la orden y se descontarán del inventario.
+• Cada ingreso, mantenimiento o reparación registrará el kilometraje del vehículo.
+• Una orden finalizada se incorporará al historial del vehículo.
+• Los diagnósticos serán realizados o validados por personal autorizado.
+• Las correcciones de movimientos de inventario conservarán trazabilidad.
+5.4 MÓDULOS A DESARROLLAR
+Módulo Descripción
+1. Usuarios y seguridad Inicio de sesión, recuperación de acceso, roles, permisos y
+auditoría.
+2. Clientes y vehículos Datos del cliente, vehículos asociados y expediente digital.
+3. Citas Agenda, disponibilidad, solicitud, confirmación, reprogramación y
+cancelación.
+4. Recepción Ingreso, kilometraje, combustible, observaciones y fotografías.
+5. Diagnóstico Fallas, severidad, evidencias, códigos OBD y mapa visual
+interactivo.
+6. Base de
+conocimiento Códigos OBD, síntomas, causas, soluciones y casos resueltos.
+NEXORA · SOLUCIONES DE SOFTWARE AUTRON · 10
+--- [SALTO_PAGINA] ---
+[PÁGINA 11]
+NEXORA AUTRON
+5.5 ARQUITECTURA TECNOLÓGICA PROPUESTA
+5.4 MÓDULOS A DESARROLLAR
+Módulo Descripción
+7. Servicios Catálogo, precios de mano de obra y duración estimada.
+8. Cotizaciones Servicios, repuestos, totales, envío y aprobación del cliente.
+9. Órdenes de trabajo Mecánicos asignados, actividades, estados, pruebas y finalización.
+10. Inventario y ventas Productos, repuestos, stock, movimientos, proveedores, compras y
+ventas.
+11. Historial y
+mantenimiento
+Trazabilidad del vehículo y programación de mantenimiento
+preventivo.
+12. Dashboard y
+reportes Indicadores de operación, ventas, servicios, stock y fallas.
+5.5 ARQUITECTURA TECNOLÓGICA PROPUESTA
+AUTRON utilizará una arquitectura web de tres capas: presentación, servicios y datos.
+Esta separación facilita el mantenimiento, las pruebas y la evolución del sistema.
+Capa Tecnología Propósito
+Frontend React Interfaz modular, responsiva e interactiva.
+Backend Node.js + Express API REST, autenticación y reglas de negocio.
+Base de datos PostgreSQL Persistencia relacional e integridad de los
+registros.
+Autenticación JWT / sesiones seguras Control de acceso por roles y permisos.
+Archivos Almacenamiento de
+objetos
+Fotografías, evidencias y documentos
+asociados.
+Despliegue Docker + proxy HTTPS Portabilidad, actualización y conexión cifrada.
+NEXORA · SOLUCIONES DE SOFTWARE AUTRON · 11
+--- [SALTO_PAGINA] ---
+[PÁGINA 12]
+NEXORA AUTRON
+5.7 METODOLOGÍA DE DESARROLLO
+5.6 MODELO GENERAL DE
+FUNCIONAMIENTO
+1. El cliente registra o selecciona su vehículo y solicita una cita.
+2. El taller confirma la cita y recibe el vehículo.
+3. El mecánico realiza la inspección y registra el diagnóstico.
+4. Las fallas se muestran en el mapa visual y se vinculan con servicios y repuestos.
+5. El sistema genera una cotización.
+6. El cliente aprueba, aprueba parcialmente o rechaza la cotización.
+7. Los trabajos autorizados generan una orden de trabajo.
+8. El mecánico registra avances y repuestos utilizados.
+9. El inventario se actualiza automáticamente.
+10. Se realizan pruebas, se finaliza la orden y se entrega el vehículo.
+11. La intervención se incorpora al historial y, cuando corresponda, alimenta la base de
+conocimiento.
+5.7 METODOLOGÍA DE DESARROLLO
+El desarrollo se organizará mediante una metodología ágil basada en Scrum y en
+iteraciones cortas. Cada Sprint incluirá planificación, desarrollo, pruebas, revisión del
+incremento y retroalimentación de los interesados. El Product Backlog concentrará los
+requisitos priorizados y permitirá ajustar decisiones antes de continuar con los siguientes
+módulos.
+El desarrollo será incremental. Las primeras iteraciones priorizarán usuarios,
+clientes y vehículos, citas, recepción, diagnóstico, cotizaciones, órdenes de trabajo,
+inventario e historial. La planificación se organizará en Sprints y se actualizará
+conforme se aprueben los módulos priorizados.
+NEXORA · SOLUCIONES DE SOFTWARE AUTRON · 12
+--- [SALTO_PAGINA] ---
+[PÁGINA 13]
+NEXORA AUTRON
+6.1 SUPUESTOS · 6.2 DEPENDENCIAS
+6. SUPUESTOS Y DEPENDENCIAS
+6.1 SUPUESTOS
+• El taller deberá contar con conexión
+estable a Internet o a una red local.
+• El personal deberá disponer de
+computadoras, tablets o teléfonos con
+navegador actualizado.
+• Los usuarios responsables recibirán
+capacitación básica.
+• El taller proporcionará precios,
+servicios, repuestos y existencias
+iniciales.
+• El taller definirá los perfiles y permisos
+finales.
+• El kilometraje será registrado o
+verificado durante la recepción.
+6.2 DEPENDENCIAS
+• Servidor o servicio de alojamiento
+disponible.
+• Motor de base de datos PostgreSQL.
+• Almacenamiento para fotografías y
+evidencias.
+• Certificado HTTPS para producción.
+• Datos técnicos confiables para la base
+de conocimiento.
+• Participación del personal en
+levantamiento, validación, pruebas y
+aceptación.
+NEXORA · SOLUCIONES DE SOFTWARE AUTRON · 13
+--- [SALTO_PAGINA] ---
+[PÁGINA 14]
+NEXORA AUTRON
+7.1 ESTRATEGIA RECOMENDADA · 7.2 GARANTÍA Y SOPORTE GRATUITO
+7. SOPORTE Y MANTENIMIENTO
+Después de la puesta en producción se establecerá un esquema de soporte orientado a
+corregir incidencias, mantener la seguridad y permitir la evolución del producto según las
+necesidades del taller.
+Tipo Actividades
+Correctivo Corrección de errores funcionales o técnicos detectados durante el uso.
+Preventivo Actualización de dependencias y controles de seguridad.
+Adaptativo Ajustes por cambios en infraestructura, navegadores o servicios
+externos.
+Evolutivo Nuevas funciones, reportes, integraciones o módulos.
+7.1 ESTRATEGIA RECOMENDADA
+• Registrar errores y auditar las operaciones críticas.
+• Mantener un ambiente de pruebas separado antes de desplegar cambios.
+• Planificar y versionar las actualizaciones.
+• Entregar un manual de usuario y una guía básica de administración.
+• Definir un canal para reportar incidencias.
+7.2 GARANTÍA Y SOPORTE GRATUITO
+Una vez que AUTRON se encuentre en producción y haya sido aceptado por el taller,
+Nexora proporcionará tres meses de soporte técnico gratuito. Durante este período se
+corregirán errores atribuibles al desarrollo que afecten las funcionalidades incluidas en el
+alcance aprobado.
+COBERTURA
+La garantía cubre errores de funcionamiento, validación y defectos de los
+módulos entregados. No incluye nuevas funcionalidades, cambios de alcance,
+modificaciones realizadas por terceros, problemas de infraestructura externa ni
+incidencias provocadas por un uso inadecuado. Las mejoras se analizarán y cotizarán
+por separado.
+NEXORA · SOLUCIONES DE SOFTWARE AUTRON · 14
+--- [SALTO_PAGINA] ---
+[PÁGINA 15]
+NEXORA AUTRON
+8.1 COSTOS OPERATIVOS ESTIMADOS
+8. PROPUESTA ECONÓMICA
+La inversión estimada para el alcance descrito considera 590 horas de trabajo a una
+tarifa de desarrollo de USD 8,00 por hora. El valor total estimado es de USD 4.720,00.
+Actividad Esfuerzo Tarifa Subtotal
+Análisis y levantamiento de requisitos 40 h USD 8,00 USD 320,00
+Diseño UX/UI y prototipos 45 h USD 8,00 USD 360,00
+Diseño de base de datos y arquitectura 40 h USD 8,00 USD 320,00
+Desarrollo frontend 160 h USD 8,00 USD 1.280,00
+Desarrollo backend y API 180 h USD 8,00 USD 1.440,00
+Pruebas y correcciones 80 h USD 8,00 USD 640,00
+Despliegue y documentación 45 h USD 8,00 USD 360,00
+TOTAL ESTIMADO 590 h — USD 4.720,00
+8.1 COSTOS OPERATIVOS ESTIMADOS
+Concepto Periodicidad Estimación
+Servidor / hosting Mensual USD 15 – 40
+Dominio Anual USD 10 – 25
+Almacenamiento Mensual USD 5 – 20
+Correo transaccional Según consumo Plan gratuito disponible
+según proveedor
+CONDICIONES ECONÓMICAS
+La inversión corresponde al alcance descrito en esta propuesta. Los costos
+operativos de hosting, dominio, almacenamiento y correo transaccional se contratan
+por separado y pueden variar según el proveedor seleccionado.
+NEXORA · SOLUCIONES DE SOFTWARE AUTRON · 15
+--- [SALTO_PAGINA] ---
+[PÁGINA 16]
+NEXORA AUTRON
+CIERRE DE LA PROPUESTA
+9. CONCLUSIÓN
+La propuesta responde a la necesidad de centralizar la gestión operativa y técnica
+de un taller automotriz, mejorando la trazabilidad de cada vehículo y la comunicación
+con el cliente. La integración entre diagnóstico, cotización, autorización, orden de trabajo,
+inventario e historial reducirá la duplicidad de información y conservará evidencia de las
+decisiones realizadas durante una reparación.
+El expediente digital del vehículo y el mapa visual de fallas constituyen componentes
+centrales de AUTRON. El primero mantiene un registro histórico de las intervenciones;
+el segundo presenta la información técnica de forma comprensible y permite relacionar
+las zonas afectadas con evidencias, códigos OBD, repuestos y servicios. La base de
+conocimiento crecerá con la experiencia del taller y servirá de apoyo para futuros
+diagnósticos.
+La implementación prioriza clientes, vehículos, citas, recepción, diagnóstico,
+cotizaciones, órdenes de trabajo, inventario, historial y base de conocimiento. Las
+nuevas integraciones o ampliaciones funcionales se gestionarán mediante solicitudes
+de cambio.
+EQUIPO RESPONSABLE
+Cuadrado Medina Jordan Ismael Falcón Acosta Martin Alejandro
+López Ocaña Jonathan Josue Rubio Aguiar Mateo Stefano
+Sailema Torres Jorge Alexander Sanchez Guevara Christian Alejandro
+DATOS DE CONTACTO
+Empresa Nexora
+Solución AUTRON
+Correo electrónico contacto@nexora.ec
+Ubicación Ambato, Ecuador
+NEXORA · SOLUCIONES DE SOFTWARE AUTRON · 16

@@ -10,7 +10,7 @@ class ProjectService {
       include: {
         _count: {
           select: {
-            requirements: true,
+            requirements: { where: { isDeleted:false, status:{not:'REMOVED'} } },
             actors: true,
             entities: true,
             screens: true
@@ -25,6 +25,7 @@ class ProjectService {
       where: { id },
       include: {
         requirements: {
+          where: { isDeleted:false, status:{not:'REMOVED'} },
           orderBy: { code: 'asc' }
         },
         actors: {
@@ -115,7 +116,7 @@ class ProjectService {
         ...(status !== undefined && { status })
       },
       include: {
-        requirements: true,
+        requirements: { where: { isDeleted:false, status:{not:'REMOVED'} } },
         actors: true,
         entities: { include: { attributes: true } },
         relationships: true,
@@ -138,25 +139,9 @@ class ProjectService {
       throw error;
     }
 
-    return await prisma.$transaction(async (tx) => {
-      // 1. Limpiar SourceVersion y Source para evitar referencias cruzadas
-      const sources = await tx.source.findMany({ where: { projectId: id }, select: { id: true } });
-      const sourceIds = sources.map(s => s.id);
-      if (sourceIds.length > 0) {
-        await tx.source.updateMany({ where: { id: { in: sourceIds } }, data: { currentVersionId: null } });
-        await tx.sourceVersion.deleteMany({ where: { sourceId: { in: sourceIds } } });
-      }
-
-      // 2. Desvincular referencias en RequirementCandidate y NeedCandidate
-      await tx.requirementCandidate.updateMany({
-        where: { projectId: id },
-        data: { promotedRequirementId: null, needCandidateId: null }
-      });
-
-      // 3. Eliminar el proyecto físicamente (PostgreSQL cascade borrará todos los elementos hijos asociados)
-      return await tx.project.delete({
-        where: { id }
-      });
+    return await prisma.project.update({
+      where: { id },
+      data: { status: 'ARCHIVED' }
     });
   }
 

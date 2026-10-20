@@ -2,7 +2,7 @@ import React, { useState, useRef, useEffect } from 'react';
 
 /**
  * Reusable searchable multi-select component for system actors.
- * Stores and emits real actor IDs/references (e.g. ['actor-uuid-1', 'ACT-01']).
+ * Stores and emits persisted actor IDs (e.g. ['actor-uuid-1']).
  */
 export default function ActorMultiSelect({
   actors = [],
@@ -31,8 +31,8 @@ export default function ActorMultiSelect({
 
   // Filter available actors
   const filteredActors = actors.filter(actor => {
-    const actorId = actor.id || actor.codeId;
-    if (selectedSet.has(actorId) || selectedSet.has(actor.codeId) || selectedSet.has(actor.name)) {
+    const actorId = actor.id;
+    if (selectedSet.has(actorId)) {
       return false;
     }
     if (!query.trim()) return true;
@@ -45,7 +45,7 @@ export default function ActorMultiSelect({
   });
 
   const handleSelect = (actor) => {
-    const actorRef = actor.id || actor.codeId;
+    const actorRef = actor.id;
     if (!selectedSet.has(actorRef)) {
       const next = [...(selectedIds || []), actorRef];
       onChange(next);
@@ -61,7 +61,7 @@ export default function ActorMultiSelect({
 
   // Find actor display details for selected IDs
   const selectedActorObjects = (selectedIds || []).map(ref => {
-    const match = actors.find(a => a.id === ref || a.codeId === ref || a.name === ref);
+    const match = actors.find(a => a.id === ref);
     return {
       ref,
       name: match ? match.name : ref,
@@ -176,12 +176,12 @@ export default function ActorMultiSelect({
         >
           {filteredActors.length === 0 ? (
             <div style={{ padding: '10px 12px', fontSize: '0.8125rem', color: 'var(--secondary)' }}>
-              {query.trim() ? 'No se encontraron actores coincidentes' : 'Todos los actores ya han sido seleccionados'}
+              {actors.length === 0 ? 'No hay actores registrados. Aprueba o crea los actores del proyecto para asignarlos.' : query.trim() ? 'No se encontraron actores coincidentes' : 'Todos los actores ya han sido seleccionados'}
             </div>
           ) : (
             filteredActors.map(actor => (
               <div
-                key={actor.id || actor.codeId}
+                key={actor.id}
                 onClick={() => handleSelect(actor)}
                 style={{
                   padding: '8px 12px',

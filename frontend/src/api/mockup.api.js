@@ -1,14 +1,14 @@
 import { request } from './client';
 
 export const mockupApi = {
-  generateMockup: (projectId, prompt = '', screenIds = [], mode = 'stitch') =>
+  list: projectId => request(`/projects/${projectId}/mockup`),
+  generateMockup: (projectId, prompt = '', navigationNodeIds, mode = 'stitch') =>
     request(`/projects/${projectId}/mockup`, {
       method: 'POST',
-      body: { prompt, screenIds, mode }
+      body: { prompt, navigationNodeIds, mode }
     }),
-  generateLocal: (projectId, screenIds = []) =>
+  generateLocal: (projectId, navigationNodeIds) =>
     request(`/projects/${projectId}/mockup`, {
-      method: 'POST',
-      body: { screenIds, mode: 'local' }
+      method: 'POST', body: { navigationNodeIds, mode: 'local' }
     })
 };

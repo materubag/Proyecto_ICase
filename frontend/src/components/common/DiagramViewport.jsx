@@ -1,5 +1,6 @@
 import React, { useState, useRef, useEffect } from 'react';
 import MermaidDiagram from '../diagrams/MermaidDiagram';
+import ChenDiagram from '../diagrams/ChenDiagram';
 
 /**
  * DiagramViewport
@@ -28,6 +29,11 @@ export default function DiagramViewport({
   const [showConfirmModal, setShowConfirmModal] = useState(false);
   const [renderError, setRenderError] = useState(null);
   const viewportRef = useRef(null);
+
+  useEffect(() => {
+    setFitMode(true);setZoom(1);setRenderError(null);
+    if(viewportRef.current){viewportRef.current.scrollTop=0;viewportRef.current.scrollLeft=0;}
+  }, [code]);
 
   const handleZoomIn = () => {
     setFitMode(false);
@@ -508,20 +514,20 @@ export default function DiagramViewport({
             className={`diagram-viewport-content ${fitMode ? 'fit-mode' : ''}`}
             style={{
               transform: fitMode ? 'none' : `scale(${zoom})`,
-              transformOrigin: 'top center',
+              transformOrigin: 'top left',
               transition: 'transform 0.15s ease-out',
-              width: fitMode ? '100%' : 'fit-content',
+              width: fitMode ? '100%' : type==='erDiagram'?'max-content':'fit-content',
               minWidth: '100%',
               display: 'flex',
               justifyContent: 'center',
               alignItems: 'flex-start'
             }}
           >
-            <MermaidDiagram
+            {type==='erDiagram'?<ChenDiagram code={code} fit={fitMode} onValidated={handleDiagramValidated}/>:<MermaidDiagram
               code={code}
               type={type}
               onValidated={handleDiagramValidated}
-            />
+            />}
           </div>
         </div>
       )}

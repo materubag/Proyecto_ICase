@@ -185,23 +185,10 @@ class ScreenController {
 
       const project = await projectService.getProjectById(projectId);
 
-      if (mode === 'stitch') {
-        const result = await mockupService.generateMockup(project, prompt, screens.map(s => s.id));
-        return res.status(200).json({
-          success: true,
-          data: result.screens,
-          provider: result.provider,
-          message: `Se generaron exitosamente ${result.screens.length} prototipos con Google Stitch.`
-        });
-      } else {
-        const result = await mockupService.generateLocalMockups(project, screens.map(s => s.id));
-        return res.status(200).json({
-          success: true,
-          data: result.screens,
-          provider: 'local-interactive',
-          message: `Se generaron exitosamente ${result.screens.length} prototipos interactivos.`
-        });
-      }
+      const result = await require('../services/engineering/mockup-artifact.service').generate(
+        projectId, prompt, undefined, undefined, { mode, screenIds: screens.map(s => s.id) }
+      );
+      return res.status(200).json({ success: true, data: result.screens, provider: result.provider });
     } catch (err) {
       next(err);
     }

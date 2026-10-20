@@ -61,7 +61,7 @@ class DiagramSemanticValidator {
         if (isPk) hasPk = true;
 
         // Check for descriptive sentence fragments masquerading as attributes
-        if (/claridad|satisfaccion|calidad_del|atencion|falla_del/i.test(name) || name.length > 25) {
+        if (/claridad|satisfaccion|calidad_del|atencion|falla_del/i.test(name) || name.length > 35) {
           warnings.push(`Atributo sospechoso en entidad '${entityName}': "${name}". Parece una frase o descripción en lugar de una propiedad técnica.`);
         }
 
@@ -71,7 +71,10 @@ class DiagramSemanticValidator {
         }
 
         // Check if an obvious non-identifier is marked as PK
-        if (isPk && (/claridad|descripcion|detalle|nota|comentario/i.test(name) || name.length > 20)) {
+        const isStandardIdentifier = /^(id|cod|codigo|uuid|pk|num|numero)(_[a-z0-9_]+)?$|^[a-z0-9_]+_(id|cod|codigo|uuid|pk|num|numero)$|^(id|cod|codigo|uuid|pk|num|numero|clave|sku|isbn|dni|nif|rut|cuit|curp|rfc|serial)$/i.test(name);
+        const isDescriptiveField = /^(descripcion|comentario|nota|observacion|texto|detalle|resumen|contenido|mensaje|claridad)(?:_[a-z0-9_]+)?$/i.test(name);
+
+        if (isPk && (!isStandardIdentifier && (isDescriptiveField || name.length > 35))) {
           errors.push(`Clave primaria (PK) inválida en '${entityName}': "${name}". Una PK debe ser un identificador (ej: id, codigo, id_${entityName.toLowerCase()}).`);
         }
 
@@ -107,6 +110,14 @@ class DiagramSemanticValidator {
       const label = (match[4] || '').trim();
 
       rels.push({ source, target, card, label });
+    }
+
+    // Mermaid permits entities introduced only by relationships.
+    for (const rel of rels) for (const name of [rel.source, rel.target]) {
+      if (!entities.has(name)) {
+        entities.set(name, {name, attributes:[], hasPk:false, isEmpty:true, implicit:true});
+        warnings.push('Entidad '+name+' mencionada en relaciones sin atributos ni PK definidos; completar el modelo.');
+      }
     }
 
     // 3. Check for isolated entities
@@ -231,7 +242,7 @@ class DiagramSemanticValidator {
     }
 
     // Check standalone class declarations: e.g. "class Cita" without block
-    const standaloneClassRegex = /^\s*class\s+([A-Za-z0-9_]+)(?!\s*\{)/gm;
+    const standaloneClassRegex = /^[ \t]*class[ \t]+([A-Za-z0-9_]+)[ \t]*$/gm;
     while ((match = standaloneClassRegex.exec(clean)) !== null) {
       const cName = match[1].trim();
       if (!classes.has(cName)) {

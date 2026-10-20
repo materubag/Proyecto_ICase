@@ -2,6 +2,39 @@ const AIProvider = require('./AIProvider');
 const env = require('../../config/env');
 
 class OpenAIProvider extends AIProvider {
+  async extractDocumentBatch(input, options = {}) {
+    if (!env.OPENAI_API_KEY) throw new Error('OpenAI no configurado');
+    const model = options.model || env.OPENAI_MODEL || 'gpt-5.6-luna';
+    const reasoningEffort = options.reasoning_effort || env.OPENAI_REASONING_EFFORT;
+
+    const bodyPayload = {
+      model,
+      response_format: { type: 'json_object' },
+      messages: [
+        { role: 'system', content: options.prompt || require('../analysis/extractionContract').prompt },
+        { role: 'user', content: JSON.stringify(input) }
+      ],
+      ...(reasoningEffort ? { reasoning_effort: reasoningEffort } : {})
+    };
+
+    const response = await fetch('https://api.openai.com/v1/chat/completions', {
+      method: 'POST',
+      signal: AbortSignal.timeout(120000),
+      headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${env.OPENAI_API_KEY}` },
+      body: JSON.stringify(bodyPayload)
+    });
+
+    if (!response.ok) {
+      let errText = '';
+      try { errText = typeof response.text === 'function' ? await response.text() : ''; } catch (e) {}
+      throw new Error(`OpenAI HTTP ${response.status}; modelo solicitado: ${model}${errText ? `; detalle: ${errText.slice(0, 300)}` : ''}`);
+    }
+    const result = await response.json();
+    const choice = result.choices?.[0];
+    if (choice?.finish_reason !== 'stop') throw Object.assign(new Error(`OpenAI respuesta incompleta: ${choice?.finish_reason}`), { usage: result.usage });
+    try { return { data: JSON.parse(choice.message.content), usage: result.usage, model }; }
+    catch (error) { error.usage = result.usage; throw error; }
+  }
   /**
    * Structure prepared for OpenAI chat completions API with JSON Mode.
    * Optimized for ISO/IEC/IEEE 29148:2018 and minimum token consumption.
@@ -12,7 +45,8 @@ class OpenAIProvider extends AIProvider {
       throw new Error('El proveedor OpenAI no está configurado (OPENAI_API_KEY no definida en el archivo .env).');
     }
 
-    const model = env.OPENAI_MODEL || 'gpt-5.4-nano';
+    const model = env.OPENAI_MODEL || 'gpt6-luna';
+    const reasoningEffort = env.OPENAI_REASONING_EFFORT;
     const endpoint = 'https://api.openai.com/v1/chat/completions';
 
     // Prompt hiper-optimizado en tokens bajo ISO/IEC/IEEE 29148:2018
@@ -42,7 +76,7 @@ Genera un JSON conciso con las siguientes claves:
 }
 Reglas:
 - Requisitos atómicos, verificables, sin ambigüedades.
-- DEBES incluir obligatoriamente tanto Requisitos Funcionales (códigos "RF-01", "RF-02"... con type "FUNCTIONAL") como Requisitos No Funcionales (códigos "RNF-01", "RNF-02"... con type "NON_FUNCTIONAL", cubriendo áreas como rendimiento, seguridad, disponibilidad, respaldo e integridad).
+- Extrae solo requisitos respaldados por el documento. Conserva códigos y descripciones explícitos. No añadas RF, RNF, reglas, actores ni condiciones por defecto. Si falta evidencia, usa null o indica que requiere revisión.
 - Toda pantalla mencionada en "navigation" ('from' y 'to') DEBE estar declarada en el arreglo "screens" y su valor DEBE ser el campo "name" exacto de la pantalla (ej: "Inicio de Sesión", "Panel Principal", "Catálogo"). No uses rutas "/..." en "from" ni en "to".
 - No agregues texto fuera del JSON.`;
 
@@ -68,19 +102,13 @@ Reglas:
             { role: 'system', content: systemPrompt },
             { role: 'user', content: input.customPrompt || userMessage }
           ],
-          temperature: 0.2
+          ...(reasoningEffort ? { reasoning_effort: reasoningEffort } : {})
         })
       });
     }
 
     try {
       let response = await sendRequest(model);
-
-      // Si el modelo específico (e.g. gpt-5.4-nano) no está disponible en la cuenta, fallback inmediato a gpt-4o-mini
-      if (!response.ok && (response.status === 404 || response.status === 400)) {
-        console.warn(`[OpenAIProvider] Modelo ${model} no disponible (HTTP ${response.status}). Reintentando con gpt-4o-mini...`);
-        response = await sendRequest('gpt-4o-mini');
-      }
 
       if (!response.ok) {
         const errBody = await response.text();

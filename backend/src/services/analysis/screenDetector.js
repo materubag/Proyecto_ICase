@@ -50,14 +50,13 @@ class ScreenDetector {
 
     // 2. Detectar vistas o pantallas comunes del sistema
     const commonScreenKeywords = [
-      { name: 'Portal de Clientes', type: 'PORTAL', trigger: /portal\s+(?:para\s+)?clientes/i },
-      { name: 'Entorno Operativo del Taller', type: 'DASHBOARD', trigger: /entorno\s+operativo/i },
-      { name: 'Expediente Digital del Vehículo', type: 'DETAIL_VIEW', trigger: /expediente\s+digital/i },
-      { name: 'Diagnóstico Visual Interactivo', type: 'INTERACTIVE_VIEW', trigger: /mapa\s+visual|representaci[oó]n\s+gr[aá]fica\s+interactiva/i },
-      { name: 'Agenda y Gestión de Citas', type: 'CALENDAR_VIEW', trigger: /agenda\s+de\s+citas|solicitud\s+de\s+cita/i },
-      { name: 'Catálogo de Repuestos y Servicios', type: 'CATALOG', trigger: /cat[aá]logo\s+de\s+servicios|cat[aá]logo\s+de\s+repuestos/i },
-      { name: 'Cotizaciones y Aprobaciones', type: 'FORM_VIEW', trigger: /gesti[oó]n\s+de\s+cotizaciones/i },
-      { name: 'Dashboard de Indicadores y Reportes', type: 'DASHBOARD', trigger: /dashboard|indicadores\s+de\s+citas/i }
+      { name: 'Portal de Usuarios', type: 'PORTAL', trigger: /portal\s+(?:de\s+|para\s+)?(?:usuarios|clientes|personas)/i },
+      { name: 'Panel Principal / Dashboard', type: 'DASHBOARD', trigger: /dashboard|panel\s+(?:principal|de\s+control)|entorno\s+operativo/i },
+      { name: 'Inicio de Sesión y Autenticación', type: 'AUTH', trigger: /inicio\s+de\s+sesi[oó]n|login|autenticaci[oó]n/i },
+      { name: 'Catálogo y Listado General', type: 'CATALOG', trigger: /cat[aá]logo|listado\s+de\s+servicios|cat[aá]logo\s+de\s+productos/i },
+      { name: 'Gestión de Formularios y Registros', type: 'FORM_VIEW', trigger: /formulario\s+de\s+captura|gesti[oó]n\s+de\s+solicitudes|cotizaciones/i },
+      { name: 'Reportes e Indicadores', type: 'DASHBOARD', trigger: /indicadores|reportes\s+y\s+estad[ií]sticas/i },
+      { name: 'Agenda y Calendario', type: 'CALENDAR_VIEW', trigger: /agenda|calendario|gesti[oó]n\s+de\s+citas/i }
     ];
 
     for (const scr of commonScreenKeywords) {

@@ -4,14 +4,15 @@ class AIController {
   async analyze(req, res, next) {
     try {
       const { projectId } = req.params;
-      const { description, systemDescription, context, providerOverride } = req.body;
+      const { description, systemDescription, context, providerOverride, modelOverride, model } = req.body;
 
       // Construir el input unificado
       const input = {
         projectId,
         description: description || systemDescription,
         context: context || {},
-        providerOverride
+        providerOverride,
+        modelOverride: modelOverride || model
       };
 
       const structuredResult = await AIService.analyzeProject(input);

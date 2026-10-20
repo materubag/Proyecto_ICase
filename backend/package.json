@@ -4,14 +4,20 @@
   "description": "Backend API for ICASE (Integrated Computer-Aided Software Engineering) Tool",
   "main": "src/server.js",
   "scripts": {
-    "test": "node --test tests/engineering.test.js tests/audio.test.js tests/pipeline.test.js tests/fase3.test.js tests/gemini_multipdf_whisper.test.js",
-    "test:integration": "node tests/engineering.integration.js",
+    "test": "node --require ./tests/fixtures/offline.cjs --test tests/*.test.js",
+    "test:extraction": "node --require ./tests/fixtures/offline.cjs --test tests/document_extraction.test.js tests/requirement_flow.test.js",
+    "test:requirements:integration": "node --test tests/analysis_postgres.integration.js",
+    "test:integration": "node --test tests/analysis_postgres.integration.js",
     "start": "node src/server.js",
     "dev": "nodemon src/server.js",
     "prisma:generate": "prisma generate",
     "prisma:migrate": "prisma migrate dev",
     "prisma:push": "prisma db push",
-    "prisma:studio": "prisma studio"
+    "prisma:studio": "prisma studio",
+    "test:integrity": "node --require ./tests/fixtures/offline.cjs --test tests/catalog_integrity.test.js",
+    "test:postgres": "node --test tests/analysis_postgres.integration.js",
+    "docs:check": "node --require ./tests/fixtures/offline.cjs --test tests/openapi.test.js",
+    "docs:sync": "node scripts/sync-docs.cjs"
   },
   "keywords": [
     "icase",
@@ -28,9 +34,11 @@
     "dotenv": "^16.4.5",
     "express": "^4.19.2",
     "multer": "^2.4.0",
-    "pdf-parse": "^2.4.5"
+    "pdf-parse": "^2.4.5",
+    "swagger-ui-express": "^5.0.1"
   },
   "devDependencies": {
+    "@apidevtools/swagger-parser": "^13.1.0",
     "nodemon": "^3.1.4",
     "prisma": "^5.19.1"
   }

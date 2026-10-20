@@ -20,12 +20,16 @@ export const sourcesApi = {
     if (file) body.append('file', file);
     return request(`/sources/${sourceId}/retry`, { method: 'POST', body });
   },
-  analyze: (sourceId, data = {}) =>
-    request(`/sources/${sourceId}/analyze`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(data)
-    }),
+  analyze: async (sourceId, data = {}) => {
+    let job=await request('/sources/'+sourceId+'/analyze',{method:'POST',body:{...data,async:true}});
+    if(!job.jobId)return job;
+    while(job.status==='RUNNING'){
+      await new Promise(resolve=>setTimeout(resolve,2000));
+      job=await request('/sources/'+sourceId+'/analysis/'+job.jobId);
+    }
+    if(job.status==='FAILED')throw new Error(job.error?.message || 'Error analizando fuente');
+    return job.result;
+  },
   get: (sourceId) => request(`/sources/${sourceId}`),
   getVersion: (sourceId, version) => request(`/sources/${sourceId}/versions/${version}`)
 };

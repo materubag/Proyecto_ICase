@@ -60,9 +60,13 @@ services:
       SIMILARITY_THRESHOLD: ${SIMILARITY_THRESHOLD:-0.85}
       OPENAI_API_KEY: ${OPENAI_API_KEY:-}
       OPENAI_MODEL: ${OPENAI_MODEL:-gpt-4o}
+      OPENAI_REASONING_EFFORT: ${OPENAI_REASONING_EFFORT:-high}
       N8N_BASE_URL: ${N8N_BASE_URL:-}
       N8N_MOCKUP_WEBHOOK: ${N8N_MOCKUP_WEBHOOK:-}
       N8N_TIMEOUT: ${N8N_TIMEOUT:-120000}
+      GOOGLE_STITCH_API_KEY: ${GOOGLE_STITCH_API_KEY:-}
+      STITCH_CONCURRENCY: ${STITCH_CONCURRENCY:-4}
+      MOCKUP_PROVIDER: ${MOCKUP_PROVIDER:-stitch}
       MOCKUP_MAX_REQUIREMENTS: ${MOCKUP_MAX_REQUIREMENTS:-12}
       AI_ANALYSIS_STRATEGY: ${AI_ANALYSIS_STRATEGY:-rules-first}
       AI_MAX_CHUNKS: ${AI_MAX_CHUNKS:-20}
@@ -127,6 +131,28 @@ services:
       MAX_AUDIO_SIZE_MB: ${MAX_AUDIO_SIZE_MB:-100}
     volumes:
       - whisper_models:/root/.cache/huggingface
+    networks:
+      - icase_network
+
+  # Documentacion tecnica - MkDocs Material
+  mkdocs:
+    image: squidfunk/mkdocs-material:9.6.23
+    container_name: icase_mkdocs
+    restart: unless-stopped
+    working_dir: /docs
+    command: ["serve", "--dev-addr=0.0.0.0:8000"]
+    ports:
+      - "8000:8000"
+    volumes:
+      - ./mkdocs.yml:/docs/mkdocs.yml:ro
+      - ./docs:/docs/docs:ro
+      - ./scripts/mkdocs_hooks.py:/docs/scripts/mkdocs_hooks.py:ro
+      - ./README.md:/docs/README.md:ro
+      - ./CONTRIBUTING.md:/docs/CONTRIBUTING.md:ro
+      - ./CODE_OF_CONDUCTS.md:/docs/CODE_OF_CONDUCTS.md:ro
+      - ./LICENSE.md:/docs/LICENSE.md:ro
+      - ./CHANGELOG.md:/docs/CHANGELOG.md:ro
+      - ./SECURITY.md:/docs/SECURITY.md:ro
     networks:
       - icase_network
 

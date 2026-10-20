@@ -29,15 +29,33 @@ class SourceController {
 
   async analyze(req, res, next) {
     try {
-      const result = await analysisPipeline.run({
+      const options = {
         sourceId: req.params.sourceId,
         sourceVersionId: req.body?.sourceVersionId,
-        force: req.body?.force === true
-      });
-      res.json({ success: true, data: result });
+        force: req.body?.force === true,
+        providerOverride: req.body?.providerOverride || req.body?.provider,
+        modelOverride: req.body?.modelOverride || req.body?.model
+      };
+      if(req.body?.async===true){
+        const source=await sourceService.getById(req.params.sourceId);
+        if(!source)return res.status(404).json({success:false,error:{message:'Fuente no encontrada.'}});
+        return res.status(202).json({success:true,data:require('../services/analysis/analysisJobs').start(options)});
+      }
+      const result=await analysisPipeline.run(options);
+      res.json({success:true,data:result});
     } catch (error) {
       next(error);
     }
+  }
+
+  async analysisStatus(req,res,next){
+    try{
+      const source=await sourceService.getById(req.params.sourceId);
+      if(!source)return res.status(404).json({success:false,error:{message:'Fuente no encontrada.'}});
+      const job=require('../services/analysis/analysisJobs').get(req.params.sourceId,req.params.jobId);
+      if(!job)return res.status(404).json({success:false,error:{message:'El trabajo ya no esta disponible. Recarga la fuente para comprobar el resultado antes de reintentar.'}});
+      res.json({success:true,data:job});
+    }catch(error){next(error);}
   }
 
   async get(req, res, next) {

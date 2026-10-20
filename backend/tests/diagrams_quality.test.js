@@ -105,7 +105,7 @@ test('5. Casos de Uso con actores externos, <<include>> y <<extend>>', () => {
   assert.ok(normalized.includes('(('), 'Debe tener actores representados con doble paréntesis');
 });
 
-test('6. Diagrama de Flujo (Procesos) con decisiones, ramas y sin identificador reservado "end"', () => {
+test('6. Flujo sin decisiones ni ramas inventadas cuando no existe una secuencia documentada', () => {
   const requirements = [
     { name: 'Registrar orden de servicio', description: 'Recepción del vehículo' },
     { name: 'Inspeccionar fallas mecánicas', description: 'Diagnóstico técnico' },
@@ -118,8 +118,9 @@ test('6. Diagrama de Flujo (Procesos) con decisiones, ramas y sin identificador 
 
   assert.strictEqual(val.isValid, true, `Flowchart debe ser válido: ${val.error}`);
   assert.ok(normalized.includes('flowchart TD'), 'Debe ser top-down (flowchart TD)');
-  assert.ok(normalized.includes('{'), 'Debe incluir nodo de decisión');
-  assert.ok(normalized.includes('|Sí|') || normalized.includes('|No|'), 'Debe incluir ramas condicionales');
+  assert.ok(!normalized.includes('{'), 'No debe inventar decisiones sin condiciones documentadas');
+  assert.ok(!normalized.includes('|Sí|') && !normalized.includes('|No|'), 'No debe inventar ramas condicionales');
+  assert.ok(requirements.every(r=>normalized.includes(r.name)), 'Todas las actividades documentadas deben conservarse');
   assert.ok(!/\bend\s*\[/i.test(normalized), 'No debe usar "end" como ID de nodo');
 });
 
