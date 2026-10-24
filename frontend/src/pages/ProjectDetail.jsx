@@ -11,6 +11,7 @@ import ProjectPrototype from './ProjectPrototype';
 import ProjectArchitecture from './ProjectArchitecture';
 import ProjectToolsTeam from './ProjectToolsTeam';
 import ProjectEngineering from './ProjectEngineering';
+import ProjectCodeGen from './ProjectCodeGen';
 
 export default function ProjectDetail({
   project,
@@ -197,6 +198,9 @@ export default function ProjectDetail({
         )}
         {['traceability', 'changes', 'versions', 'chat'].includes(activeTab) && (
           <ProjectEngineering project={project} view={activeTab} onProjectUpdated={onProjectUpdated} />
+        )}
+        {activeTab === 'codegen' && (
+          <ProjectCodeGen project={project} onNavigateTo={onTabChange} />
         )}
       </div>
     </div>

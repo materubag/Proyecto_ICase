@@ -85,6 +85,7 @@ export default function App() {
     tools_team: 'Equipo & Herramientas',
     changes: 'Control de Cambios',
     versions: 'Historial de Versiones',
+    codegen: 'Generación de Código',
     chat: 'Chat IA Asistente',
   };
 

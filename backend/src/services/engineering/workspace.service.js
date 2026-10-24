@@ -64,6 +64,25 @@ async function chat(projectId, input) {
     const origin = await d.prisma.requirementCandidate.findFirst({ where: { promotedRequirementId: r.id }, include: { source: true, sourceSegment: true } });
     context.push({ code: r.code, id: r.id, description: r.description, source: origin?.source?.name, segment: origin?.sourceSegment, impact: await impact.analyze(projectId, 'Requirement', r.id) });
   }
+
+  // Detección contextual de errores de código, Sequelize o Docker
+  const isCodeOrErrorQuery = /(error|sequelize|docker|tabla|columna|codigo|código|terminal|falla|exception|bug|crash|fail)/i.test(input.message);
+  if (isCodeOrErrorQuery) {
+    const entities = await d.prisma.entity.findMany({
+      where: { projectId, isDeleted: false },
+      include: { attributes: true },
+      take: 20
+    });
+    const rels = await d.prisma.entityRelationship.findMany({
+      where: { projectId, isDeleted: false },
+      take: 20
+    });
+    context.push({
+      type: 'CODE_DIAGNOSTIC_CONTEXT',
+      entities: entities.map(e => ({ name: e.name, attributes: (e.attributes || []).map(a => `${a.name} (${a.type}${a.isPk ? ' PK' : ''})`) })),
+      relationships: rels.map(r => `${r.source} -> ${r.target} (${r.cardinality})`)
+    });
+  }
   if (input.proposeChange === true) {
     const source = await textSource(projectId, { type: 'CHAT', text: input.message });
     const candidates = await d.transaction(async tx => {

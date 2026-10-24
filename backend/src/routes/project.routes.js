@@ -28,6 +28,7 @@ const uploadMulti = multer({
 
 // Projects CRUD
 router.use('/:projectId/engineering', require('./engineering.routes'));
+router.use('/:projectId/codegen', require('./codegen.routes'));
 router.get('/', (req, res, next) => projectController.getAll(req, res, next));
 router.get('/:id', (req, res, next) => projectController.getById(req, res, next));
 router.post('/', (req, res, next) => projectController.create(req, res, next));

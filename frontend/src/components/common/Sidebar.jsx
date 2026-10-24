@@ -24,6 +24,7 @@ const NAV_GROUPS = [
       { id: 'traceability', icon: 'link', label: 'Trazabilidad' },
       { id: 'changes', icon: 'change_circle', label: 'Cambios' },
       { id: 'versions', icon: 'history', label: 'Versiones' },
+      { id: 'codegen', icon: 'terminal', label: 'Generación de Código' },
     ]
   },
   {
