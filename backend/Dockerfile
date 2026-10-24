@@ -16,8 +16,8 @@ RUN npx prisma generate
 # Copy source code
 COPY . .
 
-# Grant execute permissions to entrypoint script
-RUN chmod +x docker-entrypoint.sh
+# Ensure LF line endings and grant execute permissions
+RUN sed -i 's/\r$//' docker-entrypoint.sh && chmod +x docker-entrypoint.sh
 
 EXPOSE 8080
 

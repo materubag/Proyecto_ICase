@@ -5,7 +5,7 @@ const GeminiProvider = require('./GeminiProvider');
 const OllamaProvider = require('./OllamaProvider');
 const OpenAIProvider = require('./OpenAIProvider');
 const N8nProvider = require('./N8nProvider');
-const { validateAIResponse } = require('./ai.contract.validator');
+const { validateAIResponse, normalizeAIResponse } = require('./ai.contract.validator');
 
 /**
  * Factory function to instantiate the selected AI provider.
@@ -40,73 +40,57 @@ class AIService {
    * @returns {Promise<Object>} Canonical Structured JSON
    */
   async analyzeProject(input) {
-    const { projectId, description, providerOverride } = input;
-
-    // 1. Obtener proyecto y verificar existencia
-    const project = await prisma.project.findUnique({
-      where: { id: projectId }
+    const project = await prisma.project.findUnique({ where: { id: input.projectId },
+      include: { actors: {where:{isDeleted:false}}, sources: { include: { currentVersion: true } } } });
+    if (!project) throw Object.assign(new Error('Proyecto no encontrado'), { statusCode: 404 });
+    const description = input.description || project.systemDescription || project.description || '';
+    const documents = (project.sources || []).filter(s => s.currentVersion?.extractedText);
+    if (!description.trim() && !documents.length) throw Object.assign(new Error('No hay texto para analizar'), { statusCode: 400 });
+    const options = { knownActors: project.actors || [], providerOverride: input.providerOverride, modelOverride: input.modelOverride,
+      providerInstance: input.providerInstance, cache: input.cache };
+    const results = [];
+    for (const source of documents) {
+      const analysis = await require('../analysis/analysisPipeline').run({ ...options, projectId: project.id,
+        sourceId: source.id, sourceVersionId: source.currentVersion.id });
+      results.push({ ...analysis.extraction, metrics: analysis.metrics });
+    }
+    const identity = require('../analysis/requirementIdentity');
+    const knownRequirements = identity.consolidate(results.flatMap(r => r.requirements));
+    if (description.trim()) { const descriptionResult = await require('../analysis/documentExtraction').extract(description, {
+      ...options, fileName: project.name, knownRequirements,
+      contextSegments: identity.unique(results.flatMap(r => r.actors.flatMap(a => a.evidence.map(e => ({
+        ...e, text: e.quote, originalText: e.quote, start: e.quoteStart, end: e.quoteEnd
+      })))))
     });
-
-    if (!project) {
-      const err = new Error(`Proyecto con ID ${projectId} no encontrado`);
-      err.statusCode = 404;
-      throw err;
+      await require('../analysis/actorRelationshipResolver').resolve(descriptionResult,{...options,knownActors:project.actors?.length?project.actors:results.flatMap(r=>r.actors)});
+      results.push(descriptionResult);
     }
-
-    // 2. Validar que tenga descripción
-    const finalDescription = (description || project.systemDescription || project.description || '').trim();
-    if (!finalDescription) {
-      const err = new Error('El proyecto debe contar con una descripción general para ser analizado.');
-      err.statusCode = 400;
-      throw err;
+    const actors = [];
+    for (const actor of results.flatMap(r => r.actors)) {
+      const existing = actors.find(a => a.id === actor.id);
+      if (existing) existing.evidence = identity.unique([...existing.evidence, ...actor.evidence]);
+      else actors.push({ ...actor });
     }
+    const requirements = identity.consolidate(results.flatMap(r => r.requirements));
+    const result = { ...results.at(-1), project: { name: project.name, description }, rawText: description,
+      requirements, actors, partial: results.some(r => r.partial),
+      functionalRequirements: requirements.filter(r => r.type === 'FUNCTIONAL'),
+      nonFunctionalRequirements: requirements.filter(r => r.type === 'NON_FUNCTIONAL'),
+      segments: identity.unique(results.flatMap(r => r.segments)), coverage: identity.unique(results.flatMap(r => r.coverage)),
+      failures: results.flatMap(r => r.failures), other: results.flatMap(r => r.other),
+      businessRules: results.flatMap(r => r.businessRules),
+      metrics: { ...results.at(-1).metrics, requestsUsed: results.reduce((n,r) => n + r.metrics.requestsUsed, 0),
+        reusedSources: results.filter(r => r.metrics.reusedSource).length,
+        usage: results.flatMap(r => r.metrics.usage || []) } };
+    result.documentAnalysis = { ...result.documentAnalysis, totalRequirements: requirements.length, totalActors: actors.length };
+    await this.persistDocumentExtraction(project.id, result, { options,
+      snapshotKey: require('../analysis/extractionStore').fingerprint({ projectId: project.id,
+        text: JSON.stringify([description, documents.map(s => s.currentVersion.id)]), options }) });
+    return result;
+  }
 
-    // Actualizar systemDescription en el proyecto si ha variado
-    if (description && description.trim() !== project.systemDescription) {
-      await prisma.project.update({
-        where: { id: projectId },
-        data: {
-          description: description.trim(),
-          systemDescription: description.trim()
-        }
-      });
-    }
-
-    // 3. Crear el proveedor seleccionado
-    const provider = createAIProvider(providerOverride || env.AI_PROVIDER);
-    console.log(`[AIService] Ejecutando análisis para proyecto '${project.name}' utilizando proveedor: [${provider.constructor.name}]`);
-
-    // 4. Invocar analyzeProject(input)
-    const rawResult = await provider.analyzeProject({
-      projectId,
-      name: project.name,
-      description: finalDescription,
-      context: input.context || {}
-    });
-
-    // 5. Validar contrato de respuesta estricto
-    const validation = validateAIResponse(rawResult);
-    if (!validation.isValid) {
-      console.error('[AIService] Error de validación de contrato:', validation.error);
-      const err = new Error(validation.error || 'La respuesta del proveedor de IA no cumple el contrato esperado.');
-      err.statusCode = 422;
-      throw err;
-    }
-
-    // 6. Persistencia transaccional en PostgreSQL (reemplazo limpio sin duplicados)
-    await this.persistProjectAnalysis(projectId, rawResult);
-
-    // 7. Devolver el JSON estructurado canónico
-    return {
-      project: rawResult.project,
-      actors: rawResult.actors,
-      requirements: rawResult.requirements,
-      entities: rawResult.entities,
-      relationships: rawResult.relationships,
-      screens: rawResult.screens,
-      navigation: rawResult.navigation,
-      architecture: rawResult.architecture
-    };
+  async persistDocumentExtraction(projectId, result, meta = {}) {
+    return require('../analysis/extractionStore').persist(projectId, result, meta);
   }
 
   /**
@@ -116,48 +100,116 @@ class AIService {
    */
   async persistProjectAnalysis(projectId, rawResult) {
     await prisma.$transaction(async (tx) => {
-      // Eliminar resultados anteriores generados
-      await tx.requirement.deleteMany({ where: { projectId } });
-      await tx.actor.deleteMany({ where: { projectId } });
-      await tx.entityRelationship.deleteMany({ where: { projectId } });
-      await tx.entity.deleteMany({ where: { projectId } });
-      await tx.screen.deleteMany({ where: { projectId } });
-      await tx.navigationNode.deleteMany({ where: { projectId } });
-      await tx.architecture.deleteMany({ where: { projectId } });
+      // Eliminar únicamente elementos NO aprobados; preservar siempre requisitos y modelos aprobados
+      await tx.requirement.deleteMany({ where: { projectId, status: { notIn: ['APPROVED', 'IMPLEMENTED'] } } });
+      await tx.actor.deleteMany({ where: { projectId, reviewStatus: { not: 'APPROVED' } } });
+      await tx.entityRelationship.deleteMany({ where: { projectId, status: { not: 'APPROVED' } } });
+      await tx.entity.deleteMany({ where: { projectId, reviewStatus: { not: 'APPROVED' } } });
+      await tx.screen.deleteMany({ where: { projectId, reviewStatus: { not: 'APPROVED' } } });
+      await tx.navigationNode.deleteMany({ where: { projectId, reviewStatus: { not: 'APPROVED' } } });
+      await tx.architecture.deleteMany({ where: { projectId, reviewStatus: { not: 'APPROVED' } } });
 
-function cleanUtf8(str) {
-  if (!str || typeof str !== 'string') return str;
-  return str.normalize('NFC').trim();
-}
+      const deduplicationService = require('../analysis/deduplicationService');
 
-      // Guardar Actores
+      function cleanUtf8(str) {
+        if (!str || typeof str !== 'string') return str;
+        return str.normalize('NFC').trim();
+      }
+
+      // Guardar Actores Canónicos (evitando duplicados mediante canonicalKey y aliases)
+      const actorReferenceMap = new Map();
       if (rawResult.actors && rawResult.actors.length > 0) {
+        const existingActors = await tx.actor.findMany({ where: { projectId, isDeleted: false } });
+
         for (const actor of rawResult.actors) {
-          await tx.actor.create({
-            data: {
-              projectId,
-              codeId: actor.id || null,
-              name: cleanUtf8(actor.name),
-              description: actor.description ? cleanUtf8(actor.description) : null
-            }
-          });
+          const rawActorName = cleanUtf8(actor.name);
+          if (!rawActorName) continue;
+
+          const canonicalKey = deduplicationService.getActorCanonicalKey(rawActorName);
+          const displayName = deduplicationService.getPreferredActorDisplayName(rawActorName, canonicalKey);
+
+          const match = existingActors.find(a =>
+            deduplicationService.getActorCanonicalKey(a.name) === canonicalKey ||
+            (a.aliases && a.aliases.includes(rawActorName))
+          );
+
+          if (match) {
+            actorReferenceMap.set(actor.id, match.id);
+            const nextAliases = Array.from(new Set([...(match.aliases || []), rawActorName, displayName]));
+            const nextDesc = match.description && actor.description && !match.description.includes(actor.description)
+              ? `${match.description} · ${cleanUtf8(actor.description)}`.slice(0, 500)
+              : (match.description || cleanUtf8(actor.description));
+
+            await tx.actor.update({
+              where: { id: match.id },
+              data: {
+                aliases: nextAliases,
+                description: nextDesc,
+                name: displayName
+              }
+            });
+          } else {
+            const count = existingActors.length + 1;
+            const code = actor.id || `ACT-${String(count).padStart(2, '0')}`;
+            const created = await tx.actor.create({
+              data: {
+                projectId,
+                codeId: code,
+                name: displayName,
+                description: actor.description ? cleanUtf8(actor.description) : null,
+                aliases: [rawActorName, displayName],
+                status: 'PENDING_REVIEW',
+                reviewStatus: /^personal$/i.test(rawActorName) ? 'NEEDS_REVIEW' : 'PENDING'
+              }
+            });
+            actorReferenceMap.set(actor.id, created.id);
+            existingActors.push(created);
+          }
         }
       }
 
-      // Guardar Requisitos
+      // Guardar Requisitos Canónicos (Deduplicación y consolidación PREVIA)
       if (rawResult.requirements && rawResult.requirements.length > 0) {
-        for (const req of rawResult.requirements) {
+        const existingApproved = await tx.requirement.findMany({
+          where: { projectId, status: 'APPROVED', isDeleted: false }
+        });
+
+        const { canonicalRequirements } = deduplicationService.groupAndConsolidateRequirements(
+          rawResult.requirements,
+          existingApproved
+        );
+
+        for (const req of canonicalRequirements) {
+          const code = req.code.trim().toUpperCase();
+
+          // Verificar si ya existe aprobado por código o semántica
+          const existingApprovedMatch = existingApproved.find(ea =>
+            ea.code === code || deduplicationService.isSemanticEquivalent(ea, req)
+          );
+          if (existingApprovedMatch) {
+            continue;
+          }
+
           await tx.requirement.create({
             data: {
               projectId,
-              code: req.code.trim().toUpperCase(),
+              code,
               name: cleanUtf8(req.name),
-              description: req.description ? cleanUtf8(req.description) : '',
-              type: req.type === 'NO_FUNCIONAL' ? 'NON_FUNCTIONAL' : 'FUNCTIONAL',
-              priority: req.priority === 'ALTA' ? 'HIGH' : req.priority === 'BAJA' ? 'LOW' : 'MEDIUM',
-              status: 'APPROVED',
-              actorIds: req.actorIds || [],
-              dependencies: req.dependencies || []
+              description: req.description ? cleanUtf8(req.description) : cleanUtf8(req.statement || req.name),
+              type: (req.type === 'NON_FUNCTIONAL' || req.type === 'NO_FUNCIONAL' || req.type === 'RNF' || code.startsWith('RNF'))
+                ? 'NON_FUNCTIONAL'
+                : 'FUNCTIONAL',
+              priority: (req.priority === 'ALTA' || req.priority === 'HIGH')
+                ? 'HIGH'
+                : (req.priority === 'BAJA' || req.priority === 'LOW')
+                  ? 'LOW'
+                  : 'MEDIUM',
+              status: 'PENDING',
+              actorIds: [...new Set((req.actorIds || []).map(ref => actorReferenceMap.get(ref)).filter(Boolean))],
+              dependencies: req.dependencies || [],
+              sources: req.sources || [],
+              preconditions: req.preconditions ? cleanUtf8(req.preconditions) : ((req.type === 'NON_FUNCTIONAL' || req.type === 'NO_FUNCIONAL' || code.startsWith('RNF')) ? 'Entorno operativo y conectividad estándar' : 'Usuario con sesión activa y permisos correspondientes'),
+              postconditions: req.postconditions ? cleanUtf8(req.postconditions) : ((req.type === 'NON_FUNCTIONAL' || req.type === 'NO_FUNCIONAL' || code.startsWith('RNF')) ? 'Métricas de calidad y estabilidad verificadas' : 'Estado del sistema actualizado y transacción persistida con éxito')
             }
           });
         }
@@ -216,7 +268,10 @@ function cleanUtf8(str) {
               name: cleanUtf8(scr.name),
               description: scr.description ? cleanUtf8(scr.description) : null,
               route: scr.route || '/',
-              purpose: scr.purpose ? cleanUtf8(scr.purpose) : null
+              purpose: scr.purpose ? cleanUtf8(scr.purpose) : null,
+              selectedForGeneration: true,
+              requirementIds: scr.requirementIds || [],
+              actorIds: scr.actorIds || []
             }
           });
 
@@ -252,34 +307,50 @@ function cleanUtf8(str) {
         }
       }
 
-      // Guardar Arquitectura con Componentes
-      if (rawResult.architecture) {
-        const arch = rawResult.architecture;
-        const createdArch = await tx.architecture.create({
-          data: {
-            projectId,
-            style: arch.style || 'Clean Architecture',
-            frontend: arch.frontend || 'React',
-            backend: arch.backend || 'Node.js Express',
-            database: arch.database || 'PostgreSQL',
-            connections: arch.connections || []
-          }
-        });
+      // Guardar Arquitectura con Componentes y Diagramas de Software y Despliegue
+      const architectureGenerator = require('../diagrams/architectureGenerator');
+      const arch = rawResult.architecture || {};
+      const createdArch = await tx.architecture.create({
+        data: {
+          projectId,
+          style: arch.style || 'Clean Architecture / 3 Capas',
+          frontend: arch.frontend || 'React',
+          backend: arch.backend || 'Node.js Express',
+          database: arch.database || 'PostgreSQL',
+          connections: arch.connections || [],
+          softwareDiagram: architectureGenerator.generateSoftwareArchitecture(arch),
+          deploymentDiagram: architectureGenerator.generateDeploymentArchitecture(rawResult.technologies || {})
+        }
+      });
 
-        if (arch.components && Array.isArray(arch.components)) {
-          for (const comp of arch.components) {
-            await tx.architectureComponent.create({
-              data: {
-                architectureId: createdArch.id,
-                name: comp.name,
-                layer: comp.layer || 'Application',
-                type: comp.type || 'Component'
-              }
-            });
-          }
+      if (arch.components && Array.isArray(arch.components)) {
+        for (const comp of arch.components) {
+          const compName = typeof comp === 'string'
+            ? comp.trim()
+            : String(comp?.name || comp?.component || comp?.label || comp?.id || '').trim();
+          if (!compName) continue;
+
+          await tx.architectureComponent.create({
+            data: {
+              architectureId: createdArch.id,
+              name: cleanUtf8(compName),
+              layer: comp?.layer || 'Application',
+              type: comp?.type || 'Component'
+            }
+          });
         }
       }
     });
+
+    // Generar Casos de Uso Fundamentales y Diagrama de Clases
+    try {
+      const useCaseService = require('../useCase.service');
+      const classModelService = require('../classModel.service');
+      await useCaseService.generateFundamentalUseCases(projectId);
+      await classModelService.generateClassesFromEntities(projectId);
+    } catch (postErr) {
+      console.warn('[AIService] Advertencia generando casos de uso o clases:', postErr.message);
+    }
 
     return true;
   }

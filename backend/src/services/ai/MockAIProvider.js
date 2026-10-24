@@ -14,7 +14,7 @@ class MockAIProvider extends AIProvider {
     const isLibrary = lower.includes('biblioteca') || lower.includes('libro') || lower.includes('prestamo') || lower.includes('préstamo');
     const isHospital = lower.includes('hospital') || lower.includes('médic') || lower.includes('medic') || lower.includes('paciente') || lower.includes('salud') || lower.includes('cita');
     const isEcommerce = lower.includes('tienda') || lower.includes('producto') || lower.includes('venta') || lower.includes('carrito') || lower.includes('comercio');
-    const isAutomotive = lower.includes('autron') || lower.includes('taller') || lower.includes('vehiculo') || lower.includes('vehículo') || lower.includes('mecanic') || lower.includes('mecánico') || lower.includes('automotriz') || lower.includes('avería') || (input.context && input.context.isDocumentAnalysis);
+    const isAutomotive = lower.includes('autron') || lower.includes('taller') || lower.includes('vehiculo') || lower.includes('vehículo') || lower.includes('mecanic') || lower.includes('mecánico') || lower.includes('automotriz') || lower.includes('avería');
 
     let actors = [];
     let requirements = [];

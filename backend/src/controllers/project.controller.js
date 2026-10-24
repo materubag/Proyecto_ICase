@@ -3,7 +3,8 @@ const projectService = require('../services/project.service');
 class ProjectController {
   async getAll(req, res, next) {
     try {
-      const projects = await projectService.getAllProjects();
+      const includeArchived = req.query.includeArchived === 'true';
+      const projects = await projectService.getAllProjects(!includeArchived);
       res.status(200).json({
         success: true,
         data: projects
@@ -64,6 +65,19 @@ class ProjectController {
       res.status(200).json({
         success: true,
         data: { message: `Project ${id} successfully deleted` }
+      });
+    } catch (error) {
+      next(error);
+    }
+  }
+
+  async restore(req, res, next) {
+    try {
+      const { id } = req.params;
+      const restored = await projectService.restoreProject(id);
+      res.status(200).json({
+        success: true,
+        data: restored
       });
     } catch (error) {
       next(error);

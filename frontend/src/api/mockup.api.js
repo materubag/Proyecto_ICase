@@ -1,9 +1,10 @@
 import { request } from './client';
 
 export const mockupApi = {
-  generateMockup: (projectId, prompt = '') =>
+  list: projectId => request(`/projects/${projectId}/mockup`),
+  generateMockup: (projectId, prompt = '', navigationNodeIds) =>
     request(`/projects/${projectId}/mockup`, {
       method: 'POST',
-      body: { prompt }
+      body: { prompt, navigationNodeIds }
     })
 };

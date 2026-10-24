@@ -125,7 +125,8 @@ async function runTests() {
     assert.ok(result.entities.length > 0, 'Debe haber guardado entidades');
 
     // Verificar en la BD
-    const countReq = await prisma.requirement.count({ where: { projectId: testProjectId } });
+    assert.strictEqual(await prisma.requirement.count({ where: { projectId: testProjectId } }), 0, 'IA no modifica requisitos oficiales');
+    const countReq = await prisma.requirementCandidate.count({ where: { projectId: testProjectId, status: 'PENDING_REVIEW' } });
     assert.strictEqual(countReq, result.requirements.length, 'Requisitos en BD deben coincidir');
   });
 
@@ -140,16 +141,16 @@ async function runTests() {
       description: 'Quiero desarrollar un sistema para administrar una biblioteca con libros, usuarios y préstamos.'
     });
 
-    const countReqAfter = await prisma.requirement.count({ where: { projectId: testProjectId } });
+    const countReqAfter = await prisma.requirementCandidate.count({ where: { projectId: testProjectId } });
     const countActorsAfter = await prisma.actor.count({ where: { projectId: testProjectId } });
     const countEntitiesAfter = await prisma.entity.count({ where: { projectId: testProjectId } });
 
     assert.strictEqual(countReqAfter, result2.requirements.length, 'No deben acumularse requisitos duplicados');
-    assert.strictEqual(countActorsAfter, result2.actors.length, 'No deben acumularse actores duplicados');
-    assert.strictEqual(countEntitiesAfter, result2.entities.length, 'No deben acumularse entidades duplicadas');
+    assert.strictEqual(countActorsAfter, 0, 'No se promueven actores automáticamente');
+    assert.strictEqual(countEntitiesAfter, 0, 'No se promueven entidades automáticamente');
 
     // Limpieza
-    await prisma.project.delete({ where: { id: testProjectId } });
+    await prisma.project.update({ where: { id: testProjectId }, data: { status: 'ARCHIVED' } });
   });
 
   console.log('\n====================================================');

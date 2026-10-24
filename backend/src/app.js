@@ -12,7 +12,7 @@ const corsOptions = {
     // Permitir cualquier origen en modo desarrollo o matching con FRONTEND_URL
     callback(null, true);
   },
-  methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
+  methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
   allowedHeaders: ['Content-Type', 'Authorization'],
   credentials: true
 };

@@ -61,7 +61,9 @@ Descripción: ${input.description}`;
       }
     } catch (err) {
       console.error('[OllamaProvider] Error de comunicación con Ollama:', err.message);
-      throw new Error(`Ollama no está disponible. Verifique que el servicio esté iniciado y que el modelo esté configurado: ${err.message}`);
+      const error = new Error(`Ollama no está disponible o el modelo no está descargado (${err.message}). Ejecute 'docker exec icase_ollama ollama pull ${model}'`);
+      error.statusCode = 503;
+      throw error;
     }
   }
 

@@ -1,13 +1,14 @@
 const prisma = require('../config/prisma');
 
 class ProjectService {
-  async getAllProjects() {
+  async getAllProjects(filterArchived = true) {
     return await prisma.project.findMany({
+      where: filterArchived ? { status: { not: 'ARCHIVED' } } : undefined,
       orderBy: { updatedAt: 'desc' },
       include: {
         _count: {
           select: {
-            requirements: true,
+            requirements: { where: { isDeleted:false, status:{not:'REMOVED'} } },
             actors: true,
             entities: true,
             screens: true
@@ -17,11 +18,12 @@ class ProjectService {
     });
   }
 
-  async getProjectById(id) {
-    return await prisma.project.findUnique({
+  async getProjectById(id, allowArchived = false) {
+    const project = await prisma.project.findUnique({
       where: { id },
       include: {
         requirements: {
+          where: { isDeleted:false, status:{not:'REMOVED'} },
           orderBy: { code: 'asc' }
         },
         actors: {
@@ -52,9 +54,28 @@ class ProjectService {
             components: true
           },
           orderBy: { createdAt: 'desc' }
+        },
+        useCases: {
+          orderBy: { codeId: 'asc' }
+        },
+        classModels: {
+          orderBy: { name: 'asc' }
+        },
+        files: {
+          orderBy: { createdAt: 'desc' }
+        },
+        versions: {
+          orderBy: { createdAt: 'desc' },
+          take: 50
         }
       }
     });
+
+    if (!project || (!allowArchived && project.status === 'ARCHIVED')) {
+      return null;
+    }
+
+    return project;
   }
 
   async createProject(data) {
@@ -93,7 +114,7 @@ class ProjectService {
         ...(status !== undefined && { status })
       },
       include: {
-        requirements: true,
+        requirements: { where: { isDeleted:false, status:{not:'REMOVED'} } },
         actors: true,
         entities: { include: { attributes: true } },
         relationships: true,
@@ -104,6 +125,10 @@ class ProjectService {
     });
   }
 
+  async replaceProjectScreens() {
+    throw Object.assign(new Error('Las pantallas generadas requieren revisi?n como ArtifactVersion. Usa el servicio de mockups versionados.'), { code: 'IMPACT_CONFIRMATION_REQUIRED', statusCode: 409 });
+  }
+
   async deleteProject(id) {
     const existing = await prisma.project.findUnique({ where: { id } });
     if (!existing) {
@@ -112,8 +137,23 @@ class ProjectService {
       throw error;
     }
 
-    return await prisma.project.delete({
-      where: { id }
+    return await prisma.project.update({
+      where: { id },
+      data: { status: 'ARCHIVED' }
+    });
+  }
+
+  async restoreProject(id) {
+    const existing = await prisma.project.findUnique({ where: { id } });
+    if (!existing) {
+      const error = new Error(`Project with ID ${id} not found`);
+      error.statusCode = 404;
+      throw error;
+    }
+
+    return await prisma.project.update({
+      where: { id },
+      data: { status: 'PLANNING' }
     });
   }
 }

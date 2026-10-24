@@ -1,10 +1,121 @@
 const prisma = require('../config/prisma');
+const versionHistoryService = require('./versionHistory.service');
 
 class ActorService {
   async getActorsByProject(projectId) {
-    return await prisma.actor.findMany({
-      where: { projectId },
-      orderBy: { name: 'asc' }
+    const actors = await prisma.actor.findMany({where:{projectId,isDeleted:false},orderBy:{codeId:'asc'}});
+    const requirements = await prisma.requirement.findMany({where:{projectId,isDeleted:false,status:{not:'REMOVED'}}});
+    return actors.map(a => ({...a, requirementCount:requirements.filter(r => (r.actorIds || []).includes(a.id)).length}));
+  }
+
+  async consolidateProjectActors(projectId, db = prisma) {
+    if (db === prisma) return prisma.$transaction(tx => this.consolidateProjectActors(projectId, tx));
+    const deduplicationService = require('./analysis/deduplicationService');
+    const actors = await db.actor.findMany({
+      where: { projectId, isDeleted: false },
+      orderBy: [{ reviewStatus: 'desc' }, { createdAt: 'asc' }]
+    });
+
+    if (actors.length === 0) return [];
+
+    const groups = new Map();
+    for (const a of actors) {
+      const key = deduplicationService.getActorCanonicalKey(a.name);
+      if (!groups.has(key)) groups.set(key, []);
+      groups.get(key).push(a);
+    }
+
+    let idx = 1;
+    for (const [key, group] of groups.entries()) {
+      const canonicalCode = group[0].codeId || `ACT-${String(idx).padStart(2, '0')}`;
+      idx++;
+
+      const primary = group[0];
+      const displayName = deduplicationService.getPreferredActorDisplayName(primary.name, key);
+
+      let mergedDesc = primary.description || '';
+      const isAnyApproved = group.some(g => g.reviewStatus === 'APPROVED' || g.status === 'APPROVED');
+
+      for (let i = 1; i < group.length; i++) {
+        const dup = group[i];
+        if (dup.description && !mergedDesc.includes(dup.description)) {
+          mergedDesc = mergedDesc ? `${mergedDesc} · ${dup.description}`.slice(0, 500) : dup.description;
+        }
+      }
+
+      const allGroupNames = group.map(g => g.name);
+      const nextAliases = Array.from(new Set([...group.flatMap(g => g.aliases || []), ...allGroupNames, displayName]));
+
+      if (group.length > 1 || primary.codeId !== canonicalCode || primary.name !== displayName || (isAnyApproved && primary.reviewStatus !== 'APPROVED') || primary.description !== mergedDesc || (primary.aliases?.length || 0) < nextAliases.length) {
+        await db.actor.update({
+          where: { id: primary.id },
+          data: {
+            codeId: canonicalCode,
+            name: displayName,
+            description: mergedDesc || primary.description,
+            aliases: nextAliases,
+            requirementIds: [...new Set(group.flatMap(g => g.requirementIds || []))],
+            reviewStatus: isAnyApproved ? 'APPROVED' : primary.reviewStatus,
+            status: isAnyApproved ? 'APPROVED' : primary.status
+          }
+        });
+      }
+
+      if (group.length > 1) {
+        const dupIds = group.slice(1).map(g => g.id);
+
+        const screens = await db.screen.findMany({where:{projectId}});
+        for (const screen of screens) { const ids = [...new Set((screen.actorIds || []).map(id => dupIds.includes(id) ? primary.id : id))]; if (JSON.stringify(ids) !== JSON.stringify(screen.actorIds)) await db.screen.update({where:{id:screen.id},data:{actorIds:ids}}); }
+
+        // Re-point references in requirements
+        const reqs = await db.requirement.findMany({ where: { projectId } });
+        for (const req of reqs) {
+          const hasDup = (req.actorIds || []).some(id => dupIds.includes(id));
+          if (hasDup) {
+            const updatedActorIds = Array.from(new Set(req.actorIds.map(id => dupIds.includes(id) ? primary.id : id)));
+            await db.requirement.update({
+              where: { id: req.id },
+              data: { actorIds: updatedActorIds }
+            });
+          }
+        }
+
+        // Re-point references in use cases
+        const ucs = await db.useCase.findMany({ where: { projectId } });
+        for (const uc of ucs) {
+          const actorIds = [...new Set((uc.actorIds || []).map(id => dupIds.includes(id) ? primary.id : id))];
+          let needsUpdate = JSON.stringify(actorIds) !== JSON.stringify(uc.actorIds);
+          let pId = uc.primaryActorId;
+          if (dupIds.includes(pId)) {
+            pId = primary.id;
+            needsUpdate = true;
+          }
+          const sec = uc.secondaryActorIds || [];
+          if (sec.some(id => dupIds.includes(id))) {
+            const updatedSec = Array.from(new Set(sec.map(id => dupIds.includes(id) ? primary.id : id)));
+            needsUpdate = true;
+            await db.useCase.update({
+              where: { id: uc.id },
+              data: { primaryActorId: pId, secondaryActorIds: updatedSec, actorIds }
+            });
+          } else if (needsUpdate) {
+            await db.useCase.update({
+              where: { id: uc.id },
+              data: { primaryActorId: pId, actorIds }
+            });
+          }
+        }
+
+        // Remove duplicate records
+        await db.actor.deleteMany({
+          where: { id: { in: dupIds } }
+        });
+      }
+    }
+
+    return await db.actor.findMany({
+      where: { projectId, isDeleted: false },
+      orderBy: { codeId: 'asc' }
     });
   }
 
@@ -16,20 +127,65 @@ class ActorService {
       throw error;
     }
 
-    const { name, description } = data;
+    const { name, description, codeId, reviewStatus } = data;
     if (!name || name.trim() === '') {
       const error = new Error('Actor name is required');
       error.statusCode = 400;
       throw error;
     }
 
-    return await prisma.actor.create({
+    const deduplicationService = require('./analysis/deduplicationService');
+    const canonicalKey = deduplicationService.getActorCanonicalKey(name);
+    const existing = await prisma.actor.findMany({ where: { projectId, isDeleted: false } });
+    const match = existing.find(a =>
+      deduplicationService.getActorCanonicalKey(a.name) === canonicalKey ||
+      (a.aliases && a.aliases.includes(name.trim()))
+    );
+
+    if (match) {
+      const currentAliases = match.aliases || [];
+      const updatedAliases = Array.from(new Set([...currentAliases, name.trim()]));
+      const updated = await prisma.actor.update({
+        where: { id: match.id },
+        data: {
+          aliases: updatedAliases,
+          reviewStatus: reviewStatus || match.reviewStatus || 'APPROVED',
+          status: reviewStatus || match.status || 'APPROVED',
+          description: match.description && description && !match.description.includes(description)
+            ? `${match.description} · ${description}`.slice(0, 500)
+            : (match.description || description)
+        }
+      });
+      return updated;
+    }
+
+    const count = existing.length + 1;
+    const finalCode = codeId ? codeId.trim().toUpperCase() : `ACT-${String(count).padStart(2, '0')}`;
+    const displayName = deduplicationService.getPreferredActorDisplayName(name, canonicalKey);
+
+    const created = await prisma.actor.create({
       data: {
         projectId,
-        name: name.trim(),
-        description: description ? description.trim() : null
+        codeId: finalCode,
+        name: displayName,
+        description: description ? description.trim() : null,
+        aliases: [name.trim(), displayName],
+        status: reviewStatus || 'PENDING_REVIEW',
+        reviewStatus: reviewStatus || 'PENDING',
+        isDeleted: false
       }
     });
+
+    await versionHistoryService.recordSnapshot(
+      projectId,
+      'ACTOR',
+      created.id,
+      'CREATED',
+      created,
+      `Creación de actor ${created.name}`
+    );
+
+    return created;
   }
 
   async updateActor(id, data) {
@@ -40,13 +196,47 @@ class ActorService {
       throw error;
     }
 
-    const { name, description } = data;
-    return await prisma.actor.update({
+    const { name, description, codeId, reviewStatus, aliases } = data;
+
+    // Regla: Si se edita un actor aprobado, pasa a NEEDS_REVIEW si no se especifica estado
+    let nextReviewStatus = reviewStatus !== undefined ? reviewStatus : existing.reviewStatus;
+    if (existing.reviewStatus === 'APPROVED' && reviewStatus === undefined) {
+      const nameChanged = name !== undefined && name.trim() !== existing.name;
+      const descChanged = description !== undefined && description.trim() !== (existing.description || '');
+      if (nameChanged || descChanged) {
+        nextReviewStatus = 'NEEDS_REVIEW';
+      }
+    }
+
+    const updated = await prisma.actor.update({
       where: { id },
       data: {
         ...(name !== undefined && { name: name.trim() }),
-        ...(description !== undefined && { description: description ? description.trim() : null })
+        ...(description !== undefined && { description: description ? description.trim() : null }),
+        ...(codeId !== undefined && { codeId: codeId ? codeId.trim().toUpperCase() : null }),
+        ...(aliases !== undefined && { aliases: Array.isArray(aliases) ? aliases : [aliases] }),
+        reviewStatus: nextReviewStatus,
+        status: nextReviewStatus
       }
+    });
+
+    await versionHistoryService.recordSnapshot(
+      existing.projectId,
+      'ACTOR',
+      id,
+      'UPDATED',
+      updated,
+      `Modificación de actor ${updated.name} (Estado: ${nextReviewStatus})`
+    );
+
+    return updated;
+  }
+
+  async updateStatus(id, reviewStatus) {
+    return prisma.$transaction(async tx => {
+      const actor = await tx.actor.update({where:{id},data:{reviewStatus,status:reviewStatus}});
+      if(reviewStatus==='APPROVED')await require('./analysis/actorIdentity').refresh(tx,actor.projectId);
+      return actor;
     });
   }
 
@@ -58,9 +248,83 @@ class ActorService {
       throw error;
     }
 
-    return await prisma.actor.delete({
+    const { projectId, name, codeId } = existing;
+    const actorRefIds = [id, name, codeId].filter(Boolean);
+
+    // 1. Guardar Snapshot para recuperación
+    await versionHistoryService.recordSnapshot(
+      projectId,
+      'ACTOR',
+      id,
+      'DELETED',
+      existing,
+      `Eliminación en cascada del actor ${name}`
+    );
+
+    const cascadedEffects = {
+      requirementsUpdated: 0,
+      useCasesUpdated: 0,
+      screensUpdated: 0,
+      navigationUpdated: 0
+    };
+
+    // 2. Cascada en Requisitos: remover actor de actorIds
+    const allReqs = await prisma.requirement.findMany({ where: { projectId } });
+    for (const req of allReqs) {
+      const filtered = req.actorIds.filter(a => !actorRefIds.includes(a));
+      if (filtered.length !== req.actorIds.length) {
+        await prisma.requirement.update({
+          where: { id: req.id },
+          data: { actorIds: filtered }
+        });
+        cascadedEffects.requirementsUpdated++;
+      }
+    }
+
+    // 3. Cascada en Casos de Uso
+    const allUCs = await prisma.useCase.findMany({ where: { projectId } });
+    for (const uc of allUCs) {
+      let modified = false;
+      let newPrimary = uc.primaryActorId;
+      if (actorRefIds.includes(uc.primaryActorId)) {
+        newPrimary = null;
+        modified = true;
+      }
+      const newSecondary = uc.secondaryActorIds.filter(a => !actorRefIds.includes(a));
+      if (newSecondary.length !== uc.secondaryActorIds.length) {
+        modified = true;
+      }
+      if (modified) {
+        await prisma.useCase.update({
+          where: { id: uc.id },
+          data: { primaryActorId: newPrimary, secondaryActorIds: newSecondary }
+        });
+        cascadedEffects.useCasesUpdated++;
+      }
+    }
+
+    // 4. Cascada en Pantallas / Mockups
+    const allScreens = await prisma.screen.findMany({ where: { projectId } });
+    for (const sc of allScreens) {
+      const filtered = sc.actorIds.filter(a => !actorRefIds.includes(a));
+      if (filtered.length !== sc.actorIds.length) {
+        await prisma.screen.update({
+          where: { id: sc.id },
+          data: { actorIds: filtered }
+        });
+        cascadedEffects.screensUpdated++;
+      }
+    }
+
+    // 5. Eliminar actor
+    await prisma.actor.delete({
       where: { id }
     });
+
+    return {
+      deletedActor: existing,
+      cascadedEffects
+    };
   }
 }
 

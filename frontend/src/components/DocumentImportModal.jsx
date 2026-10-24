@@ -13,9 +13,74 @@ import {
   ChevronDown,
   ChevronUp,
   Layers,
-  ArrowRight
+  ArrowRight,
+  Server,
+  Boxes,
+  GitBranch,
+  Copy,
+  Sparkles
 } from 'lucide-react';
 import { documentsApi } from '../api/documents.api';
+import MermaidDiagram from './diagrams/MermaidDiagram';
+
+function SourceBadge({ source }) {
+  const s = (source || '').toLowerCase();
+  if (s === 'explicit' || s === 'pdf' || s === 'rule') {
+    return (
+      <span
+        style={{
+          display: 'inline-flex',
+          alignItems: 'center',
+          padding: '2px 8px',
+          borderRadius: '4px',
+          fontSize: '0.7rem',
+          fontWeight: 600,
+          backgroundColor: 'rgba(34, 197, 94, 0.12)',
+          color: '#15803d',
+          border: '1px solid rgba(34, 197, 94, 0.25)'
+        }}
+      >
+        Explícito
+      </span>
+    );
+  }
+  if (s === 'inferred' || s === 'ai') {
+    return (
+      <span
+        style={{
+          display: 'inline-flex',
+          alignItems: 'center',
+          padding: '2px 8px',
+          borderRadius: '4px',
+          fontSize: '0.7rem',
+          fontWeight: 600,
+          backgroundColor: 'rgba(59, 130, 246, 0.12)',
+          color: '#1d4ed8',
+          border: '1px solid rgba(59, 130, 246, 0.25)'
+        }}
+      >
+        Inferido (IA)
+      </span>
+    );
+  }
+  return (
+    <span
+      style={{
+        display: 'inline-flex',
+        alignItems: 'center',
+        padding: '2px 8px',
+        borderRadius: '4px',
+        fontSize: '0.7rem',
+        fontWeight: 600,
+        backgroundColor: 'rgba(100, 116, 139, 0.12)',
+        color: '#475569',
+        border: '1px solid rgba(100, 116, 139, 0.25)'
+      }}
+    >
+      Predeterminado
+    </span>
+  );
+}
 
 export default function DocumentImportModal({
   isOpen,
@@ -24,7 +89,7 @@ export default function DocumentImportModal({
   onImportSuccess
 }) {
   const [file, setFile] = useState(null);
-  // Estados requeridos: 'idle' | 'uploading' | 'extracting' | 'analyzing' | 'validating' | 'preview' | 'success' | 'error'
+  // Estados: 'idle' | 'uploading' | 'extracting' | 'analyzing' | 'validating' | 'preview' | 'success' | 'error'
   const [status, setStatus] = useState('idle');
   const [statusMessage, setStatusMessage] = useState('');
   const [errorMessage, setErrorMessage] = useState(null);
@@ -33,9 +98,10 @@ export default function DocumentImportModal({
   const [extractionData, setExtractionData] = useState(null);
   const [previewData, setPreviewData] = useState(null);
 
-  // Vistas previas expandibles
-  const [showReqsList, setShowReqsList] = useState(false);
-  const [showActorsList, setShowActorsList] = useState(false);
+  // Pestañas de la vista previa
+  const [activeTab, setActiveTab] = useState('resumen');
+  const [activeDiagramTab, setActiveDiagramTab] = useState('er');
+  const [copiedCode, setCopiedCode] = useState(false);
 
   const fileInputRef = useRef(null);
 
@@ -75,30 +141,30 @@ export default function DocumentImportModal({
     if (!file) return;
 
     try {
-      // 1. Estado: uploading & extracting
+      // 1. Subida
       setStatus('uploading');
       setStatusMessage('Subiendo archivo PDF...');
       setErrorMessage(null);
 
-      // Paso 1: Extracción determinística sin IA
+      // 2. Extracción determinista
       setStatus('extracting');
-      setStatusMessage('Extrayendo texto plano, limpiando ruido y detectando secciones con reglas...');
+      setStatusMessage('Normalizando texto, eliminando duplicados y aplicando detectores...');
       const extractRes = await documentsApi.extract(file);
       setExtractionData(extractRes);
 
-      // Paso 2: Análisis inteligente con Ollama / Mock
+      // 3. Pipeline híbrido
       setStatus('analyzing');
-      setStatusMessage('Analizando requisitos, actores y modelo con motor de IA (Ollama / Mock)...');
+      setStatusMessage('Ejecutando pipeline híbrido determinista + IA...');
       const analyzeRes = await documentsApi.analyze(extractRes);
 
-      // Paso 3: Validación de esquema y referencias
+      // 4. Validación canónica
       setStatus('validating');
-      setStatusMessage('Validando coherencia de datos, unicidad de IDs y referencias cruzadas...');
-      await new Promise(r => setTimeout(r, 400)); // Pequeña transición fluida
+      setStatusMessage('Validando coherencia de datos y generando diagramas Mermaid...');
+      await new Promise(r => setTimeout(r, 400));
 
-      // Paso 4: Vista previa para confirmación del usuario
       setPreviewData(analyzeRes);
       setStatus('preview');
+      setActiveTab('resumen');
     } catch (err) {
       console.error('[DocumentImportModal] Error al procesar:', err);
       setStatus('error');
@@ -138,6 +204,7 @@ export default function DocumentImportModal({
     setErrorMessage(null);
     setExtractionData(null);
     setPreviewData(null);
+    setActiveTab('resumen');
     onClose();
   }
 
@@ -149,6 +216,26 @@ export default function DocumentImportModal({
     return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i];
   };
 
+  const getDiagramCode = () => {
+    if (!previewData?.diagrams) return '';
+    if (activeDiagramTab === 'er') return previewData.diagrams.erDiagram || '';
+    if (activeDiagramTab === 'navigation') return previewData.diagrams.navigationDiagram || '';
+    if (activeDiagramTab === 'architecture') return previewData.diagrams.architectureDiagram || '';
+    if (activeDiagramTab === 'useCase') return previewData.diagrams.useCaseDiagram || '';
+    return '';
+  };
+
+  const copyCurrentDiagramCode = () => {
+    const code = getDiagramCode();
+    if (!code) return;
+    navigator.clipboard.writeText(code);
+    setCopiedCode(true);
+    setTimeout(() => setCopiedCode(false), 2000);
+  };
+
+  const functionalReqs = (previewData?.requirements || []).filter(r => r.type === 'FUNCTIONAL');
+  const nonFunctionalReqs = (previewData?.requirements || []).filter(r => r.type === 'NON_FUNCTIONAL');
+
   return (
     <div
       style={{
@@ -157,24 +244,22 @@ export default function DocumentImportModal({
         left: 0,
         right: 0,
         bottom: 0,
-        backgroundColor: 'rgba(0, 0, 0, 0.65)',
+        backgroundColor: 'rgba(15, 23, 42, 0.65)',
         backdropFilter: 'blur(4px)',
-        zIndex: 1000,
         display: 'flex',
         alignItems: 'center',
         justifyContent: 'center',
+        zIndex: 9999,
         padding: '1rem'
       }}
       onClick={handleResetAndClose}
     >
       <div
+        className="card"
         style={{
-          backgroundColor: 'var(--bg-surface, #ffffff)',
-          color: 'var(--text-main, #1e293b)',
-          borderRadius: '12px',
           width: '100%',
-          maxWidth: '820px',
-          maxHeight: '90vh',
+          maxWidth: '880px',
+          maxHeight: '92vh',
           display: 'flex',
           flexDirection: 'column',
           boxShadow: '0 20px 25px -5px rgba(0, 0, 0, 0.3)',
@@ -211,10 +296,10 @@ export default function DocumentImportModal({
             </div>
             <div>
               <h2 style={{ fontSize: '1.15rem', fontWeight: 600, margin: 0 }}>
-                Importar documento PDF
+                Importar Documento PDF
               </h2>
               <p style={{ fontSize: '0.8rem', color: 'var(--text-muted, #64748b)', margin: 0 }}>
-                Extracción determinística de texto, detección de secciones y análisis estructurado con IA
+                Pipeline híbrido determinista + IA para extracción y modelado ICASE
               </p>
             </div>
           </div>
@@ -278,12 +363,12 @@ export default function DocumentImportModal({
                 {statusMessage}
               </h3>
               <p style={{ fontSize: '0.875rem', color: 'var(--text-muted)', margin: 0 }}>
-                Se han actualizado los requisitos, actores, modelo de datos, prototipo y arquitectura.
+                Se han importado los requisitos, actores, entidades, modelo de datos y arquitectura al proyecto.
               </p>
             </div>
           )}
 
-          {/* Estado: IDLE (Selección de archivo) */}
+          {/* Estado: IDLE */}
           {status === 'idle' && (
             <div>
               <div
@@ -327,12 +412,11 @@ export default function DocumentImportModal({
                 </h3>
                 <p style={{ fontSize: '0.825rem', color: 'var(--text-muted, #64748b)', margin: 0 }}>
                   {file
-                    ? `Tamaño: ${formatFileSize(file.size)} | Listo para procesar`
-                    : 'Documentos de proyecto, propuestas técnicas o especificaciones (Máximo 10 MB)'}
+                    ? `Tamaño: ${formatFileSize(file.size)} | Listo para procesar con pipeline determinista`
+                    : 'Documentos de especificación, propuestas técnicas o requerimientos en formato PDF'}
                 </p>
               </div>
 
-              {/* Documento de referencia sugerido */}
               <div
                 style={{
                   marginTop: '1.25rem',
@@ -349,69 +433,54 @@ export default function DocumentImportModal({
               >
                 <FileText size={16} color="var(--primary, #2563eb)" />
                 <span>
-                  <strong>Documento de referencia para pruebas:</strong> AUTRON_Propuesta_Overleaf.pdf (Taller automotriz).
+                  <strong>Pipeline inteligente:</strong> Aplica normalización, detectores deterministas, catálogos de tecnología y arquitectura. Ollama se invoca como último recurso únicamente ante fragmentos ambiguos.
                 </span>
               </div>
             </div>
           )}
 
-          {/* Estados de Carga: Uploading, Extracting, Analyzing, Validating */}
+          {/* Estados de carga */}
           {(status === 'uploading' || status === 'extracting' || status === 'analyzing' || status === 'validating') && (
-            <div style={{ padding: '2.5rem 1rem', textAlign: 'center' }}>
+            <div
+              style={{
+                display: 'flex',
+                flexDirection: 'column',
+                alignItems: 'center',
+                justifyContent: 'center',
+                padding: '3rem 1.5rem',
+                textAlign: 'center',
+                gap: '1rem'
+              }}
+            >
               <Loader2
                 size={40}
-                className="spin"
-                style={{ margin: '0 auto 1.25rem', color: 'var(--primary, #2563eb)' }}
-              />
-              <h3 style={{ fontSize: '1.1rem', fontWeight: 600, marginBottom: '0.5rem' }}>
-                {status === 'uploading' && 'Cargando documento...'}
-                {status === 'extracting' && 'Extrayendo texto y detectando patrones...'}
-                {status === 'analyzing' && 'Estructurando arquitectura y modelo con IA...'}
-                {status === 'validating' && 'Verificando contrato y referencias...'}
-              </h3>
-              <p style={{ fontSize: '0.875rem', color: 'var(--text-muted, #64748b)', maxWidth: '480px', margin: '0 auto' }}>
-                {statusMessage}
-              </p>
-
-              {/* Pasos en progreso */}
-              <div
                 style={{
-                  display: 'flex',
-                  justifyContent: 'center',
-                  gap: '0.75rem',
-                  marginTop: '1.75rem',
-                  fontSize: '0.75rem',
-                  flexWrap: 'wrap'
+                  animation: 'spin 1.5s linear infinite',
+                  color: 'var(--primary, #2563eb)'
                 }}
-              >
-                <span style={{ color: 'var(--primary)', fontWeight: 600 }}>1. Extracción</span>
-                <span>→</span>
-                <span style={{ color: status === 'analyzing' || status === 'validating' ? 'var(--primary)' : 'var(--text-muted)', fontWeight: 600 }}>
-                  2. Reglas
-                </span>
-                <span>→</span>
-                <span style={{ color: status === 'analyzing' || status === 'validating' ? 'var(--primary)' : 'var(--text-muted)', fontWeight: 600 }}>
-                  3. IA / Ollama
-                </span>
-                <span>→</span>
-                <span style={{ color: status === 'validating' ? 'var(--primary)' : 'var(--text-muted)', fontWeight: 600 }}>
-                  4. Validación
-                </span>
+              />
+              <div>
+                <h3 style={{ fontSize: '1.05rem', fontWeight: 600, marginBottom: '0.35rem' }}>
+                  Procesando documento...
+                </h3>
+                <p style={{ fontSize: '0.85rem', color: 'var(--text-muted, #64748b)', margin: 0 }}>
+                  {statusMessage}
+                </p>
               </div>
             </div>
           )}
 
-          {/* Estado: PREVIEW (Vista Previa Estructurada) */}
+          {/* Estado: PREVIEW (Resultados del Análisis) */}
           {status === 'preview' && previewData && (
             <div>
-              {/* Resumen del Documento */}
+              {/* Encabezado del Documento */}
               <div
                 style={{
                   backgroundColor: 'var(--bg-app, #f8fafc)',
                   border: '1px solid var(--border-subtle, #e2e8f0)',
                   borderRadius: '8px',
-                  padding: '1rem 1.25rem',
-                  marginBottom: '1.25rem',
+                  padding: '0.85rem 1.25rem',
+                  marginBottom: '1rem',
                   display: 'flex',
                   justifyContent: 'space-between',
                   alignItems: 'center',
@@ -420,251 +489,503 @@ export default function DocumentImportModal({
                 }}
               >
                 <div>
-                  <span style={{ fontSize: '0.75rem', textTransform: 'uppercase', color: 'var(--text-muted)', fontWeight: 600, letterSpacing: '0.05em' }}>
+                  <span style={{ fontSize: '0.7rem', textTransform: 'uppercase', color: 'var(--text-muted)', fontWeight: 600, letterSpacing: '0.05em' }}>
                     Documento Procesado
                   </span>
-                  <div style={{ fontSize: '1.05rem', fontWeight: 600, color: 'var(--text-main)' }}>
+                  <div style={{ fontSize: '1rem', fontWeight: 600, color: 'var(--text-main)' }}>
                     {previewData.documentAnalysis?.sourceFile || file?.name}
                   </div>
                 </div>
 
-                <div style={{ display: 'flex', gap: '0.5rem' }}>
+                <div style={{ display: 'flex', gap: '0.5rem', alignItems: 'center' }}>
                   <span className="badge badge-secondary" style={{ fontSize: '0.75rem' }}>
                     {previewData.documentAnalysis?.pageCount || 1} páginas
                   </span>
                   <span className="badge badge-success" style={{ fontSize: '0.75rem' }}>
-                    Texto extraíble válido
+                    Pipeline Completado
                   </span>
                 </div>
               </div>
 
-              {/* Métricas de Información Detectada */}
-              <div style={{ marginBottom: '1.25rem' }}>
-                <span style={{ fontSize: '0.8rem', fontWeight: 600, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
-                  Información Estructurada Detectada
-                </span>
-
-                <div
-                  style={{
-                    display: 'grid',
-                    gridTemplateColumns: 'repeat(auto-fit, minmax(130px, 1fr))',
-                    gap: '0.75rem',
-                    marginTop: '0.5rem'
-                  }}
-                >
-                  <div className="card" style={{ padding: '0.85rem', textAlign: 'center' }}>
-                    <FileText size={18} color="var(--primary)" style={{ margin: '0 auto 0.25rem' }} />
-                    <div style={{ fontSize: '1.35rem', fontWeight: 700 }}>
-                      {previewData.requirements?.length || 0}
-                    </div>
-                    <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>
-                      Requisitos ({previewData.documentAnalysis?.ruleRequirementsCount || 0} por regla)
-                    </div>
-                  </div>
-
-                  <div className="card" style={{ padding: '0.85rem', textAlign: 'center' }}>
-                    <Users size={18} color="var(--primary)" style={{ margin: '0 auto 0.25rem' }} />
-                    <div style={{ fontSize: '1.35rem', fontWeight: 700 }}>
-                      {previewData.actors?.length || 0}
-                    </div>
-                    <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>
-                      Perfiles / Actores
-                    </div>
-                  </div>
-
-                  <div className="card" style={{ padding: '0.85rem', textAlign: 'center' }}>
-                    <Database size={18} color="var(--primary)" style={{ margin: '0 auto 0.25rem' }} />
-                    <div style={{ fontSize: '1.35rem', fontWeight: 700 }}>
-                      {previewData.entities?.length || 0}
-                    </div>
-                    <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>
-                      Entidades E/R
-                    </div>
-                  </div>
-
-                  <div className="card" style={{ padding: '0.85rem', textAlign: 'center' }}>
-                    <Layout size={18} color="var(--primary)" style={{ margin: '0 auto 0.25rem' }} />
-                    <div style={{ fontSize: '1.35rem', fontWeight: 700 }}>
-                      {previewData.screens?.length || 0}
-                    </div>
-                    <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>
-                      Pantallas
-                    </div>
-                  </div>
-
-                  <div className="card" style={{ padding: '0.85rem', textAlign: 'center' }}>
-                    <Cpu size={18} color="var(--primary)" style={{ margin: '0 auto 0.25rem' }} />
-                    <div style={{ fontSize: '1.35rem', fontWeight: 700 }}>
-                      1
-                    </div>
-                    <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>
-                      Arquitectura
-                    </div>
-                  </div>
-                </div>
-              </div>
-
-              {/* Secciones Detectadas en el Documento */}
-              {previewData.documentAnalysis?.detectedSections?.length > 0 && (
-                <div style={{ marginBottom: '1.25rem' }}>
-                  <span style={{ fontSize: '0.8rem', fontWeight: 600, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
-                    Secciones Identificadas en el Documento
-                  </span>
-                  <div
+              {/* Barra de pestañas */}
+              <div
+                style={{
+                  display: 'flex',
+                  gap: '0.25rem',
+                  borderBottom: '1px solid var(--border-subtle, #e2e8f0)',
+                  marginBottom: '1.25rem',
+                  overflowX: 'auto'
+                }}
+              >
+                {[
+                  { id: 'resumen', label: 'Resumen' },
+                  { id: 'requisitos', label: `Requisitos (${previewData.requirements?.length || 0})` },
+                  { id: 'actores', label: `Actores (${previewData.actors?.length || 0})` },
+                  { id: 'entidades', label: `Entidades (${previewData.entities?.length || 0})` },
+                  { id: 'tecnologias', label: 'Tecnologías' },
+                  { id: 'arquitectura', label: 'Arquitectura' },
+                  { id: 'diagramas', label: 'Diagramas Mermaid' }
+                ].map(tab => (
+                  <button
+                    key={tab.id}
+                    onClick={() => setActiveTab(tab.id)}
                     style={{
-                      display: 'flex',
-                      flexWrap: 'wrap',
-                      gap: '0.4rem',
-                      marginTop: '0.5rem',
-                      maxHeight: '90px',
-                      overflowY: 'auto'
+                      padding: '0.5rem 0.85rem',
+                      fontSize: '0.8125rem',
+                      fontWeight: activeTab === tab.id ? 600 : 500,
+                      color: activeTab === tab.id ? 'var(--primary, #2563eb)' : 'var(--text-muted, #64748b)',
+                      border: 'none',
+                      background: 'none',
+                      borderBottom: activeTab === tab.id ? '2px solid var(--primary, #2563eb)' : '2px solid transparent',
+                      cursor: 'pointer',
+                      whiteSpace: 'nowrap'
                     }}
                   >
-                    {previewData.documentAnalysis.detectedSections.map((sec, idx) => (
-                      <span
-                        key={idx}
-                        style={{
-                          backgroundColor: 'var(--bg-app, #f1f5f9)',
-                          border: '1px solid var(--border-subtle, #cbd5e1)',
-                          padding: '2px 8px',
-                          borderRadius: '4px',
-                          fontSize: '0.75rem',
-                          color: 'var(--text-main, #334155)'
-                        }}
-                      >
-                        {sec}
+                    {tab.label}
+                  </button>
+                ))}
+              </div>
+
+              {/* TAB 1: RESUMEN */}
+              {activeTab === 'resumen' && (
+                <div>
+                  {/* Tarjetas Cuantitativas */}
+                  <div
+                    style={{
+                      display: 'grid',
+                      gridTemplateColumns: 'repeat(auto-fit, minmax(130px, 1fr))',
+                      gap: '0.75rem',
+                      marginBottom: '1.25rem'
+                    }}
+                  >
+                    <div className="card" style={{ padding: '0.75rem', textAlign: 'center' }}>
+                      <FileText size={16} color="var(--primary)" style={{ margin: '0 auto 0.2rem' }} />
+                      <div style={{ fontSize: '1.25rem', fontWeight: 700 }}>
+                        {functionalReqs.length}
+                      </div>
+                      <div style={{ fontSize: '0.7rem', color: 'var(--text-muted)' }}>
+                        Requisitos Funcionales
+                      </div>
+                    </div>
+
+                    <div className="card" style={{ padding: '0.75rem', textAlign: 'center' }}>
+                      <Layers size={16} color="#0284c7" style={{ margin: '0 auto 0.2rem' }} />
+                      <div style={{ fontSize: '1.25rem', fontWeight: 700 }}>
+                        {nonFunctionalReqs.length}
+                      </div>
+                      <div style={{ fontSize: '0.7rem', color: 'var(--text-muted)' }}>
+                        No Funcionales
+                      </div>
+                    </div>
+
+                    <div className="card" style={{ padding: '0.75rem', textAlign: 'center' }}>
+                      <Users size={16} color="#16a34a" style={{ margin: '0 auto 0.2rem' }} />
+                      <div style={{ fontSize: '1.25rem', fontWeight: 700 }}>
+                        {previewData.actors?.length || 0}
+                      </div>
+                      <div style={{ fontSize: '0.7rem', color: 'var(--text-muted)' }}>
+                        Actores
+                      </div>
+                    </div>
+
+                    <div className="card" style={{ padding: '0.75rem', textAlign: 'center' }}>
+                      <Database size={16} color="#d97706" style={{ margin: '0 auto 0.2rem' }} />
+                      <div style={{ fontSize: '1.25rem', fontWeight: 700 }}>
+                        {previewData.entities?.length || 0}
+                      </div>
+                      <div style={{ fontSize: '0.7rem', color: 'var(--text-muted)' }}>
+                        Entidades
+                      </div>
+                    </div>
+
+                    <div className="card" style={{ padding: '0.75rem', textAlign: 'center' }}>
+                      <Cpu size={16} color="#9333ea" style={{ margin: '0 auto 0.2rem' }} />
+                      <div style={{ fontSize: '1.25rem', fontWeight: 700 }}>
+                        {(previewData.technologies?.frontend?.length || 0) +
+                         (previewData.technologies?.backend?.length || 0) +
+                         (previewData.technologies?.database?.length || 0) +
+                         (previewData.technologies?.infrastructure?.length || 0)}
+                      </div>
+                      <div style={{ fontSize: '0.7rem', color: 'var(--text-muted)' }}>
+                        Tecnologías
+                      </div>
+                    </div>
+
+                    <div className="card" style={{ padding: '0.75rem', textAlign: 'center' }}>
+                      <Server size={16} color="#475569" style={{ margin: '0 auto 0.2rem' }} />
+                      <div style={{ fontSize: '1.25rem', fontWeight: 700 }}>
+                        1
+                      </div>
+                      <div style={{ fontSize: '0.7rem', color: 'var(--text-muted)' }}>
+                        Arquitectura
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Tarjeta de Estadísticas de Deduplicación y Optimización */}
+                  <div
+                    style={{
+                      backgroundColor: 'var(--bg-app, #f8fafc)',
+                      border: '1px solid var(--border-subtle, #e2e8f0)',
+                      borderRadius: '8px',
+                      padding: '1rem',
+                      marginBottom: '1rem'
+                    }}
+                  >
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', marginBottom: '0.5rem' }}>
+                      <Sparkles size={16} color="var(--primary)" />
+                      <span style={{ fontSize: '0.85rem', fontWeight: 600 }}>
+                        Métricas del Pipeline Híbrido Determinista
                       </span>
-                    ))}
+                    </div>
+
+                    <div
+                      style={{
+                        display: 'grid',
+                        gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))',
+                        gap: '0.75rem',
+                        fontSize: '0.8rem'
+                      }}
+                    >
+                      <div>
+                        <span style={{ color: 'var(--text-muted)' }}>Fragmentos analizados: </span>
+                        <strong>{previewData.statistics?.totalFragments || 0}</strong>
+                      </div>
+                      <div>
+                        <span style={{ color: 'var(--text-muted)' }}>Duplicados eliminados: </span>
+                        <strong style={{ color: '#16a34a' }}>{previewData.statistics?.duplicatesRemoved || 0}</strong>
+                      </div>
+                      <div>
+                        <span style={{ color: 'var(--text-muted)' }}>Fragmentos enviados a Ollama: </span>
+                        <strong>
+                          {previewData.statistics?.aiFragments === 0
+                            ? '0 (100% determinista)'
+                            : `${previewData.statistics?.aiFragments} fragmentos`}
+                        </strong>
+                      </div>
+                      <div>
+                        <span style={{ color: 'var(--text-muted)' }}>Origen de la arquitectura: </span>
+                        <SourceBadge source={previewData.architecture?.source} />
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Resumen de Arquitectura */}
+                  <div
+                    style={{
+                      border: '1px solid var(--border-subtle, #e2e8f0)',
+                      borderRadius: '8px',
+                      padding: '1rem',
+                      display: 'flex',
+                      justifyContent: 'space-between',
+                      alignItems: 'center'
+                    }}
+                  >
+                    <div>
+                      <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)', textTransform: 'uppercase', fontWeight: 600 }}>
+                        Arquitectura Detectada
+                      </div>
+                      <div style={{ fontSize: '0.95rem', fontWeight: 600 }}>
+                        {previewData.architecture?.name || 'Arquitectura Web Modular Cliente-Servidor'}
+                      </div>
+                      <div style={{ fontSize: '0.8rem', color: 'var(--text-muted)', marginTop: '2px' }}>
+                        {previewData.architecture?.description}
+                      </div>
+                    </div>
+                    <div>
+                      <SourceBadge source={previewData.architecture?.source} />
+                    </div>
                   </div>
                 </div>
               )}
 
-              {/* Desplegable de Requisitos Detectados */}
-              <div
-                style={{
-                  border: '1px solid var(--border-subtle, #e2e8f0)',
-                  borderRadius: '8px',
-                  marginBottom: '0.75rem',
-                  overflow: 'hidden'
-                }}
-              >
-                <div
-                  onClick={() => setShowReqsList(!showReqsList)}
-                  style={{
-                    padding: '0.75rem 1rem',
-                    backgroundColor: 'var(--bg-app, #f8fafc)',
-                    cursor: 'pointer',
-                    display: 'flex',
-                    justifyContent: 'space-between',
-                    alignItems: 'center',
-                    fontSize: '0.875rem',
-                    fontWeight: 600
-                  }}
-                >
-                  <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-                    <FileText size={16} color="var(--primary)" />
-                    <span>Ver Requisitos Detectados ({previewData.requirements?.length || 0})</span>
-                  </div>
-                  {showReqsList ? <ChevronUp size={16} /> : <ChevronDown size={16} />}
-                </div>
-
-                {showReqsList && (
-                  <div style={{ maxHeight: '200px', overflowY: 'auto', padding: '0.5rem' }}>
-                    {previewData.requirements?.map((req, i) => (
-                      <div
-                        key={i}
+              {/* TAB 2: REQUISITOS */}
+              {activeTab === 'requisitos' && (
+                <div style={{ maxHeight: '350px', overflowY: 'auto', display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
+                  {previewData.requirements?.map((req, i) => (
+                    <div
+                      key={i}
+                      style={{
+                        padding: '0.75rem 1rem',
+                        border: '1px solid var(--border-subtle, #e2e8f0)',
+                        borderRadius: '6px',
+                        backgroundColor: 'var(--bg-surface, #fff)',
+                        display: 'flex',
+                        alignItems: 'flex-start',
+                        gap: '0.75rem'
+                      }}
+                    >
+                      <span
+                        className="badge"
                         style={{
-                          padding: '0.5rem 0.75rem',
-                          borderBottom: i < previewData.requirements.length - 1 ? '1px solid var(--border-subtle, #f1f5f9)' : 'none',
-                          fontSize: '0.8rem',
-                          display: 'flex',
-                          alignItems: 'flex-start',
-                          gap: '0.75rem'
+                          backgroundColor: req.type === 'NON_FUNCTIONAL' ? 'rgba(2, 132, 199, 0.12)' : 'rgba(37, 99, 235, 0.12)',
+                          color: req.type === 'NON_FUNCTIONAL' ? '#0284c7' : '#1d4ed8',
+                          fontSize: '0.75rem',
+                          fontWeight: 700
                         }}
                       >
-                        <span
-                          className="badge"
+                        {req.code}
+                      </span>
+                      <div style={{ flex: 1 }}>
+                        <div style={{ fontWeight: 600, fontSize: '0.85rem' }}>{req.name}</div>
+                        {req.description && req.description !== req.name && (
+                          <div style={{ fontSize: '0.775rem', color: 'var(--text-muted)', marginTop: '2px' }}>
+                            {req.description}
+                          </div>
+                        )}
+                      </div>
+                      <div style={{ display: 'flex', gap: '0.4rem', alignItems: 'center' }}>
+                        <SourceBadge source={req.source} />
+                        <span className="badge badge-secondary" style={{ fontSize: '0.65rem' }}>
+                          {req.priority || 'ALTA'}
+                        </span>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+
+              {/* TAB 3: ACTORES */}
+              {activeTab === 'actores' && (
+                <div style={{ maxHeight: '350px', overflowY: 'auto', display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
+                  {previewData.actors?.map((actor, i) => (
+                    <div
+                      key={i}
+                      style={{
+                        padding: '0.75rem 1rem',
+                        border: '1px solid var(--border-subtle, #e2e8f0)',
+                        borderRadius: '6px',
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'space-between',
+                        backgroundColor: 'var(--bg-surface, #fff)'
+                      }}
+                    >
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
+                        <div
                           style={{
-                            backgroundColor: req.source === 'rule' ? 'rgba(34, 197, 94, 0.15)' : 'rgba(59, 130, 246, 0.15)',
-                            color: req.source === 'rule' ? '#15803d' : '#1d4ed8',
-                            fontSize: '0.7rem',
-                            fontWeight: 700
+                            width: '32px',
+                            height: '32px',
+                            borderRadius: '50%',
+                            backgroundColor: 'rgba(22, 163, 74, 0.1)',
+                            display: 'flex',
+                            alignItems: 'center',
+                            justifyContent: 'center',
+                            color: '#16a34a'
                           }}
                         >
-                          {req.code}
-                        </span>
-                        <div style={{ flex: 1 }}>
-                          <div style={{ fontWeight: 500, color: 'var(--text-main)' }}>{req.name}</div>
-                          {req.description && req.description !== req.name && (
-                            <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)', marginTop: '2px' }}>
-                              {req.description}
-                            </div>
-                          )}
+                          <Users size={16} />
                         </div>
-                        <span style={{ fontSize: '0.7rem', color: 'var(--text-muted)' }}>
-                          {req.source === 'rule' ? 'Regla' : 'Ollama'}
-                        </span>
-                      </div>
-                    ))}
-                  </div>
-                )}
-              </div>
-
-              {/* Desplegable de Actores / Perfiles */}
-              <div
-                style={{
-                  border: '1px solid var(--border-subtle, #e2e8f0)',
-                  borderRadius: '8px',
-                  marginBottom: '1rem',
-                  overflow: 'hidden'
-                }}
-              >
-                <div
-                  onClick={() => setShowActorsList(!showActorsList)}
-                  style={{
-                    padding: '0.75rem 1rem',
-                    backgroundColor: 'var(--bg-app, #f8fafc)',
-                    cursor: 'pointer',
-                    display: 'flex',
-                    justifyContent: 'space-between',
-                    alignItems: 'center',
-                    fontSize: '0.875rem',
-                    fontWeight: 600
-                  }}
-                >
-                  <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-                    <Users size={16} color="var(--primary)" />
-                    <span>Ver Perfiles Contemplados ({previewData.actors?.length || 0})</span>
-                  </div>
-                  {showActorsList ? <ChevronUp size={16} /> : <ChevronDown size={16} />}
-                </div>
-
-                {showActorsList && (
-                  <div style={{ maxHeight: '160px', overflowY: 'auto', padding: '0.5rem' }}>
-                    {previewData.actors?.map((actor, i) => (
-                      <div
-                        key={i}
-                        style={{
-                          padding: '0.5rem 0.75rem',
-                          borderBottom: i < previewData.actors.length - 1 ? '1px solid var(--border-subtle, #f1f5f9)' : 'none',
-                          fontSize: '0.8rem',
-                          display: 'flex',
-                          alignItems: 'center',
-                          gap: '0.75rem'
-                        }}
-                      >
-                        <span className="badge badge-secondary" style={{ fontSize: '0.7rem' }}>
-                          {actor.id || `ACT-0${i + 1}`}
-                        </span>
                         <div>
-                          <strong>{actor.name}:</strong>{' '}
-                          <span style={{ color: 'var(--text-muted)' }}>{actor.description}</span>
+                          <div style={{ fontWeight: 600, fontSize: '0.85rem' }}>{actor.name}</div>
+                          <div style={{ fontSize: '0.775rem', color: 'var(--text-muted)' }}>{actor.description}</div>
                         </div>
                       </div>
-                    ))}
+                      <SourceBadge source={actor.source} />
+                    </div>
+                  ))}
+                </div>
+              )}
+
+              {/* TAB 4: ENTIDADES */}
+              {activeTab === 'entidades' && (
+                <div style={{ maxHeight: '350px', overflowY: 'auto', display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
+                  {previewData.entities?.map((ent, i) => (
+                    <div
+                      key={i}
+                      style={{
+                        padding: '0.75rem 1rem',
+                        border: '1px solid var(--border-subtle, #e2e8f0)',
+                        borderRadius: '6px',
+                        backgroundColor: 'var(--bg-surface, #fff)'
+                      }}
+                    >
+                      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.35rem' }}>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                          <Database size={15} color="#d97706" />
+                          <strong style={{ fontSize: '0.875rem' }}>{ent.name}</strong>
+                        </div>
+                        <SourceBadge source={ent.source} />
+                      </div>
+                      <div style={{ fontSize: '0.775rem', color: 'var(--text-muted)' }}>
+                        {ent.description}
+                      </div>
+                      {Array.isArray(ent.attributes) && ent.attributes.length > 0 && (
+                        <div style={{ display: 'flex', flexWrap: 'wrap', gap: '0.3rem', marginTop: '0.4rem' }}>
+                          {ent.attributes.map((attr, aIdx) => (
+                            <span
+                              key={aIdx}
+                              style={{
+                                backgroundColor: 'var(--bg-app, #f1f5f9)',
+                                padding: '1px 6px',
+                                borderRadius: '3px',
+                                fontSize: '0.7rem',
+                                color: 'var(--text-main)'
+                              }}
+                            >
+                              {attr.name} {attr.isPk && <span style={{ color: '#d97706', fontWeight: 600 }}>[PK]</span>}
+                            </span>
+                          ))}
+                        </div>
+                      )}
+                    </div>
+                  ))}
+                </div>
+              )}
+
+              {/* TAB 5: TECNOLOGÍAS */}
+              {activeTab === 'tecnologias' && (
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '0.85rem' }}>
+                  {[
+                    { title: 'Frontend / Presentación', items: previewData.technologies?.frontend || [] },
+                    { title: 'Backend / APIs', items: previewData.technologies?.backend || [] },
+                    { title: 'Bases de Datos', items: previewData.technologies?.database || [] },
+                    { title: 'Infraestructura / Despliegue', items: previewData.technologies?.infrastructure || [] }
+                  ].map((cat, idx) => (
+                    <div
+                      key={idx}
+                      style={{
+                        border: '1px solid var(--border-subtle, #e2e8f0)',
+                        borderRadius: '6px',
+                        padding: '0.75rem 1rem',
+                        backgroundColor: 'var(--bg-surface, #fff)'
+                      }}
+                    >
+                      <div style={{ fontSize: '0.75rem', fontWeight: 600, color: 'var(--text-muted)', textTransform: 'uppercase', marginBottom: '0.4rem' }}>
+                        {cat.title}
+                      </div>
+                      {cat.items.length > 0 ? (
+                        <div style={{ display: 'flex', flexWrap: 'wrap', gap: '0.4rem' }}>
+                          {cat.items.map((techName, tIdx) => (
+                            <span
+                              key={tIdx}
+                              className="badge badge-primary"
+                              style={{ fontSize: '0.75rem', padding: '3px 8px' }}
+                            >
+                              {techName}
+                            </span>
+                          ))}
+                        </div>
+                      ) : (
+                        <span style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>No se especificaron tecnologías explícitas</span>
+                      )}
+                    </div>
+                  ))}
+                </div>
+              )}
+
+              {/* TAB 6: ARQUITECTURA */}
+              {activeTab === 'arquitectura' && (
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
+                  <div
+                    style={{
+                      border: '1px solid var(--border-subtle, #e2e8f0)',
+                      borderRadius: '8px',
+                      padding: '1.25rem',
+                      backgroundColor: 'var(--bg-surface, #fff)'
+                    }}
+                  >
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.75rem' }}>
+                      <h3 style={{ margin: 0, fontSize: '1.05rem', fontWeight: 600 }}>
+                        {previewData.architecture?.name}
+                      </h3>
+                      <SourceBadge source={previewData.architecture?.source} />
+                    </div>
+
+                    <p style={{ fontSize: '0.85rem', color: 'var(--text-muted)', margin: '0 0 1rem 0' }}>
+                      {previewData.architecture?.description}
+                    </p>
+
+                    {/* Componentes de la arquitectura */}
+                    {Array.isArray(previewData.architecture?.components) && previewData.architecture.components.length > 0 && (
+                      <div>
+                        <div style={{ fontSize: '0.75rem', fontWeight: 600, color: 'var(--text-muted)', textTransform: 'uppercase', marginBottom: '0.4rem' }}>
+                          Componentes de la solución
+                        </div>
+                        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: '0.5rem' }}>
+                          {previewData.architecture.components.map((comp, cIdx) => (
+                            <div
+                              key={cIdx}
+                              style={{
+                                padding: '0.5rem 0.75rem',
+                                border: '1px solid var(--border-subtle, #e2e8f0)',
+                                borderRadius: '4px',
+                                fontSize: '0.8rem',
+                                backgroundColor: 'var(--bg-app, #f8fafc)'
+                              }}
+                            >
+                              <strong>{comp.name}</strong>
+                              <div style={{ fontSize: '0.7rem', color: 'var(--text-muted)' }}>
+                                Capa: {comp.layer || 'Aplicación'}
+                              </div>
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    )}
                   </div>
-                )}
-              </div>
+                </div>
+              )}
+
+              {/* TAB 7: DIAGRAMAS MERMAID */}
+              {activeTab === 'diagramas' && (
+                <div>
+                  {/* Selector de tipo de diagrama */}
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.75rem', flexWrap: 'wrap', gap: '0.5rem' }}>
+                    <div style={{ display: 'flex', gap: '0.4rem' }}>
+                      {[
+                        { id: 'er', label: 'Diagrama ER' },
+                        { id: 'navigation', label: 'Navegación' },
+                        { id: 'architecture', label: 'Arquitectura' },
+                        { id: 'useCase', label: 'Casos de Uso' }
+                      ].map(d => (
+                        <button
+                          key={d.id}
+                          onClick={() => setActiveDiagramTab(d.id)}
+                          className={`btn ${activeDiagramTab === d.id ? 'btn-primary' : 'btn-secondary'}`}
+                          style={{ fontSize: '0.75rem', padding: '4px 10px' }}
+                        >
+                          {d.label}
+                        </button>
+                      ))}
+                    </div>
+
+                    <button
+                      onClick={copyCurrentDiagramCode}
+                      className="btn btn-secondary"
+                      style={{ fontSize: '0.75rem', padding: '4px 10px', display: 'flex', alignItems: 'center', gap: '0.35rem' }}
+                    >
+                      <Copy size={13} />
+                      <span>{copiedCode ? '¡Copiado!' : 'Copiar Mermaid'}</span>
+                    </button>
+                  </div>
+
+                  {/* Renderizado de Mermaid */}
+                  <div
+                    style={{
+                      border: '1px solid var(--border-subtle, #e2e8f0)',
+                      borderRadius: '8px',
+                      padding: '1rem',
+                      backgroundColor: 'var(--bg-surface, #fff)',
+                      minHeight: '260px',
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      overflowX: 'auto'
+                    }}
+                  >
+                    {getDiagramCode() ? (
+                      <div style={{ width: '100%', display: 'flex', justifyContent: 'center' }}>
+                        <MermaidDiagram code={getDiagramCode()} />
+                      </div>
+                    ) : (
+                      <span style={{ fontSize: '0.8rem', color: 'var(--text-muted)' }}>
+                        No hay diagrama generado para esta sección.
+                      </span>
+                    )}
+                  </div>
+                </div>
+              )}
             </div>
           )}
         </div>

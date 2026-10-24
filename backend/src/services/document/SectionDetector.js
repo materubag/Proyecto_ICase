@@ -34,7 +34,7 @@ class SectionDetector {
       },
       {
         id: 'requisitos_funcionales',
-        regex: /^(?:5\.1(?:\.[0-9]+)*\.?\s+)?REQUISITOS\s+FUNCIONALES/i,
+        regex: /^(?:[0-9]+(?:\.[0-9]+)*\.?\s+)?(?:REQUISITOS|REQUERIMIENTOS)\s+FUNCIONALES/i,
         category: 'functional'
       },
       {
@@ -44,12 +44,12 @@ class SectionDetector {
       },
       {
         id: 'requisitos_no_funcionales',
-        regex: /^(?:5\.2(?:\.[0-9]+)*\.?\s+)?(?:CALIDAD,\s+SEGURIDAD\s+Y\s+OPERACI[OÓ]N|REQUISITOS\s+NO\s+FUNCIONALES)/i,
+        regex: /^(?:[0-9]+(?:\.[0-9]+)*\.?\s+)?(?:CALIDAD,\s+SEGURIDAD\s+Y\s+OPERACI[OÓ]N|(?:REQUISITOS|REQUERIMIENTOS)\s+NO\s+FUNCIONALES|ATRIBUTOS\s+DE\s+CALIDAD)/i,
         category: 'functional'
       },
       {
         id: 'reglas_negocio',
-        regex: /^(?:5\.3(?:\.[0-9]+)*\.?\s+)?REGLAS\s+DE\s+NEGOCIO(?:\s+PRINCIPALES)?/i,
+        regex: /^(?:[0-9]+(?:\.[0-9]+)*\.?\s+)?(?:REGLAS|POL[IÍ]TICAS)\s+DE\s+NEGOCIO(?:\s+PRINCIPALES)?/i,
         category: 'functional'
       },
       {
@@ -73,8 +73,18 @@ class SectionDetector {
         category: 'context'
       },
       {
+        id: 'supuestos',
+        regex: /^(?:[0-9]+(?:\.[0-9]+)*\.?\s+)?(?:SUPUESTOS|ASUNCIONES|PREMISAS|HIP[OÓ]TESIS|ASSUMPTIONS)\b/i,
+        category: 'context'
+      },
+      {
+        id: 'dependencias',
+        regex: /^(?:[0-9]+(?:\.[0-9]+)*\.?\s+)?(?:DEPENDENCIAS|DEPENDENCIES)\b/i,
+        category: 'context'
+      },
+      {
         id: 'supuestos_dependencias',
-        regex: /^(?:6(?:\.[0-9]+)*\.?\s+)?(?:SUPUESTOS\s+Y\s+DEPENDENCIAS|SUPUESTOS|DEPENDENCIAS)/i,
+        regex: /^(?:[0-9]+(?:\.[0-9]+)*\.?\s+)?(?:SUPUESTOS|PREMISAS)\s+Y\s+DEPENDENCIAS/i,
         category: 'context'
       },
       {
@@ -136,6 +146,12 @@ class SectionDetector {
       const lineLength = lines[i].length + 1; // +1 por \n
 
       if (line.length > 0 && line.length < 90) {
+        // Ignorar encabezados/pies de página tipo LaTeX que contienen " · " (e.g. "6.1 SUPUESTOS · 6.2 DEPENDENCIAS")
+        if (line.includes(' · ')) {
+          currentOffset += lineLength;
+          continue;
+        }
+
         // Comprobar si coincide con alguna definición de sección
         let matchedDef = null;
 
