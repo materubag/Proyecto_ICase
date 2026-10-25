@@ -35,7 +35,11 @@ class CodeGeneratorService {
         relationships: {
           orderBy: { source: 'asc' }
         },
-        architectures: true
+        architectures: true,
+        actors: {
+          where: { isDeleted: false },
+          orderBy: { name: 'asc' }
+        }
       }
     });
 
@@ -64,10 +68,25 @@ class CodeGeneratorService {
       }
     }
 
+    // Mockups visuales del proyecto almacenados en ArtifactVersion
+    const mockupArtifacts = await prisma.artifact.findMany({
+      where: {
+        projectId,
+        type: 'MOCKUP'
+      },
+      include: {
+        versions: {
+          orderBy: { version: 'desc' },
+          take: 1
+        }
+      }
+    });
+
     return {
       project,
       entities: finalEntities,
       relationships: activeRelationships,
+      mockups: mockupArtifacts,
       isApprovedOnly: approvedEntities.length > 0
     };
   }
@@ -115,8 +134,8 @@ class CodeGeneratorService {
 
       let cardinality = '1:N';
       if (card.includes('}') && card.includes('{')) cardinality = 'N:M';
-      else if (card.includes('||') && card.includes('||')) cardinality = '1:1';
-      else if (card.includes('}') || card.includes('{') || card.includes('o{') || card.includes('|{')) cardinality = '1:N';
+      else if (card.includes('o{') || card.includes('|{') || card.includes('}{') || card.includes('}o') || card.includes('}|')) cardinality = '1:N';
+      else if (card === '||--||' || (card.startsWith('||') && card.endsWith('||'))) cardinality = '1:1';
 
       relationships.push({ source, target, cardinality, description: label });
     }
@@ -132,7 +151,7 @@ class CodeGeneratorService {
    */
   async generateProjectFiles(projectId, options = {}) {
     const { includeDocker = true } = options;
-    const { project, entities, relationships, isApprovedOnly } = await this.getProjectArtifacts(projectId);
+    const { project, entities, relationships, mockups, isApprovedOnly } = await this.getProjectArtifacts(projectId);
 
     if (entities.length === 0) {
       return {
@@ -221,7 +240,51 @@ DB_PASSWORD=postgres123
       addFile(`frontend/src/pages/${page.fileName}`, page.content, 'javascript');
     }
 
-    addFile('frontend/src/App.jsx', frontendGen.generateAppJsx(project.name, entities), 'javascript');
+    // 4. Compilación de Mockups Reales de la BD (Tailwind CSS a React JSX)
+    const compiledMockups = [];
+    if (mockups && mockups.length > 0) {
+      for (const m of mockups) {
+        const v = m.versions?.[0];
+        const html = v?.renderedContent || v?.structuredContent?.screen?.html || '';
+        const screen = v?.structuredContent?.screen || {};
+        if (html) {
+          const rawRoute = screen.route || '/' + (m.name || 'mockup').toLowerCase().replace(/[^a-z0-9]/g, '-');
+          let baseName = rawRoute.replace(/^\//, '').replace(/[^a-zA-Z0-9]/g, ' ');
+          if (!baseName.trim()) baseName = 'home';
+          const compName = toPascalCase(baseName) + 'Mockup';
+          const key = 'mockup_' + baseName.trim().replace(/\s+/g, '_').toLowerCase();
+          const title = screen.title || m.name || compName;
+
+          const convertedJsx = convertHtmlToJsx(html, compName, rawRoute);
+          const mockupComponentCode = `import React from 'react';
+
+/**
+ * Mockup Compilado con Tailwind CSS
+ * Origen: I-CASE Studio ArtifactVersion
+ * Ruta: ${rawRoute}
+ * Título: ${title}
+ */
+export default function ${compName}() {
+  return (
+    <div className="mockup-container" style={{ padding: '8px' }}>
+      ${convertedJsx}
+    </div>
+  );
+}
+`;
+          addFile(`frontend/src/pages/mockups/${compName}.jsx`, mockupComponentCode, 'javascript');
+          compiledMockups.push({
+            compName,
+            key,
+            title,
+            route: rawRoute,
+            fileName: `${compName}.jsx`
+          });
+        }
+      }
+    }
+
+    addFile('frontend/src/App.jsx', frontendGen.generateAppJsx(project.name, entities, [], project.actors || [], compiledMockups), 'javascript');
 
     // Pantallas interactivas con tablas y formularios para cada entidad (Sequelize ORM)
     for (const entity of entities) {

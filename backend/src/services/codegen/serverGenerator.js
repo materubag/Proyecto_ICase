@@ -14,6 +14,8 @@ function generateServerFile(projectName = 'App') {
 require('dotenv').config();
 const express = require('express');
 const cors = require('cors');
+const path = require('path');
+const fs = require('fs');
 const { sequelize } = require('./models');
 const routes = require('./routes');
 
@@ -24,6 +26,13 @@ const PORT = process.env.PORT || 3000;
 app.use(cors());
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
+
+// Servidor estático para evidencias multimedia y fotografías (RF-12)
+const uploadsDir = path.join(__dirname, '../uploads');
+if (!fs.existsSync(uploadsDir)) {
+  fs.mkdirSync(uploadsDir, { recursive: true });
+}
+app.use('/uploads', express.static(uploadsDir));
 
 // Montaje de rutas API
 app.use('/api', routes);
@@ -65,23 +74,36 @@ async function startServer() {
         ]);
         if (sequelize.models.Vehiculo) {
           await sequelize.models.Vehiculo.bulkCreate([
-            { placa: 'PBA-3421', marca: 'Chevrolet', modelo: 'Sail 1.4', anio: 2021, kilometraje: 45200, color: 'Gris Plata' },
-            { placa: 'PBC-8812', marca: 'Chevrolet', modelo: 'D-Max 4x4', anio: 2022, kilometraje: 71200, color: 'Blanco' },
-            { placa: 'PCA-5520', marca: 'Kia', modelo: 'Sportage R', anio: 2020, kilometraje: 62000, color: 'Negro' }
+            { clienteId: 1, placa: 'PBA-3421', marca: 'Chevrolet', modelo: 'Sail 1.4', anio: 2021, anioFabricacion: 2021, kilometraje: 45200, color: 'Gris Plata' },
+            { clienteId: 2, placa: 'PBC-8812', marca: 'Chevrolet', modelo: 'D-Max 4x4', anio: 2022, anioFabricacion: 2022, kilometraje: 71200, color: 'Blanco' },
+            { clienteId: 3, placa: 'PCA-5520', marca: 'Kia', modelo: 'Sportage R', anio: 2020, anioFabricacion: 2020, kilometraje: 62000, color: 'Negro' }
           ]);
         }
         if (sequelize.models.Servicio) {
           await sequelize.models.Servicio.bulkCreate([
-            { codigo: 'SRV-001', nombre: 'Mantenimiento Preventivo 10,000 / 20,000 km', categoria: 'Mecánica Rápida', horas: 2.5, tarifaHora: 20.00, precioTotal: 50.00 },
-            { codigo: 'SRV-002', nombre: 'Cambio de Pastillas de Freno y Rectificado de Discos', categoria: 'Frenos', horas: 1.5, tarifaHora: 20.00, precioTotal: 30.00 },
-            { codigo: 'SRV-003', nombre: 'Diagnóstico Pericial Computarizado OBD-II', categoria: 'Electrónica', horas: 1.0, tarifaHora: 25.00, precioTotal: 25.00 }
+            { codigo: 'SRV-001', nombre: 'Mantenimiento Preventivo 10,000 / 20,000 km', descripcion: 'Revisión y cambio de fluidos', categoria: 'Mecánica Rápida', horas: 2.5, tarifaHora: 20.00, precioTotal: 50.00, precioManoObra: 50.00, duracionEstimadaMinutos: 150, activo: true },
+            { codigo: 'SRV-002', nombre: 'Cambio de Pastillas de Freno y Rectificado de Discos', descripcion: 'Mantenimiento del sistema de frenos', categoria: 'Frenos', horas: 1.5, tarifaHora: 20.00, precioTotal: 30.00, precioManoObra: 30.00, duracionEstimadaMinutos: 90, activo: true },
+            { codigo: 'SRV-003', nombre: 'Diagnóstico Pericial Computarizado OBD-II', descripcion: 'Escaneo electrónico y lectura de fallas', categoria: 'Electrónica', horas: 1.0, tarifaHora: 25.00, precioTotal: 25.00, precioManoObra: 25.00, duracionEstimadaMinutos: 60, activo: true }
           ]);
         }
         if (sequelize.models.Producto) {
           await sequelize.models.Producto.bulkCreate([
-            { codigo: 'ACE-5W30-SYN', nombre: 'Aceite Sintético 5W-30 (Galón)', categoria: 'Fluidos y Lubricantes', stockActual: 14, stockMinimo: 8, precioVenta: 38.50 },
-            { codigo: 'FLT-OIL-01', nombre: 'Filtro de Aceite Blindado Original', categoria: 'Filtros', stockActual: 3, stockMinimo: 5, precioVenta: 8.50 },
-            { codigo: 'PST-FRN-CER', nombre: 'Juego de Pastillas Delanteras Cerámicas', categoria: 'Frenos', stockActual: 2, stockMinimo: 4, precioVenta: 42.00 }
+            { codigo: 'ACE-5W30-SYN', nombre: 'Aceite Sintético 5W-30 (Galón)', descripcion: 'Lubricante sintético alta gama', categoria: 'Fluidos y Lubricantes', stock: 14, stockActual: 14, stockMinimo: 8, costo: 25.00, precio: 38.50, precioVenta: 38.50, activo: true },
+            { codigo: 'FLT-OIL-01', nombre: 'Filtro de Aceite Blindado Original', descripcion: 'Filtro blindado para motor a gasolina', categoria: 'Filtros', stock: 3, stockActual: 3, stockMinimo: 5, costo: 5.00, precio: 8.50, precioVenta: 8.50, activo: true },
+            { codigo: 'PST-FRN-CER', nombre: 'Juego de Pastillas Delanteras Cerámicas', descripcion: 'Pastillas cerámicas de alto rendimiento', categoria: 'Frenos', stock: 2, stockActual: 2, stockMinimo: 4, costo: 28.00, precio: 42.00, precioVenta: 42.00, activo: true }
+          ]);
+        }
+        if (sequelize.models.ConocimientoTecnico) {
+          await sequelize.models.ConocimientoTecnico.bulkCreate([
+            { codigo: 'P0300', titulo: 'Fallo de Encendido Múltiple / Aleatorio', sistema: 'Motor', sintomas: 'Pérdida de potencia, tirones en aceleración, luz Check Engine parpadeando', causas: 'Bujías desgastadas, bobinas defectuosas, baja presión de combustible', solucion: 'Revisar resistencia de bobinas con multímetro, reemplazar juego completo de bujías y verificar pulsos de inyección.' },
+            { codigo: 'P0420', titulo: 'Eficiencia del Catalizador por Debajo del Umbral (Banco 1)', sistema: 'Emisiones', sintomas: 'Consumo elevado de combustible, olor a sulfuro en escape', causas: 'Catalizador degradado, fuga en escape antes del sensor, sensor de oxígeno post-catalizador descalibrado', solucion: 'Monitorear gráfica de voltaje de sensores O2 antes y después del catalizador. Si oscilan igual, reemplazar catalizador.' },
+            { codigo: 'C0035', titulo: 'Circuito Sensor de Velocidad Rueda Delantera Izquierda', sistema: 'Frenos ABS', sintomas: 'Luz ABS y control de tracción encendidas en tablero', causas: 'Cableado cortado por movimiento de suspensión, sensor sucio con viruta metálica, rueda fónica fisurada', solucion: 'Limpiar sensor con limpiador de frenos, medir señal de onda y sustituir sensor si no hay señal.' },
+            { codigo: 'P0171', titulo: 'Sistema Demasiado Pobre (Banco 1)', sistema: 'Admisión / Combustible', sintomas: 'Marcha mínima irregular, vacilación al pisar el acelerador', causas: 'Entrada de aire no medida, sensor MAF contaminado, filtro de combustible tapado', solucion: 'Realizar prueba de humo en múltiple de admisión y limpiar sensor de flujo de masa de aire (MAF).' }
+          ]);
+        }
+        if (sequelize.models.Cotizacion) {
+          await sequelize.models.Cotizacion.bulkCreate([
+            { clienteId: 1, vehiculoId: 1, subtotal: 73.00, iva: 10.95, total: 83.95, estado: 'Pendiente de Aprobación' }
           ]);
         }
         console.log('✅ Datos iniciales sembrados con éxito.');
@@ -158,6 +180,7 @@ function generatePackageJson(projectName = 'app') {
       cors: '^2.8.5',
       dotenv: '^16.4.5',
       express: '^4.19.2',
+      multer: '^1.4.5-lts.1',
       pg: '^8.12.0',
       'pg-hstore': '^2.3.4',
       sequelize: '^6.37.3'

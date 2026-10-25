@@ -7,12 +7,27 @@ function generateRecepcionPage() {
   return `import React, { useState, useEffect } from 'react';
 import { apiRequest } from '../api/client';
 
+const ZONE_STATES = ['Normal', 'Revisión', 'Falla', 'Falla Crítica'];
+const ZONE_COLORS = {
+  'Normal': '#10b981',
+  'Revisión': '#f59e0b',
+  'Falla': '#f97316',
+  'Falla Crítica': '#ef4444'
+};
+const ZONE_BADGES = {
+  'Normal': 'badge-success',
+  'Revisión': 'badge-warning',
+  'Falla': 'badge-danger',
+  'Falla Crítica': 'badge-danger'
+};
+
 export default function RecepcionPage() {
   const [recepciones, setRecepciones] = useState([
     { id: 1, placa: 'PBA-3421', cliente: 'Carlos Mendoza', fecha: '2026-10-24 09:30', kilometraje: 45200, combustible: '3/4', motivo: 'Mantenimiento preventivo y ruido en tren delantero', estado: 'En Inspección', zonas: { frente: 'Normal', trasera: 'Normal', lateralIzq: 'Revisión', lateralDer: 'Normal', techo: 'Normal' } },
     { id: 2, placa: 'GTX-9081', cliente: 'Lucía Fernández', fecha: '2026-10-24 11:15', kilometraje: 89300, combustible: '1/2', motivo: 'Luz Check Engine encendida y pérdida de potencia', estado: 'Diagnosticado', zonas: { frente: 'Normal', trasera: 'Falla', lateralIzq: 'Normal', lateralDer: 'Normal', techo: 'Normal' } }
   ]);
   const [modalOpen, setModalOpen] = useState(false);
+  const [selectedRecepcion, setSelectedRecepcion] = useState(null);
   const [formData, setFormData] = useState({
     placa: '',
     cliente: '',
@@ -23,6 +38,25 @@ export default function RecepcionPage() {
     zonas: { frente: 'Normal', trasera: 'Normal', lateralIzq: 'Normal', lateralDer: 'Normal', techo: 'Normal' }
   });
 
+  useEffect(() => {
+    apiRequest('/recepciones')
+      .then(res => {
+        if (res && res.data && Array.isArray(res.data) && res.data.length > 0) {
+          setRecepciones(res.data);
+        }
+      })
+      .catch(() => {});
+  }, []);
+
+  const cycleZoneState = (zona) => {
+    const current = formData.zonas[zona] || 'Normal';
+    const nextIdx = (ZONE_STATES.indexOf(current) + 1) % ZONE_STATES.length;
+    setFormData({
+      ...formData,
+      zonas: { ...formData.zonas, [zona]: ZONE_STATES[nextIdx] }
+    });
+  };
+
   const handleCrear = async (e) => {
     e.preventDefault();
     const nuevo = {
@@ -32,11 +66,19 @@ export default function RecepcionPage() {
       estado: 'Ingresado'
     };
     try {
-      await apiRequest('/recepcions', { method: 'POST', body: nuevo }).catch(() => {});
+      await apiRequest('/recepciones', { method: 'POST', body: nuevo }).catch(() => {});
     } catch (err) {}
     setRecepciones([nuevo, ...recepciones]);
     setModalOpen(false);
-    setFormData({ placa: '', cliente: '', kilometraje: '', combustible: '1/2', motivo: '', observaciones: '', zonas: { frente: 'Normal', trasera: 'Normal', lateralIzq: 'Normal', lateralDer: 'Normal', techo: 'Normal' } });
+    setFormData({
+      placa: '',
+      cliente: '',
+      kilometraje: '',
+      combustible: '1/2',
+      motivo: '',
+      observaciones: '',
+      zonas: { frente: 'Normal', trasera: 'Normal', lateralIzq: 'Normal', lateralDer: 'Normal', techo: 'Normal' }
+    });
   };
 
   const getBadgeClass = (estado) => {
@@ -52,7 +94,7 @@ export default function RecepcionPage() {
         <div>
           <h2 style={{ fontSize: '1.4rem', fontWeight: 700 }}>🚗 Recepción e Inspección de Vehículos</h2>
           <p style={{ color: 'var(--text-muted)', fontSize: '0.9rem', marginTop: '4px' }}>
-            Control de ingreso de vehículos, kilometraje, combustible e inspección pericial de zonas con evidencias.
+            Control de ingreso pericial, combustible, kilometraje e inspección interactiva de zonas (RF-10, RF-12).
           </p>
         </div>
         <button className="btn btn-primary" onClick={() => setModalOpen(true)}>
@@ -77,6 +119,137 @@ export default function RecepcionPage() {
         </div>
       </div>
 
+      {/* Selector Gráfico Interactivo de Silueta Vehicular en Vivo */}
+      <div className="card" style={{ marginBottom: '24px' }}>
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px', flexWrap: 'wrap', gap: '8px' }}>
+          <div>
+            <h3 style={{ fontSize: '1.05rem', fontWeight: 600 }}>🗺️ Inspección Pericial de Zonas de Carrocería (RF-10)</h3>
+            <span style={{ fontSize: '0.82rem', color: 'var(--text-muted)' }}>
+              Silueta interactiva con estados de peritaje: Normal (Verde), Revisión (Amarillo), Falla (Naranja), Falla Crítica (Rojo).
+            </span>
+          </div>
+          <div style={{ display: 'flex', gap: '8px', fontSize: '0.78rem' }}>
+            <span className="badge badge-success">● Normal</span>
+            <span className="badge badge-warning">● Revisión</span>
+            <span className="badge badge-danger">● Falla</span>
+            <span className="badge badge-danger" style={{ background: '#991b1b', color: '#fff' }}>● Falla Crítica</span>
+          </div>
+        </div>
+
+        {/* Diagrama Silueta Cuadrante de Zonas */}
+        <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', padding: '24px 12px', background: 'linear-gradient(180deg, #f8fafc 0%, #edf2f7 100%)', borderRadius: '12px', border: '1px solid #e2e8f0' }}>
+          <div style={{ maxWidth: '420px', width: '100%', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '12px' }}>
+            {/* Frente */}
+            <div
+              style={{
+                width: '180px',
+                padding: '12px',
+                textAlign: 'center',
+                borderRadius: '8px',
+                cursor: 'pointer',
+                fontWeight: 600,
+                fontSize: '0.88rem',
+                color: '#fff',
+                backgroundColor: ZONE_COLORS[selectedRecepcion?.zonas?.frente || formData.zonas.frente] || '#10b981',
+                boxShadow: '0 2px 6px rgba(0,0,0,0.1)',
+                transition: 'transform 0.2s'
+              }}
+              onClick={() => cycleZoneState('frente')}
+              title="Click para cambiar estado"
+            >
+              Frente / Capó: {selectedRecepcion?.zonas?.frente || formData.zonas.frente}
+            </div>
+
+            {/* Laterales y Techo */}
+            <div style={{ display: 'flex', gap: '12px', width: '100%', justifyContent: 'center' }}>
+              <div
+                style={{
+                  flex: 1,
+                  padding: '16px 8px',
+                  textAlign: 'center',
+                  borderRadius: '8px',
+                  cursor: 'pointer',
+                  fontWeight: 600,
+                  fontSize: '0.82rem',
+                  color: '#fff',
+                  backgroundColor: ZONE_COLORS[selectedRecepcion?.zonas?.lateralIzq || formData.zonas.lateralIzq] || '#10b981',
+                  boxShadow: '0 2px 6px rgba(0,0,0,0.1)'
+                }}
+                onClick={() => cycleZoneState('lateralIzq')}
+                title="Click para cambiar estado"
+              >
+                Lateral Izquierdo<br />
+                <span style={{ fontSize: '0.75rem', opacity: 0.9 }}>{selectedRecepcion?.zonas?.lateralIzq || formData.zonas.lateralIzq}</span>
+              </div>
+
+              <div
+                style={{
+                  width: '120px',
+                  padding: '16px 8px',
+                  textAlign: 'center',
+                  borderRadius: '8px',
+                  cursor: 'pointer',
+                  fontWeight: 600,
+                  fontSize: '0.82rem',
+                  color: '#fff',
+                  backgroundColor: ZONE_COLORS[selectedRecepcion?.zonas?.techo || formData.zonas.techo] || '#10b981',
+                  boxShadow: '0 2px 6px rgba(0,0,0,0.1)'
+                }}
+                onClick={() => cycleZoneState('techo')}
+                title="Click para cambiar estado"
+              >
+                Techo / Cabina<br />
+                <span style={{ fontSize: '0.75rem', opacity: 0.9 }}>{selectedRecepcion?.zonas?.techo || formData.zonas.techo}</span>
+              </div>
+
+              <div
+                style={{
+                  flex: 1,
+                  padding: '16px 8px',
+                  textAlign: 'center',
+                  borderRadius: '8px',
+                  cursor: 'pointer',
+                  fontWeight: 600,
+                  fontSize: '0.82rem',
+                  color: '#fff',
+                  backgroundColor: ZONE_COLORS[selectedRecepcion?.zonas?.lateralDer || formData.zonas.lateralDer] || '#10b981',
+                  boxShadow: '0 2px 6px rgba(0,0,0,0.1)'
+                }}
+                onClick={() => cycleZoneState('lateralDer')}
+                title="Click para cambiar estado"
+              >
+                Lateral Derecho<br />
+                <span style={{ fontSize: '0.75rem', opacity: 0.9 }}>{selectedRecepcion?.zonas?.lateralDer || formData.zonas.lateralDer}</span>
+              </div>
+            </div>
+
+            {/* Trasera */}
+            <div
+              style={{
+                width: '180px',
+                padding: '12px',
+                textAlign: 'center',
+                borderRadius: '8px',
+                cursor: 'pointer',
+                fontWeight: 600,
+                fontSize: '0.88rem',
+                color: '#fff',
+                backgroundColor: ZONE_COLORS[selectedRecepcion?.zonas?.trasera || formData.zonas.trasera] || '#10b981',
+                boxShadow: '0 2px 6px rgba(0,0,0,0.1)'
+              }}
+              onClick={() => cycleZoneState('trasera')}
+              title="Click para cambiar estado"
+            >
+              Trasera / Maletero: {selectedRecepcion?.zonas?.trasera || formData.zonas.trasera}
+            </div>
+
+            <span style={{ fontSize: '0.74rem', color: 'var(--text-muted)', marginTop: '4px' }}>
+              💡 Haz clic sobre cualquier cuadrante para alternar su estado pericial.
+            </span>
+          </div>
+        </div>
+      </div>
+
       {/* Tabla de Recepciones */}
       <div className="card">
         <h3 style={{ fontSize: '1.05rem', marginBottom: '16px', fontWeight: 600 }}>Registro de Ingresos Recientes</h3>
@@ -92,6 +265,7 @@ export default function RecepcionPage() {
                 <th>Motivo de Ingreso</th>
                 <th>Estado</th>
                 <th>Inspección Zonas</th>
+                <th>Acción</th>
               </tr>
             </thead>
             <tbody>
@@ -109,10 +283,21 @@ export default function RecepcionPage() {
                     <span className={\`badge \${getBadgeClass(r.estado)}\`}>{r.estado}</span>
                   </td>
                   <td>
-                    <div style={{ display: 'flex', gap: '4px', fontSize: '0.72rem' }}>
-                      <span title="Frente" className={\`badge \${r.zonas?.frente === 'Normal' ? 'badge-success' : 'badge-warning'}\`}>F: {r.zonas?.frente}</span>
-                      <span title="Trasera" className={\`badge \${r.zonas?.trasera === 'Normal' ? 'badge-success' : 'badge-danger'}\`}>T: {r.zonas?.trasera}</span>
+                    <div style={{ display: 'flex', gap: '4px', fontSize: '0.72rem', flexWrap: 'wrap' }}>
+                      <span className={\`badge \${ZONE_BADGES[r.zonas?.frente || 'Normal']}\`}>F: {r.zonas?.frente || 'Normal'}</span>
+                      <span className={\`badge \${ZONE_BADGES[r.zonas?.lateralIzq || 'Normal']}\`}>LI: {r.zonas?.lateralIzq || 'Normal'}</span>
+                      <span className={\`badge \${ZONE_BADGES[r.zonas?.lateralDer || 'Normal']}\`}>LD: {r.zonas?.lateralDer || 'Normal'}</span>
+                      <span className={\`badge \${ZONE_BADGES[r.zonas?.trasera || 'Normal']}\`}>T: {r.zonas?.trasera || 'Normal'}</span>
                     </div>
+                  </td>
+                  <td>
+                    <button
+                      className="btn btn-secondary"
+                      style={{ fontSize: '0.76rem', padding: '4px 8px' }}
+                      onClick={() => setSelectedRecepcion(r)}
+                    >
+                      Ver Peritaje
+                    </button>
                   </td>
                 </tr>
               ))}
@@ -124,7 +309,7 @@ export default function RecepcionPage() {
       {/* Modal Nueva Recepción */}
       {modalOpen && (
         <div className="modal-overlay">
-          <div className="modal-content" style={{ maxWidth: '650px' }}>
+          <div className="modal-content" style={{ maxWidth: '680px' }}>
             <h3 style={{ marginBottom: '16px', fontWeight: 700 }}>Registrar Nueva Recepción de Vehículo</h3>
             <form onSubmit={handleCrear}>
               <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px' }}>
@@ -160,27 +345,35 @@ export default function RecepcionPage() {
                 <textarea className="form-control" rows={2} required placeholder="Describa el motivo de visita, ruidos, fallas observadas..." value={formData.motivo} onChange={e => setFormData({ ...formData, motivo: e.target.value })} />
               </div>
 
-              {/* Inspección visual de Zonas */}
-              <div style={{ marginBottom: '16px', padding: '12px', background: '#f8fafc', borderRadius: '6px', border: '1px solid var(--border-color)' }}>
-                <label style={{ fontWeight: 600, fontSize: '0.85rem', marginBottom: '8px', display: 'block' }}>
-                  Inspección Visual de Carrocería y Zonas
-                </label>
-                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(130px, 1fr))', gap: '8px' }}>
-                  {['frente', 'trasera', 'lateralIzq', 'lateralDer', 'techo'].map(zona => (
-                    <div key={zona}>
-                      <span style={{ fontSize: '0.75rem', textTransform: 'capitalize', color: 'var(--text-muted)' }}>{zona}:</span>
-                      <select
-                        className="form-control"
-                        style={{ fontSize: '0.78rem', padding: '4px 6px' }}
-                        value={formData.zonas[zona]}
-                        onChange={e => setFormData({ ...formData, zonas: { ...formData.zonas, [zona]: e.target.value } })}
-                      >
-                        <option value="Normal">Normal</option>
-                        <option value="Revisión">Revisión</option>
-                        <option value="Falla">Falla</option>
-                        <option value="Falla Crítica">Falla Crítica</option>
-                      </select>
-                    </div>
+              {/* Inspección visual de Zonas con Selector Gráfico */}
+              <div style={{ marginBottom: '16px', padding: '14px', background: '#f8fafc', borderRadius: '8px', border: '1px solid var(--border-color)' }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '8px' }}>
+                  <label style={{ fontWeight: 600, fontSize: '0.85rem' }}>
+                    Inspección Visual de Carrocería (Clic para alternar estado)
+                  </label>
+                  <span style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>Normal ➔ Revisión ➔ Falla ➔ Crítica</span>
+                </div>
+
+                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(5, 1fr)', gap: '8px' }}>
+                  {['frente', 'lateralIzq', 'techo', 'lateralDer', 'trasera'].map(zona => (
+                    <button
+                      key={zona}
+                      type="button"
+                      onClick={() => cycleZoneState(zona)}
+                      style={{
+                        padding: '8px 4px',
+                        borderRadius: '6px',
+                        border: 'none',
+                        cursor: 'pointer',
+                        fontSize: '0.76rem',
+                        fontWeight: 600,
+                        color: '#fff',
+                        backgroundColor: ZONE_COLORS[formData.zonas[zona]] || '#10b981'
+                      }}
+                    >
+                      <div style={{ textTransform: 'capitalize' }}>{zona.replace('lateral', 'Lat. ')}</div>
+                      <div style={{ fontSize: '0.7rem', opacity: 0.9 }}>{formData.zonas[zona]}</div>
+                    </button>
                   ))}
                 </div>
               </div>
@@ -200,7 +393,7 @@ export default function RecepcionPage() {
 }
 
 function generateCitasPage() {
-  return `import React, { useState } from 'react';
+  return `import React, { useState, useEffect } from 'react';
 import { apiRequest } from '../api/client';
 
 export default function CitasPage() {
@@ -219,6 +412,16 @@ export default function CitasPage() {
     servicio: 'Mantenimiento Preventivo',
     bahia: 'Bahía 1 (Elevador)'
   });
+
+  useEffect(() => {
+    apiRequest('/citas')
+      .then(res => {
+        if (res && res.data && Array.isArray(res.data) && res.data.length > 0) {
+          setCitas(res.data);
+        }
+      })
+      .catch(() => {});
+  }, []);
 
   const handleCrear = async (e) => {
     e.preventDefault();
@@ -355,7 +558,7 @@ export default function CitasPage() {
 }
 
 function generateClientesPage() {
-  return `import React, { useState } from 'react';
+  return `import React, { useState, useEffect } from 'react';
 import { apiRequest } from '../api/client';
 
 export default function ClientesPage() {
@@ -367,6 +570,16 @@ export default function ClientesPage() {
   const [busqueda, setBusqueda] = useState('');
   const [modalOpen, setModalOpen] = useState(false);
   const [formData, setFormData] = useState({ identificacion: '', nombre: '', telefono: '', correo: '', direccion: '' });
+
+  useEffect(() => {
+    apiRequest('/clientes')
+      .then(res => {
+        if (res && res.data && Array.isArray(res.data) && res.data.length > 0) {
+          setClientes(res.data);
+        }
+      })
+      .catch(() => {});
+  }, []);
 
   const handleCrear = async (e) => {
     e.preventDefault();
@@ -483,7 +696,7 @@ export default function ClientesPage() {
 }
 
 function generateVehiculosPage() {
-  return `import React, { useState } from 'react';
+  return `import React, { useState, useEffect } from 'react';
 import { apiRequest } from '../api/client';
 
 export default function VehiculosPage() {
@@ -495,6 +708,16 @@ export default function VehiculosPage() {
   const [busqueda, setBusqueda] = useState('');
   const [modalOpen, setModalOpen] = useState(false);
   const [formData, setFormData] = useState({ placa: '', marca: '', modelo: '', anio: 2022, vin: '', kilometraje: '', color: '', cliente: '' });
+
+  useEffect(() => {
+    apiRequest('/vehiculos')
+      .then(res => {
+        if (res && res.data && Array.isArray(res.data) && res.data.length > 0) {
+          setVehiculos(res.data);
+        }
+      })
+      .catch(() => {});
+  }, []);
 
   const handleCrear = async (e) => {
     e.preventDefault();
@@ -901,7 +1124,7 @@ export default function ReparacionesPage() {
 }
 
 function generateInventarioPage() {
-  return `import React, { useState } from 'react';
+  return `import React, { useState, useEffect } from 'react';
 import { apiRequest } from '../api/client';
 
 export default function InventarioPage() {
@@ -916,11 +1139,21 @@ export default function InventarioPage() {
 
   const bajoStockItems = repuestos.filter(r => r.stock <= r.stockMin);
 
+  useEffect(() => {
+    apiRequest('/productos')
+      .then(res => {
+        if (res && res.data && Array.isArray(res.data) && res.data.length > 0) {
+          setRepuestos(res.data);
+        }
+      })
+      .catch(() => {});
+  }, []);
+
   const handleCrear = async (e) => {
     e.preventDefault();
     const nuevo = { id: Date.now(), ...formData, costo: Number(formData.costo), precio: Number(formData.precio), stock: Number(formData.stock), stockMin: Number(formData.stockMin) };
     try {
-      await apiRequest('/repuestos', { method: 'POST', body: nuevo }).catch(() => {});
+      await apiRequest('/productos', { method: 'POST', body: nuevo }).catch(() => {});
     } catch (err) {}
     setRepuestos([...repuestos, nuevo]);
     setModalOpen(false);
@@ -1050,7 +1283,8 @@ export default function InventarioPage() {
 }
 
 function generateCotizacionesClientePage() {
-  return `import React, { useState } from 'react';
+  return `import React, { useState, useEffect } from 'react';
+import { apiRequest } from '../api/client';
 
 export default function CotizacionesClientePage() {
   const [cotizacion, setCotizacion] = useState({
@@ -1066,6 +1300,21 @@ export default function CotizacionesClientePage() {
     ]
   });
 
+  useEffect(() => {
+    apiRequest('/cotizaciones')
+      .then(res => {
+        if (res && res.data && Array.isArray(res.data) && res.data.length > 0) {
+          const first = res.data[0];
+          setCotizacion(prev => ({
+            ...prev,
+            numero: first.numeroCotizacion || prev.numero,
+            estado: first.estado || prev.estado
+          }));
+        }
+      })
+      .catch(() => {});
+  }, []);
+
   const total = cotizacion.items.reduce((sum, i) => sum + (i.aprobado ? i.precio : 0), 0);
 
   const toggleItem = (id) => {
@@ -1075,8 +1324,34 @@ export default function CotizacionesClientePage() {
     });
   };
 
-  const handleDecision = (decision) => {
+  const handleDecision = async (decision) => {
     setCotizacion({ ...cotizacion, estado: decision });
+    try {
+      await apiRequest('/cotizaciones/1', {
+        method: 'PUT',
+        body: { estado: decision, fechaDecision: new Date().toISOString() }
+      }).catch(() => {});
+
+      if (decision === 'Aprobada' || decision === 'Aprobada Parcial') {
+        // Generar Orden de Trabajo automáticamente a partir de ítems autorizados (RF-17)
+        const actividades = cotizacion.items
+          .filter(i => i.aprobado)
+          .map(i => i.descripcion)
+          .join(', ');
+        await apiRequest('/orden_trabajos', {
+          method: 'POST',
+          body: {
+            id: 'OT-' + Math.floor(100 + Math.random() * 900),
+            vehiculo: cotizacion.vehiculo,
+            cliente: 'Roberto Gómez (Cliente)',
+            mecanico: 'Ing. Marco Valencia',
+            progreso: 20,
+            etapa: 'En Reparación',
+            actividades: actividades || 'Mantenimiento autorizado por cliente'
+          }
+        }).catch(() => {});
+      }
+    } catch (e) {}
   };
 
   return (
@@ -1972,31 +2247,73 @@ export default function CitasClientePage() {
 }
 
 function generateConocimientoPage() {
-  return `import React, { useState } from 'react';
+  return `import React, { useState, useEffect } from 'react';
+import { apiRequest } from '../api/client';
 
 export default function ConocimientoPage() {
   const [busqueda, setBusqueda] = useState('');
-  const articulos = [
+  const [modalOpen, setModalOpen] = useState(false);
+  const [formData, setFormData] = useState({ codigo: '', titulo: '', sistema: 'Motor', sintomas: '', causas: '', solucion: '' });
+  const [articulos, setArticulos] = useState([
     { codigo: 'P0300', titulo: 'Fallo de Encendido Múltiple / Aleatorio', sistema: 'Motor', sintomas: 'Pérdida de potencia, tirones en aceleración, luz Check Engine parpadeando', causas: 'Bujías desgastadas, bobinas defectuosas, baja presión de combustible, inyectores obstruidos', solucion: 'Revisar resistencia de bobinas con multímetro, reemplazar juego completo de bujías y verificar pulsos de inyección.' },
     { codigo: 'P0420', titulo: 'Eficiencia del Catalizador por Debajo del Umbral (Banco 1)', sistema: 'Emisiones', sintomas: 'Consumo elevado de combustible, olor a sulfuro en escape', causas: 'Catalizador degradado, fuga en escape antes del sensor, sensor de oxígeno post-catalizador descalibrado', solucion: 'Monitorear gráfica de voltaje de sensores O2 antes y después del catalizador. Si oscilan igual, reemplazar catalizador.' },
     { codigo: 'C0035', titulo: 'Circuito Sensor de Velocidad Rueda Delantera Izquierda', sistema: 'Frenos ABS', sintomas: 'Luz ABS y control de tracción encendidas en tablero', causas: 'Cableado cortado por movimiento de suspensión, sensor sucio con viruta metálica, rueda fónica fisurada', solucion: 'Limpiar sensor con limpiador de frenos, medir señal de onda sinusoidal/cuadrada al girar rueda y sustituir sensor si no hay señal.' },
     { codigo: 'P0171', titulo: 'Sistema Demasiado Pobre (Banco 1)', sistema: 'Admisión / Combustible', sintomas: 'Marcha mínima irregular, vacilación al pisar el acelerador', causas: 'Entrada de aire no medida (manguera de vacío rota), sensor MAF contaminado, filtro de combustible tapado', solucion: 'Realizar prueba de humo en múltiple de admisión y limpiar sensor de flujo de masa de aire (MAF).' }
-  ];
+  ]);
 
-  const filtrados = articulos.filter(a =>
-    a.codigo.toLowerCase().includes(busqueda.toLowerCase()) ||
-    a.titulo.toLowerCase().includes(busqueda.toLowerCase()) ||
-    a.sistema.toLowerCase().includes(busqueda.toLowerCase()) ||
-    a.causas.toLowerCase().includes(busqueda.toLowerCase())
-  );
+  useEffect(() => {
+    apiRequest('/conocimiento_tecnicos')
+      .then(res => {
+        if (res && res.data && Array.isArray(res.data) && res.data.length > 0) {
+          setArticulos(res.data);
+        }
+      })
+      .catch(() => {});
+  }, []);
+
+  const handleCrear = async (e) => {
+    e.preventDefault();
+    const nuevo = { id: Date.now(), ...formData };
+    try {
+      const res = await apiRequest('/conocimiento_tecnicos', { method: 'POST', body: nuevo });
+      if (res && res.data) {
+        setArticulos(prev => [res.data, ...prev]);
+      } else {
+        setArticulos(prev => [nuevo, ...prev]);
+      }
+    } catch (err) {
+      setArticulos(prev => [nuevo, ...prev]);
+    }
+    setModalOpen(false);
+    setFormData({ codigo: '', titulo: '', sistema: 'Motor', sintomas: '', causas: '', solucion: '' });
+  };
+
+  const term = busqueda.toLowerCase().trim();
+  const filtrados = articulos.filter(a => {
+    if (!term) return true;
+    return (
+      (a.codigo && a.codigo.toLowerCase().includes(term)) ||
+      (a.titulo && a.titulo.toLowerCase().includes(term)) ||
+      (a.sistema && a.sistema.toLowerCase().includes(term)) ||
+      (a.sintomas && a.sintomas.toLowerCase().includes(term)) ||
+      (a.causas && a.causas.toLowerCase().includes(term)) ||
+      (a.solucion && a.solucion.toLowerCase().includes(term))
+    );
+  });
 
   return (
     <div>
-      <div style={{ marginBottom: '24px' }}>
-        <h2 style={{ fontSize: '1.4rem', fontWeight: 700 }}>📚 Base de Conocimiento Técnico OBD-II</h2>
-        <p style={{ color: 'var(--text-muted)', fontSize: '0.9rem', marginTop: '4px' }}>
-          Buscador pericial de códigos de avería, síntomas, causas documentadas y soluciones técnicas de taller (RF-30, RF-31).
-        </p>
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '24px' }}>
+        <div>
+          <h2 style={{ fontSize: '1.4rem', fontWeight: 700 }}>📚 Base de Conocimiento Técnico OBD-II</h2>
+          <p style={{ color: 'var(--text-muted)', fontSize: '0.9rem', marginTop: '4px' }}>
+            Buscador determinístico de códigos de avería, síntomas, causas y soluciones técnicas (RF-30, RF-31).
+          </p>
+        </div>
+        <button className="btn btn-primary" onClick={() => setModalOpen(true)}>
+          <span className="material-symbols-outlined">add_circle</span>
+          Registrar Caso Técnico
+        </button>
       </div>
 
       <div style={{ marginBottom: '20px' }}>
@@ -2004,7 +2321,7 @@ export default function ConocimientoPage() {
           type="text"
           className="form-control"
           placeholder="🔍 Buscar por código OBD (ej: P0300), síntoma, sistema o componente..."
-          style={{ maxWidth: '500px' }}
+          style={{ maxWidth: '550px' }}
           value={busqueda}
           onChange={e => setBusqueda(e.target.value)}
         />
@@ -2012,16 +2329,16 @@ export default function ConocimientoPage() {
 
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(350px, 1fr))', gap: '16px' }}>
         {filtrados.map(a => (
-          <div className="card" key={a.codigo}>
+          <div className="card" key={a.id || a.codigo}>
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '10px' }}>
               <span className="badge badge-info" style={{ fontSize: '0.85rem', fontWeight: 700 }}>{a.codigo}</span>
               <span style={{ fontSize: '0.8rem', color: 'var(--text-muted)' }}>{a.sistema}</span>
             </div>
-            <h3 style={{ fontSize: '1.05rem', fontWeight: 700, marginBottom: '8px' }}>{a.titulo}</h3>
+            <h3 style={{ fontSize: '1.05rem', fontWeight: 700, marginBottom: '8px' }}>{a.titulo || a.nombre}</h3>
 
             <div style={{ fontSize: '0.82rem', marginBottom: '8px' }}>
               <strong style={{ color: '#b45309' }}>Síntomas habituales:</strong>
-              <p style={{ color: 'var(--text-muted)', marginTop: '2px' }}>{a.sintomas}</p>
+              <p style={{ color: 'var(--text-muted)', marginTop: '2px' }}>{a.sintomas || a.descripcion}</p>
             </div>
 
             <div style={{ fontSize: '0.82rem', marginBottom: '8px' }}>
@@ -2036,6 +2353,52 @@ export default function ConocimientoPage() {
           </div>
         ))}
       </div>
+
+      {modalOpen && (
+        <div className="modal-overlay">
+          <div className="modal-content" style={{ maxWidth: '550px' }}>
+            <h3 style={{ marginBottom: '16px', fontWeight: 700 }}>Registrar Solución en Base de Conocimiento</h3>
+            <form onSubmit={handleCrear}>
+              <div style={{ display: 'grid', gridTemplateColumns: '120px 1fr', gap: '12px' }}>
+                <div className="form-group">
+                  <label>Código OBD *</label>
+                  <input className="form-control" required placeholder="Ej: P0301" value={formData.codigo} onChange={e => setFormData({ ...formData, codigo: e.target.value.toUpperCase() })} />
+                </div>
+                <div className="form-group">
+                  <label>Título del Caso *</label>
+                  <input className="form-control" required placeholder="Ej: Falla cilindro 1" value={formData.titulo} onChange={e => setFormData({ ...formData, titulo: e.target.value })} />
+                </div>
+              </div>
+              <div className="form-group">
+                <label>Sistema Afectado</label>
+                <select className="form-control" value={formData.sistema} onChange={e => setFormData({ ...formData, sistema: e.target.value })}>
+                  <option value="Motor">Motor / Encendido</option>
+                  <option value="Frenos ABS">Frenos ABS / Estabilidad</option>
+                  <option value="Emisiones">Emisiones / Escape</option>
+                  <option value="Transmisión">Transmisión Automática</option>
+                  <option value="Electrónica">Electrónica / Red CAN</option>
+                </select>
+              </div>
+              <div className="form-group">
+                <label>Síntomas Observados *</label>
+                <textarea className="form-control" rows={2} required placeholder="Ruidos, vibraciones, comportamientos..." value={formData.sintomas} onChange={e => setFormData({ ...formData, sintomas: e.target.value })} />
+              </div>
+              <div className="form-group">
+                <label>Causas Técnicas Comprobadas *</label>
+                <textarea className="form-control" rows={2} required placeholder="Causas diagnosticadas..." value={formData.causas} onChange={e => setFormData({ ...formData, causas: e.target.value })} />
+              </div>
+              <div className="form-group">
+                <label>Procedimiento de Solución *</label>
+                <textarea className="form-control" rows={2} required placeholder="Acciones correctivas..." value={formData.solucion} onChange={e => setFormData({ ...formData, solucion: e.target.value })} />
+              </div>
+              <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '8px', marginTop: '16px' }}>
+                <button type="button" className="btn btn-secondary" onClick={() => setModalOpen(false)}>Cancelar</button>
+                <button type="submit" className="btn btn-primary">Guardar en Base de Conocimiento</button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

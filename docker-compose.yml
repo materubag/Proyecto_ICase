@@ -71,7 +71,8 @@ services:
       AI_ANALYSIS_STRATEGY: ${AI_ANALYSIS_STRATEGY:-rules-first}
       AI_MAX_CHUNKS: ${AI_MAX_CHUNKS:-20}
       AI_CHUNK_MAX_LENGTH: ${AI_CHUNK_MAX_LENGTH:-350}
-      AI_FALLBACK_CONFIDENCE_THRESHOLD: ${AI_FALLBACK_CONFIDENCE_THRESHOLD:-0.65}
+    volumes:
+      - ./backend/src:/usr/src/app/src
     ports:
       - "8080:8080"
     depends_on:

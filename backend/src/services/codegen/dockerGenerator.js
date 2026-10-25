@@ -69,6 +69,8 @@ services:
       DB_NAME: \${DB_NAME:-${safeName}_db}
       DB_USER: \${DB_USER:-postgres}
       DB_PASSWORD: \${DB_PASSWORD:-postgres123}
+    volumes:
+      - uploads_data:/app/uploads
     depends_on:
       db:
         condition: service_healthy
@@ -87,6 +89,7 @@ services:
 
 volumes:
   postgres_data:
+  uploads_data:
 `;
 }
 

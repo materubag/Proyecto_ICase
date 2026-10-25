@@ -562,41 +562,44 @@ export default function Dashboard({ setActiveTab }) {
 `;
 }
 
-function generateAppJsx(projectName = 'Aplicación', entities = [], customPages = [], actors = []) {
+function generateAppJsx(projectName = 'Aplicación', entities = [], customPages = [], actors = [], compiledMockups = []) {
   const isMockupMode = customPages && customPages.length > 0;
 
-  // Lista de páginas funcionales (de mockups o por defecto)
+  // Lista de páginas funcionales con asignación de roles (RBAC ISO 29148)
   const pagesList = isMockupMode
-    ? customPages.filter(p => p.route !== '/login')
+    ? customPages.filter(p => p.route !== '/login').map(p => ({
+        pascal: p.pascal || 'Custom',
+        key: p.key || p.route.replace(/^\//, '').replace(/-/g, '_'),
+        name: p.name || p.title || 'Módulo',
+        icon: p.icon || 'view_quilt',
+        roles: p.roles || (
+          p.route.includes('cliente') ? ['Cliente'] :
+          p.route.includes('diagnostico') || p.route.includes('obd') ? ['Administrador', 'Mecánico'] :
+          p.route.includes('recepcion') || p.route.includes('cita') ? ['Administrador', 'Recepción'] :
+          p.route.includes('reparacion') || p.route.includes('orden') ? ['Administrador', 'Mecánico', 'Recepción'] :
+          ['Administrador']
+        )
+      }))
     : [
-        { pascal: 'Recepcion', key: 'recepcion', name: 'Recepción e Inspección', icon: 'directions_car' },
-        { pascal: 'Citas', key: 'citas', name: 'Agenda de Citas', icon: 'event' },
-        { pascal: 'Diagnosticos', key: 'diagnosticos', name: 'Diagnósticos OBD', icon: 'bug_report' },
-        { pascal: 'Reparaciones', key: 'reparaciones', name: 'Órdenes de Trabajo', icon: 'engineering' },
-        { pascal: 'Clientes', key: 'clientes', name: 'Directorio de Clientes', icon: 'people' },
-        { pascal: 'Vehiculos', key: 'vehiculos', name: 'Expediente de Vehículos', icon: 'folder_shared' },
-        { pascal: 'Inventario', key: 'inventario', name: 'Inventario y Repuestos', icon: 'inventory_2' },
-        { pascal: 'Servicios', key: 'servicios', name: 'Catálogo de Servicios', icon: 'list_alt' },
-        { pascal: 'MisVehiculos', key: 'mis_vehiculos', name: 'Mis Vehículos', icon: 'car_repair' },
-        { pascal: 'CitasCliente', key: 'citas_cliente', name: 'Solicitar Cita', icon: 'calendar_month' },
-        { pascal: 'CotizacionesCliente', key: 'cotizaciones_cliente', name: 'Presupuestos', icon: 'check_circle' },
-        { pascal: 'ProgresoReparacion', key: 'progreso_reparacion', name: 'Seguimiento en Vivo', icon: 'trending_up' },
-        { pascal: 'Conocimiento', key: 'conocimiento', name: 'Base de Conocimiento OBD', icon: 'menu_book' },
-        { pascal: 'Reportes', key: 'reportes', name: 'Indicadores y Reportes', icon: 'analytics' },
-        { pascal: 'Usuarios', key: 'usuarios', name: 'Personal y Roles', icon: 'admin_panel_settings' }
+        { pascal: 'Recepcion', key: 'recepcion', name: 'Recepción e Inspección', icon: 'directions_car', roles: ['Administrador', 'Recepción'] },
+        { pascal: 'Citas', key: 'citas', name: 'Agenda de Citas', icon: 'event', roles: ['Administrador', 'Recepción'] },
+        { pascal: 'Diagnosticos', key: 'diagnosticos', name: 'Diagnósticos OBD', icon: 'bug_report', roles: ['Administrador', 'Mecánico'] },
+        { pascal: 'Reparaciones', key: 'reparaciones', name: 'Órdenes de Trabajo', icon: 'engineering', roles: ['Administrador', 'Mecánico', 'Recepción'] },
+        { pascal: 'Clientes', key: 'clientes', name: 'Directorio de Clientes', icon: 'people', roles: ['Administrador', 'Recepción'] },
+        { pascal: 'Vehiculos', key: 'vehiculos', name: 'Expediente de Vehículos', icon: 'folder_shared', roles: ['Administrador', 'Recepción', 'Mecánico'] },
+        { pascal: 'Inventario', key: 'inventario', name: 'Inventario y Repuestos', icon: 'inventory_2', roles: ['Administrador', 'Mecánico'] },
+        { pascal: 'Servicios', key: 'servicios', name: 'Catálogo de Servicios', icon: 'list_alt', roles: ['Administrador', 'Recepción'] },
+        { pascal: 'MisVehiculos', key: 'mis_vehiculos', name: 'Mis Vehículos', icon: 'car_repair', roles: ['Cliente'] },
+        { pascal: 'CitasCliente', key: 'citas_cliente', name: 'Solicitar Cita', icon: 'calendar_month', roles: ['Cliente'] },
+        { pascal: 'CotizacionesCliente', key: 'cotizaciones_cliente', name: 'Presupuestos', icon: 'check_circle', roles: ['Cliente', 'Recepción'] },
+        { pascal: 'ProgresoReparacion', key: 'progreso_reparacion', name: 'Seguimiento en Vivo', icon: 'trending_up', roles: ['Cliente'] },
+        { pascal: 'Conocimiento', key: 'conocimiento', name: 'Base de Conocimiento OBD', icon: 'menu_book', roles: ['Administrador', 'Mecánico'] },
+        { pascal: 'Reportes', key: 'reportes', name: 'Indicadores y Reportes', icon: 'analytics', roles: ['Administrador'] },
+        { pascal: 'Usuarios', key: 'usuarios', name: 'Personal y Roles', icon: 'admin_panel_settings', roles: ['Administrador'] }
       ];
 
   const pageImports = pagesList.map(p => `import ${p.pascal}Page from './pages/${p.pascal}Page';`).join('\n');
-
-  const pageNavItems = pagesList.map(p => `          <div
-            className={\`nav-item \${activeTab === '${p.key}' ? 'active' : ''}\`}
-            onClick={() => setActiveTab('${p.key}')}
-          >
-            <span className="material-symbols-outlined" style={{ fontSize: '18px' }}>${p.icon || 'view_quilt'}</span>
-            <span>${p.name}</span>
-          </div>`).join('\n');
-
-  const pageSwitches = pagesList.map(p => `          {activeTab === '${p.key}' && <${p.pascal}Page />}`).join('\n');
+  const pageSwitches = pagesList.map(p => `          {activeTab === '${p.key}' && isAuthorized('${p.key}') && <${p.pascal}Page />}`).join('\n');
 
   // Opciones de roles según los actores del proyecto
   const roleList = (actors && actors.length > 0)
@@ -606,7 +609,7 @@ function generateAppJsx(projectName = 'Aplicación', entities = [], customPages 
   const roleOptions = roleList.map(r => `<option value="${r}">${r}</option>`).join('\n              ');
   const initialRole = roleList[0] || 'Administrador';
 
-  // Navigation tabs for data models (if developer wants to inspect raw Sequelize entities)
+  // Navigation tabs for data models (solo visibles para Administrador)
   const ormNavButtons = entities.slice(0, 10).map(e => {
     const pascal = toPascalCase(e.name);
     return `            <div
@@ -620,7 +623,7 @@ function generateAppJsx(projectName = 'Aplicación', entities = [], customPages 
 
   const ormConditionalPages = entities.map(e => {
     const pascal = toPascalCase(e.name);
-    return `          {activeTab === 'orm_${pascal}' && <${pascal}OrmPage />}`;
+    return `            {activeTab === 'orm_${pascal}' && <${pascal}OrmPage />}`;
   }).join('\n');
 
   const ormImports = entities.map(e => {
@@ -628,35 +631,94 @@ function generateAppJsx(projectName = 'Aplicación', entities = [], customPages 
     return `import ${pascal}OrmPage from './pages/orm/${pascal}Page';`;
   }).join('\n');
 
-  const defaultFirstTab = pagesList[0]?.key || 'dashboard';
+  // Mockups de diseño compilados (ArtifactVersion con Tailwind)
+  const mockupImports = (compiledMockups && compiledMockups.length > 0)
+    ? compiledMockups.map(m => `import ${m.compName} from './pages/mockups/${m.compName}';`).join('\n')
+    : '';
+
+  const mockupNavButtons = (compiledMockups && compiledMockups.length > 0)
+    ? compiledMockups.map(m => `            <div
+              className={\`nav-item \${activeTab === '${m.key}' ? 'active' : ''}\`}
+              onClick={() => setActiveTab('${m.key}')}
+            >
+              <span className="material-symbols-outlined" style={{ fontSize: '16px' }}>palette</span>
+              <span style={{ fontSize: '0.8rem' }} title="${m.title}">${m.compName.replace('Mockup', '')}</span>
+            </div>`).join('\n')
+    : '';
+
+  const mockupConditionalPages = (compiledMockups && compiledMockups.length > 0)
+    ? compiledMockups.map(m => `            {activeTab === '${m.key}' && (
+              <div>
+                <div style={{ marginBottom: '16px', padding: '10px 16px', background: '#e0f2fe', color: '#0369a1', borderRadius: '8px', fontSize: '0.85rem', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                  <span>🎨 <strong>Mockup de Diseño Original:</strong> ${m.title}</span>
+                  <span className="badge badge-info">${m.route}</span>
+                </div>
+                <${m.compName} />
+              </div>
+            )}`).join('\n')
+    : '';
+
+  const modulesJson = JSON.stringify(pagesList, null, 2);
 
   return `import React, { useState } from 'react';
 import LoginPage from './pages/LoginPage';
 import Dashboard from './pages/Dashboard';
 ${pageImports}
 ${ormImports}
+${mockupImports}
+
+// Configuración de módulos y permisos por rol (RBAC)
+const MODULES_CONFIG = ${modulesJson};
+
+const ROLE_DEFAULT_TABS = {
+  Administrador: 'dashboard',
+  Recepción: 'recepcion',
+  Mecánico: 'diagnosticos',
+  Cliente: 'mis_vehiculos'
+};
 
 export default function App() {
   const [currentUser, setCurrentUser] = useState(null);
-  const [activeTab, setActiveTab] = useState('${defaultFirstTab}');
   const [activeRole, setActiveRole] = useState('${initialRole}');
+  const [activeTab, setActiveTab] = useState('dashboard');
 
   // Si no ha iniciado sesión, mostrar la pantalla de Login (RF-01, RNF-03)
   if (!currentUser) {
     return (
       <LoginPage
         onLogin={(user) => {
+          const role = user.role || 'Administrador';
+          const defaultTab = ROLE_DEFAULT_TABS[role] || (MODULES_CONFIG.find(m => m.roles?.includes(role))?.key) || 'dashboard';
           setCurrentUser(user);
-          setActiveRole(user.role);
-          setActiveTab('${defaultFirstTab}');
+          setActiveRole(role);
+          setActiveTab(defaultTab);
         }}
       />
     );
   }
 
+  // Comprobar si la pestaña solicitada está permitida para el rol actual
+  const isAuthorized = (tab, role = activeRole) => {
+    if (tab === 'dashboard') return role === 'Administrador';
+    if (tab.startsWith('orm_')) return role === 'Administrador';
+    if (tab.startsWith('mockup_')) return role === 'Administrador';
+    const mod = MODULES_CONFIG.find(m => m.key === tab);
+    return mod ? (!mod.roles || mod.roles.includes(role)) : false;
+  };
+
+  // Módulos visibles en la barra lateral según el rol activo
+  const allowedModules = MODULES_CONFIG.filter(m => !m.roles || m.roles.includes(activeRole));
+
+  // Cambio de rol simulado (solo para Administrador)
+  const handleRoleChange = (newRole) => {
+    setActiveRole(newRole);
+    const defaultTab = ROLE_DEFAULT_TABS[newRole] || (MODULES_CONFIG.find(m => m.roles?.includes(newRole))?.key) || 'dashboard';
+    setActiveTab(defaultTab);
+  };
+
   return (
     <div className="app-container">
-      {/* Sidebar de Navegación Funcional */}
+      {/* Sidebar de Navegación con Control de Acceso por Rol (RBAC) */}
       <aside className="sidebar">
         <div className="sidebar-brand">
           <span className="material-symbols-outlined" style={{ color: '#38bdf8' }}>dashboard</span>
@@ -664,20 +726,48 @@ export default function App() {
         </div>
 
         <nav className="sidebar-nav">
-          <div
-            className={\`nav-item \${activeTab === 'dashboard' ? 'active' : ''}\`}
-            onClick={() => setActiveTab('dashboard')}
-          >
-            <span className="material-symbols-outlined" style={{ fontSize: '18px' }}>dashboard</span>
-            <span>Panel General</span>
+          {/* Panel General: solo disponible para Administrador */}
+          {activeRole === 'Administrador' && (
+            <div
+              className={\`nav-item \${activeTab === 'dashboard' ? 'active' : ''}\`}
+              onClick={() => setActiveTab('dashboard')}
+            >
+              <span className="material-symbols-outlined" style={{ fontSize: '18px' }}>dashboard</span>
+              <span>Panel General</span>
+            </div>
+          )}
+
+          <div className="nav-section-title">
+            {activeRole === 'Cliente' ? 'Portal del Cliente' : \`Módulos (\${activeRole})\`}
           </div>
 
-          <div className="nav-section-title">Módulos del Sistema</div>
-${pageNavItems}
+          {/* Módulos estrictamente autorizados para el rol activo */}
+          {allowedModules.map(m => (
+            <div
+              key={m.key}
+              className={\`nav-item \${activeTab === m.key ? 'active' : ''}\`}
+              onClick={() => setActiveTab(m.key)}
+            >
+              <span className="material-symbols-outlined" style={{ fontSize: '18px' }}>{m.icon || 'view_quilt'}</span>
+              <span>{m.name}</span>
+            </div>
+          ))}
 
-          {/* TABLAS DE DATOS ORM */}
-          <div className="nav-section-title" style={{ opacity: 0.7 }}>Tablas Sequelize (ORM)</div>
+          {/* TABLAS DE DATOS ORM: Solo visibles para perfil Administrador */}
+          {activeRole === 'Administrador' && (
+            <>
+              <div className="nav-section-title" style={{ opacity: 0.7 }}>Tablas Sequelize (ORM)</div>
 ${ormNavButtons}
+            </>
+          )}
+
+          {/* MOCKUPS DE DISEÑO: Mockups reales aprobados en la BD con Tailwind CSS */}
+          {activeRole === 'Administrador' && (
+            <>
+              <div className="nav-section-title" style={{ opacity: 0.7 }}>Mockups Aprobados (Tailwind)</div>
+${mockupNavButtons}
+            </>
+          )}
         </nav>
       </aside>
 
@@ -691,15 +781,23 @@ ${ormNavButtons}
           </div>
 
           <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
-            <span style={{ fontSize: '0.8rem', color: 'var(--text-muted)' }}>Vista de Rol:</span>
-            <select
-              className="form-control"
-              style={{ width: 'auto', padding: '4px 8px', fontSize: '0.8rem' }}
-              value={activeRole}
-              onChange={e => setActiveRole(e.target.value)}
-            >
-              ${roleOptions}
-            </select>
+            {/* Si es Administrador, puede simular otros roles para probar la experiencia */}
+            {currentUser.role === 'Administrador' ? (
+              <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                <span style={{ fontSize: '0.78rem', color: 'var(--text-muted)' }}>Simular Rol:</span>
+                <select
+                  className="form-control"
+                  style={{ width: 'auto', padding: '3px 8px', fontSize: '0.78rem' }}
+                  value={activeRole}
+                  onChange={e => handleRoleChange(e.target.value)}
+                  title="Como Administrador puedes simular la vista y permisos de otros roles"
+                >
+                  ${roleOptions}
+                </select>
+              </div>
+            ) : (
+              <span className="badge badge-info" style={{ fontSize: '0.78rem' }}>Perfil: {currentUser.role}</span>
+            )}
 
             <div style={{ display: 'flex', alignItems: 'center', gap: '6px', padding: '4px 10px', background: '#f1f5f9', borderRadius: '20px', fontSize: '0.8rem' }}>
               <span className="material-symbols-outlined" style={{ fontSize: '16px', color: 'var(--primary)' }}>account_circle</span>
@@ -720,9 +818,32 @@ ${ormNavButtons}
         </header>
 
         <div className="content-body">
-          {activeTab === 'dashboard' && <Dashboard setActiveTab={setActiveTab} />}
+          {activeTab === 'dashboard' && activeRole === 'Administrador' && <Dashboard setActiveTab={setActiveTab} />}
 ${pageSwitches}
+          {activeRole === 'Administrador' && (
+            <>
 ${ormConditionalPages}
+${mockupConditionalPages}
+            </>
+          )}
+
+          {/* Bloque de Acceso Denegado si se intenta acceder a una pestaña no permitida */}
+          {!isAuthorized(activeTab) && (
+            <div className="card" style={{ padding: '36px', textAlign: 'center', maxWidth: '540px', margin: '40px auto' }}>
+              <span className="material-symbols-outlined" style={{ fontSize: '48px', color: '#ef4444', marginBottom: '12px' }}>lock</span>
+              <h3 style={{ fontSize: '1.25rem', fontWeight: 700, color: '#991b1b', marginBottom: '8px' }}>Acceso Restringido</h3>
+              <p style={{ color: 'var(--text-muted)', fontSize: '0.9rem', lineHeight: '1.5' }}>
+                Tu perfil actual (<strong>{activeRole}</strong>) no tiene autorización para visualizar este módulo.
+              </p>
+              <button
+                className="btn btn-primary"
+                style={{ marginTop: '20px', display: 'inline-flex', margin: '20px auto 0 auto' }}
+                onClick={() => setActiveTab(ROLE_DEFAULT_TABS[activeRole] || allowedModules[0]?.key || 'dashboard')}
+              >
+                Volver a mi módulo principal
+              </button>
+            </div>
+          )}
         </div>
       </main>
     </div>

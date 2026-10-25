@@ -43,3 +43,12 @@ backend/.cache/
 # Tests
 /backend/tests/
 /frontend/tests/
+
+# Local change logs / scratch notes
+Cambios.md
+Analisis_*.md
+
+#proyecto generado
+/mecanica_autron*
+*.zip
+
