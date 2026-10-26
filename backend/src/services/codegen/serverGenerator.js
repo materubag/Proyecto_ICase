@@ -93,17 +93,50 @@ async function startServer() {
             { codigo: 'PST-FRN-CER', nombre: 'Juego de Pastillas Delanteras Cerámicas', descripcion: 'Pastillas cerámicas de alto rendimiento', categoria: 'Frenos', stock: 2, stockActual: 2, stockMinimo: 4, costo: 28.00, precio: 42.00, precioVenta: 42.00, activo: true }
           ]);
         }
-        if (sequelize.models.ConocimientoTecnico) {
-          await sequelize.models.ConocimientoTecnico.bulkCreate([
-            { codigo: 'P0300', titulo: 'Fallo de Encendido Múltiple / Aleatorio', sistema: 'Motor', sintomas: 'Pérdida de potencia, tirones en aceleración, luz Check Engine parpadeando', causas: 'Bujías desgastadas, bobinas defectuosas, baja presión de combustible', solucion: 'Revisar resistencia de bobinas con multímetro, reemplazar juego completo de bujías y verificar pulsos de inyección.' },
-            { codigo: 'P0420', titulo: 'Eficiencia del Catalizador por Debajo del Umbral (Banco 1)', sistema: 'Emisiones', sintomas: 'Consumo elevado de combustible, olor a sulfuro en escape', causas: 'Catalizador degradado, fuga en escape antes del sensor, sensor de oxígeno post-catalizador descalibrado', solucion: 'Monitorear gráfica de voltaje de sensores O2 antes y después del catalizador. Si oscilan igual, reemplazar catalizador.' },
-            { codigo: 'C0035', titulo: 'Circuito Sensor de Velocidad Rueda Delantera Izquierda', sistema: 'Frenos ABS', sintomas: 'Luz ABS y control de tracción encendidas en tablero', causas: 'Cableado cortado por movimiento de suspensión, sensor sucio con viruta metálica, rueda fónica fisurada', solucion: 'Limpiar sensor con limpiador de frenos, medir señal de onda y sustituir sensor si no hay señal.' },
-            { codigo: 'P0171', titulo: 'Sistema Demasiado Pobre (Banco 1)', sistema: 'Admisión / Combustible', sintomas: 'Marcha mínima irregular, vacilación al pisar el acelerador', causas: 'Entrada de aire no medida, sensor MAF contaminado, filtro de combustible tapado', solucion: 'Realizar prueba de humo en múltiple de admisión y limpiar sensor de flujo de masa de aire (MAF).' }
+        const ConocimientoModel = sequelize.models.BaseConocimiento || sequelize.models.ConocimientoTecnico;
+        if (ConocimientoModel) {
+          await ConocimientoModel.bulkCreate([
+            { codigoObd: 'P0300', componente: 'Motor / Encendido', descripcion: 'Fallo de Encendido Múltiple / Aleatorio', sintoma: 'Pérdida de potencia, tirones en aceleración, luz Check Engine parpadeando', causa: 'Bujías desgastadas, bobinas defectuosas, baja presión de combustible', solucion: 'Revisar resistencia de bobinas con multímetro, reemplazar bujías y verificar inyectores.', casoResuelto: true },
+            { codigoObd: 'P0420', componente: 'Emisiones / Escape', descripcion: 'Eficiencia del Catalizador por Debajo del Umbral (Banco 1)', sintoma: 'Consumo elevado de combustible, olor a sulfuro en escape', causa: 'Catalizador degradado, sensor de oxígeno post-catalizador descalibrado', solucion: 'Monitorear voltaje de sensores O2 antes y después del catalizador. Reemplazar catalizador.', casoResuelto: true },
+            { codigoObd: 'C0035', componente: 'Frenos ABS', descripcion: 'Circuito Sensor de Velocidad Rueda Delantera Izquierda', sintoma: 'Luz ABS y control de tracción encendidas en tablero', causa: 'Cableado cortado por movimiento de suspensión o sensor sucio', solucion: 'Limpiar sensor con limpiador de frenos, medir señal y sustituir si no hay pulso.', casoResuelto: true },
+            { codigoObd: 'P0171', componente: 'Admisión / Combustible', descripcion: 'Sistema Demasiado Pobre (Banco 1)', sintoma: 'Marcha mínima irregular, vacilación al pisar el acelerador', causa: 'Entrada de aire no medida, sensor MAF contaminado, filtro tapado', solucion: 'Realizar prueba de humo en múltiple de admisión y limpiar sensor MAF.', casoResuelto: true }
+          ]);
+        }
+        if (sequelize.models.Recepcion) {
+          await sequelize.models.Recepcion.bulkCreate([
+            { vehiculoId: 1, kilometraje: 45200, nivelCombustible: '3/4', motivoIngreso: 'Mantenimiento preventivo y ruido en tren delantero', observaciones: 'Inspección visual conforme', fechaRecepcion: new Date() },
+            { vehiculoId: 2, kilometraje: 71200, nivelCombustible: '1/2', motivoIngreso: 'Luz Check Engine encendida y pérdida de potencia', observaciones: 'Falla intermitente en aceleración', fechaRecepcion: new Date() }
+          ]);
+        }
+        if (sequelize.models.Cita) {
+          await sequelize.models.Cita.bulkCreate([
+            { clienteId: 1, vehiculoId: 1, fechaHora: new Date('2026-10-27T08:30:00Z'), motivo: 'Mantenimiento preventivo 40,000 km', estado: 'Confirmada' },
+            { clienteId: 2, vehiculoId: 2, fechaHora: new Date('2026-10-27T10:00:00Z'), motivo: 'Diagnóstico Electrónico OBD-II', estado: 'Pendiente' },
+            { clienteId: 3, vehiculoId: 3, fechaHora: new Date('2026-10-27T14:00:00Z'), motivo: 'Cambio de Pastillas de Freno', estado: 'Confirmada' }
+          ]);
+        }
+        if (sequelize.models.Diagnostico) {
+          await sequelize.models.Diagnostico.bulkCreate([
+            { vehiculoId: 1, observaciones: 'Fallo de encendido en cilindro 2 y pastillas de freno desgastadas', estado: 'Diagnosticado', fechaDiagnostico: new Date() },
+            { vehiculoId: 2, observaciones: 'Código P0300 detectado en escaneo OBD-II', estado: 'En Diagnóstico', fechaDiagnostico: new Date() }
+          ]);
+        }
+        if (sequelize.models.OrdenTrabajo) {
+          await sequelize.models.OrdenTrabajo.bulkCreate([
+            { vehiculoId: 1, estado: 'En Reparación', fechaInicio: new Date(), observaciones: 'Sustitución de bujes de tijera, rectificación de discos delanteros' },
+            { vehiculoId: 2, estado: 'Esperando Repuestos', fechaInicio: new Date(), observaciones: 'Desmontaje de inyectores y comprobación en banco' }
           ]);
         }
         if (sequelize.models.Cotizacion) {
           await sequelize.models.Cotizacion.bulkCreate([
-            { clienteId: 1, vehiculoId: 1, subtotal: 73.00, iva: 10.95, total: 83.95, estado: 'Pendiente de Aprobación' }
+            { clienteId: 1, vehiculoId: 1, subtotal: 73.00, impuesto: 10.95, total: 83.95, estado: 'Pendiente de Aprobación' }
+          ]);
+        }
+        if (sequelize.models.Usuario) {
+          await sequelize.models.Usuario.bulkCreate([
+            { nombre: 'Administrador General', correo: 'admin@autron21.com', estado: 'Activo' },
+            { nombre: 'Mariana Silva', correo: 'recepcion@autron21.com', estado: 'Activo' },
+            { nombre: 'Marco Valencia', correo: 'mecanico@autron21.com', estado: 'Activo' }
           ]);
         }
         console.log('✅ Datos iniciales sembrados con éxito.');

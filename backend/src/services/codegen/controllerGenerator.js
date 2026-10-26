@@ -22,7 +22,12 @@ const { ${modelName} } = require('../models');
  */
 exports.getAll = async (req, res) => {
   try {
-    const items = await ${modelName}.findAll();
+    let items;
+    try {
+      items = await ${modelName}.findAll({ include: { all: true, nested: false } });
+    } catch (e) {
+      items = await ${modelName}.findAll();
+    }
     return res.status(200).json({
       success: true,
       count: items.length,
@@ -45,7 +50,12 @@ exports.getAll = async (req, res) => {
 exports.getById = async (req, res) => {
   try {
     const { id } = req.params;
-    const item = await ${modelName}.findByPk(id);
+    let item;
+    try {
+      item = await ${modelName}.findByPk(id, { include: { all: true, nested: false } });
+    } catch (e) {
+      item = await ${modelName}.findByPk(id);
+    }
 
     if (!item) {
       return res.status(404).json({
@@ -74,7 +84,8 @@ exports.getById = async (req, res) => {
  */
 exports.create = async (req, res) => {
   try {
-    const newItem = await ${modelName}.create(req.body);
+    const { id, ...dataToCreate } = req.body;
+    const newItem = await ${modelName}.create(dataToCreate);
     return res.status(201).json({
       success: true,
       message: '${modelName} creado exitosamente',

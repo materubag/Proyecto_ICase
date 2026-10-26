@@ -42,7 +42,18 @@ export default function RecepcionPage() {
     apiRequest('/recepciones')
       .then(res => {
         if (res && res.data && Array.isArray(res.data) && res.data.length > 0) {
-          setRecepciones(res.data);
+          const mapped = res.data.map(r => ({
+            id: r.id,
+            placa: r.vehiculo ? r.vehiculo.placa : (r.placa || \`Vehículo #\${r.vehiculoId || r.id}\`),
+            cliente: r.vehiculo?.cliente?.nombre || r.cliente || 'Cliente General',
+            fecha: r.fechaRecepcion ? String(r.fechaRecepcion).substring(0, 16).replace('T', ' ') : (r.fecha || 'Reciente'),
+            kilometraje: r.kilometraje || 45000,
+            combustible: r.nivelCombustible || r.combustible || '1/2',
+            motivo: r.motivoIngreso || r.motivo || 'Revisión y mantenimiento',
+            estado: r.estado || 'En Inspección',
+            zonas: r.zonas || { frente: 'Normal', trasera: 'Normal', lateralIzq: 'Normal', lateralDer: 'Normal', techo: 'Normal' }
+          }));
+          setRecepciones(mapped);
         }
       })
       .catch(() => {});
@@ -59,16 +70,26 @@ export default function RecepcionPage() {
 
   const handleCrear = async (e) => {
     e.preventDefault();
-    const nuevo = {
-      id: Date.now(),
-      ...formData,
-      fecha: new Date().toISOString().replace('T', ' ').substring(0, 16),
-      estado: 'Ingresado'
+    const payload = {
+      vehiculoId: 1,
+      kilometraje: Number(formData.kilometraje) || 45000,
+      nivelCombustible: formData.combustible,
+      motivoIngreso: formData.motivo,
+      observaciones: formData.observaciones || 'Inspección física inicial',
+      fechaRecepcion: new Date().toISOString()
     };
     try {
-      await apiRequest('/recepciones', { method: 'POST', body: nuevo }).catch(() => {});
-    } catch (err) {}
-    setRecepciones([nuevo, ...recepciones]);
+      const res = await apiRequest('/recepciones', { method: 'POST', body: payload });
+      const nuevo = {
+        id: res?.data?.id || Date.now(),
+        ...formData,
+        fecha: new Date().toISOString().replace('T', ' ').substring(0, 16),
+        estado: 'Ingresado'
+      };
+      setRecepciones([nuevo, ...recepciones]);
+    } catch (err) {
+      setRecepciones([{ id: Date.now(), ...formData, fecha: 'Reciente', estado: 'Ingresado' }, ...recepciones]);
+    }
     setModalOpen(false);
     setFormData({
       placa: '',
@@ -417,7 +438,16 @@ export default function CitasPage() {
     apiRequest('/citas')
       .then(res => {
         if (res && res.data && Array.isArray(res.data) && res.data.length > 0) {
-          setCitas(res.data);
+          const mapped = res.data.map(c => ({
+            id: c.id,
+            fecha: c.fechaHora ? String(c.fechaHora).substring(0, 16).replace('T', ' ') : (c.fecha || 'Fecha programada'),
+            cliente: c.cliente ? c.cliente.nombre : (c.cliente || \`Cliente #\${c.clienteId || 1}\`),
+            vehiculo: c.vehiculo ? \`\${c.vehiculo.marca || ''} \${c.vehiculo.modelo || ''} (\${c.vehiculo.placa || ''})\` : (c.vehiculo || \`Vehículo #\${c.vehiculoId || 1}\`),
+            servicio: c.motivo || c.servicio || 'Mantenimiento General',
+            bahia: c.bahia || 'Bahía 1 (Elevador)',
+            estado: c.estado || 'Confirmada'
+          }));
+          setCitas(mapped);
         }
       })
       .catch(() => {});
@@ -425,19 +455,28 @@ export default function CitasPage() {
 
   const handleCrear = async (e) => {
     e.preventDefault();
-    const nueva = {
-      id: Date.now(),
-      fecha: \`\${formData.fecha} \${formData.hora}\`,
-      cliente: formData.cliente,
-      vehiculo: formData.vehiculo,
-      servicio: formData.servicio,
-      bahia: formData.bahia,
+    const payload = {
+      clienteId: 1,
+      vehiculoId: 1,
+      fechaHora: \`\${formData.fecha} \${formData.hora}:00\`,
+      motivo: \`\${formData.servicio} (\${formData.bahia})\`,
       estado: 'Confirmada'
     };
     try {
-      await apiRequest('/citas', { method: 'POST', body: nueva }).catch(() => {});
-    } catch (err) {}
-    setCitas([nueva, ...citas]);
+      const res = await apiRequest('/citas', { method: 'POST', body: payload });
+      const nueva = {
+        id: res?.data?.id || Date.now(),
+        fecha: \`\${formData.fecha} \${formData.hora}\`,
+        cliente: formData.cliente || 'Cliente General',
+        vehiculo: formData.vehiculo || 'Vehículo Registrado',
+        servicio: formData.servicio,
+        bahia: formData.bahia,
+        estado: 'Confirmada'
+      };
+      setCitas([nueva, ...citas]);
+    } catch (err) {
+      setCitas([{ id: Date.now(), fecha: \`\${formData.fecha} \${formData.hora}\`, ...formData, estado: 'Confirmada' }, ...citas]);
+    }
     setModalOpen(false);
   };
 
@@ -575,7 +614,16 @@ export default function ClientesPage() {
     apiRequest('/clientes')
       .then(res => {
         if (res && res.data && Array.isArray(res.data) && res.data.length > 0) {
-          setClientes(res.data);
+          const mapped = res.data.map(c => ({
+            id: c.id,
+            identificacion: c.cedula || c.identificacion || \`17\${String(c.id).padStart(8, '0')}\`,
+            nombre: c.nombre,
+            telefono: c.telefono || '0990000000',
+            correo: c.correo || 'cliente@autron.com',
+            direccion: c.direccion || 'Quito',
+            vehiculosCount: c.vehiculos?.length || 1
+          }));
+          setClientes(mapped);
         }
       })
       .catch(() => {});
@@ -583,19 +631,31 @@ export default function ClientesPage() {
 
   const handleCrear = async (e) => {
     e.preventDefault();
-    const nuevo = { id: Date.now(), ...formData, vehiculosCount: 0 };
+    const payload = {
+      nombre: formData.nombre,
+      telefono: formData.telefono,
+      correo: formData.correo,
+      direccion: formData.direccion
+    };
     try {
-      await apiRequest('/clientes', { method: 'POST', body: nuevo }).catch(() => {});
-    } catch (err) {}
-    setClientes([nuevo, ...clientes]);
+      const res = await apiRequest('/clientes', { method: 'POST', body: payload });
+      const nuevo = {
+        id: res?.data?.id || Date.now(),
+        ...formData,
+        vehiculosCount: 0
+      };
+      setClientes([nuevo, ...clientes]);
+    } catch (err) {
+      setClientes([{ id: Date.now(), ...formData, vehiculosCount: 0 }, ...clientes]);
+    }
     setModalOpen(false);
     setFormData({ identificacion: '', nombre: '', telefono: '', correo: '', direccion: '' });
   };
 
   const filtrados = clientes.filter(c =>
-    c.nombre.toLowerCase().includes(busqueda.toLowerCase()) ||
-    c.identificacion.includes(busqueda) ||
-    c.correo.toLowerCase().includes(busqueda.toLowerCase())
+    (c.nombre || '').toLowerCase().includes(busqueda.toLowerCase()) ||
+    (c.identificacion || c.cedula || '').includes(busqueda) ||
+    (c.correo || '').toLowerCase().includes(busqueda.toLowerCase())
   );
 
   return (
@@ -713,7 +773,18 @@ export default function VehiculosPage() {
     apiRequest('/vehiculos')
       .then(res => {
         if (res && res.data && Array.isArray(res.data) && res.data.length > 0) {
-          setVehiculos(res.data);
+          const mapped = res.data.map(v => ({
+            id: v.id,
+            placa: v.placa,
+            marca: v.marca,
+            modelo: v.modelo,
+            anio: v.anio,
+            vin: v.vin || 'VIN-NO-REGISTRADO',
+            kilometraje: v.kilometrajeActual || v.kilometraje || 45000,
+            color: v.color || 'Plata',
+            cliente: v.cliente?.nombre || v.cliente || \`Cliente #\${v.clienteId || 1}\`
+          }));
+          setVehiculos(mapped);
         }
       })
       .catch(() => {});
@@ -721,19 +792,33 @@ export default function VehiculosPage() {
 
   const handleCrear = async (e) => {
     e.preventDefault();
-    const nuevo = { id: Date.now(), ...formData };
+    const payload = {
+      clienteId: 1,
+      placa: formData.placa,
+      marca: formData.marca,
+      modelo: formData.modelo,
+      anio: Number(formData.anio) || 2022,
+      vin: formData.vin,
+      kilometrajeActual: Number(formData.kilometraje) || 0
+    };
     try {
-      await apiRequest('/vehiculos', { method: 'POST', body: nuevo }).catch(() => {});
-    } catch (err) {}
-    setVehiculos([nuevo, ...vehiculos]);
+      const res = await apiRequest('/vehiculos', { method: 'POST', body: payload });
+      const nuevo = {
+        id: res?.data?.id || Date.now(),
+        ...formData
+      };
+      setVehiculos([nuevo, ...vehiculos]);
+    } catch (err) {
+      setVehiculos([{ id: Date.now(), ...formData }, ...vehiculos]);
+    }
     setModalOpen(false);
   };
 
   const filtrados = vehiculos.filter(v =>
-    v.placa.toLowerCase().includes(busqueda.toLowerCase()) ||
-    v.marca.toLowerCase().includes(busqueda.toLowerCase()) ||
-    v.modelo.toLowerCase().includes(busqueda.toLowerCase()) ||
-    v.cliente.toLowerCase().includes(busqueda.toLowerCase())
+    (v.placa || '').toLowerCase().includes(busqueda.toLowerCase()) ||
+    (v.marca || '').toLowerCase().includes(busqueda.toLowerCase()) ||
+    (v.modelo || '').toLowerCase().includes(busqueda.toLowerCase()) ||
+    (v.cliente || '').toLowerCase().includes(busqueda.toLowerCase())
   );
 
   return (
@@ -847,7 +932,7 @@ export default function VehiculosPage() {
 }
 
 function generateDiagnosticosPage() {
-  return `import React, { useState } from 'react';
+  return `import React, { useState, useEffect } from 'react';
 import { apiRequest } from '../api/client';
 
 export default function DiagnosticosPage() {
@@ -859,13 +944,45 @@ export default function DiagnosticosPage() {
   const [modalOpen, setModalOpen] = useState(false);
   const [formData, setFormData] = useState({ vehiculo: '', codigoObd: 'P0300', sistema: 'Motor', severidad: 'Media', descripcion: '', solucion: '' });
 
+  useEffect(() => {
+    apiRequest('/diagnosticos')
+      .then(res => {
+        if (res && res.data && Array.isArray(res.data) && res.data.length > 0) {
+          const mapped = res.data.map(d => ({
+            id: d.id,
+            vehiculo: d.vehiculo ? \`\${d.vehiculo.marca || ''} \${d.vehiculo.modelo || ''} (\${d.vehiculo.placa || ''})\` : \`Vehículo #\${d.vehiculoId || 1}\`,
+            codigoObd: d.diagnosticoObds?.[0]?.codigoObd || d.codigoObd || 'P0300',
+            sistema: d.sistema || 'Electrónica / Motor',
+            severidad: d.severidad || 'Media',
+            descripcion: d.observaciones || d.descripcion || 'Diagnóstico pericial computarizado',
+            solucion: d.solucion || 'Inspección de actuadores y cableado',
+            estado: d.estado || 'Diagnosticado'
+          }));
+          setDiagnosticos(mapped);
+        }
+      })
+      .catch(() => {});
+  }, []);
+
   const handleCrear = async (e) => {
     e.preventDefault();
-    const nuevo = { id: Date.now(), ...formData, estado: 'Registrado' };
+    const payload = {
+      vehiculoId: 1,
+      observaciones: \`[\${formData.codigoObd}] \${formData.descripcion} - Solución: \${formData.solucion}\`,
+      estado: 'Diagnosticado',
+      fechaDiagnostico: new Date().toISOString()
+    };
     try {
-      await apiRequest('/diagnosticos', { method: 'POST', body: nuevo }).catch(() => {});
-    } catch (err) {}
-    setDiagnosticos([nuevo, ...diagnosticos]);
+      const res = await apiRequest('/diagnosticos', { method: 'POST', body: payload });
+      const nuevo = {
+        id: res?.data?.id || Date.now(),
+        ...formData,
+        estado: 'Registrado'
+      };
+      setDiagnosticos([nuevo, ...diagnosticos]);
+    } catch (err) {
+      setDiagnosticos([{ id: Date.now(), ...formData, estado: 'Registrado' }, ...diagnosticos]);
+    }
     setModalOpen(false);
   };
 
@@ -987,36 +1104,95 @@ export default function DiagnosticosPage() {
 }
 
 function generateReparacionesPage() {
-  return `import React, { useState } from 'react';
+  return `import React, { useState, useEffect } from 'react';
 import { apiRequest } from '../api/client';
 
 export default function ReparacionesPage() {
   const [ordenes, setOrdenes] = useState([
-    { id: 'OT-101', vehiculo: 'PBA-3421 (Sail)', cliente: 'Carlos Mendoza', mecanico: 'Ing. Marco Valencia', progreso: 75, etapa: 'En Reparación', actividades: 'Sustitución de bujes de tijera, rectificación de discos delanteros', repuestos: 'Pastillas Bosch (x1), Bujes de suspensión (x2)' },
-    { id: 'OT-102', vehiculo: 'GTX-9081 (Corolla Cross)', cliente: 'Lucía Fernández', mecanico: 'Téc. Javier Andrade', progreso: 35, etapa: 'Esperando Repuestos', actividades: 'Diagnóstico OBD confirmado, desmontaje de inyectores', repuestos: 'Juego de bujías iridio (x4)' },
-    { id: 'OT-103', vehiculo: 'PCA-5541 (Hilux)', cliente: 'Roberto Gómez', mecanico: 'Ing. Marco Valencia', progreso: 100, etapa: 'Control de Calidad', actividades: 'Afinamiento mayor completo y prueba de ruta OK', repuestos: 'Filtro aceite (x1), Aceite sintético 5W30 (x4 gl)' }
+    { id: 1, codigo: 'OT-101', vehiculo: 'PBA-3421 (Sail)', cliente: 'Carlos Mendoza', mecanico: 'Ing. Marco Valencia', progreso: 75, etapa: 'En Reparación', actividades: 'Sustitución de bujes de tijera, rectificación de discos delanteros', repuestos: 'Pastillas Bosch (x1), Bujes de suspensión (x2)' },
+    { id: 2, codigo: 'OT-102', vehiculo: 'GTX-9081 (Corolla Cross)', cliente: 'Lucía Fernández', mecanico: 'Téc. Javier Andrade', progreso: 35, etapa: 'Esperando Repuestos', actividades: 'Diagnóstico OBD confirmado, desmontaje de inyectores', repuestos: 'Juego de bujías iridio (x4)' },
+    { id: 3, codigo: 'OT-103', vehiculo: 'PCA-5541 (Hilux)', cliente: 'Roberto Gómez', mecanico: 'Ing. Marco Valencia', progreso: 100, etapa: 'Control de Calidad', actividades: 'Afinamiento mayor completo y prueba de ruta OK', repuestos: 'Filtro aceite (x1), Aceite sintético 5W30 (x4 gl)' }
   ]);
   const [modalOpen, setModalOpen] = useState(false);
-  const [formData, setFormData] = useState({ id: 'OT-104', vehiculo: '', cliente: '', mecanico: 'Ing. Marco Valencia', actividades: '', repuestos: '' });
+  const [formData, setFormData] = useState({ vehiculo: '', cliente: '', mecanico: 'Ing. Marco Valencia', actividades: '', repuestos: '' });
+
+  useEffect(() => {
+    apiRequest('/orden_trabajos')
+      .then(res => {
+        if (res && res.data && Array.isArray(res.data) && res.data.length > 0) {
+          const mapped = res.data.map((ot, idx) => {
+            const etapa = ot.estado || 'En Reparación';
+            let progreso = 50;
+            if (etapa === 'En Diagnóstico') progreso = 25;
+            else if (etapa === 'Esperando Repuestos') progreso = 35;
+            else if (etapa === 'En Reparación') progreso = 70;
+            else if (etapa === 'Control de Calidad') progreso = 90;
+            else if (etapa === 'Completada') progreso = 100;
+
+            return {
+              id: ot.id,
+              codigo: \`OT-\${100 + ot.id}\`,
+              vehiculo: ot.vehiculo ? \`\${ot.vehiculo.marca || ''} \${ot.vehiculo.modelo || ''} (\${ot.vehiculo.placa || ''})\` : \`Vehículo #\${ot.vehiculoId || 1}\`,
+              cliente: ot.vehiculo?.cliente?.nombre || 'Cliente General',
+              mecanico: 'Ing. Marco Valencia',
+              progreso,
+              etapa,
+              actividades: ot.observaciones || 'Intervención mecánica integral',
+              repuestos: 'Insumos y repuestos asignados desde almacén'
+            };
+          });
+          setOrdenes(mapped);
+        }
+      })
+      .catch(() => {});
+  }, []);
 
   const handleCrear = async (e) => {
     e.preventDefault();
-    const nueva = { ...formData, progreso: 15, etapa: 'En Diagnóstico' };
+    const payload = {
+      vehiculoId: 1,
+      recepcionId: 1,
+      estado: 'En Reparación',
+      observaciones: formData.actividades || 'Reparación autorizada por cliente',
+      fechaInicio: new Date().toISOString()
+    };
     try {
-      await apiRequest('/orden_trabajos', { method: 'POST', body: nueva }).catch(() => {});
-    } catch (err) {}
-    setOrdenes([nueva, ...ordenes]);
+      const res = await apiRequest('/orden_trabajos', { method: 'POST', body: payload });
+      const nueva = {
+        id: res?.data?.id || Date.now(),
+        codigo: \`OT-\${100 + (res?.data?.id || (ordenes.length + 1))}\`,
+        vehiculo: formData.vehiculo || 'Chevrolet Sail (PBA-3421)',
+        cliente: formData.cliente || 'Cliente General',
+        mecanico: formData.mecanico,
+        progreso: 25,
+        etapa: 'En Diagnóstico',
+        actividades: formData.actividades,
+        repuestos: formData.repuestos || 'Insumos de taller'
+      };
+      setOrdenes([nueva, ...ordenes]);
+    } catch (err) {
+      setOrdenes([{ id: Date.now(), codigo: \`OT-\${100 + ordenes.length + 1}\`, ...formData, progreso: 25, etapa: 'En Diagnóstico' }, ...ordenes]);
+    }
     setModalOpen(false);
   };
 
-  const avanzarEtapa = (id) => {
-    setOrdenes(ordenes.map(o => {
-      if (o.id !== id) return o;
-      if (o.etapa === 'En Diagnóstico') return { ...o, etapa: 'En Reparación', progreso: 50 };
-      if (o.etapa === 'En Reparación') return { ...o, etapa: 'Control de Calidad', progreso: 90 };
-      if (o.etapa === 'Control de Calidad') return { ...o, etapa: 'Completada', progreso: 100 };
-      return o;
-    }));
+  const avanzarEtapa = async (id) => {
+    const orden = ordenes.find(o => o.id === id);
+    if (!orden) return;
+    let nextEtapa = 'En Reparación';
+    let nextProgreso = 50;
+    if (orden.etapa === 'En Diagnóstico') { nextEtapa = 'En Reparación'; nextProgreso = 50; }
+    else if (orden.etapa === 'En Reparación') { nextEtapa = 'Control de Calidad'; nextProgreso = 90; }
+    else if (orden.etapa === 'Control de Calidad') { nextEtapa = 'Completada'; nextProgreso = 100; }
+
+    setOrdenes(ordenes.map(o => o.id === id ? { ...o, etapa: nextEtapa, progreso: nextProgreso } : o));
+
+    try {
+      await apiRequest(\`/orden_trabajos/\${id}\`, {
+        method: 'PUT',
+        body: { estado: nextEtapa }
+      });
+    } catch (err) {}
   };
 
   return (
@@ -1137,13 +1313,24 @@ export default function InventarioPage() {
   const [modalOpen, setModalOpen] = useState(false);
   const [formData, setFormData] = useState({ codigo: '', nombre: '', categoria: 'Frenos', marca: '', stock: 10, stockMin: 5, costo: '', precio: '' });
 
-  const bajoStockItems = repuestos.filter(r => r.stock <= r.stockMin);
+  const bajoStockItems = repuestos.filter(r => (Number(r.stock) || 0) <= (Number(r.stockMin || r.stockMinimo) || 5));
 
   useEffect(() => {
     apiRequest('/productos')
       .then(res => {
         if (res && res.data && Array.isArray(res.data) && res.data.length > 0) {
-          setRepuestos(res.data);
+          const mapped = res.data.map(p => ({
+            id: p.id,
+            codigo: p.codigo || \`REP-00\${p.id}\`,
+            nombre: p.nombre,
+            categoria: p.categoria || 'Frenos',
+            marca: p.marca || 'Original',
+            stock: Number(p.stock) || 0,
+            stockMin: Number(p.stockMinimo || p.stockMin) || 5,
+            costo: Number(p.costo) || 15.00,
+            precio: Number(p.precio || p.precioVenta) || 25.00
+          }));
+          setRepuestos(mapped);
         }
       })
       .catch(() => {});
@@ -1151,11 +1338,28 @@ export default function InventarioPage() {
 
   const handleCrear = async (e) => {
     e.preventDefault();
-    const nuevo = { id: Date.now(), ...formData, costo: Number(formData.costo), precio: Number(formData.precio), stock: Number(formData.stock), stockMin: Number(formData.stockMin) };
+    const payload = {
+      codigo: formData.codigo || \`REP-00\${repuestos.length + 1}\`,
+      nombre: formData.nombre,
+      categoria: formData.categoria,
+      marca: formData.marca || 'Genérica',
+      costo: Number(formData.costo) || 10,
+      precio: Number(formData.precio) || 20,
+      stock: Number(formData.stock) || 0,
+      stockMinimo: Number(formData.stockMin) || 5,
+      estado: 'Activo'
+    };
     try {
-      await apiRequest('/productos', { method: 'POST', body: nuevo }).catch(() => {});
-    } catch (err) {}
-    setRepuestos([...repuestos, nuevo]);
+      const res = await apiRequest('/productos', { method: 'POST', body: payload });
+      const nuevo = {
+        id: res?.data?.id || Date.now(),
+        ...payload,
+        stockMin: payload.stockMinimo
+      };
+      setRepuestos([...repuestos, nuevo]);
+    } catch (err) {
+      setRepuestos([...repuestos, { id: Date.now(), ...formData, costo: Number(formData.costo), precio: Number(formData.precio), stock: Number(formData.stock), stockMin: Number(formData.stockMin) }]);
+    }
     setModalOpen(false);
   };
 
@@ -1341,13 +1545,11 @@ export default function CotizacionesClientePage() {
         await apiRequest('/orden_trabajos', {
           method: 'POST',
           body: {
-            id: 'OT-' + Math.floor(100 + Math.random() * 900),
-            vehiculo: cotizacion.vehiculo,
-            cliente: 'Roberto Gómez (Cliente)',
-            mecanico: 'Ing. Marco Valencia',
-            progreso: 20,
-            etapa: 'En Reparación',
-            actividades: actividades || 'Mantenimiento autorizado por cliente'
+            vehiculoId: 1,
+            recepcionId: 1,
+            estado: 'En Reparación',
+            observaciones: actividades || 'Mantenimiento autorizado por cliente',
+            fechaInicio: new Date().toISOString()
           }
         }).catch(() => {});
       }
@@ -1605,7 +1807,7 @@ export default function ReportesPage() {
 }
 
 function generateUsuariosPage() {
-  return `import React, { useState } from 'react';
+  return `import React, { useState, useEffect } from 'react';
 import { apiRequest } from '../api/client';
 
 export default function UsuariosPage() {
@@ -1619,13 +1821,45 @@ export default function UsuariosPage() {
   const [modalOpen, setModalOpen] = useState(false);
   const [formData, setFormData] = useState({ nombre: '', correo: '', rol: 'Mecánico', estado: 'Activo' });
 
+  useEffect(() => {
+    apiRequest('/usuarios')
+      .then(res => {
+        if (res && res.data && Array.isArray(res.data) && res.data.length > 0) {
+          const mapped = res.data.map(u => ({
+            id: u.id,
+            nombre: u.nombre,
+            correo: u.correo,
+            rol: u.rol?.nombre || u.rol || 'Mecánico',
+            estado: u.estado || 'Activo',
+            ultimoAcceso: u.updatedAt ? u.updatedAt.substring(0, 16).replace('T', ' ') : 'Reciente'
+          }));
+          setUsuarios(mapped);
+        }
+      })
+      .catch(() => {});
+  }, []);
+
   const handleCrear = async (e) => {
     e.preventDefault();
-    const nuevo = { id: Date.now(), ...formData, ultimoAcceso: 'Recién creado' };
+    const payload = {
+      nombre: formData.nombre,
+      correo: formData.correo,
+      estado: formData.estado || 'Activo'
+    };
     try {
-      await apiRequest('/usuarios', { method: 'POST', body: nuevo }).catch(() => {});
-    } catch (err) {}
-    setUsuarios([...usuarios, nuevo]);
+      const res = await apiRequest('/usuarios', { method: 'POST', body: payload });
+      const nuevo = {
+        id: res?.data?.id || Date.now(),
+        nombre: formData.nombre,
+        correo: formData.correo,
+        rol: formData.rol,
+        estado: 'Activo',
+        ultimoAcceso: 'Recién creado'
+      };
+      setUsuarios([...usuarios, nuevo]);
+    } catch (err) {
+      setUsuarios([...usuarios, { id: Date.now(), ...formData, ultimoAcceso: 'Recién creado' }]);
+    }
     setModalOpen(false);
   };
 
@@ -1960,7 +2194,7 @@ export default function LoginPage({ onLogin }) {
 }
 
 function generateServiciosPage() {
-  return `import React, { useState } from 'react';
+  return `import React, { useState, useEffect } from 'react';
 import { apiRequest } from '../api/client';
 
 export default function ServiciosPage() {
@@ -1974,17 +2208,49 @@ export default function ServiciosPage() {
   const [modalOpen, setModalOpen] = useState(false);
   const [formData, setFormData] = useState({ codigo: '', nombre: '', categoria: 'Mecánica Rápida', horas: 1.5, tarifaHora: 20.00 });
 
+  useEffect(() => {
+    apiRequest('/servicios')
+      .then(res => {
+        if (res && res.data && Array.isArray(res.data) && res.data.length > 0) {
+          const mapped = res.data.map((s, idx) => ({
+            id: s.id,
+            codigo: s.codigo || \`SRV-00\${s.id}\`,
+            nombre: s.nombre,
+            categoria: s.categoria || 'Mecánica General',
+            horas: s.horas || 1.5,
+            tarifaHora: s.tarifaHora || 20.00,
+            precioTotal: s.precioTotal || s.precioManoObra || (Number(s.precioManoObra) || 30.00)
+          }));
+          setServicios(mapped);
+        }
+      })
+      .catch(() => {});
+  }, []);
+
   const handleCrear = async (e) => {
     e.preventDefault();
-    const nuevo = {
-      id: Date.now(),
-      ...formData,
-      precioTotal: Number(formData.horas) * Number(formData.tarifaHora)
+    const precio = Number(formData.horas) * Number(formData.tarifaHora);
+    const payload = {
+      nombre: formData.nombre,
+      descripcion: \`\${formData.categoria} - Tarifa: \$\${formData.tarifaHora}/h\`,
+      precioManoObra: precio,
+      estado: 'Activo'
     };
     try {
-      await apiRequest('/servicios', { method: 'POST', body: nuevo }).catch(() => {});
-    } catch (err) {}
-    setServicios([...servicios, nuevo]);
+      const res = await apiRequest('/servicios', { method: 'POST', body: payload });
+      const nuevo = {
+        id: res?.data?.id || Date.now(),
+        codigo: formData.codigo || \`SRV-00\${servicios.length + 1}\`,
+        nombre: formData.nombre,
+        categoria: formData.categoria,
+        horas: formData.horas,
+        tarifaHora: formData.tarifaHora,
+        precioTotal: precio
+      };
+      setServicios([...servicios, nuevo]);
+    } catch (err) {
+      setServicios([...servicios, { id: Date.now(), ...formData, precioTotal: precio }]);
+    }
     setModalOpen(false);
   };
 
@@ -2080,13 +2346,41 @@ export default function ServiciosPage() {
 }
 
 function generateMisVehiculosPage() {
-  return `import React from 'react';
+  return `import React, { useState, useEffect } from 'react';
+import { apiRequest } from '../api/client';
 
 export default function MisVehiculosPage({ onSolicitarCita }) {
-  const misVehiculos = [
+  const [misVehiculos, setMisVehiculos] = useState([
     { id: 1, placa: 'PBA-3421', marca: 'Chevrolet', modelo: 'Sail 1.4', anio: 2021, kilometraje: 45200, proximoMantenimiento: 'Mantenimiento Preventivo 50,000 km', alertaKm: 4800, fechaUltimaVisita: '2026-08-14' },
     { id: 2, placa: 'PBC-8812', marca: 'Chevrolet', modelo: 'D-Max 4x4', anio: 2022, kilometraje: 71200, proximoMantenimiento: 'Cambio de pastillas de freno y revisión de fluidos', alertaKm: 1200, urgente: true, fechaUltimaVisita: '2026-09-02' }
-  ];
+  ]);
+
+  useEffect(() => {
+    apiRequest('/vehiculos')
+      .then(res => {
+        if (res && res.data && Array.isArray(res.data) && res.data.length > 0) {
+          const mapped = res.data.map(v => {
+            const km = Number(v.kilometrajeActual) || Number(v.kilometraje) || 45000;
+            const proximo = Math.ceil((km + 1000) / 10000) * 10000;
+            const diff = proximo - km;
+            return {
+              id: v.id,
+              placa: v.placa,
+              marca: v.marca,
+              modelo: v.modelo,
+              anio: v.anio,
+              kilometraje: km,
+              proximoMantenimiento: \`Mantenimiento Preventivo \${proximo.toLocaleString()} km\`,
+              alertaKm: diff,
+              urgente: diff < 2000,
+              fechaUltimaVisita: v.updatedAt ? v.updatedAt.substring(0, 10) : '2026-10-20'
+            };
+          });
+          setMisVehiculos(mapped);
+        }
+      })
+      .catch(() => {});
+  }, []);
 
   return (
     <div>
@@ -2147,6 +2441,7 @@ export default function MisVehiculosPage({ onSolicitarCita }) {
 
 function generateCitasClientePage() {
   return `import React, { useState } from 'react';
+import { apiRequest } from '../api/client';
 
 export default function CitasClientePage() {
   const [enviado, setEnviado] = useState(false);
@@ -2158,8 +2453,20 @@ export default function CitasClientePage() {
     motivo: ''
   });
 
-  const handleSubmit = (e) => {
+  const handleSubmit = async (e) => {
     e.preventDefault();
+    try {
+      await apiRequest('/citas', {
+        method: 'POST',
+        body: {
+          clienteId: 1,
+          vehiculoId: 1,
+          fechaHora: \`\${formData.fecha} 09:00:00\`,
+          motivo: \`\${formData.servicio} (\${formData.turno}) - \${formData.motivo || 'Solicitud de cliente'}\`,
+          estado: 'Pendiente'
+        }
+      });
+    } catch (err) {}
     setEnviado(true);
   };
 
@@ -2262,10 +2569,17 @@ export default function ConocimientoPage() {
   ]);
 
   useEffect(() => {
-    apiRequest('/conocimiento_tecnicos')
+    apiRequest('/base_conocimientos')
       .then(res => {
         if (res && res.data && Array.isArray(res.data) && res.data.length > 0) {
-          setArticulos(res.data);
+          setArticulos(res.data.map(item => ({
+            codigo: item.codigoObd || item.codigo || 'OBD-II',
+            titulo: item.descripcion || item.titulo || 'Caso Técnico',
+            sistema: item.componente || item.sistema || 'General',
+            sintomas: item.sintoma || item.sintomas || '',
+            causas: item.causa || item.causas || '',
+            solucion: item.solucion || ''
+          })));
         }
       })
       .catch(() => {});
@@ -2273,16 +2587,28 @@ export default function ConocimientoPage() {
 
   const handleCrear = async (e) => {
     e.preventDefault();
-    const nuevo = { id: Date.now(), ...formData };
+    const payload = {
+      codigoObd: formData.codigo,
+      descripcion: formData.titulo,
+      componente: formData.sistema,
+      sintoma: formData.sintomas,
+      causa: formData.causas,
+      solucion: formData.solucion,
+      casoResuelto: true
+    };
     try {
-      const res = await apiRequest('/conocimiento_tecnicos', { method: 'POST', body: nuevo });
-      if (res && res.data) {
-        setArticulos(prev => [res.data, ...prev]);
-      } else {
-        setArticulos(prev => [nuevo, ...prev]);
-      }
+      const res = await apiRequest('/base_conocimientos', { method: 'POST', body: payload });
+      const createdItem = res && res.data ? {
+        codigo: res.data.codigoObd || formData.codigo,
+        titulo: res.data.descripcion || formData.titulo,
+        sistema: res.data.componente || formData.sistema,
+        sintomas: res.data.sintoma || formData.sintomas,
+        causas: res.data.causa || formData.causas,
+        solucion: res.data.solucion || formData.solucion
+      } : formData;
+      setArticulos(prev => [createdItem, ...prev]);
     } catch (err) {
-      setArticulos(prev => [nuevo, ...prev]);
+      setArticulos(prev => [formData, ...prev]);
     }
     setModalOpen(false);
     setFormData({ codigo: '', titulo: '', sistema: 'Motor', sintomas: '', causas: '', solucion: '' });
