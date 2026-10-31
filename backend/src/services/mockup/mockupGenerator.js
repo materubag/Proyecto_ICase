@@ -1,9 +1,7 @@
-/**
- * Generador de Mockups HTML Interactivos y Minimalistas para Pantallas ICASE.
- * Diseño limpio, 100% en español, sin sobrecarga visual y con coherencia de datos.
- */
+const designSystemService = require('./designSystemService');
 
 function generateHtmlMockup(screen) {
+  const tokens = designSystemService.getCssTokens();
   const title = screen.name || 'Pantalla del Sistema';
   const description = screen.description || screen.purpose || 'Módulo operativo del sistema';
   const route = screen.route || '/';
@@ -176,36 +174,51 @@ function generateHtmlMockup(screen) {
   <title>${title} - Prototipo ICASE</title>
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <style>
+    :root {
+      --color-primary: ${tokens['--color-primary'] || '#4F46E5'};
+      --color-primary-hover: ${tokens['--color-primary-hover'] || '#4338CA'};
+      --color-bg-app: ${tokens['--color-bg-app'] || '#F8FAFC'};
+      --color-surface: ${tokens['--color-surface'] || '#FFFFFF'};
+      --color-border: ${tokens['--color-border'] || '#E2E8F0'};
+      --color-border-focus: ${tokens['--color-border-focus'] || '#6366F1'};
+      --color-text-title: ${tokens['--color-text-title'] || '#0F172A'};
+      --color-text-body: ${tokens['--color-text-body'] || '#334155'};
+      --color-text-muted: ${tokens['--color-text-muted'] || '#64748B'};
+      --radius-sm: ${tokens['--radius-sm'] || '6px'};
+      --radius-md: ${tokens['--radius-md'] || '8px'};
+      --radius-lg: ${tokens['--radius-lg'] || '16px'};
+    }
     * { box-sizing: border-box; margin: 0; padding: 0; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; }
-    body { background-color: #f8fafc; color: #0f172a; padding: 1.25rem; }
-    .mockup-container { max-width: 820px; margin: 0 auto; background: #ffffff; border-radius: 12px; border: 1px solid #e2e8f0; box-shadow: 0 4px 16px -2px rgba(15, 23, 42, 0.04); overflow: hidden; }
-    .mockup-topbar { background: #0f172a; color: #ffffff; padding: 0.7rem 1.25rem; display: flex; justify-content: space-between; align-items: center; font-size: 0.825rem; }
+    body { background-color: var(--color-bg-app); color: var(--color-text-title); padding: 1.25rem; }
+    .mockup-container { max-width: 820px; margin: 0 auto; background: var(--color-surface); border-radius: var(--radius-lg); border: 1px solid var(--color-border); box-shadow: 0 4px 16px -2px rgba(15, 23, 42, 0.04); overflow: hidden; }
+    .mockup-topbar { background: var(--color-text-title); color: #ffffff; padding: 0.7rem 1.25rem; display: flex; justify-content: space-between; align-items: center; font-size: 0.825rem; }
     .mockup-topbar .route-badge { background: #1e293b; color: #38bdf8; font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 0.75rem; padding: 3px 8px; border-radius: 4px; }
-    .mockup-body { padding: 1.5rem; display: flex; flexDirection: column; gap: 1rem; }
+    .mockup-body { padding: 1.5rem; display: flex; flex-direction: column; gap: 1rem; }
     .mockup-heading { margin-bottom: 0.5rem; }
-    .mockup-heading h2 { font-size: 1.25rem; font-weight: 700; color: #0f172a; letter-spacing: -0.01em; margin-bottom: 0.25rem; }
-    .mockup-subtext { color: #64748b; font-size: 0.85rem; line-height: 1.4; }
-    .mockup-navbar { background: #f8fafc; border: 1px solid #e2e8f0; padding: 0.6rem 1rem; border-radius: 8px; display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.5rem; }
-    .mockup-navbar .brand { font-weight: 600; color: #0f172a; font-size: 0.85rem; }
+    .mockup-heading h2 { font-size: 1.25rem; font-weight: 700; color: var(--color-text-title); letter-spacing: -0.01em; margin-bottom: 0.25rem; }
+    .mockup-subtext { color: var(--color-text-muted); font-size: 0.85rem; line-height: 1.4; }
+    .mockup-navbar { background: var(--color-bg-app); border: 1px solid var(--color-border); padding: 0.6rem 1rem; border-radius: var(--radius-md); display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.5rem; }
+    .mockup-navbar .brand { font-weight: 600; color: var(--color-text-title); font-size: 0.85rem; }
     .mockup-navbar .nav-links { display: flex; gap: 1rem; font-size: 0.8rem; }
-    .mockup-navbar .nav-item { color: #64748b; }
-    .mockup-navbar .nav-item.active { color: #0f172a; font-weight: 600; }
-    .mockup-card { background: #ffffff; border: 1px solid #e2e8f0; border-radius: 8px; padding: 1.25rem; }
-    .mockup-card-title { font-weight: 600; font-size: 0.95rem; color: #0f172a; margin-bottom: 0.5rem; }
+    .mockup-navbar .nav-item { color: var(--color-text-muted); }
+    .mockup-navbar .nav-item.active { color: var(--color-text-title); font-weight: 600; }
+    .mockup-card { background: var(--color-surface); border: 1px solid var(--color-border); border-radius: var(--radius-md); padding: 1.25rem; }
+    .mockup-card-title { font-weight: 600; font-size: 0.95rem; color: var(--color-text-title); margin-bottom: 0.5rem; }
     .mockup-form-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: 1rem; }
     .mockup-form-group { display: flex; flex-direction: column; gap: 0.35rem; }
-    .mockup-label { font-size: 0.8rem; font-weight: 600; color: #334155; }
-    .mockup-input { width: 100%; padding: 0.55rem 0.75rem; border: 1px solid #cbd5e1; border-radius: 6px; font-size: 0.85rem; outline: none; transition: border-color 0.15s; background: #ffffff; color: #0f172a; }
-    .mockup-input:focus { border-color: #2563eb; }
+    .mockup-label { font-size: 0.8rem; font-weight: 600; color: var(--color-text-body); }
+    .mockup-input { width: 100%; padding: 0.55rem 0.75rem; border: 1px solid var(--color-border); border-radius: var(--radius-md); font-size: 0.85rem; outline: none; transition: border-color 0.15s; background: var(--color-surface); color: var(--color-text-title); }
+    .mockup-input:focus { border-color: var(--color-border-focus); }
     .mockup-action-group { display: flex; gap: 0.5rem; }
-    .btn-mockup { padding: 0.5rem 1rem; border-radius: 6px; font-size: 0.825rem; font-weight: 600; cursor: pointer; border: none; transition: opacity 0.15s; }
+    .btn-mockup { padding: 0.5rem 1rem; border-radius: var(--radius-md); font-size: 0.825rem; font-weight: 600; cursor: pointer; border: none; transition: opacity 0.15s; }
     .btn-mockup:hover { opacity: 0.9; }
-    .btn-mockup-primary { background: #0f172a; color: #ffffff; }
-    .btn-mockup-secondary { background: #f1f5f9; color: #334155; border: 1px solid #e2e8f0; }
+    .btn-mockup-primary { background: var(--color-primary); color: #ffffff; }
+    .btn-mockup-primary:hover { background: var(--color-primary-hover); }
+    .btn-mockup-secondary { background: #f1f5f9; color: var(--color-text-body); border: 1px solid var(--color-border); }
     .mockup-table { width: 100%; border-collapse: collapse; text-align: left; font-size: 0.825rem; }
-    .mockup-table th { background: #f8fafc; padding: 0.6rem 1rem; color: #475569; font-weight: 600; border-bottom: 1px solid #e2e8f0; font-size: 0.75rem; text-transform: uppercase; letter-spacing: 0.03em; }
+    .mockup-table th { background: var(--color-bg-app); padding: 0.6rem 1rem; color: #475569; font-weight: 600; border-bottom: 1px solid var(--color-border); font-size: 0.75rem; text-transform: uppercase; letter-spacing: 0.03em; }
     .mockup-table td { padding: 0.65rem 1rem; border-bottom: 1px solid #f1f5f9; color: #1e293b; }
-    .mockup-badge { display: inline-block; padding: 2px 7px; border-radius: 4px; font-size: 0.725rem; font-weight: 600; }
+    .mockup-badge { display: inline-block; padding: 2px 7px; border-radius: var(--radius-sm); font-size: 0.725rem; font-weight: 600; }
     .mockup-badge.success { background: #ecfdf5; color: #065f46; border: 1px solid #a7f3d0; }
     .mockup-badge.pending { background: #fffbeb; color: #92400e; border: 1px solid #fde68a; }
   </style>

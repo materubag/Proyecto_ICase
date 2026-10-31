@@ -11,13 +11,42 @@ export const codegenApi = {
   },
 
   /**
+   * Obtiene la especificación JSON común y su diagnóstico de validación
+   */
+  getSpecification: (projectId) => {
+    return request(`/projects/${projectId}/codegen/spec`);
+  },
+
+  /**
+   * Valida una especificación JSON arbitraria contra los Quality Gates
+   */
+  validateSpecification: (projectId, spec) => {
+    return request(`/projects/${projectId}/codegen/spec/validate`, {
+      method: 'POST',
+      body: spec
+    });
+  },
+
+  /**
+   * Aprueba formalmente la especificación y la congela en un baseline inmutable
+   */
+  approveSpecification: (projectId, data = {}) => {
+    return request(`/projects/${projectId}/codegen/spec/approve`, {
+      method: 'POST',
+      body: data
+    });
+  },
+
+  /**
    * Descarga el archivo .zip directamente en el navegador
    */
   downloadZip: async (projectId, includeDocker = true, defaultFilename = 'proyecto-api.zip') => {
     const url = `${BASE_URL}/projects/${projectId}/codegen/download?includeDocker=${includeDocker}`;
     const response = await fetch(url);
     if (!response.ok) {
-      throw new Error(`Error al descargar el archivo ZIP (HTTP ${response.status})`);
+      const errJson = await response.json().catch(() => ({}));
+      const msg = errJson?.error?.message || `Error al descargar el archivo ZIP (HTTP ${response.status})`;
+      throw new Error(msg);
     }
 
     // Obtener nombre del header si viene
@@ -39,5 +68,52 @@ export const codegenApi = {
     window.URL.revokeObjectURL(blobUrl);
 
     return { success: true, filename };
+  },
+
+  /**
+   * Obtiene el estado de operaciones incompletas, mockups y propuestas de IA
+   */
+  getAiStatus: (projectId) => {
+    return request(`/projects/${projectId}/codegen/ai/status`);
+  },
+
+  /**
+   * Solicita propuestas de IA para operaciones incompletas
+   */
+  proposeOperations: (projectId, operationIds = []) => {
+    return request(`/projects/${projectId}/codegen/ai/propose-operations`, {
+      method: 'POST',
+      body: { operationIds }
+    });
+  },
+
+  /**
+   * Solicita propuestas de vinculación de mockups a la API
+   */
+  proposeBindings: (projectId, screenIds = []) => {
+    return request(`/projects/${projectId}/codegen/ai/propose-bindings`, {
+      method: 'POST',
+      body: { screenIds }
+    });
+  },
+
+  /**
+   * Aprueba o rechaza una propuesta generada por IA
+   */
+  reviewProposal: (projectId, { proposalId, status, notes = '' }) => {
+    return request(`/projects/${projectId}/codegen/ai/review-proposal`, {
+      method: 'POST',
+      body: { proposalId, status, notes }
+    });
+  },
+
+  /**
+   * Aplica las propuestas aprobadas a la especificación del proyecto
+   */
+  applyApprovedProposals: (projectId) => {
+    return request(`/projects/${projectId}/codegen/ai/apply`, {
+      method: 'POST',
+      body: {}
+    });
   }
 };

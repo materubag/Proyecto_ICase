@@ -4,7 +4,8 @@
   "description": "Backend API for ICASE (Integrated Computer-Aided Software Engineering) Tool",
   "main": "src/server.js",
   "scripts": {
-    "test": "node --require ./tests/fixtures/offline.cjs --test tests/document_extraction.test.js tests/requirement_flow.test.js tests/engineering.test.js tests/audio.test.js tests/pipeline.test.js tests/fase3.test.js tests/gemini_multipdf_whisper.test.js tests/actor_identity.test.js tests/objective_classification.test.js tests/analysis_jobs.test.js",
+    "test": "node --require ./tests/fixtures/offline.cjs --test tests/document_extraction.test.js tests/requirement_flow.test.js tests/engineering.test.js tests/audio.test.js tests/pipeline.test.js tests/fase3.test.js tests/gemini_multipdf_whisper.test.js tests/actor_identity.test.js tests/objective_classification.test.js tests/analysis_jobs.test.js tests/codegen_typeMapper.test.js tests/codegen_modelGenerator.test.js tests/codegen_specValidator.test.js tests/codegen_multi_domain.test.js",
+    "test:codegen": "node --test tests/codegen_typeMapper.test.js tests/codegen_modelGenerator.test.js tests/codegen_specValidator.test.js tests/codegen_multi_domain.test.js tests/codegen_full_pipeline.test.js tests/codegen_snapshot_hash.test.js tests/codegen_dependency_freshness.test.js tests/codegen_real_business_operations.test.js tests/codegen_coverage_breakdown.test.js tests/codegen_auth_security.test.js tests/codegen_migrations_constraints.test.js tests/codegen_stitch_design_system.test.js",
     "test:extraction": "node --require ./tests/fixtures/offline.cjs --test tests/document_extraction.test.js tests/requirement_flow.test.js",
     "test:requirements:integration": "node tests/requirement_flow.integration.js",
     "test:integration": "node tests/engineering.integration.js",
@@ -33,7 +34,12 @@
     "pdf-parse": "^2.4.5"
   },
   "devDependencies": {
+    "bcryptjs": "^3.0.3",
+    "jsonwebtoken": "^9.0.3",
     "nodemon": "^3.1.4",
-    "prisma": "^5.19.1"
+    "pg": "^8.23.1",
+    "pg-hstore": "^2.3.4",
+    "prisma": "^5.19.1",
+    "sequelize": "^6.37.8"
   }
 }

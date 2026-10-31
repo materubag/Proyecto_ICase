@@ -1,11 +1,11 @@
 /**
  * React Frontend Generator
- * Generates an interactive SPA with Dashboard, dynamic CRUD tables, forms, modals,
- * and high-fidelity functional screens based on project requirements and mockups.
+ * Generates an interactive SPA with dynamic Dashboard, CRUD views, forms, modals,
+ * and high-fidelity functional screens based on approved project specifications.
  */
 
-const { toPascalCase, toCamelCase, toSnakeCasePlural, normalizeAttributes } = require('./typeMapper');
-const funcGen = require('./functionalPagesGenerator');
+const { toPascalCase, toCamelCase, toSnakeCasePlural, deriveNaming, normalizeAttributes } = require('./typeMapper');
+const { generateEntityViewPage } = require('./functionalPagesGenerator');
 
 function generateFrontendPackageJson(projectName = 'app') {
   const safeName = projectName.toLowerCase().replace(/[^a-z0-9-]/g, '-').replace(/^-|-$/g, '') || 'app-frontend';
@@ -61,49 +61,8 @@ function generateIndexHtml(projectName = 'Aplicación') {
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
     <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:opsz,wght,FILL,GRAD@20..48,100..700,0..1,-50..200" />
     <script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
-    <script>
-      tailwind.config = {
-        darkMode: "class",
-        theme: {
-          extend: {
-            colors: {
-              primary: "#3525cd",
-              "primary-container": "#4f46e5",
-              surface: "#f8f9ff",
-              background: "#f8f9ff",
-              "surface-container-lowest": "#ffffff",
-              "surface-container": "#e5eeff",
-              "surface-container-high": "#dce9ff",
-              "surface-container-highest": "#d3e4fe",
-              "on-surface": "#0b1c30",
-              outline: "#777587",
-              "outline-variant": "#c7c4d8",
-              secondary: "#565e74",
-              tertiary: "#005338",
-              error: "#ba1a1a"
-            },
-            fontFamily: {
-              "body-sm": ["Inter", "sans-serif"],
-              "body-md": ["Inter", "sans-serif"],
-              "headline-sm": ["Inter", "sans-serif"],
-              "headline-md": ["Inter", "sans-serif"],
-              "label-sm": ["Inter", "sans-serif"],
-              "label-md": ["Inter", "sans-serif"]
-            }
-          }
-        }
-      };
-    </script>
-    <style>
-      .material-symbols-outlined {
-        font-variation-settings: 'FILL' 0, 'wght' 400, 'GRAD' 0, 'opsz' 24;
-        display: inline-block;
-        vertical-align: middle;
-        line-height: 1;
-      }
-    </style>
   </head>
-  <body class="bg-background text-on-surface">
+  <body class="bg-slate-50 text-slate-800">
     <div id="root"></div>
     <script type="module" src="/src/main.jsx"></script>
   </body>
@@ -140,7 +99,6 @@ function generateFrontendNginxConf() {
         try_files $uri $uri/ /index.html;
     }
 
-    # Proxy a la API backend
     location /api/ {
         proxy_pass http://backend:8080/api/;
         proxy_http_version 1.1;
@@ -154,282 +112,145 @@ function generateFrontendNginxConf() {
 }
 
 function generateFrontendCss() {
-  return `:root {
-  --primary: #2563eb;
-  --primary-hover: #1d4ed8;
-  --primary-light: #eff6ff;
-  --bg-main: #f8fafc;
-  --bg-sidebar: #0f172a;
-  --text-sidebar: #94a3b8;
-  --text-sidebar-active: #ffffff;
-  --card-bg: #ffffff;
-  --border-color: #e2e8f0;
-  --text-main: #1e293b;
-  --text-muted: #64748b;
-  --success: #10b981;
-  --danger: #ef4444;
+  return `/**
+ * Global Stylesheet for Generated SPA
+ * Follows DESIGN_SYSTEM.md (v3.0 - Estándar Esencial Minimalista)
+ */
+
+:root {
+  --color-primary: #4f46e5;
+  --color-primary-hover: #4338ca;
+  --color-primary-subtle: #eef2ff;
+  --color-bg-app: #f8fafc;
+  --color-surface: #ffffff;
+  --color-border: #e2e8f0;
+  --color-border-focus: #6366f1;
+  --color-text-title: #0f172a;
+  --color-text-body: #334155;
+  --color-text-muted: #64748b;
+  --color-text-placeholder: #94a3b8;
+  --status-success: #16a34a;
+  --status-success-bg: #f0fdf4;
+  --status-warning: #d97706;
+  --status-warning-bg: #fffbeb;
+  --status-danger: #dc2626;
+  --status-danger-bg: #fef2f2;
+  --radius-sm: 6px;
+  --radius-md: 8px;
+  --radius-lg: 16px;
+  --shadow-card: 0 1px 3px rgba(15, 23, 42, 0.04);
+
+  /* Semantic Aliases */
+  --primary: var(--color-primary);
+  --primary-hover: var(--color-primary-hover);
+  --bg-main: var(--color-bg-app);
+  --surface: var(--color-surface);
+  --text-main: var(--color-text-title);
+  --text-muted: var(--color-text-muted);
+  --border: var(--color-border);
 }
 
 * {
   box-sizing: border-box;
   margin: 0;
   padding: 0;
-  font-family: 'Inter', -apple-system, sans-serif;
 }
 
 body {
+  font-family: 'Inter', sans-serif;
   background-color: var(--bg-main);
   color: var(--text-main);
+  line-height: 1.5;
 }
 
-.app-container {
-  display: flex;
-  height: 100vh;
-  overflow: hidden;
-}
-
+/* Nav styles */
 .sidebar {
-  width: 270px;
-  background-color: var(--bg-sidebar);
-  color: var(--text-sidebar);
+  width: 260px;
+  background: var(--surface);
+  border-right: 1px solid var(--border);
   display: flex;
   flex-direction: column;
-}
-
-.sidebar-brand {
-  padding: 18px 20px;
-  font-size: 1.15rem;
-  font-weight: 700;
-  color: #fff;
-  border-bottom: 1px solid rgba(255,255,255,0.08);
-  display: flex;
-  align-items: center;
-  gap: 10px;
-}
-
-.sidebar-nav {
-  flex: 1;
-  overflow-y: auto;
-  padding: 12px 8px;
-}
-
-.nav-section-title {
-  padding: 12px 14px 4px 14px;
-  font-size: 0.72rem;
-  color: #64748b;
-  font-weight: 700;
-  text-transform: uppercase;
-  letter-spacing: 0.05em;
+  height: 100vh;
+  position: sticky;
+  top: 0;
 }
 
 .nav-item {
   display: flex;
   align-items: center;
   gap: 10px;
-  padding: 9px 14px;
+  padding: 10px 16px;
+  color: var(--text-muted);
   border-radius: 6px;
-  color: var(--text-sidebar);
   cursor: pointer;
-  margin-bottom: 2px;
-  font-size: 0.86rem;
-  font-weight: 500;
-  transition: all 0.15s;
+  margin: 2px 8px;
+  font-size: 0.88rem;
+  transition: all 0.15s ease;
 }
 
 .nav-item:hover {
-  background-color: rgba(255,255,255,0.06);
-  color: #fff;
+  background: #f1f5f9;
+  color: var(--text-main);
 }
 
 .nav-item.active {
+  background: #eff6ff;
+  color: var(--primary);
+  font-weight: 600;
+}
+
+.btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 8px 16px;
+  border-radius: 6px;
+  font-size: 0.88rem;
+  font-weight: 500;
+  cursor: pointer;
+  border: none;
+  transition: background-color 0.15s;
+}
+
+.btn-primary {
   background-color: var(--primary);
   color: #fff;
 }
 
-.main-content {
-  flex: 1;
-  display: flex;
-  flex-direction: column;
-  overflow-y: auto;
-}
-
-.topbar {
-  background: #fff;
-  padding: 14px 28px;
-  border-bottom: 1px solid var(--border-color);
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-}
-
-.content-body {
-  padding: 28px;
+.btn-primary:hover {
+  background-color: var(--primary-hover);
 }
 
 .card {
-  background: var(--card-bg);
-  border: 1px solid var(--border-color);
+  background: var(--surface);
+  border: 1px solid var(--border);
   border-radius: 8px;
   padding: 20px;
-  box-shadow: 0 1px 3px rgba(0,0,0,0.02);
-}
-
-.btn {
-  padding: 8px 16px;
-  border-radius: 6px;
-  font-size: 0.85rem;
-  font-weight: 500;
-  cursor: pointer;
-  border: none;
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-  transition: all 0.15s;
-}
-
-.btn-primary {
-  background: var(--primary);
-  color: #fff;
-}
-
-.btn-primary:hover {
-  background: var(--primary-hover);
-}
-
-.btn-secondary {
-  background: #f1f5f9;
-  color: #334155;
-  border: 1px solid var(--border-color);
-}
-
-.btn-secondary:hover {
-  background: #e2e8f0;
-}
-
-.btn-danger {
-  background: #fee2e2;
-  color: var(--danger);
-  border: 1px solid #fecaca;
-}
-
-.btn-danger:hover {
-  background: #fecaca;
-}
-
-.btn-sm {
-  padding: 4px 10px;
-  font-size: 0.78rem;
-}
-
-/* Badges */
-.badge {
-  display: inline-flex;
-  align-items: center;
-  padding: 3px 8px;
-  border-radius: 999px;
-  font-size: 0.75rem;
-  font-weight: 600;
-}
-.badge-success { background: #dcfce7; color: #15803d; }
-.badge-danger { background: #fee2e2; color: #b91c1c; }
-.badge-warning { background: #fef3c7; color: #b45309; }
-.badge-info { background: #e0f2fe; color: #0369a1; }
-.badge-secondary { background: #f1f5f9; color: #475569; }
-
-.table-responsive {
-  width: 100%;
-  overflow-x: auto;
-  margin-top: 16px;
-}
-
-table {
-  width: 100%;
-  border-collapse: collapse;
-  text-align: left;
-  font-size: 0.85rem;
-}
-
-th {
-  background: #f8fafc;
-  padding: 12px 14px;
-  border-bottom: 2px solid var(--border-color);
-  color: var(--text-muted);
-  font-weight: 600;
-}
-
-td {
-  padding: 12px 14px;
-  border-bottom: 1px solid var(--border-color);
-}
-
-tr:hover {
-  background-color: #f8fafc;
-}
-
-/* Modal */
-.modal-overlay {
-  position: fixed;
-  top: 0;
-  left: 0;
-  right: 0;
-  bottom: 0;
-  background: rgba(0,0,0,0.5);
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  z-index: 999;
-}
-
-.modal-content {
-  background: #fff;
-  border-radius: 8px;
-  width: 90%;
-  max-width: 540px;
-  padding: 24px;
-  box-shadow: 0 20px 25px -5px rgba(0,0,0,0.1);
-}
-
-.form-group {
-  margin-bottom: 14px;
-}
-
-.form-group label {
-  display: block;
-  font-size: 0.82rem;
-  font-weight: 500;
-  margin-bottom: 5px;
-  color: var(--text-main);
-}
-
-.form-control {
-  width: 100%;
-  padding: 8px 12px;
-  border: 1px solid var(--border-color);
-  border-radius: 6px;
-  font-size: 0.88rem;
-  background: #fff;
-}
-
-.form-control:focus {
-  outline: none;
-  border-color: var(--primary);
-  box-shadow: 0 0 0 3px rgba(37,99,235,0.1);
 }
 `;
 }
 
 function generateApiClientJs() {
   return `/**
- * Cliente HTTP para conectarse a la API REST de Express + Sequelize
+ * Cliente HTTP unificado para la API REST de Express + Sequelize
+ * Soporta métodos REST estándar (GET, POST, PUT, PATCH, DELETE),
+ * inyecta automáticamente el token de autenticación desde localStorage,
+ * retorna directamente el payload data y propaga errores estructurados del servidor.
  */
 
 const API_BASE = '/api';
 
 export async function apiRequest(endpoint, options = {}) {
-  const url = \`\${API_BASE}\${endpoint.startsWith('/') ? endpoint : \`/\${endpoint}\`}\`;
+  const cleanEndpoint = endpoint.startsWith('/') ? endpoint : \`/\${endpoint}\`;
+  const url = cleanEndpoint.startsWith('/api') ? cleanEndpoint : \`\${API_BASE}\${cleanEndpoint}\`;
+
+  // Obtener token de autenticación de la sesión si existe
+  const token = typeof window !== 'undefined' && window.localStorage ? window.localStorage.getItem('token') : null;
+
   const config = {
     headers: {
       'Content-Type': 'application/json',
+      ...(token ? { 'Authorization': \`Bearer \${token}\` } : {}),
       ...options.headers
     },
     ...options
@@ -443,11 +264,33 @@ export async function apiRequest(endpoint, options = {}) {
   const json = await response.json().catch(() => ({}));
 
   if (!response.ok || json.success === false) {
-    throw new Error(json.message || json.error || \`Error HTTP \${response.status}\`);
+    if (response.status === 401 && (json.code === 'TOKEN_EXPIRED' || json.code === 'UNAUTHENTICATED')) {
+      if (typeof window !== 'undefined' && window.localStorage) {
+        window.localStorage.removeItem('token');
+        window.localStorage.removeItem('user');
+        window.dispatchEvent(new Event('auth:expired'));
+      }
+    }
+    const error = new Error(json.message || json.error || \`Error HTTP \${response.status}\`);
+    error.status = response.status;
+    error.details = json;
+    throw error;
   }
 
-  return json.data;
+  // Contrato unificado: Retorna directamente json.data
+  return json.data !== undefined ? json.data : json;
 }
+
+const apiClient = {
+  request: apiRequest,
+  get: (endpoint, options = {}) => apiRequest(endpoint, { ...options, method: 'GET' }),
+  post: (endpoint, body, options = {}) => apiRequest(endpoint, { ...options, method: 'POST', body }),
+  put: (endpoint, body, options = {}) => apiRequest(endpoint, { ...options, method: 'PUT', body }),
+  patch: (endpoint, body, options = {}) => apiRequest(endpoint, { ...options, method: 'PATCH', body }),
+  delete: (endpoint, options = {}) => apiRequest(endpoint, { ...options, method: 'DELETE' })
+};
+
+export default apiClient;
 `;
 }
 
@@ -465,582 +308,942 @@ ReactDOM.createRoot(document.getElementById('root')).render(
 `;
 }
 
-function generateDashboardJsx(projectName = 'Aplicación') {
+function generateDashboardJsx(projectName = 'Aplicación', entities = [], compiledMockups = []) {
+  const operationalMockups = (compiledMockups || []).filter(m =>
+    !/iniciodesesi|accesoalsistema|login|auth/i.test((m.key || '') + ' ' + (m.compName || '') + ' ' + (m.title || ''))
+  );
+
+  const entityCards = entities.map(e => {
+    const naming = deriveNaming(e.name);
+    return `        <div className="card" style={{ borderLeft: '4px solid #3b82f6', cursor: 'pointer', padding: '16px', background: '#ffffff', borderRadius: '8px', boxShadow: '0 1px 3px rgba(0,0,0,0.06)' }} onClick={() => setActiveTab('${naming.endpoint}')}>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+            <span style={{ fontSize: '0.78rem', color: '#64748b', textTransform: 'uppercase', fontWeight: 600 }}>Entidad</span>
+            <span className="material-symbols-outlined" style={{ color: '#2563eb', fontSize: '20px' }}>table_chart</span>
+          </div>
+          <h3 style={{ fontSize: '1.15rem', marginTop: '6px', fontWeight: 700, color: '#1e293b' }}>${naming.modelName}</h3>
+          <span style={{ fontSize: '0.75rem', color: '#2563eb' }}>/api/${naming.endpoint}</span>
+        </div>`;
+  }).join('\n');
+
+  const screenCards = operationalMockups.map(m => {
+    return `        <div className="card" style={{ borderLeft: '4px solid #10b981', cursor: 'pointer', padding: '16px', background: '#ffffff', borderRadius: '8px', boxShadow: '0 1px 3px rgba(0,0,0,0.06)' }} onClick={() => setActiveTab('${m.key}')}>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+            <span style={{ fontSize: '0.78rem', color: '#059669', textTransform: 'uppercase', fontWeight: 600 }}>Pantalla Operativa</span>
+            <span className="material-symbols-outlined" style={{ color: '#10b981', fontSize: '20px' }}>palette</span>
+          </div>
+          <h3 style={{ fontSize: '1.05rem', marginTop: '6px', fontWeight: 600, color: '#1e293b' }}>${m.title}</h3>
+          <span style={{ fontSize: '0.75rem', color: '#64748b' }}>Ver interfaz funcional →</span>
+        </div>`;
+  }).join('\n');
+
   return `import React from 'react';
 
-export default function Dashboard({ setActiveTab }) {
-  return (
-    <div>
-      <div style={{ marginBottom: '24px' }}>
-        <h2 style={{ fontSize: '1.4rem', fontWeight: 700 }}>Panel de Control Principal — ${projectName}</h2>
-        <p style={{ color: 'var(--text-muted)', fontSize: '0.9rem', marginTop: '4px' }}>
-          Sistema de gestión integral para taller automotriz, diagnóstico pericial y portal de clientes.
-        </p>
-      </div>
-
-      {/* Tarjetas de Métricas Ejecutivas */}
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))', gap: '16px', marginBottom: '24px' }}>
-        <div className="card" style={{ borderLeft: '4px solid var(--primary)' }}>
-          <span style={{ fontSize: '0.8rem', color: 'var(--text-muted)' }}>Vehículos en Taller Hoy</span>
-          <h3 style={{ fontSize: '1.6rem', marginTop: '4px', color: 'var(--primary)' }}>8</h3>
-          <span style={{ fontSize: '0.75rem', color: '#10b981' }}>3 ingresados hoy</span>
-        </div>
-        <div className="card" style={{ borderLeft: '4px solid #f59e0b' }}>
-          <span style={{ fontSize: '0.8rem', color: 'var(--text-muted)' }}>Citas Pendientes Esta Semana</span>
-          <h3 style={{ fontSize: '1.6rem', marginTop: '4px', color: '#f59e0b' }}>12</h3>
-          <span style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>2 bahías disponibles</span>
-        </div>
-        <div className="card" style={{ borderLeft: '4px solid #10b981' }}>
-          <span style={{ fontSize: '0.8rem', color: 'var(--text-muted)' }}>Órdenes en Reparación Activa</span>
-          <h3 style={{ fontSize: '1.6rem', marginTop: '4px', color: '#10b981' }}>5</h3>
-          <span style={{ fontSize: '0.75rem', color: '#10b981' }}>2 listas para control de calidad</span>
-        </div>
-        <div className="card" style={{ borderLeft: '4px solid #ef4444' }}>
-          <span style={{ fontSize: '0.8rem', color: 'var(--text-muted)' }}>Alertas de Bajo Stock</span>
-          <h3 style={{ fontSize: '1.6rem', marginTop: '4px', color: '#ef4444' }}>2</h3>
-          <span style={{ fontSize: '0.75rem', color: '#ef4444' }}>Pastillas de freno y filtros</span>
-        </div>
-      </div>
-
-      {/* Accesos Rápidos Operativos */}
-      <div className="card" style={{ marginBottom: '24px' }}>
-        <h3 style={{ fontSize: '1.05rem', fontWeight: 600, marginBottom: '14px' }}>Acciones Rápidas del Día</h3>
-        <div style={{ display: 'flex', gap: '12px', flexWrap: 'wrap' }}>
-          <button className="btn btn-primary" onClick={() => setActiveTab('recepcion')}>
-            <span className="material-symbols-outlined">directions_car</span>
-            Nueva Recepción
-          </button>
-          <button className="btn btn-secondary" onClick={() => setActiveTab('citas')}>
-            <span className="material-symbols-outlined">event</span>
-            Agendar Cita
-          </button>
-          <button className="btn btn-secondary" onClick={() => setActiveTab('diagnosticos')}>
-            <span className="material-symbols-outlined">bug_report</span>
-            Registrar Falla OBD
-          </button>
-          <button className="btn btn-secondary" onClick={() => setActiveTab('inventario')}>
-            <span className="material-symbols-outlined">inventory_2</span>
-            Consultar Stock
-          </button>
-        </div>
-      </div>
-
-      {/* Resumen de Flujo de Taller */}
-      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '20px' }}>
-        <div className="card">
-          <h3 style={{ fontSize: '1rem', fontWeight: 600, marginBottom: '12px' }}>Flujo de Trabajo Operativo</h3>
-          <ol style={{ paddingLeft: '20px', fontSize: '0.88rem', display: 'flex', flexDirection: 'column', gap: '8px', color: 'var(--text-muted)' }}>
-            <li><strong>Recepción:</strong> Registro de kilometraje, combustible e inspección de carrocería.</li>
-            <li><strong>Diagnóstico OBD:</strong> Escaneo de averías DTC y causas probables.</li>
-            <li><strong>Presupuesto:</strong> Generación y aprobación de cotización con repuestos y mano de obra.</li>
-            <li><strong>Reparación:</strong> Asignación de mecánico y consumo de insumos del inventario.</li>
-            <li><strong>Control de Calidad:</strong> Prueba de ruta y entrega conforme al cliente.</li>
-          </ol>
-        </div>
-
-        <div className="card">
-          <h3 style={{ fontSize: '1rem', fontWeight: 600, marginBottom: '12px' }}>Estado del Entorno Full-Stack</h3>
-          <ul style={{ listStyle: 'none', padding: 0, fontSize: '0.88rem', display: 'flex', flexDirection: 'column', gap: '8px' }}>
-            <li style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-              <span className="badge badge-success">✓ Conectado</span>
-              <span>PostgreSQL 15 Container</span>
-            </li>
-            <li style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-              <span className="badge badge-success">✓ Operativa</span>
-              <span>API REST Express + Sequelize ORM</span>
-            </li>
-            <li style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-              <span className="badge badge-success">✓ Compilado</span>
-              <span>Frontend React 18 + Vite SPA</span>
-            </li>
-          </ul>
-        </div>
-      </div>
-    </div>
-  );
-}
-`;
-}
-
-function generateAppJsx(projectName = 'Aplicación', entities = [], customPages = [], actors = [], compiledMockups = []) {
-  const isMockupMode = customPages && customPages.length > 0;
-
-  // Lista de páginas funcionales con asignación de roles (RBAC ISO 29148)
-  const pagesList = isMockupMode
-    ? customPages.filter(p => p.route !== '/login').map(p => ({
-        pascal: p.pascal || 'Custom',
-        key: p.key || p.route.replace(/^\//, '').replace(/-/g, '_'),
-        name: p.name || p.title || 'Módulo',
-        icon: p.icon || 'view_quilt',
-        roles: p.roles || (
-          p.route.includes('cliente') ? ['Cliente'] :
-          p.route.includes('diagnostico') || p.route.includes('obd') ? ['Administrador', 'Mecánico'] :
-          p.route.includes('recepcion') || p.route.includes('cita') ? ['Administrador', 'Recepción'] :
-          p.route.includes('reparacion') || p.route.includes('orden') ? ['Administrador', 'Mecánico', 'Recepción'] :
-          ['Administrador']
-        )
-      }))
-    : [
-        { pascal: 'Recepcion', key: 'recepcion', name: 'Recepción e Inspección', icon: 'directions_car', roles: ['Administrador', 'Recepción'] },
-        { pascal: 'Citas', key: 'citas', name: 'Agenda de Citas', icon: 'event', roles: ['Administrador', 'Recepción'] },
-        { pascal: 'Diagnosticos', key: 'diagnosticos', name: 'Diagnósticos OBD', icon: 'bug_report', roles: ['Administrador', 'Mecánico'] },
-        { pascal: 'Reparaciones', key: 'reparaciones', name: 'Órdenes de Trabajo', icon: 'engineering', roles: ['Administrador', 'Mecánico', 'Recepción'] },
-        { pascal: 'Clientes', key: 'clientes', name: 'Directorio de Clientes', icon: 'people', roles: ['Administrador', 'Recepción'] },
-        { pascal: 'Vehiculos', key: 'vehiculos', name: 'Expediente de Vehículos', icon: 'folder_shared', roles: ['Administrador', 'Recepción', 'Mecánico'] },
-        { pascal: 'Inventario', key: 'inventario', name: 'Inventario y Repuestos', icon: 'inventory_2', roles: ['Administrador', 'Mecánico'] },
-        { pascal: 'Servicios', key: 'servicios', name: 'Catálogo de Servicios', icon: 'list_alt', roles: ['Administrador', 'Recepción'] },
-        { pascal: 'MisVehiculos', key: 'mis_vehiculos', name: 'Mis Vehículos', icon: 'car_repair', roles: ['Cliente'] },
-        { pascal: 'CitasCliente', key: 'citas_cliente', name: 'Solicitar Cita', icon: 'calendar_month', roles: ['Cliente'] },
-        { pascal: 'CotizacionesCliente', key: 'cotizaciones_cliente', name: 'Presupuestos', icon: 'check_circle', roles: ['Cliente', 'Recepción'] },
-        { pascal: 'ProgresoReparacion', key: 'progreso_reparacion', name: 'Seguimiento en Vivo', icon: 'trending_up', roles: ['Cliente'] },
-        { pascal: 'Conocimiento', key: 'conocimiento', name: 'Base de Conocimiento OBD', icon: 'menu_book', roles: ['Administrador', 'Mecánico'] },
-        { pascal: 'Reportes', key: 'reportes', name: 'Indicadores y Reportes', icon: 'analytics', roles: ['Administrador'] },
-        { pascal: 'Usuarios', key: 'usuarios', name: 'Personal y Roles', icon: 'admin_panel_settings', roles: ['Administrador'] }
-      ];
-
-  const pageImports = pagesList.map(p => `import ${p.pascal}Page from './pages/${p.pascal}Page';`).join('\n');
-  const pageSwitches = pagesList.map(p => `          {activeTab === '${p.key}' && isAuthorized('${p.key}') && <${p.pascal}Page />}`).join('\n');
-
-  // Opciones de roles según los actores del proyecto
-  const roleList = (actors && actors.length > 0)
-    ? actors.map(a => a.name)
-    : ['Administrador', 'Recepción', 'Mecánico', 'Cliente'];
-
-  const roleOptions = roleList.map(r => `<option value="${r}">${r}</option>`).join('\n              ');
-  const initialRole = roleList[0] || 'Administrador';
-
-  // Navigation tabs for data models (solo visibles para Administrador)
-  const ormNavButtons = entities.slice(0, 10).map(e => {
-    const pascal = toPascalCase(e.name);
-    return `            <div
-              className={\`nav-item \${activeTab === 'orm_${pascal}' ? 'active' : ''}\`}
-              onClick={() => setActiveTab('orm_${pascal}')}
-            >
-              <span className="material-symbols-outlined" style={{ fontSize: '16px' }}>table_chart</span>
-              <span style={{ fontSize: '0.8rem' }}>${pascal}</span>
-            </div>`;
-  }).join('\n');
-
-  const ormConditionalPages = entities.map(e => {
-    const pascal = toPascalCase(e.name);
-    return `            {activeTab === 'orm_${pascal}' && <${pascal}OrmPage />}`;
-  }).join('\n');
-
-  const ormImports = entities.map(e => {
-    const pascal = toPascalCase(e.name);
-    return `import ${pascal}OrmPage from './pages/orm/${pascal}Page';`;
-  }).join('\n');
-
-  // Mockups de diseño compilados (ArtifactVersion con Tailwind)
-  const mockupImports = (compiledMockups && compiledMockups.length > 0)
-    ? compiledMockups.map(m => `import ${m.compName} from './pages/mockups/${m.compName}';`).join('\n')
-    : '';
-
-  const mockupNavButtons = (compiledMockups && compiledMockups.length > 0)
-    ? compiledMockups.map(m => `            <div
-              className={\`nav-item \${activeTab === '${m.key}' ? 'active' : ''}\`}
-              onClick={() => setActiveTab('${m.key}')}
-            >
-              <span className="material-symbols-outlined" style={{ fontSize: '16px' }}>palette</span>
-              <span style={{ fontSize: '0.8rem' }} title="${m.title}">${m.compName.replace('Mockup', '')}</span>
-            </div>`).join('\n')
-    : '';
-
-  const mockupConditionalPages = (compiledMockups && compiledMockups.length > 0)
-    ? compiledMockups.map(m => `            {activeTab === '${m.key}' && (
-              <div>
-                <div style={{ marginBottom: '16px', padding: '10px 16px', background: '#e0f2fe', color: '#0369a1', borderRadius: '8px', fontSize: '0.85rem', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                  <span>🎨 <strong>Mockup de Diseño Original:</strong> ${m.title}</span>
-                  <span className="badge badge-info">${m.route}</span>
-                </div>
-                <${m.compName} />
-              </div>
-            )}`).join('\n')
-    : '';
-
-  const modulesJson = JSON.stringify(pagesList, null, 2);
-
-  return `import React, { useState } from 'react';
-import LoginPage from './pages/LoginPage';
-import Dashboard from './pages/Dashboard';
-${pageImports}
-${ormImports}
-${mockupImports}
-
-// Configuración de módulos y permisos por rol (RBAC)
-const MODULES_CONFIG = ${modulesJson};
-
-const ROLE_DEFAULT_TABS = {
-  Administrador: 'dashboard',
-  Recepción: 'recepcion',
-  Mecánico: 'diagnosticos',
-  Cliente: 'mis_vehiculos'
-};
-
-export default function App() {
-  const [currentUser, setCurrentUser] = useState(null);
-  const [activeRole, setActiveRole] = useState('${initialRole}');
-  const [activeTab, setActiveTab] = useState('dashboard');
-
-  // Si no ha iniciado sesión, mostrar la pantalla de Login (RF-01, RNF-03)
-  if (!currentUser) {
-    return (
-      <LoginPage
-        onLogin={(user) => {
-          const role = user.role || 'Administrador';
-          const defaultTab = ROLE_DEFAULT_TABS[role] || (MODULES_CONFIG.find(m => m.roles?.includes(role))?.key) || 'dashboard';
-          setCurrentUser(user);
-          setActiveRole(role);
-          setActiveTab(defaultTab);
-        }}
-      />
-    );
-  }
-
-  // Comprobar si la pestaña solicitada está permitida para el rol actual
-  const isAuthorized = (tab, role = activeRole) => {
-    if (tab === 'dashboard') return role === 'Administrador';
-    if (tab.startsWith('orm_')) return role === 'Administrador';
-    if (tab.startsWith('mockup_')) return role === 'Administrador';
-    const mod = MODULES_CONFIG.find(m => m.key === tab);
-    return mod ? (!mod.roles || mod.roles.includes(role)) : false;
-  };
-
-  // Módulos visibles en la barra lateral según el rol activo
-  const allowedModules = MODULES_CONFIG.filter(m => !m.roles || m.roles.includes(activeRole));
-
-  // Cambio de rol simulado (solo para Administrador)
-  const handleRoleChange = (newRole) => {
-    setActiveRole(newRole);
-    const defaultTab = ROLE_DEFAULT_TABS[newRole] || (MODULES_CONFIG.find(m => m.roles?.includes(newRole))?.key) || 'dashboard';
-    setActiveTab(defaultTab);
-  };
+export default function Dashboard({ setActiveTab, user = null }) {
+  const roleName = user?.role || user?.rol || 'Administrador';
+  const userName = user?.nombre || user?.username || user?.email || 'Administrador';
+  const isAdmin = /admin/i.test(roleName);
 
   return (
-    <div className="app-container">
-      {/* Sidebar de Navegación con Control de Acceso por Rol (RBAC) */}
-      <aside className="sidebar">
-        <div className="sidebar-brand">
-          <span className="material-symbols-outlined" style={{ color: '#38bdf8' }}>dashboard</span>
-          <span>${projectName}</span>
-        </div>
-
-        <nav className="sidebar-nav">
-          {/* Panel General: solo disponible para Administrador */}
-          {activeRole === 'Administrador' && (
-            <div
-              className={\`nav-item \${activeTab === 'dashboard' ? 'active' : ''}\`}
-              onClick={() => setActiveTab('dashboard')}
-            >
-              <span className="material-symbols-outlined" style={{ fontSize: '18px' }}>dashboard</span>
-              <span>Panel General</span>
-            </div>
-          )}
-
-          <div className="nav-section-title">
-            {activeRole === 'Cliente' ? 'Portal del Cliente' : \`Módulos (\${activeRole})\`}
-          </div>
-
-          {/* Módulos estrictamente autorizados para el rol activo */}
-          {allowedModules.map(m => (
-            <div
-              key={m.key}
-              className={\`nav-item \${activeTab === m.key ? 'active' : ''}\`}
-              onClick={() => setActiveTab(m.key)}
-            >
-              <span className="material-symbols-outlined" style={{ fontSize: '18px' }}>{m.icon || 'view_quilt'}</span>
-              <span>{m.name}</span>
-            </div>
-          ))}
-
-          {/* TABLAS DE DATOS ORM: Solo visibles para perfil Administrador */}
-          {activeRole === 'Administrador' && (
-            <>
-              <div className="nav-section-title" style={{ opacity: 0.7 }}>Tablas Sequelize (ORM)</div>
-${ormNavButtons}
-            </>
-          )}
-
-          {/* MOCKUPS DE DISEÑO: Mockups reales aprobados en la BD con Tailwind CSS */}
-          {activeRole === 'Administrador' && (
-            <>
-              <div className="nav-section-title" style={{ opacity: 0.7 }}>Mockups Aprobados (Tailwind)</div>
-${mockupNavButtons}
-            </>
-          )}
-        </nav>
-      </aside>
-
-      {/* Contenido Principal */}
-      <main className="main-content">
-        <header className="topbar">
-          <div style={{ display: 'flex', alignItems: 'center', gap: '16px' }}>
-            <span style={{ fontSize: '0.85rem', color: 'var(--text-muted)' }}>
-              Estado: <strong style={{ color: '#10b981' }}>● Conectado a PostgreSQL</strong>
+    <div style={{ padding: '8px', maxWidth: '1280px', margin: '0 auto' }}>
+      {/* Banner de Bienvenida y Rol */}
+      <div style={{
+        marginBottom: '24px',
+        padding: '24px',
+        background: 'linear-gradient(135deg, #1e3a8a 0%, #2563eb 100%)',
+        borderRadius: '12px',
+        color: '#ffffff',
+        boxShadow: '0 4px 6px -1px rgba(0, 0, 0, 0.1)'
+      }}>
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', flexWrap: 'wrap', gap: '12px' }}>
+          <div>
+            <span style={{
+              display: 'inline-block',
+              padding: '4px 10px',
+              backgroundColor: 'rgba(255, 255, 255, 0.2)',
+              borderRadius: '20px',
+              fontSize: '0.75rem',
+              fontWeight: 600,
+              letterSpacing: '0.5px',
+              marginBottom: '8px',
+              textTransform: 'uppercase'
+            }}>
+              Sesión Activa: {roleName}
             </span>
+            <h2 style={{ fontSize: '1.6rem', fontWeight: 700, margin: '4px 0' }}>
+              Panel de Control — ${projectName}
+            </h2>
+            <p style={{ color: '#e0e7ff', fontSize: '0.92rem', marginTop: '4px', maxWidth: '700px' }}>
+              Bienvenido/a, <strong>{userName}</strong>. {isAdmin
+                ? 'Tienes acceso total de Administrador para gestionar todas las operaciones, entidades de datos y pantallas operativas del sistema.'
+                : 'Accede a los módulos y pantallas operativas autorizados para tu rol.'}
+            </p>
           </div>
-
-          <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
-            {/* Si es Administrador, puede simular otros roles para probar la experiencia */}
-            {currentUser.role === 'Administrador' ? (
-              <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
-                <span style={{ fontSize: '0.78rem', color: 'var(--text-muted)' }}>Simular Rol:</span>
-                <select
-                  className="form-control"
-                  style={{ width: 'auto', padding: '3px 8px', fontSize: '0.78rem' }}
-                  value={activeRole}
-                  onChange={e => handleRoleChange(e.target.value)}
-                  title="Como Administrador puedes simular la vista y permisos de otros roles"
-                >
-                  ${roleOptions}
-                </select>
-              </div>
-            ) : (
-              <span className="badge badge-info" style={{ fontSize: '0.78rem' }}>Perfil: {currentUser.role}</span>
-            )}
-
-            <div style={{ display: 'flex', alignItems: 'center', gap: '6px', padding: '4px 10px', background: '#f1f5f9', borderRadius: '20px', fontSize: '0.8rem' }}>
-              <span className="material-symbols-outlined" style={{ fontSize: '16px', color: 'var(--primary)' }}>account_circle</span>
-              <strong>{currentUser.name}</strong>
-              <span className="badge badge-info" style={{ marginLeft: '4px' }}>{activeRole}</span>
-            </div>
-
-            <button
-              className="btn btn-sm btn-danger"
-              style={{ display: 'inline-flex', alignItems: 'center', gap: '4px', cursor: 'pointer' }}
-              onClick={() => setCurrentUser(null)}
-              title="Cerrar Sesión y regresar a pantalla de Login"
-            >
-              <span className="material-symbols-outlined" style={{ fontSize: '15px' }}>logout</span>
-              Cerrar Sesión
-            </button>
+          <div style={{ textAlign: 'right' }}>
+            <div style={{ fontSize: '0.8rem', color: '#bfdbfe' }}>Estado del Sistema</div>
+            <div style={{ fontSize: '1.05rem', fontWeight: 700, color: '#86efac' }}>● Conectado y Operativo</div>
           </div>
-        </header>
-
-        <div className="content-body">
-          {activeTab === 'dashboard' && activeRole === 'Administrador' && <Dashboard setActiveTab={setActiveTab} />}
-${pageSwitches}
-          {activeRole === 'Administrador' && (
-            <>
-${ormConditionalPages}
-${mockupConditionalPages}
-            </>
-          )}
-
-          {/* Bloque de Acceso Denegado si se intenta acceder a una pestaña no permitida */}
-          {!isAuthorized(activeTab) && (
-            <div className="card" style={{ padding: '36px', textAlign: 'center', maxWidth: '540px', margin: '40px auto' }}>
-              <span className="material-symbols-outlined" style={{ fontSize: '48px', color: '#ef4444', marginBottom: '12px' }}>lock</span>
-              <h3 style={{ fontSize: '1.25rem', fontWeight: 700, color: '#991b1b', marginBottom: '8px' }}>Acceso Restringido</h3>
-              <p style={{ color: 'var(--text-muted)', fontSize: '0.9rem', lineHeight: '1.5' }}>
-                Tu perfil actual (<strong>{activeRole}</strong>) no tiene autorización para visualizar este módulo.
-              </p>
-              <button
-                className="btn btn-primary"
-                style={{ marginTop: '20px', display: 'inline-flex', margin: '20px auto 0 auto' }}
-                onClick={() => setActiveTab(ROLE_DEFAULT_TABS[activeRole] || allowedModules[0]?.key || 'dashboard')}
-              >
-                Volver a mi módulo principal
-              </button>
-            </div>
-          )}
         </div>
-      </main>
+      </div>
+
+      {/* Métricas Rápidas */}
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: '16px', marginBottom: '28px' }}>
+        <div style={{ padding: '18px', background: '#ffffff', borderRadius: '10px', border: '1px solid #e2e8f0', boxShadow: '0 1px 3px rgba(0,0,0,0.04)' }}>
+          <div style={{ fontSize: '0.78rem', color: '#64748b', fontWeight: 600, textTransform: 'uppercase' }}>Rol Autenticado</div>
+          <div style={{ fontSize: '1.35rem', fontWeight: 700, color: '#1e293b', marginTop: '4px' }}>{roleName}</div>
+          <div style={{ fontSize: '0.75rem', color: '#16a34a', marginTop: '4px' }}>✓ Permisos verificados por backend</div>
+        </div>
+        <div style={{ padding: '18px', background: '#ffffff', borderRadius: '10px', border: '1px solid #e2e8f0', boxShadow: '0 1px 3px rgba(0,0,0,0.04)' }}>
+          <div style={{ fontSize: '0.78rem', color: '#64748b', fontWeight: 600, textTransform: 'uppercase' }}>Pantallas Aprobadas</div>
+          <div style={{ fontSize: '1.35rem', fontWeight: 700, color: '#2563eb', marginTop: '4px' }}>${operationalMockups.length}</div>
+          <div style={{ fontSize: '0.75rem', color: '#64748b', marginTop: '4px' }}>Interfaces funcionales conectadas</div>
+        </div>
+        <div style={{ padding: '18px', background: '#ffffff', borderRadius: '10px', border: '1px solid #e2e8f0', boxShadow: '0 1px 3px rgba(0,0,0,0.04)' }}>
+          <div style={{ fontSize: '0.78rem', color: '#64748b', fontWeight: 600, textTransform: 'uppercase' }}>Módulos de Datos</div>
+          <div style={{ fontSize: '1.35rem', fontWeight: 700, color: '#059669', marginTop: '4px' }}>${entities.length}</div>
+          <div style={{ fontSize: '0.75rem', color: '#64748b', marginTop: '4px' }}>Tablas PostgreSQL sincronizadas</div>
+        </div>
+      </div>
+
+${operationalMockups.length > 0 ? `      {/* Pantallas Operativas del Sistema */}
+      <div style={{ marginBottom: '32px' }}>
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '14px' }}>
+          <div>
+            <h3 style={{ fontSize: '1.2rem', fontWeight: 700, color: '#1e293b', margin: 0 }}>Pantallas Operativas Aprobadas</h3>
+            <p style={{ fontSize: '0.85rem', color: '#64748b', margin: '2px 0 0 0' }}>Interfaces enriquecidas de Stitch conectadas al backend Express + Sequelize</p>
+          </div>
+        </div>
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))', gap: '16px' }}>
+${screenCards}
+        </div>
+      </div>` : ''}
+
+      {/* Módulos de Datos */}
+      <div style={{ marginBottom: '32px' }}>
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '14px' }}>
+          <div>
+            <h3 style={{ fontSize: '1.2rem', fontWeight: 700, color: '#1e293b', margin: 0 }}>Módulos de Datos y Entidades</h3>
+            <p style={{ fontSize: '0.85rem', color: '#64748b', margin: '2px 0 0 0' }}>Gestión directa de tablas y operaciones CRUD de la base de datos</p>
+          </div>
+        </div>
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))', gap: '14px' }}>
+${entityCards}
+        </div>
+      </div>
     </div>
   );
 }
 `;
 }
 
-function generateEntityPageJsx(entity) {
-  const pascalName = toPascalCase(entity.name);
-  const pluralRoute = toSnakeCasePlural(entity.name);
-  const normalizedAttrs = normalizeAttributes(entity.attributes || []);
-  const nonPkAttrs = normalizedAttrs.filter(a => !a.isPk && !a.fieldName.toLowerCase().includes('hash') && !a.fieldName.toLowerCase().includes('token'));
+function generateLoginPageJsx(projectName = 'Aplicación') {
+  const domain = projectName ? projectName.toLowerCase().replace(/[^a-z0-9]/g, '') : 'app';
+  return `import React, { useState } from 'react';
+import apiClient from '../api/client';
 
-  // Table headers (filter out sensitive fields like passwords or tokens)
-  const displayAttrs = normalizedAttrs.filter(a => !a.fieldName.toLowerCase().includes('hash') && !a.fieldName.toLowerCase().includes('token'));
-  const thHeaders = displayAttrs.map(a => `<th>${a.fieldName}</th>`).join('\n              ');
-  const tdValues = displayAttrs.map(a => `<td>{String(item.${a.fieldName} ?? '')}</td>`).join('\n                ');
-
-  // Initial state for form fields
-  const initialState = nonPkAttrs.map(a => `${a.fieldName}: ''`).join(',\n    ');
-
-  // Modal form inputs
-  const formInputs = nonPkAttrs.map(a => {
-    let inputType = 'text';
-    if (a.dataType.includes('INTEGER') || a.dataType.includes('FLOAT') || a.dataType.includes('DECIMAL')) inputType = 'number';
-    else if (a.dataType.includes('DATE')) inputType = 'date';
-    else if (a.dataType.includes('BOOLEAN')) inputType = 'checkbox';
-
-    if (inputType === 'checkbox') {
-      return `          <div className="form-group" style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-            <input
-              type="checkbox"
-              id="${a.fieldName}"
-              checked={Boolean(formData.${a.fieldName})}
-              onChange={e => setFormData({ ...formData, ${a.fieldName}: e.target.checked })}
-            />
-            <label htmlFor="${a.fieldName}" style={{ margin: 0 }}>${a.fieldName}</label>
-          </div>`;
-    }
-
-    return `          <div className="form-group">
-            <label htmlFor="${a.fieldName}">${a.fieldName}</label>
-            <input
-              type="${inputType}"
-              id="${a.fieldName}"
-              className="form-control"
-              value={formData.${a.fieldName} || ''}
-              onChange={e => setFormData({ ...formData, ${a.fieldName}: e.target.value })}
-            />
-          </div>`;
-  }).join('\n');
-
-  return `import React, { useState, useEffect } from 'react';
-import { apiRequest } from '../../api/client';
-
-export default function ${pascalName}Page() {
-  const [data, setData] = useState([]);
-  const [loading, setLoading] = useState(true);
+/**
+ * Pantalla de Inicio de Sesión según DESIGN_SYSTEM.md (v3.0)
+ * Valida credenciales contra el backend (/api/auth/login), guarda el JWT y session info,
+ * y propaga errores reales sin admitir suplantación visual de roles.
+ */
+export default function LoginPage({ onLoginSuccess }) {
+  const [identifier, setIdentifier] = useState('');
+  const [password, setPassword] = useState('');
+  const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
-  const [modalOpen, setModalOpen] = useState(false);
-  const [editingItem, setEditingItem] = useState(null);
-  const [formData, setFormData] = useState({
-    ${initialState}
-  });
 
-  const loadData = async () => {
+  const handleSubmit = async (e) => {
+    e.preventDefault();
+    setLoading(true);
+    setError(null);
+
     try {
-      setLoading(true);
-      const res = await apiRequest('/${pluralRoute}');
-      setData(Array.isArray(res) ? res : (res?.data || []));
-      setError(null);
+      const response = await apiClient.post('/auth/login', {
+        identifier,
+        password
+      });
+
+      const token = response.token || response.data?.token;
+      const user = response.user || response.data?.user;
+
+      if (!token) {
+        throw new Error('Respuesta inválida del servidor: No se recibió token de sesión.');
+      }
+
+      localStorage.setItem('token', token);
+      localStorage.setItem('user', JSON.stringify(user || {}));
+
+      if (onLoginSuccess) {
+        onLoginSuccess(token, user);
+      }
     } catch (err) {
-      setError(err.message);
+      setError(err.details?.message || err.message || 'Error al autenticar credenciales.');
     } finally {
       setLoading(false);
     }
   };
 
-  useEffect(() => {
-    loadData();
-  }, []);
-
-  const handleOpenCreate = () => {
-    setEditingItem(null);
-    setFormData({
-      ${initialState}
-    });
-    setModalOpen(true);
-  };
-
-  const handleOpenEdit = (item) => {
-    setEditingItem(item);
-    setFormData({ ...item });
-    setModalOpen(true);
-  };
-
-  const handleDelete = async (id) => {
-    if (!window.confirm('¿Está seguro de eliminar este registro?')) return;
-    try {
-      await apiRequest(\`/${pluralRoute}/\${id}\`, { method: 'DELETE' });
-      setData(data.filter(item => item.id !== id));
-    } catch (err) {
-      alert(\`Error al eliminar: \${err.message}\`);
-    }
-  };
-
-  const handleSubmit = async (e) => {
-    e.preventDefault();
-    try {
-      if (editingItem) {
-        const updated = await apiRequest(\`/${pluralRoute}/\${editingItem.id}\`, {
-          method: 'PUT',
-          body: formData
-        });
-        setData(data.map(item => (item.id === editingItem.id ? updated : item)));
-      } else {
-        const created = await apiRequest('/${pluralRoute}', {
-          method: 'POST',
-          body: formData
-        });
-        setData([created, ...data]);
-      }
-      setModalOpen(false);
-    } catch (err) {
-      alert(\`Error al guardar: \${err.message}\`);
-    }
-  };
-
   return (
-    <div>
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '24px' }}>
-        <div>
-          <h2 style={{ fontSize: '1.4rem', fontWeight: 700 }}>Tabla ORM: ${pascalName}</h2>
-          <p style={{ color: 'var(--text-muted)', fontSize: '0.85rem', marginTop: '4px' }}>
-            Operaciones directas sobre el modelo Sequelize <code>${pascalName}</code> (/api/${pluralRoute}).
+    <div style={{
+      display: 'flex',
+      alignItems: 'center',
+      justifyContent: 'center',
+      minHeight: '100vh',
+      backgroundColor: 'var(--color-bg-app)',
+      padding: '20px'
+    }}>
+      <div style={{
+        width: '100%',
+        maxWidth: '420px',
+        backgroundColor: 'var(--color-surface)',
+        borderRadius: 'var(--radius-lg, 16px)',
+        border: '1px solid var(--color-border)',
+        boxShadow: 'var(--shadow-card)',
+        padding: '36px 32px'
+      }}>
+        {/* Cabecera */}
+        <div style={{ textAlign: 'center', marginBottom: '28px' }}>
+          <h1 style={{ fontSize: '1.4rem', fontWeight: 700, color: 'var(--color-text-title)', marginBottom: '6px' }}>
+            ${projectName}
+          </h1>
+          <p style={{ fontSize: '0.875rem', color: 'var(--color-text-muted)' }}>
+            Inicio de sesión seguro para usuarios autorizados
           </p>
         </div>
-        <button className="btn btn-primary" onClick={handleOpenCreate}>
-          <span className="material-symbols-outlined">add</span>
-          Nuevo Registro
-        </button>
-      </div>
 
-      {error && (
-        <div style={{ background: '#fee2e2', color: '#b91c1c', padding: '12px 16px', borderRadius: '6px', marginBottom: '16px' }}>
-          {error}
-        </div>
-      )}
-
-      <div className="card">
-        {loading ? (
-          <div style={{ padding: '24px', textAlign: 'center', color: 'var(--text-muted)' }}>Cargando registros...</div>
-        ) : data.length === 0 ? (
-          <div style={{ padding: '36px', textAlign: 'center', color: 'var(--text-muted)' }}>
-            No hay registros en la tabla. Haz clic en "Nuevo Registro" para crear uno.
-          </div>
-        ) : (
-          <div className="table-responsive">
-            <table>
-              <thead>
-                <tr>
-                  ${thHeaders}
-                  <th>Acciones</th>
-                </tr>
-              </thead>
-              <tbody>
-                {data.map((item, idx) => (
-                  <tr key={item.id || idx}>
-                    ${tdValues}
-                    <td style={{ display: 'flex', gap: '8px' }}>
-                      <button className="btn btn-sm btn-secondary" onClick={() => handleOpenEdit(item)}>Editar</button>
-                      <button className="btn btn-sm btn-danger" onClick={() => handleDelete(item.id)}>Eliminar</button>
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
+        {/* Mensaje de Error */}
+        {error && (
+          <div style={{
+            marginBottom: '20px',
+            padding: '12px 14px',
+            backgroundColor: 'var(--status-danger-bg)',
+            border: '1px solid #fecaca',
+            borderRadius: 'var(--radius-md)',
+            color: 'var(--status-danger)',
+            fontSize: '0.85rem'
+          }}>
+            ✗ {error}
           </div>
         )}
-      </div>
 
-      {modalOpen && (
-        <div className="modal-overlay">
-          <div className="modal-content">
-            <h3 style={{ marginBottom: '16px', fontWeight: 700 }}>
-              {editingItem ? 'Editar Registro' : 'Nuevo Registro'} — ${pascalName}
-            </h3>
-            <form onSubmit={handleSubmit}>
-              ${formInputs}
-              <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '8px', marginTop: '20px' }}>
-                <button type="button" className="btn btn-secondary" onClick={() => setModalOpen(false)}>Cancelar</button>
-                <button type="submit" className="btn btn-primary">Guardar</button>
-              </div>
-            </form>
+        {/* Formulario */}
+        <form onSubmit={handleSubmit}>
+          <div style={{ marginBottom: '18px' }}>
+            <label style={{ display: 'block', fontSize: '0.85rem', fontWeight: 500, color: 'var(--color-text-body)', marginBottom: '6px' }}>
+              Usuario o Correo Electrónico
+            </label>
+            <input
+              type="text"
+              required
+              value={identifier}
+              onChange={e => setIdentifier(e.target.value)}
+              placeholder="ej. usuario@ejemplo.com"
+              style={{
+                width: '100%',
+                height: '44px',
+                padding: '0 14px',
+                borderRadius: 'var(--radius-md)',
+                border: '1px solid var(--color-border)',
+                backgroundColor: 'var(--color-surface)',
+                fontSize: '0.875rem',
+                color: 'var(--color-text-title)',
+                outline: 'none',
+                boxSizing: 'border-box'
+              }}
+            />
           </div>
+
+          <div style={{ marginBottom: '24px' }}>
+            <label style={{ display: 'block', fontSize: '0.85rem', fontWeight: 500, color: 'var(--color-text-body)', marginBottom: '6px' }}>
+              Contraseña
+            </label>
+            <input
+              type="password"
+              required
+              value={password}
+              onChange={e => setPassword(e.target.value)}
+              placeholder="••••••••"
+              style={{
+                width: '100%',
+                height: '44px',
+                padding: '0 14px',
+                borderRadius: 'var(--radius-md)',
+                border: '1px solid var(--color-border)',
+                backgroundColor: 'var(--color-surface)',
+                fontSize: '0.875rem',
+                color: 'var(--color-text-title)',
+                outline: 'none',
+                boxSizing: 'border-box'
+              }}
+            />
+          </div>
+
+          <button
+            type="submit"
+            disabled={loading}
+            style={{
+              width: '100%',
+              height: '44px',
+              backgroundColor: 'var(--color-primary)',
+              color: '#ffffff',
+              border: 'none',
+              borderRadius: 'var(--radius-md)',
+              fontSize: '0.9rem',
+              fontWeight: 600,
+              cursor: loading ? 'not-allowed' : 'pointer',
+              opacity: loading ? 0.7 : 1,
+              transition: 'background-color 0.15s ease'
+            }}
+          >
+            {loading ? 'Verificando...' : 'Iniciar Sesión'}
+          </button>
+        </form>
+
+        {/* Acceso Rápido con Credenciales Semilla */}
+        <div style={{
+          marginTop: '20px',
+          padding: '12px 14px',
+          backgroundColor: '#eff6ff',
+          border: '1px solid #bfdbfe',
+          borderRadius: 'var(--radius-md, 8px)',
+          fontSize: '0.8125rem',
+          color: '#1e40af',
+          textAlign: 'left'
+        }}>
+          <strong style={{ display: 'block', marginBottom: '4px' }}>🔑 Credenciales de Acceso Rápido (Semilla):</strong>
+          <div>• <strong>Usuario:</strong> <code>admin</code> (o <code>admin@${domain}.com</code>)</div>
+          <div>• <strong>Contraseña:</strong> <code>admin123</code></div>
+          <button
+            type="button"
+            onClick={() => { setIdentifier('admin'); setPassword('admin123'); }}
+            style={{
+              marginTop: '6px',
+              padding: '0',
+              background: 'none',
+              border: 'none',
+              color: '#2563eb',
+              fontSize: '0.75rem',
+              fontWeight: 600,
+              cursor: 'pointer',
+              textDecoration: 'underline'
+            }}
+          >
+            Autocompletar formulario
+          </button>
         </div>
+
+        <div style={{ marginTop: '20px', textAlign: 'center', fontSize: '0.75rem', color: 'var(--color-text-muted)' }}>
+          Autenticación JWT gestionada por backend Express + Sequelize
+        </div>
+      </div>
+    </div>
+  );
+}
+`;
+}
+
+function generateAppJsx(projectName = 'Aplicación', entities = [], customPages = [], actors = [], compiledMockups = [], options = {}) {
+  const { hasAuth = false } = options;
+
+  const entityImports = entities.map(e => {
+    const naming = deriveNaming(e.name);
+    return `import ${naming.modelName}Page from './pages/${naming.modelName}Page';`;
+  }).join('\n');
+
+  const entityPageSwitches = entities.map(e => {
+    const naming = deriveNaming(e.name);
+    return `      {activeTab === '${naming.endpoint}' && <${naming.modelName}Page />}`;
+  }).join('\n');
+
+  // Compiled mockups tabs (omitiendo pantallas de inicio de sesión que ya gestiona LoginPage)
+  const operationalMockups = (compiledMockups || []).filter(m =>
+    !/iniciodesesi|accesoalsistema|login|auth/i.test((m.key || '') + ' ' + (m.compName || '') + ' ' + (m.title || ''))
+  );
+
+  const mockupImports = operationalMockups.map(m => `import ${m.compName} from './pages/mockups/${m.compName}';`).join('\n');
+
+  const mockupSwitches = operationalMockups.map(m => `      {activeTab === '${m.key}' && (
+        <${m.compName} onNavigate={setActiveTab} />
+      )}`).join('\n');
+
+  const adminDefaultMockup = operationalMockups.find(m => /tablero|reporte|indicador/i.test(m.title || m.key)) || operationalMockups[0];
+  const defaultTab = adminDefaultMockup ? `'${adminDefaultMockup.key}'` : "'dashboard'";
+
+  return `import React, { useState, useEffect } from 'react';
+import AppShell from './components/AppShell';
+import Dashboard from './pages/Dashboard';
+${hasAuth ? `import LoginPage from './pages/LoginPage';\n` : ''}${entityImports}
+${mockupImports}
+
+export default function App() {
+  const [activeTab, setActiveTab] = useState(${defaultTab});
+  const allNavItems = [
+${operationalMockups.map(m => {
+  let role = (m.roles && m.roles[0]) || 'Administrador';
+  const t = (m.title || m.key || '').toLowerCase();
+  if (/report|usuario|admin|indicador|inventario|stock|servicio|tarifa|proveedor|compra|venta.*mostrador/i.test(t)) {
+    role = 'Administrador';
+  } else if (/portal|mis.*vehic|solicitud.*cita|aprobac.*presupuesto|seguimiento.*avance/i.test(t)) {
+    role = 'Cliente';
+  } else if (/diag|obd|orden.*trabaj|bitacora|taller|conocimiento/i.test(t)) {
+    role = 'Mecánico';
+  } else if (/recep|inspecc|agenda|cita|directorio|ficha.*client|expediente.*vehic/i.test(t)) {
+    role = 'Recepción';
+  }
+
+  let icon = 'palette';
+  if (/tablero|reporte|indicador/i.test(t)) icon = 'analytics';
+  else if (/usuario|rol|seguridad/i.test(t)) icon = 'admin_panel_settings';
+  else if (/inventario|stock|repuesto/i.test(t)) icon = 'inventory_2';
+  else if (/servicio|tarifa/i.test(t)) icon = 'list_alt';
+  else if (/proveedor|compra/i.test(t)) icon = 'local_shipping';
+  else if (/venta/i.test(t)) icon = 'point_of_sale';
+  else if (/recep|inspecc/i.test(t)) icon = 'directions_car';
+  else if (/agenda|cita/i.test(t)) icon = 'calendar_month';
+  else if (/cliente/i.test(t)) icon = 'people';
+  else if (/vehic/i.test(t)) icon = 'folder_shared';
+  else if (/diag|obd/i.test(t)) icon = 'build';
+  else if (/orden|trabajo|bitacora/i.test(t)) icon = 'engineering';
+  else if (/conocimiento/i.test(t)) icon = 'menu_book';
+  else if (/portal/i.test(t)) icon = 'person';
+
+  return `    { key: '${m.key}', label: '${m.title}', icon: '${icon}', role: '${role}', roles: ${JSON.stringify(m.roles || [role])}, isEntity: false }`;
+}).join(',\n')},
+${entities.map(e => {
+  const naming = deriveNaming(e.name);
+  return `    { key: '${naming.endpoint}', label: '${naming.modelName}', icon: 'dataset', role: 'Administrador', isEntity: true }`;
+}).join(',\n')}
+  ];
+
+${hasAuth ? `  const [session, setSession] = useState(() => {
+    try {
+      const token = typeof window !== 'undefined' ? localStorage.getItem('token') : null;
+      const userStr = typeof window !== 'undefined' ? localStorage.getItem('user') : null;
+      return token ? { token, user: userStr ? JSON.parse(userStr) : null } : null;
+    } catch {
+      return null;
+    }
+  });
+
+  useEffect(() => {
+    const handleExpired = () => {
+      setSession(null);
+    };
+    window.addEventListener('auth:expired', handleExpired);
+    return () => window.removeEventListener('auth:expired', handleExpired);
+  }, []);
+
+  const cleanStr = (s) => (s || '').toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '').trim();
+
+  const getInitialTab = (u) => {
+    const role = cleanStr(u?.role || u?.rol || '');
+    const match = allNavItems.find(item => !item.isEntity && item.role && cleanStr(item.role) === role);
+    return match ? match.key : ${defaultTab};
+  };
+
+  const handleLogout = () => {
+    localStorage.removeItem('token');
+    localStorage.removeItem('user');
+    setSession(null);
+    setActiveTab(${defaultTab});
+  };
+
+  if (!session || !session.token) {
+    return <LoginPage onLoginSuccess={(token, user) => { setSession({ token, user }); setActiveTab(getInitialTab(user)); }} />;
+  }
+` : ''}
+
+  const currentUserRole = ${hasAuth ? '(session?.user?.role || session?.user?.rol || null)' : 'null'};
+  const isAdmin = /admin|gerente|supervisor/i.test(currentUserRole || '');
+  const navItems = allNavItems.filter(item => {
+    if (isAdmin) return true;
+    ${hasAuth ? `if (currentUserRole && item.role) {
+      const clean = (s) => (s || '').toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '').trim();
+      return clean(item.role) === clean(currentUserRole);
+    }` : ''}
+    return true;
+  });
+
+  return (
+    <AppShell
+      title="${projectName}"
+      user={${hasAuth ? 'session?.user' : 'null'}}
+      onLogout={${hasAuth ? 'handleLogout' : 'null'}}
+      navItems={navItems}
+      activeTab={activeTab}
+      onSelectTab={setActiveTab}
+    >
+      {activeTab === 'dashboard' && <Dashboard setActiveTab={setActiveTab} user={${hasAuth ? 'session?.user' : 'null'}} />}
+${mockupSwitches}
+${entityPageSwitches}
+    </AppShell>
+  );
+}
+`;
+}
+
+function generateAppShellComponent() {
+  return `import React, { useState, useMemo } from 'react';
+
+/**
+ * AppShell Maestro Unificado con Segmentación por Roles y Actores
+ * Basado en el diseño aprobado de Stitch y DESIGN_SYSTEM.md
+ */
+export default function AppShell({
+  title = 'ICASE App',
+  user = null,
+  onLogout = null,
+  children,
+  navItems = [],
+  activeTab,
+  onSelectTab
+}) {
+  const userRole = (user && (user.role || user.rol)) || 'Administrador';
+  const userName = user?.nombre || user?.username || user?.email || 'Usuario';
+  const isAdmin = /admin/i.test(userRole);
+
+  // Extraer roles disponibles a partir de los navItems
+  const availableRoles = useMemo(() => {
+    const rolesSet = new Set();
+    navItems.forEach(item => {
+      if (item.role) rolesSet.add(item.role);
+      else if (Array.isArray(item.roles)) item.roles.forEach(r => rolesSet.add(r));
+    });
+    return Array.from(rolesSet);
+  }, [navItems]);
+
+  // Filtro de rol en la barra lateral: por defecto el rol del usuario autenticado
+  const [selectedRoleFilter, setSelectedRoleFilter] = useState(() => {
+    if (availableRoles.includes(userRole)) return userRole;
+    return availableRoles[0] || 'ALL';
+  });
+  const [roleMenuOpen, setRoleMenuOpen] = useState(false);
+
+  // Agrupar items por rol
+  const groupedItems = useMemo(() => {
+    const groups = {};
+    const generalItems = [];
+    const entityItems = [];
+
+    navItems.forEach(item => {
+      if (item.type === 'section') return;
+      if (item.isEntity) {
+        entityItems.push(item);
+        return;
+      }
+      const role = item.role || (item.roles && item.roles[0]) || 'General';
+      if (!groups[role]) groups[role] = [];
+      groups[role].push(item);
+    });
+
+    return { groups, generalItems, entityItems };
+  }, [navItems]);
+
+  const activeItem = navItems.find(i => i.key === activeTab);
+  const activeLabel = activeItem?.label || 'Vista del Sistema';
+
+  // Determinar qué grupos mostrar según el selector de rol
+  const displayedGroups = useMemo(() => {
+    if (selectedRoleFilter === 'ALL') return groupedItems.groups;
+    if (groupedItems.groups[selectedRoleFilter]) {
+      return { [selectedRoleFilter]: groupedItems.groups[selectedRoleFilter] };
+    }
+    return groupedItems.groups;
+  }, [groupedItems, selectedRoleFilter]);
+
+  const [showEntities, setShowEntities] = useState(false);
+
+  return (
+    <div style={{ display: 'flex', minHeight: '100vh', backgroundColor: 'var(--color-bg-app)', fontFamily: 'system-ui, -apple-system, sans-serif' }}>
+      {/* Sidebar Corporativo Oscuro (Estilo Stitch) */}
+      <aside style={{
+        width: '270px',
+        backgroundColor: '#0f172a',
+        color: '#94a3b8',
+        display: 'flex',
+        flexDirection: 'column',
+        justifyContent: 'space-between',
+        borderRight: '1px solid #1e293b',
+        flexShrink: 0
+      }}>
+        <div>
+          {/* Header del Sidebar */}
+          <div style={{
+            padding: '16px',
+            borderBottom: '1px solid rgba(255,255,255,0.06)',
+            display: 'flex',
+            alignItems: 'center',
+            gap: '10px'
+          }}>
+            <div style={{
+              width: '32px',
+              height: '32px',
+              borderRadius: '8px',
+              backgroundColor: '#4f46e5',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              color: '#ffffff',
+              fontWeight: 700,
+              fontSize: '0.95rem'
+            }}>
+              {title ? title.charAt(0).toUpperCase() : 'A'}
+            </div>
+            <div style={{ overflow: 'hidden' }}>
+              <div style={{ color: '#ffffff', fontWeight: 700, fontSize: '0.9rem', lineHeight: 1.2, textOverflow: 'ellipsis', overflow: 'hidden', whiteSpace: 'nowrap' }}>
+                {title}
+              </div>
+              <div style={{ fontSize: '0.7rem', color: '#64748b' }}>
+                Control de Acceso por Roles
+              </div>
+            </div>
+          </div>
+
+          {/* Selector de Rol en Sidebar */}
+          <div style={{ padding: '10px 14px 6px', borderBottom: '1px solid rgba(255,255,255,0.04)', position: 'relative' }}>
+            <div style={{ fontSize: '0.675rem', fontWeight: 700, textTransform: 'uppercase', color: '#64748b', letterSpacing: '0.05em', marginBottom: '4px' }}>
+              Filtrar Vista por Rol
+            </div>
+            <div
+              onClick={() => setRoleMenuOpen(!roleMenuOpen)}
+              style={{
+                width: '100%',
+                backgroundColor: 'rgba(255,255,255,0.06)',
+                color: '#ffffff',
+                border: '1px solid rgba(255,255,255,0.12)',
+                borderRadius: '6px',
+                padding: '6px 10px',
+                fontSize: '0.75rem',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'space-between',
+                cursor: 'pointer'
+              }}
+            >
+              <span>{selectedRoleFilter === 'ALL' ? '✦ Todos los Roles' : selectedRoleFilter}</span>
+              <span className="material-symbols-outlined" style={{ fontSize: '14px', color: '#94a3b8' }}>
+                {roleMenuOpen ? 'expand_less' : 'expand_more'}
+              </span>
+            </div>
+            {roleMenuOpen && (
+              <div style={{
+                position: 'absolute',
+                top: '100%',
+                left: '14px',
+                right: '14px',
+                zIndex: 50,
+                backgroundColor: '#1e293b',
+                border: '1px solid #334155',
+                borderRadius: '6px',
+                boxShadow: '0 4px 12px rgba(0,0,0,0.5)',
+                overflow: 'hidden',
+                marginTop: '4px'
+              }}>
+                <div
+                  onClick={() => { setSelectedRoleFilter('ALL'); setRoleMenuOpen(false); }}
+                  style={{
+                    padding: '8px 10px',
+                    fontSize: '0.75rem',
+                    color: selectedRoleFilter === 'ALL' ? '#818cf8' : '#e2e8f0',
+                    backgroundColor: selectedRoleFilter === 'ALL' ? 'rgba(79,70,229,0.15)' : 'transparent',
+                    cursor: 'pointer',
+                    fontWeight: selectedRoleFilter === 'ALL' ? 600 : 400
+                  }}
+                >
+                  ✦ Todos los Roles ({navItems.filter(i => !i.isEntity && i.type !== 'section').length})
+                </div>
+                {availableRoles.map(r => (
+                  <div
+                    key={r}
+                    onClick={() => { setSelectedRoleFilter(r); setRoleMenuOpen(false); }}
+                    style={{
+                      padding: '8px 10px',
+                      fontSize: '0.75rem',
+                      color: selectedRoleFilter === r ? '#818cf8' : '#e2e8f0',
+                      backgroundColor: selectedRoleFilter === r ? 'rgba(79,70,229,0.15)' : 'transparent',
+                      cursor: 'pointer',
+                      fontWeight: selectedRoleFilter === r ? 600 : 400
+                    }}
+                  >
+                    {r} ({groupedItems.groups[r]?.length || 0})
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+
+          {/* Navegación por Grupos de Roles */}
+          <nav style={{ padding: '10px 8px', maxHeight: 'calc(100vh - 230px)', overflowY: 'auto' }}>
+            {Object.entries(displayedGroups).map(([roleName, screensInRole]) => {
+              if (!screensInRole || screensInRole.length === 0) return null;
+              return (
+                <div key={roleName} style={{ marginBottom: '14px' }}>
+                  <div style={{
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'space-between',
+                    padding: '4px 8px',
+                    marginBottom: '4px'
+                  }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                      <span className="material-symbols-outlined" style={{ color: '#818cf8', fontSize: '15px' }}>
+                        {/admin/i.test(roleName) ? 'admin_panel_settings' : /recep/i.test(roleName) ? 'directions_car' : /mecanic|tecnic/i.test(roleName) ? 'build' : 'person'}
+                      </span>
+                      <span style={{ fontSize: '0.7rem', fontWeight: 700, textTransform: 'uppercase', color: '#cbd5e1', letterSpacing: '0.04em' }}>
+                        {roleName}
+                      </span>
+                    </div>
+                    <span style={{ fontSize: '0.625rem', backgroundColor: 'rgba(255,255,255,0.08)', color: '#94a3b8', padding: '1px 5px', borderRadius: '4px', fontWeight: 600 }}>
+                      {screensInRole.length}
+                    </span>
+                  </div>
+
+                  {screensInRole.map(item => {
+                    const isActive = activeTab === item.key;
+                    return (
+                      <div
+                        key={item.key}
+                        onClick={() => onSelectTab && onSelectTab(item.key)}
+                        style={{
+                          display: 'flex',
+                          alignItems: 'center',
+                          justifyContent: 'space-between',
+                          gap: '8px',
+                          padding: '8px 10px',
+                          borderRadius: '6px',
+                          cursor: 'pointer',
+                          marginBottom: '2px',
+                          fontSize: '0.8rem',
+                          color: isActive ? '#ffffff' : '#94a3b8',
+                          backgroundColor: isActive ? '#4f46e5' : 'transparent',
+                          fontWeight: isActive ? 600 : 400,
+                          transition: 'background-color 0.15s ease'
+                        }}
+                      >
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '8px', overflow: 'hidden' }}>
+                          <span className="material-symbols-outlined" style={{ fontSize: '16px', color: isActive ? '#ffffff' : '#818cf8', flexShrink: 0 }}>
+                            {item.icon || 'palette'}
+                          </span>
+                          <span style={{ textOverflow: 'ellipsis', overflow: 'hidden', whiteSpace: 'nowrap' }}>
+                            {item.label}
+                          </span>
+                        </div>
+                        {isActive && (
+                          <span style={{
+                            fontSize: '0.625rem',
+                            backgroundColor: 'rgba(255,255,255,0.25)',
+                            color: '#ffffff',
+                            padding: '1px 5px',
+                            borderRadius: '4px',
+                            fontWeight: 600,
+                            flexShrink: 0
+                          }}>
+                            Activo
+                          </span>
+                        )}
+                      </div>
+                    );
+                  })}
+                </div>
+              );
+            })}
+
+            {/* Sección Módulos de Datos (CRUD Sequelize) */}
+            {groupedItems.entityItems.length > 0 && (
+              <div style={{ marginTop: '12px', borderTop: '1px solid rgba(255,255,255,0.06)', paddingTop: '8px' }}>
+                <div
+                  onClick={() => setShowEntities(!showEntities)}
+                  style={{
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'space-between',
+                    padding: '4px 8px',
+                    cursor: 'pointer',
+                    color: '#94a3b8',
+                    fontSize: '0.7rem',
+                    fontWeight: 700,
+                    textTransform: 'uppercase'
+                  }}
+                >
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                    <span className="material-symbols-outlined" style={{ fontSize: '15px' }}>database</span>
+                    <span>Módulos de Datos ({groupedItems.entityItems.length})</span>
+                  </div>
+                  <span className="material-symbols-outlined" style={{ fontSize: '14px' }}>
+                    {showEntities ? 'expand_less' : 'expand_more'}
+                  </span>
+                </div>
+                {showEntities && groupedItems.entityItems.map(item => {
+                  const isActive = activeTab === item.key;
+                  return (
+                    <div
+                      key={item.key}
+                      onClick={() => onSelectTab && onSelectTab(item.key)}
+                      style={{
+                        display: 'flex',
+                        alignItems: 'center',
+                        gap: '8px',
+                        padding: '6px 10px',
+                        borderRadius: '6px',
+                        cursor: 'pointer',
+                        marginBottom: '1px',
+                        fontSize: '0.75rem',
+                        color: isActive ? '#ffffff' : '#64748b',
+                        backgroundColor: isActive ? '#2563eb' : 'transparent',
+                        fontWeight: isActive ? 600 : 400
+                      }}
+                    >
+                      <span className="material-symbols-outlined" style={{ fontSize: '14px' }}>table_chart</span>
+                      <span>{item.label}</span>
+                    </div>
+                  );
+                })}
+              </div>
+            )}
+          </nav>
+        </div>
+
+        {/* Perfil del Usuario Autenticado en Sidebar Inferior */}
+        {user && (
+          <div style={{ padding: '12px 14px', borderTop: '1px solid rgba(255,255,255,0.06)', backgroundColor: 'rgba(0,0,0,0.2)' }}>
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '6px' }}>
+              <div style={{ overflow: 'hidden' }}>
+                <div style={{ fontSize: '0.8rem', fontWeight: 600, color: '#f1f5f9', textOverflow: 'ellipsis', overflow: 'hidden', whiteSpace: 'nowrap' }}>
+                  {userName}
+                </div>
+                <div style={{ fontSize: '0.7rem', color: '#818cf8', fontWeight: 500 }}>
+                  {userRole}
+                </div>
+              </div>
+              <div style={{ width: '28px', height: '28px', borderRadius: '50%', backgroundColor: '#4f46e5', color: '#ffffff', display: 'flex', alignItems: 'center', justifyContent: 'center', fontWeight: 700, fontSize: '0.75rem' }}>
+                {userName.charAt(0).toUpperCase()}
+              </div>
+            </div>
+            {onLogout && (
+              <button
+                type="button"
+                onClick={onLogout}
+                style={{
+                  width: '100%',
+                  padding: '4px 8px',
+                  fontSize: '0.725rem',
+                  color: '#f87171',
+                  background: 'rgba(239, 68, 68, 0.1)',
+                  border: '1px solid rgba(239, 68, 68, 0.25)',
+                  borderRadius: '4px',
+                  cursor: 'pointer',
+                  fontWeight: 500
+                }}
+              >
+                Cerrar Sesión
+              </button>
+            )}
+          </div>
+        )}
+      </aside>
+
+      {/* Área de Trabajo con Cabecera Superior */}
+      <div style={{ flex: 1, display: 'flex', flexDirection: 'column', minWidth: 0, overflowY: 'auto' }}>
+        {/* Cabecera Superior Estilo Stitch */}
+        <header style={{
+          height: '56px',
+          backgroundColor: '#ffffff',
+          borderBottom: '1px solid #e2e8f0',
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'space-between',
+          padding: '0 24px',
+          boxShadow: '0 1px 2px rgba(0,0,0,0.03)',
+          flexShrink: 0
+        }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+            <span style={{ fontSize: '0.95rem', fontWeight: 700, color: '#1e293b' }}>
+              {activeLabel}
+            </span>
+            <span style={{
+              display: 'inline-flex',
+              alignItems: 'center',
+              gap: '4px',
+              padding: '2px 8px',
+              borderRadius: '12px',
+              backgroundColor: '#ecfdf5',
+              color: '#059669',
+              fontSize: '0.7rem',
+              fontWeight: 600
+            }}>
+              ● En Línea
+            </span>
+          </div>
+
+          <div style={{ display: 'flex', alignItems: 'center', gap: '16px' }}>
+            <div style={{
+              display: 'flex',
+              alignItems: 'center',
+              gap: '6px',
+              padding: '4px 12px',
+              backgroundColor: '#f1f5f9',
+              borderRadius: '6px',
+              border: '1px solid #e2e8f0',
+              fontSize: '0.8rem',
+              color: '#64748b'
+            }}>
+              <span className="material-symbols-outlined" style={{ fontSize: '16px' }}>search</span>
+              <span>Buscar vehículo, cliente u orden...</span>
+            </div>
+            <span className="material-symbols-outlined" style={{ color: '#64748b', cursor: 'pointer', fontSize: '20px' }}>notifications</span>
+            <span className="material-symbols-outlined" style={{ color: '#64748b', cursor: 'pointer', fontSize: '20px' }}>settings</span>
+          </div>
+        </header>
+
+        {/* Contenido Principal */}
+        <main style={{ flex: 1, padding: '24px 32px' }}>
+          {children}
+        </main>
+      </div>
+    </div>
+  );
+}
+`;
+}
+
+function generateSharedFormFieldComponent() {
+  return `import React from 'react';
+
+/**
+ * Campo de Entrada estandarizado según DESIGN_SYSTEM.md (Sección 4.1)
+ */
+export default function FormField({ label, name, type = 'text', value, onChange, placeholder, required = false, error = null }) {
+  return (
+    <div style={{ marginBottom: '16px' }}>
+      {label && (
+        <label style={{ display: 'block', fontSize: '0.875rem', fontWeight: 500, color: 'var(--color-text-body)', marginBottom: '6px' }}>
+          {label} {required && <span style={{ color: 'var(--status-danger)' }}>*</span>}
+        </label>
+      )}
+      <input
+        type={type}
+        name={name}
+        id={name}
+        value={value !== undefined && value !== null ? value : ''}
+        onChange={onChange}
+        placeholder={placeholder}
+        required={required}
+        style={{
+          width: '100%',
+          height: '44px',
+          padding: '0 14px',
+          borderRadius: 'var(--radius-md)',
+          border: error ? '1px solid var(--status-danger)' : '1px solid var(--color-border)',
+          backgroundColor: 'var(--color-surface)',
+          fontSize: '0.875rem',
+          color: 'var(--color-text-title)',
+          outline: 'none',
+          boxSizing: 'border-box'
+        }}
+      />
+      {error && (
+        <span style={{ display: 'block', fontSize: '0.75rem', color: 'var(--status-danger)', marginTop: '4px' }}>
+          {error}
+        </span>
       )}
     </div>
   );
@@ -1048,25 +1251,92 @@ export default function ${pascalName}Page() {
 `;
 }
 
-function getFunctionalPages() {
-  return [
-    { fileName: 'LoginPage.jsx', content: funcGen.generateLoginPage() },
-    { fileName: 'RecepcionPage.jsx', content: funcGen.generateRecepcionPage() },
-    { fileName: 'CitasPage.jsx', content: funcGen.generateCitasPage() },
-    { fileName: 'ClientesPage.jsx', content: funcGen.generateClientesPage() },
-    { fileName: 'VehiculosPage.jsx', content: funcGen.generateVehiculosPage() },
-    { fileName: 'DiagnosticosPage.jsx', content: funcGen.generateDiagnosticosPage() },
-    { fileName: 'ReparacionesPage.jsx', content: funcGen.generateReparacionesPage() },
-    { fileName: 'InventarioPage.jsx', content: funcGen.generateInventarioPage() },
-    { fileName: 'ServiciosPage.jsx', content: funcGen.generateServiciosPage() },
-    { fileName: 'MisVehiculosPage.jsx', content: funcGen.generateMisVehiculosPage() },
-    { fileName: 'CitasClientePage.jsx', content: funcGen.generateCitasClientePage() },
-    { fileName: 'CotizacionesClientePage.jsx', content: funcGen.generateCotizacionesClientePage() },
-    { fileName: 'ProgresoReparacionPage.jsx', content: funcGen.generateProgresoReparacionPage() },
-    { fileName: 'ConocimientoPage.jsx', content: funcGen.generateConocimientoPage() },
-    { fileName: 'ReportesPage.jsx', content: funcGen.generateReportesPage() },
-    { fileName: 'UsuariosPage.jsx', content: funcGen.generateUsuariosPage() }
-  ];
+function generateSharedButtonComponent() {
+  return `import React from 'react';
+
+/**
+ * Botón Minimalista estandarizado según DESIGN_SYSTEM.md (Sección 4.2)
+ */
+export default function Button({ children, onClick, type = 'button', variant = 'primary', disabled = false, fullWidth = false }) {
+  const isPrimary = variant === 'primary';
+
+  return (
+    <button
+      type={type}
+      onClick={onClick}
+      disabled={disabled}
+      style={{
+        display: 'inline-flex',
+        alignItems: 'center',
+        justifyContent: 'center',
+        gap: '8px',
+        width: fullWidth ? '100%' : 'auto',
+        height: '44px',
+        padding: '0 20px',
+        borderRadius: 'var(--radius-md)',
+        backgroundColor: isPrimary ? 'var(--color-primary)' : 'var(--color-surface)',
+        color: isPrimary ? '#ffffff' : 'var(--color-text-body)',
+        border: isPrimary ? 'none' : '1px solid var(--color-border)',
+        fontSize: '0.875rem',
+        fontWeight: 500,
+        cursor: disabled ? 'not-allowed' : 'pointer',
+        opacity: disabled ? 0.6 : 1,
+        transition: 'all 0.15s ease',
+        boxSizing: 'border-box'
+      }}
+    >
+      {children}
+    </button>
+  );
+}
+`;
+}
+
+function generateSharedStatusBadgeComponent() {
+  return `import React from 'react';
+
+/**
+ * Badge de Estado Semántico Ligero según DESIGN_SYSTEM.md (Sección 4.3)
+ */
+export default function StatusBadge({ status = 'info', label }) {
+  let bg = '#eff6ff';
+  let text = '#1d4ed8';
+  let dot = '#3b82f6';
+
+  const s = String(status).toLowerCase();
+  if (s.includes('succ') || s.includes('aprob') || s.includes('complet') || s.includes('confirm') || s.includes('act')) {
+    bg = 'var(--status-success-bg, #f0fdf4)';
+    text = 'var(--status-success, #16a34a)';
+    dot = '#16a34a';
+  } else if (s.includes('warn') || s.includes('pend') || s.includes('proc') || s.includes('revis')) {
+    bg = 'var(--status-warning-bg, #fffbeb)';
+    text = 'var(--status-warning, #d97706)';
+    dot = '#d97706';
+  } else if (s.includes('dang') || s.includes('err') || s.includes('rech') || s.includes('canc')) {
+    bg = 'var(--status-danger-bg, #fef2f2)';
+    text = 'var(--status-danger, #dc2626)';
+    dot = '#dc2626';
+  }
+
+  return (
+    <span style={{
+      display: 'inline-flex',
+      alignItems: 'center',
+      gap: '6px',
+      padding: '4px 10px',
+      borderRadius: 'var(--radius-sm)',
+      backgroundColor: bg,
+      color: text,
+      fontSize: '0.75rem',
+      fontWeight: 500,
+      border: '1px solid rgba(0,0,0,0.05)'
+    }}>
+      <span style={{ width: '6px', height: '6px', borderRadius: '50%', backgroundColor: dot }} />
+      <span>{label || status}</span>
+    </span>
+  );
+}
+`;
 }
 
 module.exports = {
@@ -1080,6 +1350,10 @@ module.exports = {
   generateMainJsx,
   generateAppJsx,
   generateDashboardJsx,
-  generateEntityPageJsx,
-  getFunctionalPages
+  generateEntityViewPage,
+  generateAppShellComponent,
+  generateLoginPageJsx,
+  generateSharedFormFieldComponent,
+  generateSharedButtonComponent,
+  generateSharedStatusBadgeComponent
 };

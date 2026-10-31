@@ -14,19 +14,15 @@ module.exports = {
    * @param {string} projectName - Name of the project
    */
   generate(screens = [], projectName = 'Sistema de Información') {
+    if (!screens || screens.length === 0) {
+      return 'flowchart TD';
+    }
+
     const lines = ['flowchart TD'];
 
     const rootId = 'APP_ROOT';
     const safeProjectName = toSafeLabel(projectName, 40) || 'Sistema';
     lines.push(`  ${rootId}["🌐 ${safeProjectName}"]`);
-
-    if (!screens || screens.length === 0) {
-      lines.push(`  ${rootId} --> MOD_AUTH["Módulo de Autenticación"]`);
-      lines.push(`  ${rootId} --> MOD_MAIN["Módulo Principal"]`);
-      lines.push(`  MOD_AUTH --> SCR_LOGIN["Inicio de Sesión\\n/login"]`);
-      lines.push(`  MOD_MAIN --> SCR_DASH["Panel Principal / Dashboard\\n/dashboard"]`);
-      return lines.join('\n');
-    }
 
     // Clean and normalize screens
     const normalizedScreens = screens.map((s, idx) => {

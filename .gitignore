@@ -38,11 +38,12 @@ playwright-report/
 backend/.cache/
 
 # Project documentation
-/docs/
+
 
 # Tests
-/backend/tests/
-/frontend/tests/
+# Test output / coverage
+coverage/
+.nyc_output/
 
 # Local change logs / scratch notes
 Cambios.md

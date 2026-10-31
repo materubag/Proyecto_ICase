@@ -1,11 +1,12 @@
 /**
  * Server and Configuration Generator
- * Produces server.js, database.js, package.json, .env.example and README.md
+ * Produces production-ready server.js, database.js, package.json, .env.example and README.md.
+ * Completely domain-agnostic, with versioned migration support and no automotive constants.
  */
 
-const { toSnakeCasePlural } = require('./typeMapper');
+function generateServerFile(projectName = 'App', options = {}) {
+  const safeName = projectName.toLowerCase().replace(/[^a-z0-9]/g, '_');
 
-function generateServerFile(projectName = 'App') {
   return `/**
  * Servidor Principal Express + Sequelize
  * Generado automáticamente por ICASE Studio para ${projectName}
@@ -20,14 +21,14 @@ const { sequelize } = require('./models');
 const routes = require('./routes');
 
 const app = express();
-const PORT = process.env.PORT || 3000;
+const PORT = process.env.PORT || 8080;
 
 // Middlewares globales
 app.use(cors());
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 
-// Servidor estático para evidencias multimedia y fotografías (RF-12)
+// Directorio para almacenamiento de archivos estáticos
 const uploadsDir = path.join(__dirname, '../uploads');
 if (!fs.existsSync(uploadsDir)) {
   fs.mkdirSync(uploadsDir, { recursive: true });
@@ -48,271 +49,189 @@ app.use((req, res) => {
 // Manejador global de errores (500)
 app.use((err, req, res, next) => {
   console.error('Error no controlado:', err);
-  res.status(err.status || 500).json({
+  const status = err.status || 500;
+  res.status(status).json({
     success: false,
     message: err.message || 'Error interno del servidor',
-    error: process.env.NODE_ENV === 'development' ? err : {}
+    error: process.env.NODE_ENV === 'development' ? err.stack : undefined
   });
 });
 
-// Inicio del servidor con sincronización de Sequelize
+// Inicio del servidor con autenticación de base de datos
 async function startServer() {
   try {
-    console.log('⏳ Conectando y sincronizando base de datos con Sequelize...');
-    // Sincroniza los modelos con las tablas de PostgreSQL automáticamente
-    await sequelize.sync({ alter: true });
-    console.log('✅ Base de datos sincronizada correctamente.');
+    // Verificación obligatoria de entorno de seguridad
+    if (!process.env.JWT_SECRET) {
+      throw new Error('La variable de entorno JWT_SECRET es obligatoria para la seguridad del servidor.');
+    }
 
-    // Sembrar registros iniciales de prueba si la base de datos está vacía
-    try {
-      if (sequelize.models.Cliente && (await sequelize.models.Cliente.count()) === 0) {
-        console.log('🌱 Sembrando registros iniciales de demostración en PostgreSQL...');
-        await sequelize.models.Cliente.bulkCreate([
-          { nombre: 'Roberto Gómez', cedula: '1723458901', telefono: '0998765432', correo: 'roberto@gmail.com', direccion: 'Av. Amazonas y Colón' },
-          { nombre: 'Mariana Silva', cedula: '1719876543', telefono: '0981234567', correo: 'mariana.silva@gmail.com', direccion: 'Calle República 450' },
-          { nombre: 'Carlos Mendoza', cedula: '1708765432', telefono: '0976543210', correo: 'carlos.m@hotmail.com', direccion: 'Av. Shyris N34-12' }
-        ]);
-        if (sequelize.models.Vehiculo) {
-          await sequelize.models.Vehiculo.bulkCreate([
-            { clienteId: 1, placa: 'PBA-3421', marca: 'Chevrolet', modelo: 'Sail 1.4', anio: 2021, anioFabricacion: 2021, kilometraje: 45200, color: 'Gris Plata' },
-            { clienteId: 2, placa: 'PBC-8812', marca: 'Chevrolet', modelo: 'D-Max 4x4', anio: 2022, anioFabricacion: 2022, kilometraje: 71200, color: 'Blanco' },
-            { clienteId: 3, placa: 'PCA-5520', marca: 'Kia', modelo: 'Sportage R', anio: 2020, anioFabricacion: 2020, kilometraje: 62000, color: 'Negro' }
-          ]);
-        }
-        if (sequelize.models.Servicio) {
-          await sequelize.models.Servicio.bulkCreate([
-            { codigo: 'SRV-001', nombre: 'Mantenimiento Preventivo 10,000 / 20,000 km', descripcion: 'Revisión y cambio de fluidos', categoria: 'Mecánica Rápida', horas: 2.5, tarifaHora: 20.00, precioTotal: 50.00, precioManoObra: 50.00, duracionEstimadaMinutos: 150, activo: true },
-            { codigo: 'SRV-002', nombre: 'Cambio de Pastillas de Freno y Rectificado de Discos', descripcion: 'Mantenimiento del sistema de frenos', categoria: 'Frenos', horas: 1.5, tarifaHora: 20.00, precioTotal: 30.00, precioManoObra: 30.00, duracionEstimadaMinutos: 90, activo: true },
-            { codigo: 'SRV-003', nombre: 'Diagnóstico Pericial Computarizado OBD-II', descripcion: 'Escaneo electrónico y lectura de fallas', categoria: 'Electrónica', horas: 1.0, tarifaHora: 25.00, precioTotal: 25.00, precioManoObra: 25.00, duracionEstimadaMinutos: 60, activo: true }
-          ]);
-        }
-        if (sequelize.models.Producto) {
-          await sequelize.models.Producto.bulkCreate([
-            { codigo: 'ACE-5W30-SYN', nombre: 'Aceite Sintético 5W-30 (Galón)', descripcion: 'Lubricante sintético alta gama', categoria: 'Fluidos y Lubricantes', stock: 14, stockActual: 14, stockMinimo: 8, costo: 25.00, precio: 38.50, precioVenta: 38.50, activo: true },
-            { codigo: 'FLT-OIL-01', nombre: 'Filtro de Aceite Blindado Original', descripcion: 'Filtro blindado para motor a gasolina', categoria: 'Filtros', stock: 3, stockActual: 3, stockMinimo: 5, costo: 5.00, precio: 8.50, precioVenta: 8.50, activo: true },
-            { codigo: 'PST-FRN-CER', nombre: 'Juego de Pastillas Delanteras Cerámicas', descripcion: 'Pastillas cerámicas de alto rendimiento', categoria: 'Frenos', stock: 2, stockActual: 2, stockMinimo: 4, costo: 28.00, precio: 42.00, precioVenta: 42.00, activo: true }
-          ]);
-        }
-        const ConocimientoModel = sequelize.models.BaseConocimiento || sequelize.models.ConocimientoTecnico;
-        if (ConocimientoModel) {
-          await ConocimientoModel.bulkCreate([
-            { codigoObd: 'P0300', componente: 'Motor / Encendido', descripcion: 'Fallo de Encendido Múltiple / Aleatorio', sintoma: 'Pérdida de potencia, tirones en aceleración, luz Check Engine parpadeando', causa: 'Bujías desgastadas, bobinas defectuosas, baja presión de combustible', solucion: 'Revisar resistencia de bobinas con multímetro, reemplazar bujías y verificar inyectores.', casoResuelto: true },
-            { codigoObd: 'P0420', componente: 'Emisiones / Escape', descripcion: 'Eficiencia del Catalizador por Debajo del Umbral (Banco 1)', sintoma: 'Consumo elevado de combustible, olor a sulfuro en escape', causa: 'Catalizador degradado, sensor de oxígeno post-catalizador descalibrado', solucion: 'Monitorear voltaje de sensores O2 antes y después del catalizador. Reemplazar catalizador.', casoResuelto: true },
-            { codigoObd: 'C0035', componente: 'Frenos ABS', descripcion: 'Circuito Sensor de Velocidad Rueda Delantera Izquierda', sintoma: 'Luz ABS y control de tracción encendidas en tablero', causa: 'Cableado cortado por movimiento de suspensión o sensor sucio', solucion: 'Limpiar sensor con limpiador de frenos, medir señal y sustituir si no hay pulso.', casoResuelto: true },
-            { codigoObd: 'P0171', componente: 'Admisión / Combustible', descripcion: 'Sistema Demasiado Pobre (Banco 1)', sintoma: 'Marcha mínima irregular, vacilación al pisar el acelerador', causa: 'Entrada de aire no medida, sensor MAF contaminado, filtro tapado', solucion: 'Realizar prueba de humo en múltiple de admisión y limpiar sensor MAF.', casoResuelto: true }
-          ]);
-        }
-        if (sequelize.models.Recepcion) {
-          await sequelize.models.Recepcion.bulkCreate([
-            { vehiculoId: 1, kilometraje: 45200, nivelCombustible: '3/4', motivoIngreso: 'Mantenimiento preventivo y ruido en tren delantero', observaciones: 'Inspección visual conforme', fechaRecepcion: new Date() },
-            { vehiculoId: 2, kilometraje: 71200, nivelCombustible: '1/2', motivoIngreso: 'Luz Check Engine encendida y pérdida de potencia', observaciones: 'Falla intermitente en aceleración', fechaRecepcion: new Date() }
-          ]);
-        }
-        if (sequelize.models.Cita) {
-          await sequelize.models.Cita.bulkCreate([
-            { clienteId: 1, vehiculoId: 1, fechaHora: new Date('2026-10-27T08:30:00Z'), motivo: 'Mantenimiento preventivo 40,000 km', estado: 'Confirmada' },
-            { clienteId: 2, vehiculoId: 2, fechaHora: new Date('2026-10-27T10:00:00Z'), motivo: 'Diagnóstico Electrónico OBD-II', estado: 'Pendiente' },
-            { clienteId: 3, vehiculoId: 3, fechaHora: new Date('2026-10-27T14:00:00Z'), motivo: 'Cambio de Pastillas de Freno', estado: 'Confirmada' }
-          ]);
-        }
-        if (sequelize.models.Diagnostico) {
-          await sequelize.models.Diagnostico.bulkCreate([
-            { vehiculoId: 1, observaciones: 'Fallo de encendido en cilindro 2 y pastillas de freno desgastadas', estado: 'Diagnosticado', fechaDiagnostico: new Date() },
-            { vehiculoId: 2, observaciones: 'Código P0300 detectado en escaneo OBD-II', estado: 'En Diagnóstico', fechaDiagnostico: new Date() }
-          ]);
-        }
-        if (sequelize.models.OrdenTrabajo) {
-          await sequelize.models.OrdenTrabajo.bulkCreate([
-            { vehiculoId: 1, estado: 'En Reparación', fechaInicio: new Date(), observaciones: 'Sustitución de bujes de tijera, rectificación de discos delanteros' },
-            { vehiculoId: 2, estado: 'Esperando Repuestos', fechaInicio: new Date(), observaciones: 'Desmontaje de inyectores y comprobación en banco' }
-          ]);
-        }
-        if (sequelize.models.Cotizacion) {
-          await sequelize.models.Cotizacion.bulkCreate([
-            { clienteId: 1, vehiculoId: 1, subtotal: 73.00, impuesto: 10.95, total: 83.95, estado: 'Pendiente de Aprobación' }
-          ]);
-        }
-        if (sequelize.models.Usuario) {
-          await sequelize.models.Usuario.bulkCreate([
-            { nombre: 'Administrador General', correo: 'admin@autron21.com', estado: 'Activo' },
-            { nombre: 'Mariana Silva', correo: 'recepcion@autron21.com', estado: 'Activo' },
-            { nombre: 'Marco Valencia', correo: 'mecanico@autron21.com', estado: 'Activo' }
-          ]);
-        }
-        console.log('✅ Datos iniciales sembrados con éxito.');
-      }
-    } catch (seedErr) {
-      console.log('ℹ️ Nota de inicialización:', seedErr.message);
+    console.log('⏳ Conectando con PostgreSQL mediante Sequelize...');
+    await sequelize.authenticate();
+    console.log('✅ Conexión con PostgreSQL establecida exitosamente.');
+
+    // En desarrollo local inicial, asegurar que las tablas existan sin alter destructivo
+    if (process.env.AUTO_SYNC_DB === 'true') {
+      console.log('⏳ Sincronizando modelos (sin alter destructivo)...');
+      await sequelize.sync();
+      console.log('✅ Modelos sincronizados correctamente.');
     }
 
     app.listen(PORT, () => {
-      console.log(\`🚀 Servidor \${process.env.APP_NAME || '${projectName}'} activo en: http://localhost:\${PORT}\`);
-      console.log(\`📋 Healthcheck disponible en: http://localhost:\${PORT}/api/health\`);
+      console.log(\`🚀 Servidor \${process.env.APP_NAME || '${projectName}'} ejecutándose en el puerto \${PORT}\`);
+      console.log(\`📡 API disponible en: http://localhost:\${PORT}/api\`);
     });
   } catch (error) {
-    console.error('❌ Error crítico al iniciar el servidor:', error);
+    console.error('❌ Error fatal al iniciar el servidor:', error.message);
     process.exit(1);
   }
 }
 
 startServer();
+
+module.exports = app;
 `;
 }
 
 function generateDatabaseConfig(projectName = 'app') {
-  const safeDb = projectName.toLowerCase().replace(/[^a-z0-9]/g, '_') + '_db';
+  const dbName = projectName.toLowerCase().replace(/[^a-z0-9]/g, '_') + '_db';
 
   return `/**
- * Configuración de Conexión a Base de Datos con Sequelize
+ * Configuración de Conexión a Base de Datos PostgreSQL
  * Generado automáticamente por ICASE Studio
  */
 
-require('dotenv').config();
 const { Sequelize } = require('sequelize');
 
-const DB_NAME = process.env.DB_NAME || '${safeDb}';
-const DB_USER = process.env.DB_USER || 'postgres';
-const DB_PASSWORD = process.env.DB_PASSWORD || 'postgres123';
-const DB_HOST = process.env.DB_HOST || 'localhost';
-const DB_PORT = process.env.DB_PORT || 5432;
-
-const sequelize = new Sequelize(DB_NAME, DB_USER, DB_PASSWORD, {
-  host: DB_HOST,
-  port: DB_PORT,
-  dialect: 'postgres',
-  logging: process.env.NODE_ENV === 'development' ? console.log : false,
-  pool: {
-    max: 10,
-    min: 0,
-    acquire: 30000,
-    idle: 10000
-  },
-  define: {
-    underscored: true,
-    timestamps: true
+const sequelize = new Sequelize(
+  process.env.DB_NAME || '${dbName}',
+  process.env.DB_USER || 'postgres',
+  process.env.DB_PASSWORD || 'postgres123',
+  {
+    host: process.env.DB_HOST || 'localhost',
+    port: Number(process.env.DB_PORT) || 5432,
+    dialect: 'postgres',
+    logging: process.env.NODE_ENV === 'development' ? false : false,
+    pool: {
+      max: 10,
+      min: 0,
+      acquire: 30000,
+      idle: 10000
+    },
+    define: {
+      timestamps: true,
+      underscored: true
+    }
   }
-});
+);
 
 module.exports = sequelize;
 `;
 }
 
 function generatePackageJson(projectName = 'app') {
-  const safeName = projectName.toLowerCase().replace(/[^a-z0-9-]/g, '-').replace(/^-|-$/g, '') || 'app-api';
+  const safeName = projectName.toLowerCase().replace(/[^a-z0-9-]/g, '-').replace(/^-|-$/g, '') || 'icase-api';
 
   return JSON.stringify({
-    name: safeName,
+    name: `${safeName}-backend`,
     version: '1.0.0',
-    description: `API REST generada automáticamente por ICASE Studio para ${projectName}`,
+    description: `API Backend para ${projectName} generada por ICASE Studio`,
     main: 'src/server.js',
     scripts: {
       start: 'node src/server.js',
-      dev: 'nodemon src/server.js'
+      dev: 'nodemon src/server.js',
+      migrate: 'node src/migrate.js',
+      'migrate:cli': 'npx sequelize-cli db:migrate',
+      'migrate:undo': 'npx sequelize-cli db:migrate:undo'
     },
     dependencies: {
+      bcryptjs: '^2.4.3',
       cors: '^2.8.5',
       dotenv: '^16.4.5',
       express: '^4.19.2',
-      multer: '^1.4.5-lts.1',
+      jsonwebtoken: '^9.0.2',
+      multer: '^2.4.0',
       pg: '^8.12.0',
       'pg-hstore': '^2.3.4',
-      sequelize: '^6.37.3'
+      sequelize: '^6.37.3',
+      'sequelize-cli': '^6.6.2'
     },
     devDependencies: {
       nodemon: '^3.1.4'
-    },
-    engines: {
-      node: '>=18.0.0'
     }
   }, null, 2);
 }
 
 function generateEnvExample(projectName = 'app') {
-  const safeDb = projectName.toLowerCase().replace(/[^a-z0-9]/g, '_') + '_db';
+  const dbName = projectName.toLowerCase().replace(/[^a-z0-9]/g, '_') + '_db';
 
-  return `# Configuración de la Aplicación
-APP_NAME="${projectName} API"
-PORT=3000
+  return `# Entorno y Configuración del Servidor
+PORT=8080
 NODE_ENV=development
+APP_NAME="${projectName}"
+AUTO_SYNC_DB=true
 
-# Base de Datos PostgreSQL
+# Conexión PostgreSQL
 DB_HOST=localhost
 DB_PORT=5432
-DB_NAME=${safeDb}
+DB_NAME=${dbName}
 DB_USER=postgres
 DB_PASSWORD=postgres123
+
+# Seguridad y Autenticación
+JWT_SECRET=super_secret_jwt_key_change_in_production
+JWT_EXPIRATION=8h
 `;
 }
 
-function generateReadme(projectName = 'Aplicación', entities = []) {
-  const endpointsList = entities.map(e => {
-    const plural = toSnakeCasePlural(e.name);
-    return `### Entidad: ${e.name}
-- \`GET /api/${plural}\` - Listar todos los registros
-- \`GET /api/${plural}/:id\` - Obtener un registro por ID
-- \`POST /api/${plural}\` - Crear un nuevo registro
-- \`PUT /api/${plural}/:id\` - Actualizar un registro existente
-- \`DELETE /api/${plural}/:id\` - Eliminar un registro`;
-  }).join('\n\n');
+function generateReadme(projectName = 'app', entities = []) {
+  const entityList = entities.map(e => `- **${e.modelName || e.name}**: /api/${e.endpoint || e.name.toLowerCase()}`).join('\n');
 
-  return `# ${projectName} — Backend API REST
+  return `# ${projectName} — Sistema Full-Stack Generado por ICASE Studio
 
-API REST completamente funcional generada automáticamente por **ICASE Studio** a partir de los modelos de ingeniería de software aprobados (ISO/IEC/IEEE 29148).
+Este proyecto fue generado automáticamente a partir de la especificación común validada y aprobada por el equipo de ingeniería en software.
 
----
+## Arquitectura
 
-## 🚀 Puesta en marcha rápida con Docker (Recomendado)
+- **Frontend:** React 18, Vite, Single Page Application (SPA), Fetch Client.
+- **Backend:** Node.js, Express, Rutas RESTful, Middlewares de validación.
+- **Base de Datos:** PostgreSQL con Sequelize ORM y migraciones versionadas.
+- **Contenedores:** Docker Compose con soporte multi-servicio y redes aisladas.
 
-No requieres instalar Node.js ni PostgreSQL en tu máquina. Con tener Docker abierto:
+## Módulos y Entidades de Datos
+
+${entityList || '- Sin entidades configuradas.'}
+
+## Instrucciones de Ejecución
+
+### Opción 1: Con Docker Compose (Recomendado)
 
 \`\`\`bash
-# 1. Construir y levantar los contenedores de la API y PostgreSQL
-docker compose up --build -d
-
-# 2. Ver registros de inicio
-docker compose logs -f api
+docker compose up --build
 \`\`\`
 
-¡Listo! La aplicación Full-Stack estará corriendo en:
-- **Frontend React:** [http://localhost:3005](http://localhost:3005)
-- **API REST Backend:** [http://localhost:8085/api](http://localhost:8085/api)
-- **Healthcheck:** [http://localhost:8085/api/health](http://localhost:8085/api/health)
-- **PostgreSQL:** \`localhost:5435\` (Usuario: \`postgres\`, Password: \`postgres123\`)
+- Frontend disponible en: \`http://localhost:3000\`
+- Backend API disponible en: \`http://localhost:8080/api\`
+- PostgreSQL en puerto: \`5432\`
 
-*(Nota: Puedes cambiar cualquiera de estos puertos en el archivo \`.env\` generado en la raíz)*
+### Opción 2: Ejecución Local
 
-Para apagar los contenedores:
-\`\`\`bash
-docker compose down
-\`\`\`
+1. **Configurar la Base de Datos:**
+   Asegúrate de tener PostgreSQL corriendo y crea la base de datos indicada en \`backend/.env\`.
 
----
-
-## 💻 Puesta en marcha en Entorno Local (Sin Docker)
-
-Si deseas ejecutarlo directamente en tu máquina:
-
-1. Asegúrate de tener Node.js 18+ y un servidor PostgreSQL corriendo.
-2. Copia las variables de entorno:
+2. **Iniciar el Backend:**
    \`\`\`bash
-   cp .env.example .env
-   \`\`\`
-3. Configura tus credenciales de PostgreSQL en el archivo \`.env\`.
-4. Instala dependencias y arranca:
-   \`\`\`bash
+   cd backend
    npm install
-   npm start
-   # o en modo desarrollo con recarga automática:
+   cp .env.example .env
    npm run dev
    \`\`\`
 
-Sequelize creará y sincronizará automáticamente las tablas en tu base de datos al iniciar.
-
----
-
-## 📡 Endpoints REST Disponibles
-
-${endpointsList}
+3. **Iniciar el Frontend:**
+   \`\`\`bash
+   cd frontend
+   npm install
+   npm run dev
+   \`\`\`
 `;
 }
 

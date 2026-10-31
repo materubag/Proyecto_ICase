@@ -65,12 +65,13 @@ async function extract(text,options={}) {
       evidence:evidence({segmentIds:parts.map(s=>s.id),quote:r.sourceText}),segmentIds:parts.map(s=>s.id),
       associations:[],actorIds:[],pending:[],confidence:null,status:'PENDING_REVIEW'};
   }));
+  const additionalCandidates = [];
   for(const objective of objectives)for(const c of objective.capabilities){
     const ev=evidence({segmentIds:segments.filter(s=>s.start<c.end&&s.end>c.start).map(s=>s.id),quote:c.quote});
     const behavior=v=>identity.normalize(v).replace(/^(?:el sistema|la aplicaci[o\u00f3]n|la plataforma) (?:debe(?:r[a\u00e1])? permitir|permitir[a\u00e1]|permite|debe(?:r[a\u00e1])?)\s+/,'');
     const match=requirements.find(r=>behavior(r.statement)===behavior(c.statement)) || (options.knownRequirements||[]).find(r=>behavior(r.statement)===behavior(c.statement));
     if(match){let target=requirements.find(r=>r.id===match.id);if(!target){target={...match};requirements.push(target);}target.evidence=identity.unique([...(target.evidence||[]),...ev]);}
-    else requirements.push({statement:c.statement,name:c.statement,description:c.statement,type:'FUNCTIONAL',originalCode:null,source:'explicit',extractionMethod:'LOCAL',evidence:ev,segmentIds:ev.map(s=>s.id),associations:[],actorIds:[],pending:['Capacidad mencionada en objetivo: revisar alcance'],status:'PENDING_REVIEW'});
+    else additionalCandidates.push({statement:c.statement,name:c.statement,description:c.statement,type:'FUNCTIONAL',originalCode:null,source:'explicit',extractionMethod:'LOCAL',evidence:ev,segmentIds:ev.map(s=>s.id),associations:[],actorIds:[],pending:['Capacidad mencionada en objetivo: revisar alcance'],status:'PENDING_REVIEW'});
   }
   requirements=identity.consolidate(requirements);
   const localRequirementCount=requirements.length;
@@ -184,10 +185,15 @@ async function extract(text,options={}) {
         if(r.segmentIds.every(id=>segments.find(s=>s.id===id)?.mode==='RELATIONSHIPS_ONLY')){
           other.push({type:'UNCERTAIN',reason:'La IA propuso otro requisito en un bloque ya resuelto; revisar sin insertarlo',statement:r.statement,evidence:ev});continue;
         }
-        requirements.push({statement:r.statement.trim().replace(/\s+/g,' '),name:r.statement.trim(),description:r.statement.trim(),type:r.type,
-          originalCode:null,source:r.explicit?'explicit':'inferred',extractionMethod:'SEMANTIC',
+        const reqCandidate = {statement:r.statement.trim().replace(/\s+/g,' '),name:r.statement.trim(),description:r.statement.trim(),type:r.type,
+          originalCode:r.code||null,source:r.explicit?'explicit':'inferred',extractionMethod:'SEMANTIC',
           evidence:ev,segmentIds:ev.map(s=>s.id),associations:assoc,actorIds:assoc.map(a=>a.actorId),
-          pending:r.pending,confidence:null,status:'PENDING_REVIEW'});
+          pending:r.pending,confidence:null,status:'PENDING_REVIEW'};
+        if(local.length > 0 && !r.code) {
+          additionalCandidates.push(reqCandidate);
+        } else {
+          requirements.push(reqCandidate);
+        }
       }
       other.push(...response.data.other.map(r=>({...r,evidence:evidence(r,context)})));
       for(const s of items){const c=coverage.find(c=>c.segmentId===s.id);c.status=response.recoveryIssues?.length?'FAILED':'ANALYZED';c.relationshipsStatus=response.recoveryIssues?.length?'FAILED':'ANALYZED';if(c.requirementsStatus==='PENDING')c.requirementsStatus=response.recoveryIssues?.length?'FAILED':'SEMANTIC_RESOLVED';}
@@ -201,7 +207,7 @@ async function extract(text,options={}) {
     pending:identity.unique([...r.pending,...(r.type==='FUNCTIONAL'&&!r.associations.length?['Responsable pendiente de revisión']:[])])}));
   const partial=failures.length>0;
   return {extractionVersion:contract.PROMPT_VERSION,architecture:{},project:{name:options.fileName||'Documento',description:''},rawText:text,
-    objectives:identity.unique(other.filter(r=>r.type==='OBJECTIVE')),requirements,actors,other,businessRules:other.filter(r=>r.type==='BUSINESS_RULE'),segments,coverage,failures,partial,metrics,
+    objectives:identity.unique(other.filter(r=>r.type==='OBJECTIVE')),requirements,additionalCandidates:identity.consolidate(additionalCandidates),actors,other,businessRules:other.filter(r=>r.type==='BUSINESS_RULE'),segments,coverage,failures,partial,metrics,
     functionalRequirements:requirements.filter(r=>r.type==='FUNCTIONAL'),nonFunctionalRequirements:requirements.filter(r=>r.type==='NON_FUNCTIONAL'),
     entities:[],relationships:[],screens:[],navigation:[],statistics:{totalFragments:segments.length,aiFragments:coverage.filter(c=>c.status==='ANALYZED').length},
     documentAnalysis:{sourceFile:options.fileName,totalRequirements:requirements.length,totalActors:actors.length,aiAnalysisStatus:partial?'partial':'complete',...config}};

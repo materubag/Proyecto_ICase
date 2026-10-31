@@ -1,13 +1,17 @@
 /**
  * Controller Generator for Express + Sequelize
- * Produces functional, production-ready CRUD controllers with error handling
+ * Produces functional, production-ready REST controllers with input sanitization,
+ * explicit field projection and standard JSON envelopes.
  */
 
-const { toPascalCase, toCamelCase } = require('./typeMapper');
+const { toPascalCase, toCamelCase, deriveNaming, normalizeAttributes } = require('./typeMapper');
 
 function generateControllerFile(entity) {
-  const modelName = toPascalCase(entity.name);
-  const varName = toCamelCase(entity.name);
+  const naming = deriveNaming(entity.name);
+  const modelName = naming.modelName;
+  const varName = naming.paramName;
+  const normalizedAttrs = normalizeAttributes(entity.attributes || []);
+  const allowedFields = normalizedAttrs.filter(a => !a.isPk).map(a => a.fieldName);
 
   return `/**
  * Controlador REST para ${modelName}
@@ -18,7 +22,7 @@ const { ${modelName} } = require('../models');
 
 /**
  * Obtener todos los registros de ${modelName}
- * GET /api/${varName}s
+ * GET /api/${naming.endpoint}
  */
 exports.getAll = async (req, res) => {
   try {
@@ -45,7 +49,7 @@ exports.getAll = async (req, res) => {
 
 /**
  * Obtener un registro de ${modelName} por su ID
- * GET /api/${varName}s/:id
+ * GET /api/${naming.endpoint}/:id
  */
 exports.getById = async (req, res) => {
   try {
@@ -80,11 +84,19 @@ exports.getById = async (req, res) => {
 
 /**
  * Crear un nuevo registro de ${modelName}
- * POST /api/${varName}s
+ * POST /api/${naming.endpoint}
  */
 exports.create = async (req, res) => {
   try {
-    const { id, ...dataToCreate } = req.body;
+    // Sanitización: Permitir únicamente campos declarados en la entidad
+    const allowed = ${JSON.stringify(allowedFields)};
+    const dataToCreate = {};
+    for (const key of allowed) {
+      if (req.body[key] !== undefined) {
+        dataToCreate[key] = req.body[key];
+      }
+    }
+
     const newItem = await ${modelName}.create(dataToCreate);
     return res.status(201).json({
       success: true,
@@ -103,7 +115,7 @@ exports.create = async (req, res) => {
 
 /**
  * Actualizar un registro existente de ${modelName}
- * PUT /api/${varName}s/:id
+ * PUT /api/${naming.endpoint}/:id
  */
 exports.update = async (req, res) => {
   try {
@@ -117,7 +129,16 @@ exports.update = async (req, res) => {
       });
     }
 
-    await item.update(req.body);
+    // Sanitización: Permitir únicamente campos declarados en la entidad
+    const allowed = ${JSON.stringify(allowedFields)};
+    const dataToUpdate = {};
+    for (const key of allowed) {
+      if (req.body[key] !== undefined) {
+        dataToUpdate[key] = req.body[key];
+      }
+    }
+
+    await item.update(dataToUpdate);
 
     return res.status(200).json({
       success: true,
@@ -136,7 +157,7 @@ exports.update = async (req, res) => {
 
 /**
  * Eliminar un registro de ${modelName}
- * DELETE /api/${varName}s/:id
+ * DELETE /api/${naming.endpoint}/:id
  */
 exports.delete = async (req, res) => {
   try {
