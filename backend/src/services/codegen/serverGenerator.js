@@ -33,7 +33,7 @@ const uploadsDir = path.join(__dirname, '../uploads');
 if (!fs.existsSync(uploadsDir)) {
   fs.mkdirSync(uploadsDir, { recursive: true });
 }
-app.use('/uploads', express.static(uploadsDir));
+${options.privateUploads ? '// Los archivos se sirven solo mediante la ruta autenticada de uploads.' : "app.use('/uploads', express.static(uploadsDir));"}
 
 // Montaje de rutas API
 app.use('/api', routes);
@@ -188,7 +188,7 @@ function generateReadme(projectName = 'app', entities = []) {
 
   return `# ${projectName} — Sistema Full-Stack Generado por ICASE Studio
 
-Este proyecto fue generado automáticamente a partir de la especificación común validada y aprobada por el equipo de ingeniería en software.
+Este proyecto se genera a partir de icase.spec.json. Consulte el estado de validación y aprobación de esa especificación antes de desplegarlo.
 
 ## Arquitectura
 

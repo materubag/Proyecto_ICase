@@ -4,6 +4,7 @@
  * explicit field projection and standard JSON envelopes.
  */
 
+const { buildFieldContract, isPasswordField } = require('./screenContract');
 const { toPascalCase, toCamelCase, deriveNaming, normalizeAttributes } = require('./typeMapper');
 
 function generateControllerFile(entity) {
@@ -11,7 +12,27 @@ function generateControllerFile(entity) {
   const modelName = naming.modelName;
   const varName = naming.paramName;
   const normalizedAttrs = normalizeAttributes(entity.attributes || []);
-  const allowedFields = normalizedAttrs.filter(a => !a.isPk).map(a => a.fieldName);
+  const fieldContract = buildFieldContract(entity);
+  const allowedFields = fieldContract.filter(a => a.mode === 'editable').map(a => a.fieldName);
+  const passwordField = fieldContract.find(a => isPasswordField(a.fieldName))?.fieldName
+    || normalizedAttrs.find(a => isPasswordField(a.fieldName))?.fieldName
+    || null;
+  const passwordBlock = passwordField ? `
+const bcrypt = require('bcryptjs');
+const PASSWORD_FIELD = ${JSON.stringify(passwordField)};
+async function applyPassword(body, target, required) {
+  const plain = body.password ?? body.contrasena ?? body.contraseña ?? body.clave ?? body[PASSWORD_FIELD];
+  if (plain === undefined || plain === null || plain === '') {
+    if (required) {
+      const err = new Error('La contraseña es obligatoria');
+      err.statusCode = 400;
+      throw err;
+    }
+    return;
+  }
+  target[PASSWORD_FIELD] = /^\\$2[aby]\\$/.test(String(plain)) ? String(plain) : await bcrypt.hash(String(plain), 10);
+}
+` : '';
 
   return `/**
  * Controlador REST para ${modelName}
@@ -19,6 +40,12 @@ function generateControllerFile(entity) {
  */
 
 const { ${modelName} } = require('../models');
+${passwordBlock}function sanitize(value) {
+  if (value?.toJSON) value = value.toJSON();
+  if (Array.isArray(value)) return value.map(sanitize);
+  if (value && typeof value === 'object') return Object.fromEntries(Object.entries(value).filter(([key]) => !['password', 'passwordHash', 'password_hash', 'contrasena', 'token', 'salt'].includes(key)).map(([key, item]) => [key, sanitize(item)]));
+  return value;
+}
 
 /**
  * Obtener todos los registros de ${modelName}
@@ -35,7 +62,7 @@ exports.getAll = async (req, res) => {
     return res.status(200).json({
       success: true,
       count: items.length,
-      data: items
+      data: sanitize(items)
     });
   } catch (error) {
     console.error('Error al obtener ${modelName}:', error);
@@ -70,7 +97,7 @@ exports.getById = async (req, res) => {
 
     return res.status(200).json({
       success: true,
-      data: item
+      data: sanitize(item)
     });
   } catch (error) {
     console.error('Error al obtener ${modelName} por ID:', error);
@@ -89,19 +116,20 @@ exports.getById = async (req, res) => {
 exports.create = async (req, res) => {
   try {
     // Sanitización: Permitir únicamente campos declarados en la entidad
-    const allowed = ${JSON.stringify(allowedFields)};
+    const allowed = ${JSON.stringify(allowedFields.filter(f => !isPasswordField(f)))};
     const dataToCreate = {};
     for (const key of allowed) {
-      if (req.body[key] !== undefined) {
-        dataToCreate[key] = req.body[key];
-      }
+      const value = req.body[key];
+      if (value !== undefined && value !== '') dataToCreate[key] = value;
     }
-
+    if (dataToCreate.fechaCreacion === undefined && allowed.includes('fechaCreacion')) dataToCreate.fechaCreacion = new Date();
+    if (dataToCreate.activo === undefined && allowed.includes('activo')) dataToCreate.activo = true;
+${passwordField ? '    await applyPassword(req.body, dataToCreate, true);\n' : ''}
     const newItem = await ${modelName}.create(dataToCreate);
     return res.status(201).json({
       success: true,
       message: '${modelName} creado exitosamente',
-      data: newItem
+      data: sanitize(newItem)
     });
   } catch (error) {
     console.error('Error al crear ${modelName}:', error);
@@ -130,20 +158,19 @@ exports.update = async (req, res) => {
     }
 
     // Sanitización: Permitir únicamente campos declarados en la entidad
-    const allowed = ${JSON.stringify(allowedFields)};
+    const allowed = ${JSON.stringify(allowedFields.filter(f => !isPasswordField(f)))};
     const dataToUpdate = {};
     for (const key of allowed) {
-      if (req.body[key] !== undefined) {
-        dataToUpdate[key] = req.body[key];
-      }
+      const value = req.body[key];
+      if (value !== undefined && value !== '') dataToUpdate[key] = value;
     }
-
+${passwordField ? '    await applyPassword(req.body, dataToUpdate, false);\n' : ''}
     await item.update(dataToUpdate);
 
     return res.status(200).json({
       success: true,
       message: '${modelName} actualizado exitosamente',
-      data: item
+      data: sanitize(item)
     });
   } catch (error) {
     console.error('Error al actualizar ${modelName}:', error);

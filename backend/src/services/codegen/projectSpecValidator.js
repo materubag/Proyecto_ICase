@@ -15,6 +15,21 @@ const { normalizeCardinality } = require('./modelGenerator');
 const { deriveUserFieldMapping } = require('./authGenerator');
 const { SUPPORTED_STEP_ACTIONS } = require('./contractSchema');
 
+function describeOperationBehavior(op) {
+  const hasTarget = op.targetEntity || op.entity;
+  const methodAction = hasTarget && op.method ? (op.method === 'POST' ? 'CREATE' : op.method === 'DELETE' ? 'DELETE' : (op.method === 'PUT' || op.method === 'PATCH') ? 'UPDATE' : null) : null;
+  const effectiveAction = (op.action || methodAction || '').toUpperCase();
+  const hasExecutableSteps = Array.isArray(op.steps) && op.steps.some(step => step && typeof step === 'object' && SUPPORTED_STEP_ACTIONS.includes(String(step.action || '').toUpperCase()));
+  const hasExplicitAction = SUPPORTED_STEP_ACTIONS.includes(effectiveAction);
+  return { hasTarget, hasExecutableSteps, hasExplicitAction, effectiveAction };
+}
+
+function operationNeedsExecutableBehavior(op) {
+  if (!op || op.type !== 'BUSINESS_LOGIC') return false;
+  const { hasExecutableSteps, hasExplicitAction, hasTarget } = describeOperationBehavior(op);
+  return (!hasExecutableSteps && !hasExplicitAction) || (!hasTarget && !hasExecutableSteps);
+}
+
 function validateProjectSpec(spec, options = {}) {
   const errors = [];
   const warnings = [];
@@ -32,6 +47,8 @@ function validateProjectSpec(spec, options = {}) {
       coverage: { requirementsCovered: 0, requirementsTotal: 0, percentage: 0 }
     };
   }
+
+  for (const point of spec.unresolved || []) errors.push({ code: 'UNRESOLVED_PROJECT_CONTRACT', element: 'spec', message: point, action: 'Resolver la decisi?n pendiente.' });
 
   // 1. Entities Check
   const entities = spec.entities || [];
@@ -143,6 +160,17 @@ function validateProjectSpec(spec, options = {}) {
     }
     routeMethodMap.add(routeKey);
 
+    if (op.permissionSource === 'UNRESOLVED' && spec.security?.authType === 'JWT') {
+      const crud = op.type === 'READ' || op.type === 'WRITE';
+      (crud ? warnings : errors).push({
+        code: 'UNRESOLVED_OPERATION_PERMISSION',
+        element: 'Operation:' + op.operationId,
+        message: crud
+          ? 'CRUD secundario sin permiso explícito: se formaliza con el rol administrador al generar.'
+          : 'UNRESOLVED: autorización de operación de negocio sin fuente explícita.',
+        action: crud ? 'Los permisos se toman de la pantalla del rol o del administrador.' : 'Definir permisos con respaldo en requisitos y actores.'
+      });
+    }
     if (!op.authorizedRoles || op.authorizedRoles.length === 0) {
       warnings.push({
         code: 'OPERATION_NO_ROLES',
@@ -151,12 +179,10 @@ function validateProjectSpec(spec, options = {}) {
       });
     }
 
+    for (const message of op.unresolved || []) errors.push({ code: 'UNRESOLVED_OPERATION_CONTRACT', element: 'Operation:' + op.operationId, message, action: 'Completar el contrato ejecutable.' });
     if (op.type === 'BUSINESS_LOGIC') {
       const hasTarget = op.targetEntity || op.entity;
-      const methodAction = hasTarget && op.method ? (op.method === 'POST' ? 'CREATE' : op.method === 'DELETE' ? 'DELETE' : (op.method === 'PUT' || op.method === 'PATCH') ? 'UPDATE' : null) : null;
-      const effectiveAction = (op.action || methodAction || '').toUpperCase();
-      const hasExecutableSteps = Array.isArray(op.steps) && op.steps.length > 0;
-      const hasExplicitAction = SUPPORTED_STEP_ACTIONS.includes(effectiveAction);
+      const { hasExecutableSteps, hasExplicitAction } = describeOperationBehavior(op);
 
       if (!hasExecutableSteps && !hasExplicitAction) {
         errors.push({
@@ -185,6 +211,7 @@ function validateProjectSpec(spec, options = {}) {
             });
           } else if (typeof step === 'object' && step !== null) {
             const act = (step.action || '').toUpperCase();
+            if (op.bindingVersion === 2 && !['CREATE', 'UPDATE', 'QUERY'].includes(act)) errors.push({ code: 'UNSUPPORTED_BINDING_ACTION', element: `Operation:${op.operationId}`, message: `La versión de referencias 2 no implementa ${act}.`, action: 'Implementar y probar la acción antes de exportarla.' });
             if (!SUPPORTED_STEP_ACTIONS.includes(act)) {
               errors.push({
                 code: 'UNRESOLVED_OPERATION_STEPS',
@@ -225,6 +252,11 @@ function validateProjectSpec(spec, options = {}) {
   const opIds = new Set(operations.map(o => o.operationId));
 
   for (const scr of screens) {
+    for (const message of scr.contract?.unresolved || []) {
+      errors.push({ code: 'UNRESOLVED_SCREEN_CONTRACT', element: 'Screen:' + scr.name, message,
+        action: 'Completar el contrato expl?cito en evidence.screenContract o structuredContent.screen.contract.' });
+    }
+
     if (screenRoutes.has(scr.route.toLowerCase())) {
       errors.push({
         code: 'SCREEN_ROUTE_COLLISION',
@@ -468,5 +500,7 @@ function validateProjectSpec(spec, options = {}) {
 }
 
 module.exports = {
-  validateProjectSpec
+  validateProjectSpec,
+  describeOperationBehavior,
+  operationNeedsExecutableBehavior
 };

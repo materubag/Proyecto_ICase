@@ -7,13 +7,19 @@
 const prisma = require('../../config/prisma');
 const { buildProjectSpec, computeCanonicalHash, verifySpecHash } = require('./projectSpecBuilder');
 const { validateProjectSpec } = require('./projectSpecValidator');
+const { applyApprovedProposals } = require('./aiProposalStore');
 
 class ProjectSpecService {
   /**
    * Builds and validates a project specification in-memory without mutating the DB.
    */
   async getSpecificationDiagnostics(projectId, options = {}) {
-    const spec = await buildProjectSpec(projectId, options);
+    const rawSpec = await buildProjectSpec(projectId, options);
+    let spec = rawSpec;
+    try {
+      const { spec: mergedSpec } = applyApprovedProposals(projectId, rawSpec);
+      spec = mergedSpec;
+    } catch (_) {}
     const diagnostics = validateProjectSpec(spec, options);
 
     return {

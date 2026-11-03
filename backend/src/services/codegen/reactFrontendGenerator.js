@@ -25,6 +25,9 @@ function generateFrontendPackageJson(projectName = 'app') {
     },
     devDependencies: {
       '@vitejs/plugin-react': '^4.3.1',
+      autoprefixer: '^10.4.20',
+      postcss: '^8.4.47',
+      tailwindcss: '^3.4.14',
       vite: '^5.4.2'
     }
   }, null, 2);
@@ -60,7 +63,6 @@ function generateIndexHtml(projectName = 'Aplicación') {
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
     <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:opsz,wght,FILL,GRAD@20..48,100..700,0..1,-50..200" />
-    <script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
   </head>
   <body class="bg-slate-50 text-slate-800">
     <div id="root"></div>
@@ -111,12 +113,99 @@ function generateFrontendNginxConf() {
 `;
 }
 
+function generateTailwindConfig() {
+  return `/** @type {import('tailwindcss').Config} */
+export default {
+  content: ['./index.html', './src/**/*.{js,jsx}'],
+  theme: { extend: {} },
+  plugins: []
+};
+`;
+}
+
+function generatePostcssConfig() {
+  return `export default {
+  plugins: {
+    tailwindcss: {},
+    autoprefixer: {}
+  }
+};
+`;
+}
+
 function generateFrontendCss() {
-  return `/**
+  return `@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/**
  * Global Stylesheet for Generated SPA
  * Follows DESIGN_SYSTEM.md (v3.0 - Estándar Esencial Minimalista)
  */
 
+* { box-sizing: border-box; }
+.icase-shell { display: flex; flex-direction: column; min-height: 100vh; background: var(--color-bg-app); }
+.icase-topbar { position: sticky; top: 0; z-index: 20; display: flex; align-items: center; gap: 1.25rem; min-height: 64px; padding: .65rem 1.25rem; background: #ffffff; border-bottom: 1px solid var(--color-border); }
+.icase-brand { display: flex; align-items: center; gap: .7rem; flex-shrink: 0; }
+.icase-brand span { display: grid; place-items: center; width: 36px; height: 36px; border-radius: 10px; background: var(--color-primary); color: #fff; font-weight: 700; }
+.icase-brand strong { display: block; font-size: .95rem; line-height: 1.1; }
+.icase-brand small { display: inline-flex; margin-top: .2rem; padding: .1rem .45rem; border-radius: 999px; background: #f1f5f9; color: var(--color-text-muted); font-size: .68rem; font-weight: 600; }
+.icase-topnav { display: flex; align-items: stretch; gap: .15rem; flex: 1; min-width: 0; overflow-x: auto; }
+.icase-topnav button { appearance: none; border: 0; background: transparent; color: #64748b; font: inherit; font-size: .88rem; font-weight: 500; padding: .85rem .7rem; white-space: nowrap; cursor: pointer; border-bottom: 2px solid transparent; }
+.icase-topnav button.active { color: var(--color-primary); font-weight: 600; border-bottom-color: var(--color-primary); }
+.icase-session { display: flex; align-items: center; gap: .65rem; margin-left: auto; flex-shrink: 0; }
+.icase-session strong { font-size: .8rem; }
+.icase-session span { color: var(--color-text-muted); font-size: .75rem; }
+.icase-session button { appearance: none; border: 1px solid var(--color-border); background: #fff; border-radius: 8px; padding: .45rem .7rem; font: inherit; font-size: .78rem; cursor: pointer; }
+.icase-menu-toggle { display: none; }
+.icase-nav-overlay { display: none; }
+.icase-content { min-width: 0; flex: 1; }
+@media(max-width: 900px) {
+  .icase-menu-toggle { display: inline-flex; margin-left: auto; padding: .45rem .7rem; border: 1px solid var(--color-border); background: #fff; border-radius: 8px; }
+  .icase-topnav { display: none; position: absolute; top: 64px; left: 0; right: 0; flex-direction: column; background: #fff; border-bottom: 1px solid var(--color-border); padding: .5rem; }
+  .icase-topnav[data-open=true] { display: flex; }
+  .icase-nav-overlay { display: block; position: fixed; inset: 64px 0 0; z-index: 19; border: 0; background: #0f172a66; }
+  .icase-session span { display: none; }
+}
+.contract-task { padding: 1rem; max-width: 1280px; margin: auto; }
+.contract-task:has(.mockup-screen) { max-width: none; padding: 0; }
+.contract-task:has(.mockup-screen) > nav { display: none; }
+.icase-content:has(.mockup-screen) { padding: 0; }
+.icase-content:has(.mockup-screen) .icase-task-header { display: none; }
+.mockup-screen { min-width: 0; }
+.mockup-screen [data-contract-form], .mockup-screen .contract-table { margin: 0; max-width: none; }
+.mockup-screen form[data-contract-form] { max-width: none; padding: 0; background: transparent; border: 0; border-radius: 0; }
+.mockup-live-region { padding: 1.25rem; }
+.mockup-live-panel { display: none; }
+.contract-purpose { color: var(--color-text-muted); margin: 0 0 1.25rem; }
+.contract-task-grid { display: grid; grid-template-columns: minmax(0, 2fr) minmax(240px, 1fr); gap: 1.5rem; align-items: start; }
+.contract-panel, .contract-table { padding: 1.5rem; background: var(--color-surface); border: 1px solid var(--color-border); border-radius: var(--radius-md); margin-bottom: 1.5rem; min-width: 0; overflow-x: auto; }
+.contract-task table { width: 100%; border-collapse: collapse; }
+.contract-table button { padding: .65rem .85rem; border: 1px solid var(--color-border); background: white; color: var(--color-primary); border-radius: var(--radius-sm); cursor: pointer; }
+@media(max-width: 640px) { .contract-table table, .contract-table tbody, .contract-table tr { display: block; width: 100%; } .contract-table thead { display: none; } .contract-table tr { border: 1px solid var(--color-border); border-radius: var(--radius-sm); margin-bottom: 1rem; } .contract-task .contract-table td { display: grid; grid-template-columns: minmax(90px, 40%) minmax(0, 1fr); gap: .5rem; overflow-wrap: anywhere; } .contract-table td::before { content: attr(data-label); font-weight: 600; } }
+.contract-task td, .contract-task th { padding: .75rem; text-align: left; border-bottom: 1px solid var(--color-border); }
+.contract-task nav { display: flex; flex-wrap: wrap; gap: .75rem; }
+.contract-task nav button { padding: .75rem; border: 1px solid var(--color-border); border-radius: var(--radius-sm); background: white; }
+.contract-image-preview { position: fixed; inset: 0; z-index: 50; background: #0f172aee; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 1rem; padding: 1rem; }
+.contract-image-preview img { max-width: 90vw; max-height: 80vh; object-fit: contain; background: white; }
+.contract-image-preview button { padding: .75rem 1rem; border: 0; border-radius: 6px; }
+.contract-error { padding: 1rem; color: var(--status-danger); background: var(--status-danger-bg); }
+.contract-success { padding: 1rem; color: var(--status-success); background: var(--status-success-bg); }
+@media(max-width: 760px) { .contract-task-grid { grid-template-columns: minmax(0, 1fr); } .contract-task { padding: .5rem; } }
+.dashboard-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: 1rem; }
+.dashboard-card { text-align: left; cursor: pointer; width: 100%; font: inherit; color: inherit; }
+.dashboard-card h3 { margin: .35rem 0 .5rem; }
+.dashboard-card-kicker { font-size: .75rem; letter-spacing: .06em; text-transform: uppercase; color: var(--color-text-muted); font-weight: 600; }
+.entity-page { padding: 1rem; max-width: 1280px; margin: auto; }
+.form-group { min-width: 0; margin-bottom: 1rem; }
+.form-group label { display: block; margin-bottom: .4rem; font-weight: 600; }
+.form-group input, .form-group select, .form-group textarea { width: 100%; max-width: 100%; padding: .65rem; border: 1px solid var(--color-border); border-radius: var(--radius-sm); }
+.form-group input[type=checkbox] { width: auto; }
+.mockup-content-wrapper { max-width: 100%; overflow-x: auto; padding: 1rem; }
+form[data-contract-form] { max-width: 760px; padding: 1.5rem; background: var(--color-surface); border: 1px solid var(--color-border); border-radius: var(--radius-md); }
+button[data-action-id] { padding: .7rem 1.25rem; border: 0; border-radius: var(--radius-sm); background: var(--color-primary); color: white; font-weight: 600; cursor: pointer; }
+.field-automatic { display: block; margin-bottom: 1rem; color: var(--color-text-muted); font-size: .85rem; }
+@media(max-width: 640px) { table { display: block; max-width: 100%; overflow-x: auto; } input, select, textarea, button { min-height: 44px; } }
 :root {
   --color-primary: #4f46e5;
   --color-primary-hover: #4338ca;
@@ -313,121 +402,39 @@ function generateDashboardJsx(projectName = 'Aplicación', entities = [], compil
     !/iniciodesesi|accesoalsistema|login|auth/i.test((m.key || '') + ' ' + (m.compName || '') + ' ' + (m.title || ''))
   );
 
-  const entityCards = entities.map(e => {
+  const hideEntityNav = operationalMockups.length > 0;
+  const entityCards = hideEntityNav ? '' : entities.map(e => {
     const naming = deriveNaming(e.name);
-    return `        <div className="card" style={{ borderLeft: '4px solid #3b82f6', cursor: 'pointer', padding: '16px', background: '#ffffff', borderRadius: '8px', boxShadow: '0 1px 3px rgba(0,0,0,0.06)' }} onClick={() => setActiveTab('${naming.endpoint}')}>
-          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-            <span style={{ fontSize: '0.78rem', color: '#64748b', textTransform: 'uppercase', fontWeight: 600 }}>Entidad</span>
-            <span className="material-symbols-outlined" style={{ color: '#2563eb', fontSize: '20px' }}>table_chart</span>
-          </div>
-          <h3 style={{ fontSize: '1.15rem', marginTop: '6px', fontWeight: 700, color: '#1e293b' }}>${naming.modelName}</h3>
-          <span style={{ fontSize: '0.75rem', color: '#2563eb' }}>/api/${naming.endpoint}</span>
-        </div>`;
+    return `        <button type="button" className="contract-panel dashboard-card" onClick={() => setActiveTab('${naming.endpoint}')}>
+          <span className="dashboard-card-kicker">Consulta</span>
+          <h3>${(e.name || naming.modelName).replace(/_/g, ' ')}</h3>
+          <span>Abrir listado</span>
+        </button>`;
   }).join('\n');
 
   const screenCards = operationalMockups.map(m => {
-    return `        <div className="card" style={{ borderLeft: '4px solid #10b981', cursor: 'pointer', padding: '16px', background: '#ffffff', borderRadius: '8px', boxShadow: '0 1px 3px rgba(0,0,0,0.06)' }} onClick={() => setActiveTab('${m.key}')}>
-          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-            <span style={{ fontSize: '0.78rem', color: '#059669', textTransform: 'uppercase', fontWeight: 600 }}>Pantalla Operativa</span>
-            <span className="material-symbols-outlined" style={{ color: '#10b981', fontSize: '20px' }}>palette</span>
-          </div>
-          <h3 style={{ fontSize: '1.05rem', marginTop: '6px', fontWeight: 600, color: '#1e293b' }}>${m.title}</h3>
-          <span style={{ fontSize: '0.75rem', color: '#64748b' }}>Ver interfaz funcional →</span>
-        </div>`;
+    return `        <button type="button" className="contract-panel dashboard-card" onClick={() => setActiveTab(${JSON.stringify(m.key)})}>
+          <span className="dashboard-card-kicker">Tarea</span>
+          <h3>{${JSON.stringify(m.title)}}</h3>
+          <span>Continuar el proceso</span>
+        </button>`;
   }).join('\n');
 
   return `import React from 'react';
 
 export default function Dashboard({ setActiveTab, user = null }) {
-  const roleName = user?.role || user?.rol || 'Administrador';
-  const userName = user?.nombre || user?.username || user?.email || 'Administrador';
-  const isAdmin = /admin/i.test(roleName);
+  const roleName = user?.role || user?.rol || 'Sesión';
+  const userName = user?.nombre || user?.username || user?.email || 'Usuario';
 
   return (
-    <div style={{ padding: '8px', maxWidth: '1280px', margin: '0 auto' }}>
-      {/* Banner de Bienvenida y Rol */}
-      <div style={{
-        marginBottom: '24px',
-        padding: '24px',
-        background: 'linear-gradient(135deg, #1e3a8a 0%, #2563eb 100%)',
-        borderRadius: '12px',
-        color: '#ffffff',
-        boxShadow: '0 4px 6px -1px rgba(0, 0, 0, 0.1)'
-      }}>
-        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', flexWrap: 'wrap', gap: '12px' }}>
-          <div>
-            <span style={{
-              display: 'inline-block',
-              padding: '4px 10px',
-              backgroundColor: 'rgba(255, 255, 255, 0.2)',
-              borderRadius: '20px',
-              fontSize: '0.75rem',
-              fontWeight: 600,
-              letterSpacing: '0.5px',
-              marginBottom: '8px',
-              textTransform: 'uppercase'
-            }}>
-              Sesión Activa: {roleName}
-            </span>
-            <h2 style={{ fontSize: '1.6rem', fontWeight: 700, margin: '4px 0' }}>
-              Panel de Control — ${projectName}
-            </h2>
-            <p style={{ color: '#e0e7ff', fontSize: '0.92rem', marginTop: '4px', maxWidth: '700px' }}>
-              Bienvenido/a, <strong>{userName}</strong>. {isAdmin
-                ? 'Tienes acceso total de Administrador para gestionar todas las operaciones, entidades de datos y pantallas operativas del sistema.'
-                : 'Accede a los módulos y pantallas operativas autorizados para tu rol.'}
-            </p>
-          </div>
-          <div style={{ textAlign: 'right' }}>
-            <div style={{ fontSize: '0.8rem', color: '#bfdbfe' }}>Estado del Sistema</div>
-            <div style={{ fontSize: '1.05rem', fontWeight: 700, color: '#86efac' }}>● Conectado y Operativo</div>
-          </div>
-        </div>
-      </div>
-
-      {/* Métricas Rápidas */}
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: '16px', marginBottom: '28px' }}>
-        <div style={{ padding: '18px', background: '#ffffff', borderRadius: '10px', border: '1px solid #e2e8f0', boxShadow: '0 1px 3px rgba(0,0,0,0.04)' }}>
-          <div style={{ fontSize: '0.78rem', color: '#64748b', fontWeight: 600, textTransform: 'uppercase' }}>Rol Autenticado</div>
-          <div style={{ fontSize: '1.35rem', fontWeight: 700, color: '#1e293b', marginTop: '4px' }}>{roleName}</div>
-          <div style={{ fontSize: '0.75rem', color: '#16a34a', marginTop: '4px' }}>✓ Permisos verificados por backend</div>
-        </div>
-        <div style={{ padding: '18px', background: '#ffffff', borderRadius: '10px', border: '1px solid #e2e8f0', boxShadow: '0 1px 3px rgba(0,0,0,0.04)' }}>
-          <div style={{ fontSize: '0.78rem', color: '#64748b', fontWeight: 600, textTransform: 'uppercase' }}>Pantallas Aprobadas</div>
-          <div style={{ fontSize: '1.35rem', fontWeight: 700, color: '#2563eb', marginTop: '4px' }}>${operationalMockups.length}</div>
-          <div style={{ fontSize: '0.75rem', color: '#64748b', marginTop: '4px' }}>Interfaces funcionales conectadas</div>
-        </div>
-        <div style={{ padding: '18px', background: '#ffffff', borderRadius: '10px', border: '1px solid #e2e8f0', boxShadow: '0 1px 3px rgba(0,0,0,0.04)' }}>
-          <div style={{ fontSize: '0.78rem', color: '#64748b', fontWeight: 600, textTransform: 'uppercase' }}>Módulos de Datos</div>
-          <div style={{ fontSize: '1.35rem', fontWeight: 700, color: '#059669', marginTop: '4px' }}>${entities.length}</div>
-          <div style={{ fontSize: '0.75rem', color: '#64748b', marginTop: '4px' }}>Tablas PostgreSQL sincronizadas</div>
-        </div>
-      </div>
-
-${operationalMockups.length > 0 ? `      {/* Pantallas Operativas del Sistema */}
-      <div style={{ marginBottom: '32px' }}>
-        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '14px' }}>
-          <div>
-            <h3 style={{ fontSize: '1.2rem', fontWeight: 700, color: '#1e293b', margin: 0 }}>Pantallas Operativas Aprobadas</h3>
-            <p style={{ fontSize: '0.85rem', color: '#64748b', margin: '2px 0 0 0' }}>Interfaces enriquecidas de Stitch conectadas al backend Express + Sequelize</p>
-          </div>
-        </div>
-        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))', gap: '16px' }}>
-${screenCards}
-        </div>
-      </div>` : ''}
-
-      {/* Módulos de Datos */}
-      <div style={{ marginBottom: '32px' }}>
-        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '14px' }}>
-          <div>
-            <h3 style={{ fontSize: '1.2rem', fontWeight: 700, color: '#1e293b', margin: 0 }}>Módulos de Datos y Entidades</h3>
-            <p style={{ fontSize: '0.85rem', color: '#64748b', margin: '2px 0 0 0' }}>Gestión directa de tablas y operaciones CRUD de la base de datos</p>
-          </div>
-        </div>
-        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))', gap: '14px' }}>
-${entityCards}
-        </div>
+    <div className="contract-task">
+      <section className="contract-panel">
+        <p className="dashboard-card-kicker">{roleName}</p>
+        <h1>${projectName}</h1>
+        <p className="contract-purpose">Hola {userName}. Elige una tarea para continuar el proceso.</p>
+      </section>
+      <div className="dashboard-grid">
+${screenCards || entityCards}
       </div>
     </div>
   );
@@ -641,32 +648,45 @@ export default function LoginPage({ onLoginSuccess }) {
 `;
 }
 
+const { compactNavLabel } = require('./screenContract');
+
 function generateAppJsx(projectName = 'Aplicación', entities = [], customPages = [], actors = [], compiledMockups = [], options = {}) {
   const { hasAuth = false } = options;
+  const taskEntityIds = new Set(customPages.filter(s => s.contract?.renderer === 'task').map(s => s.contract.entityId).filter(Boolean));
+  const hideEntityNav = (compiledMockups || []).length > 0;
 
-  const entityImports = entities.map(e => {
+  const visibleEntities = hideEntityNav ? [] : entities;
+  const entityImports = visibleEntities.map(e => {
     const naming = deriveNaming(e.name);
     return `import ${naming.modelName}Page from './pages/${naming.modelName}Page';`;
   }).join('\n');
 
-  const entityPageSwitches = entities.map(e => {
+  const entityPageSwitches = visibleEntities.map(e => {
     const naming = deriveNaming(e.name);
-    return `      {activeTab === '${naming.endpoint}' && <${naming.modelName}Page />}`;
+    return `      {navItems.some(item => item.key === '${naming.endpoint}') && resolvedTab === '${naming.endpoint}' && <${naming.modelName}Page />}`;
   }).join('\n');
 
   // Compiled mockups tabs (omitiendo pantallas de inicio de sesión que ya gestiona LoginPage)
   const operationalMockups = (compiledMockups || []).filter(m =>
     !/iniciodesesi|accesoalsistema|login|auth/i.test((m.key || '') + ' ' + (m.compName || '') + ' ' + (m.title || ''))
-  );
+  ).sort((a, b) => (a.order ?? 999) - (b.order ?? 999));
 
   const mockupImports = operationalMockups.map(m => `import ${m.compName} from './pages/mockups/${m.compName}';`).join('\n');
 
-  const mockupSwitches = operationalMockups.map(m => `      {activeTab === '${m.key}' && (
+  const mockupSwitches = operationalMockups.map(m => `      {navItems.some(item => item.key === '${m.key}') && resolvedTab === '${m.key}' && (
         <${m.compName} onNavigate={setActiveTab} />
       )}`).join('\n');
 
-  const adminDefaultMockup = operationalMockups.find(m => /tablero|reporte|indicador/i.test(m.title || m.key)) || operationalMockups[0];
+  const adminDefaultMockup = operationalMockups[0];
   const defaultTab = adminDefaultMockup ? `'${adminDefaultMockup.key}'` : "'dashboard'";
+  const navEntries = [
+    ...operationalMockups.map(m => `    { key: ${JSON.stringify(m.key)}, label: ${JSON.stringify(compactNavLabel(m.title))}, icon: 'task_alt', role: ${JSON.stringify(m.roles?.[0] || '')}, roles: ${JSON.stringify(m.roles || [])}, isEntity: false }`),
+    ...(hideEntityNav ? [] : entities.filter(e => !taskEntityIds.has(e.id) && !/(detalle|item|permiso|falla|multimedia)/i.test((e.name || '') + (e.modelName || ''))).map(e => {
+      const naming = deriveNaming(e.name);
+      const label = (e.name || naming.modelName).replace(/_/g, ' ');
+      return `    { key: ${JSON.stringify(naming.endpoint)}, label: ${JSON.stringify(label)}, icon: 'dataset', roles: ${JSON.stringify(e.permissions || [])}, isEntity: true }`;
+    }))
+  ];
 
   return `import React, { useState, useEffect } from 'react';
 import AppShell from './components/AppShell';
@@ -677,41 +697,7 @@ ${mockupImports}
 export default function App() {
   const [activeTab, setActiveTab] = useState(${defaultTab});
   const allNavItems = [
-${operationalMockups.map(m => {
-  let role = (m.roles && m.roles[0]) || 'Administrador';
-  const t = (m.title || m.key || '').toLowerCase();
-  if (/report|usuario|admin|indicador|inventario|stock|servicio|tarifa|proveedor|compra|venta.*mostrador/i.test(t)) {
-    role = 'Administrador';
-  } else if (/portal|mis.*vehic|solicitud.*cita|aprobac.*presupuesto|seguimiento.*avance/i.test(t)) {
-    role = 'Cliente';
-  } else if (/diag|obd|orden.*trabaj|bitacora|taller|conocimiento/i.test(t)) {
-    role = 'Mecánico';
-  } else if (/recep|inspecc|agenda|cita|directorio|ficha.*client|expediente.*vehic/i.test(t)) {
-    role = 'Recepción';
-  }
-
-  let icon = 'palette';
-  if (/tablero|reporte|indicador/i.test(t)) icon = 'analytics';
-  else if (/usuario|rol|seguridad/i.test(t)) icon = 'admin_panel_settings';
-  else if (/inventario|stock|repuesto/i.test(t)) icon = 'inventory_2';
-  else if (/servicio|tarifa/i.test(t)) icon = 'list_alt';
-  else if (/proveedor|compra/i.test(t)) icon = 'local_shipping';
-  else if (/venta/i.test(t)) icon = 'point_of_sale';
-  else if (/recep|inspecc/i.test(t)) icon = 'directions_car';
-  else if (/agenda|cita/i.test(t)) icon = 'calendar_month';
-  else if (/cliente/i.test(t)) icon = 'people';
-  else if (/vehic/i.test(t)) icon = 'folder_shared';
-  else if (/diag|obd/i.test(t)) icon = 'build';
-  else if (/orden|trabajo|bitacora/i.test(t)) icon = 'engineering';
-  else if (/conocimiento/i.test(t)) icon = 'menu_book';
-  else if (/portal/i.test(t)) icon = 'person';
-
-  return `    { key: '${m.key}', label: '${m.title}', icon: '${icon}', role: '${role}', roles: ${JSON.stringify(m.roles || [role])}, isEntity: false }`;
-}).join(',\n')},
-${entities.map(e => {
-  const naming = deriveNaming(e.name);
-  return `    { key: '${naming.endpoint}', label: '${naming.modelName}', icon: 'dataset', role: 'Administrador', isEntity: true }`;
-}).join(',\n')}
+${navEntries.join(',\n')}
   ];
 
 ${hasAuth ? `  const [session, setSession] = useState(() => {
@@ -753,26 +739,21 @@ ${hasAuth ? `  const [session, setSession] = useState(() => {
 ` : ''}
 
   const currentUserRole = ${hasAuth ? '(session?.user?.role || session?.user?.rol || null)' : 'null'};
-  const isAdmin = /admin|gerente|supervisor/i.test(currentUserRole || '');
   const navItems = allNavItems.filter(item => {
-    if (isAdmin) return true;
-    ${hasAuth ? `if (currentUserRole && item.role) {
-      const clean = (s) => (s || '').toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '').trim();
-      return clean(item.role) === clean(currentUserRole);
-    }` : ''}
-    return true;
+    ${hasAuth ? "const role = cleanStr(currentUserRole); if (!Array.isArray(item.roles) || item.roles.length === 0) return /admin/.test(role); return item.roles.some(r => cleanStr(r) === role);" : "return true;"}
   });
 
+  const resolvedTab = navItems.some(item => item.key === activeTab) ? activeTab : (navItems[0]?.key || 'dashboard');
   return (
     <AppShell
       title="${projectName}"
       user={${hasAuth ? 'session?.user' : 'null'}}
       onLogout={${hasAuth ? 'handleLogout' : 'null'}}
       navItems={navItems}
-      activeTab={activeTab}
+      activeTab={resolvedTab}
       onSelectTab={setActiveTab}
     >
-      {activeTab === 'dashboard' && <Dashboard setActiveTab={setActiveTab} user={${hasAuth ? 'session?.user' : 'null'}} />}
+      {resolvedTab === 'dashboard' && <Dashboard setActiveTab={setActiveTab} user={${hasAuth ? 'session?.user' : 'null'}} />}
 ${mockupSwitches}
 ${entityPageSwitches}
     </AppShell>
@@ -782,427 +763,7 @@ ${entityPageSwitches}
 }
 
 function generateAppShellComponent() {
-  return `import React, { useState, useMemo } from 'react';
-
-/**
- * AppShell Maestro Unificado con Segmentación por Roles y Actores
- * Basado en el diseño aprobado de Stitch y DESIGN_SYSTEM.md
- */
-export default function AppShell({
-  title = 'ICASE App',
-  user = null,
-  onLogout = null,
-  children,
-  navItems = [],
-  activeTab,
-  onSelectTab
-}) {
-  const userRole = (user && (user.role || user.rol)) || 'Administrador';
-  const userName = user?.nombre || user?.username || user?.email || 'Usuario';
-  const isAdmin = /admin/i.test(userRole);
-
-  // Extraer roles disponibles a partir de los navItems
-  const availableRoles = useMemo(() => {
-    const rolesSet = new Set();
-    navItems.forEach(item => {
-      if (item.role) rolesSet.add(item.role);
-      else if (Array.isArray(item.roles)) item.roles.forEach(r => rolesSet.add(r));
-    });
-    return Array.from(rolesSet);
-  }, [navItems]);
-
-  // Filtro de rol en la barra lateral: por defecto el rol del usuario autenticado
-  const [selectedRoleFilter, setSelectedRoleFilter] = useState(() => {
-    if (availableRoles.includes(userRole)) return userRole;
-    return availableRoles[0] || 'ALL';
-  });
-  const [roleMenuOpen, setRoleMenuOpen] = useState(false);
-
-  // Agrupar items por rol
-  const groupedItems = useMemo(() => {
-    const groups = {};
-    const generalItems = [];
-    const entityItems = [];
-
-    navItems.forEach(item => {
-      if (item.type === 'section') return;
-      if (item.isEntity) {
-        entityItems.push(item);
-        return;
-      }
-      const role = item.role || (item.roles && item.roles[0]) || 'General';
-      if (!groups[role]) groups[role] = [];
-      groups[role].push(item);
-    });
-
-    return { groups, generalItems, entityItems };
-  }, [navItems]);
-
-  const activeItem = navItems.find(i => i.key === activeTab);
-  const activeLabel = activeItem?.label || 'Vista del Sistema';
-
-  // Determinar qué grupos mostrar según el selector de rol
-  const displayedGroups = useMemo(() => {
-    if (selectedRoleFilter === 'ALL') return groupedItems.groups;
-    if (groupedItems.groups[selectedRoleFilter]) {
-      return { [selectedRoleFilter]: groupedItems.groups[selectedRoleFilter] };
-    }
-    return groupedItems.groups;
-  }, [groupedItems, selectedRoleFilter]);
-
-  const [showEntities, setShowEntities] = useState(false);
-
-  return (
-    <div style={{ display: 'flex', minHeight: '100vh', backgroundColor: 'var(--color-bg-app)', fontFamily: 'system-ui, -apple-system, sans-serif' }}>
-      {/* Sidebar Corporativo Oscuro (Estilo Stitch) */}
-      <aside style={{
-        width: '270px',
-        backgroundColor: '#0f172a',
-        color: '#94a3b8',
-        display: 'flex',
-        flexDirection: 'column',
-        justifyContent: 'space-between',
-        borderRight: '1px solid #1e293b',
-        flexShrink: 0
-      }}>
-        <div>
-          {/* Header del Sidebar */}
-          <div style={{
-            padding: '16px',
-            borderBottom: '1px solid rgba(255,255,255,0.06)',
-            display: 'flex',
-            alignItems: 'center',
-            gap: '10px'
-          }}>
-            <div style={{
-              width: '32px',
-              height: '32px',
-              borderRadius: '8px',
-              backgroundColor: '#4f46e5',
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'center',
-              color: '#ffffff',
-              fontWeight: 700,
-              fontSize: '0.95rem'
-            }}>
-              {title ? title.charAt(0).toUpperCase() : 'A'}
-            </div>
-            <div style={{ overflow: 'hidden' }}>
-              <div style={{ color: '#ffffff', fontWeight: 700, fontSize: '0.9rem', lineHeight: 1.2, textOverflow: 'ellipsis', overflow: 'hidden', whiteSpace: 'nowrap' }}>
-                {title}
-              </div>
-              <div style={{ fontSize: '0.7rem', color: '#64748b' }}>
-                Control de Acceso por Roles
-              </div>
-            </div>
-          </div>
-
-          {/* Selector de Rol en Sidebar */}
-          <div style={{ padding: '10px 14px 6px', borderBottom: '1px solid rgba(255,255,255,0.04)', position: 'relative' }}>
-            <div style={{ fontSize: '0.675rem', fontWeight: 700, textTransform: 'uppercase', color: '#64748b', letterSpacing: '0.05em', marginBottom: '4px' }}>
-              Filtrar Vista por Rol
-            </div>
-            <div
-              onClick={() => setRoleMenuOpen(!roleMenuOpen)}
-              style={{
-                width: '100%',
-                backgroundColor: 'rgba(255,255,255,0.06)',
-                color: '#ffffff',
-                border: '1px solid rgba(255,255,255,0.12)',
-                borderRadius: '6px',
-                padding: '6px 10px',
-                fontSize: '0.75rem',
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'space-between',
-                cursor: 'pointer'
-              }}
-            >
-              <span>{selectedRoleFilter === 'ALL' ? '✦ Todos los Roles' : selectedRoleFilter}</span>
-              <span className="material-symbols-outlined" style={{ fontSize: '14px', color: '#94a3b8' }}>
-                {roleMenuOpen ? 'expand_less' : 'expand_more'}
-              </span>
-            </div>
-            {roleMenuOpen && (
-              <div style={{
-                position: 'absolute',
-                top: '100%',
-                left: '14px',
-                right: '14px',
-                zIndex: 50,
-                backgroundColor: '#1e293b',
-                border: '1px solid #334155',
-                borderRadius: '6px',
-                boxShadow: '0 4px 12px rgba(0,0,0,0.5)',
-                overflow: 'hidden',
-                marginTop: '4px'
-              }}>
-                <div
-                  onClick={() => { setSelectedRoleFilter('ALL'); setRoleMenuOpen(false); }}
-                  style={{
-                    padding: '8px 10px',
-                    fontSize: '0.75rem',
-                    color: selectedRoleFilter === 'ALL' ? '#818cf8' : '#e2e8f0',
-                    backgroundColor: selectedRoleFilter === 'ALL' ? 'rgba(79,70,229,0.15)' : 'transparent',
-                    cursor: 'pointer',
-                    fontWeight: selectedRoleFilter === 'ALL' ? 600 : 400
-                  }}
-                >
-                  ✦ Todos los Roles ({navItems.filter(i => !i.isEntity && i.type !== 'section').length})
-                </div>
-                {availableRoles.map(r => (
-                  <div
-                    key={r}
-                    onClick={() => { setSelectedRoleFilter(r); setRoleMenuOpen(false); }}
-                    style={{
-                      padding: '8px 10px',
-                      fontSize: '0.75rem',
-                      color: selectedRoleFilter === r ? '#818cf8' : '#e2e8f0',
-                      backgroundColor: selectedRoleFilter === r ? 'rgba(79,70,229,0.15)' : 'transparent',
-                      cursor: 'pointer',
-                      fontWeight: selectedRoleFilter === r ? 600 : 400
-                    }}
-                  >
-                    {r} ({groupedItems.groups[r]?.length || 0})
-                  </div>
-                ))}
-              </div>
-            )}
-          </div>
-
-          {/* Navegación por Grupos de Roles */}
-          <nav style={{ padding: '10px 8px', maxHeight: 'calc(100vh - 230px)', overflowY: 'auto' }}>
-            {Object.entries(displayedGroups).map(([roleName, screensInRole]) => {
-              if (!screensInRole || screensInRole.length === 0) return null;
-              return (
-                <div key={roleName} style={{ marginBottom: '14px' }}>
-                  <div style={{
-                    display: 'flex',
-                    alignItems: 'center',
-                    justifyContent: 'space-between',
-                    padding: '4px 8px',
-                    marginBottom: '4px'
-                  }}>
-                    <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
-                      <span className="material-symbols-outlined" style={{ color: '#818cf8', fontSize: '15px' }}>
-                        {/admin/i.test(roleName) ? 'admin_panel_settings' : /recep/i.test(roleName) ? 'directions_car' : /mecanic|tecnic/i.test(roleName) ? 'build' : 'person'}
-                      </span>
-                      <span style={{ fontSize: '0.7rem', fontWeight: 700, textTransform: 'uppercase', color: '#cbd5e1', letterSpacing: '0.04em' }}>
-                        {roleName}
-                      </span>
-                    </div>
-                    <span style={{ fontSize: '0.625rem', backgroundColor: 'rgba(255,255,255,0.08)', color: '#94a3b8', padding: '1px 5px', borderRadius: '4px', fontWeight: 600 }}>
-                      {screensInRole.length}
-                    </span>
-                  </div>
-
-                  {screensInRole.map(item => {
-                    const isActive = activeTab === item.key;
-                    return (
-                      <div
-                        key={item.key}
-                        onClick={() => onSelectTab && onSelectTab(item.key)}
-                        style={{
-                          display: 'flex',
-                          alignItems: 'center',
-                          justifyContent: 'space-between',
-                          gap: '8px',
-                          padding: '8px 10px',
-                          borderRadius: '6px',
-                          cursor: 'pointer',
-                          marginBottom: '2px',
-                          fontSize: '0.8rem',
-                          color: isActive ? '#ffffff' : '#94a3b8',
-                          backgroundColor: isActive ? '#4f46e5' : 'transparent',
-                          fontWeight: isActive ? 600 : 400,
-                          transition: 'background-color 0.15s ease'
-                        }}
-                      >
-                        <div style={{ display: 'flex', alignItems: 'center', gap: '8px', overflow: 'hidden' }}>
-                          <span className="material-symbols-outlined" style={{ fontSize: '16px', color: isActive ? '#ffffff' : '#818cf8', flexShrink: 0 }}>
-                            {item.icon || 'palette'}
-                          </span>
-                          <span style={{ textOverflow: 'ellipsis', overflow: 'hidden', whiteSpace: 'nowrap' }}>
-                            {item.label}
-                          </span>
-                        </div>
-                        {isActive && (
-                          <span style={{
-                            fontSize: '0.625rem',
-                            backgroundColor: 'rgba(255,255,255,0.25)',
-                            color: '#ffffff',
-                            padding: '1px 5px',
-                            borderRadius: '4px',
-                            fontWeight: 600,
-                            flexShrink: 0
-                          }}>
-                            Activo
-                          </span>
-                        )}
-                      </div>
-                    );
-                  })}
-                </div>
-              );
-            })}
-
-            {/* Sección Módulos de Datos (CRUD Sequelize) */}
-            {groupedItems.entityItems.length > 0 && (
-              <div style={{ marginTop: '12px', borderTop: '1px solid rgba(255,255,255,0.06)', paddingTop: '8px' }}>
-                <div
-                  onClick={() => setShowEntities(!showEntities)}
-                  style={{
-                    display: 'flex',
-                    alignItems: 'center',
-                    justifyContent: 'space-between',
-                    padding: '4px 8px',
-                    cursor: 'pointer',
-                    color: '#94a3b8',
-                    fontSize: '0.7rem',
-                    fontWeight: 700,
-                    textTransform: 'uppercase'
-                  }}
-                >
-                  <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
-                    <span className="material-symbols-outlined" style={{ fontSize: '15px' }}>database</span>
-                    <span>Módulos de Datos ({groupedItems.entityItems.length})</span>
-                  </div>
-                  <span className="material-symbols-outlined" style={{ fontSize: '14px' }}>
-                    {showEntities ? 'expand_less' : 'expand_more'}
-                  </span>
-                </div>
-                {showEntities && groupedItems.entityItems.map(item => {
-                  const isActive = activeTab === item.key;
-                  return (
-                    <div
-                      key={item.key}
-                      onClick={() => onSelectTab && onSelectTab(item.key)}
-                      style={{
-                        display: 'flex',
-                        alignItems: 'center',
-                        gap: '8px',
-                        padding: '6px 10px',
-                        borderRadius: '6px',
-                        cursor: 'pointer',
-                        marginBottom: '1px',
-                        fontSize: '0.75rem',
-                        color: isActive ? '#ffffff' : '#64748b',
-                        backgroundColor: isActive ? '#2563eb' : 'transparent',
-                        fontWeight: isActive ? 600 : 400
-                      }}
-                    >
-                      <span className="material-symbols-outlined" style={{ fontSize: '14px' }}>table_chart</span>
-                      <span>{item.label}</span>
-                    </div>
-                  );
-                })}
-              </div>
-            )}
-          </nav>
-        </div>
-
-        {/* Perfil del Usuario Autenticado en Sidebar Inferior */}
-        {user && (
-          <div style={{ padding: '12px 14px', borderTop: '1px solid rgba(255,255,255,0.06)', backgroundColor: 'rgba(0,0,0,0.2)' }}>
-            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '6px' }}>
-              <div style={{ overflow: 'hidden' }}>
-                <div style={{ fontSize: '0.8rem', fontWeight: 600, color: '#f1f5f9', textOverflow: 'ellipsis', overflow: 'hidden', whiteSpace: 'nowrap' }}>
-                  {userName}
-                </div>
-                <div style={{ fontSize: '0.7rem', color: '#818cf8', fontWeight: 500 }}>
-                  {userRole}
-                </div>
-              </div>
-              <div style={{ width: '28px', height: '28px', borderRadius: '50%', backgroundColor: '#4f46e5', color: '#ffffff', display: 'flex', alignItems: 'center', justifyContent: 'center', fontWeight: 700, fontSize: '0.75rem' }}>
-                {userName.charAt(0).toUpperCase()}
-              </div>
-            </div>
-            {onLogout && (
-              <button
-                type="button"
-                onClick={onLogout}
-                style={{
-                  width: '100%',
-                  padding: '4px 8px',
-                  fontSize: '0.725rem',
-                  color: '#f87171',
-                  background: 'rgba(239, 68, 68, 0.1)',
-                  border: '1px solid rgba(239, 68, 68, 0.25)',
-                  borderRadius: '4px',
-                  cursor: 'pointer',
-                  fontWeight: 500
-                }}
-              >
-                Cerrar Sesión
-              </button>
-            )}
-          </div>
-        )}
-      </aside>
-
-      {/* Área de Trabajo con Cabecera Superior */}
-      <div style={{ flex: 1, display: 'flex', flexDirection: 'column', minWidth: 0, overflowY: 'auto' }}>
-        {/* Cabecera Superior Estilo Stitch */}
-        <header style={{
-          height: '56px',
-          backgroundColor: '#ffffff',
-          borderBottom: '1px solid #e2e8f0',
-          display: 'flex',
-          alignItems: 'center',
-          justifyContent: 'space-between',
-          padding: '0 24px',
-          boxShadow: '0 1px 2px rgba(0,0,0,0.03)',
-          flexShrink: 0
-        }}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
-            <span style={{ fontSize: '0.95rem', fontWeight: 700, color: '#1e293b' }}>
-              {activeLabel}
-            </span>
-            <span style={{
-              display: 'inline-flex',
-              alignItems: 'center',
-              gap: '4px',
-              padding: '2px 8px',
-              borderRadius: '12px',
-              backgroundColor: '#ecfdf5',
-              color: '#059669',
-              fontSize: '0.7rem',
-              fontWeight: 600
-            }}>
-              ● En Línea
-            </span>
-          </div>
-
-          <div style={{ display: 'flex', alignItems: 'center', gap: '16px' }}>
-            <div style={{
-              display: 'flex',
-              alignItems: 'center',
-              gap: '6px',
-              padding: '4px 12px',
-              backgroundColor: '#f1f5f9',
-              borderRadius: '6px',
-              border: '1px solid #e2e8f0',
-              fontSize: '0.8rem',
-              color: '#64748b'
-            }}>
-              <span className="material-symbols-outlined" style={{ fontSize: '16px' }}>search</span>
-              <span>Buscar vehículo, cliente u orden...</span>
-            </div>
-            <span className="material-symbols-outlined" style={{ color: '#64748b', cursor: 'pointer', fontSize: '20px' }}>notifications</span>
-            <span className="material-symbols-outlined" style={{ color: '#64748b', cursor: 'pointer', fontSize: '20px' }}>settings</span>
-          </div>
-        </header>
-
-        {/* Contenido Principal */}
-        <main style={{ flex: 1, padding: '24px 32px' }}>
-          {children}
-        </main>
-      </div>
-    </div>
-  );
-}
-`;
+  return require('fs').readFileSync(require.resolve('./appShellTemplate.jsx'), 'utf8');
 }
 
 function generateSharedFormFieldComponent() {
@@ -1342,6 +903,8 @@ export default function StatusBadge({ status = 'info', label }) {
 module.exports = {
   generateFrontendPackageJson,
   generateViteConfig,
+  generateTailwindConfig,
+  generatePostcssConfig,
   generateIndexHtml,
   generateFrontendDockerfile,
   generateFrontendNginxConf,

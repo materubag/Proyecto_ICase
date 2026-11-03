@@ -134,7 +134,7 @@ function buildOperationNameMap(operations = []) {
   return map;
 }
 
-function generateOperationServiceFile(operations = [], entities = []) {
+function generateOperationServiceFile(operations = [], entities = [], options = {}) {
   const nameMap = buildOperationNameMap(operations);
 
   const opFunctions = operations.map((op, idx) => {
@@ -143,6 +143,9 @@ function generateOperationServiceFile(operations = [], entities = []) {
     // Explicit target entity without defaulting to entities[0]
     const targetModel = op.targetEntity || op.entity || null;
 
+    if (options.reviewOnly && ((op.unresolved || []).length || (!targetModel && (!op.steps || op.steps.length === 0)))) {
+      return '  async ' + fnName + '() { const err = new Error(' + JSON.stringify('UNRESOLVED: ' + op.operationId) + '); err.statusCode = 501; err.code = "UNRESOLVED_OPERATION"; throw err; },';
+    }
     if (!targetModel && (!op.steps || op.steps.length === 0)) {
       const err = new Error(`La operación '${op.name || op.operationId}' carece de entidad objetivo (targetEntity) y de pasos definidos.`);
       err.code = 'UNDEFINED_OPERATION_BEHAVIOR';
@@ -160,7 +163,9 @@ function generateOperationServiceFile(operations = [], entities = []) {
     // Resolve primary key for target entity
     const targetPk = (entities.find(e => e.modelName === targetModel || e.name === targetModel)?.primaryKey?.fieldName) || 'id';
 
-    if (op.steps && Array.isArray(op.steps) && op.steps.length > 0) {
+    if (op.bindingVersion === 2) {
+      mutationLogic = '      const { executeSteps } = require("./operation.runtime");\n      const record = await executeSteps(models, ' + JSON.stringify(op) + ', payload, user, t);';
+    } else if (op.steps && Array.isArray(op.steps) && op.steps.length > 0) {
       const stepResults = [];
       const stepLines = op.steps.map((step, sIdx) => {
         const stepNum = step.step || (sIdx + 1);
@@ -339,7 +344,7 @@ function generateOperationControllerFile(operations = []) {
         message: 'Operación ejecutada exitosamente'
       });
     } catch (error) {
-      console.error('Error en operación ${fnName}:', error);
+      console.error('Error en operación ${fnName}:', error.code || error.name || 'OPERATION_ERROR');
       return res.status(error.statusCode || 400).json({
         success: false,
         error: error.code || 'OPERATION_ERROR',
@@ -377,11 +382,14 @@ function generateOperationRoutesFile(operations = [], security = {}) {
 
     const middlewares = [];
     if (hasAuth) {
-      if (op.authorizedRoles && op.authorizedRoles.length > 0) {
-        const rolesList = op.authorizedRoles.map(r => `'${r}'`).join(', ');
+      const roles = [...(op.authorizedRoles || [])];
+      const adminRole = (security.roles || []).find(r => /admin/i.test(r));
+      if (adminRole && roles.length && !roles.includes(adminRole)) roles.push(adminRole);
+      if (roles.length > 0) {
+        const rolesList = roles.map(r => `'${r}'`).join(', ');
         middlewares.push(`authenticateToken`, `authorizeRoles(${rolesList})`);
       } else {
-        middlewares.push(`authenticateToken`);
+        middlewares.push(`authenticateToken`, `(req, res) => res.status(403).json({ code: 'UNRESOLVED_PERMISSION' })`);
       }
     }
 
@@ -390,9 +398,7 @@ function generateOperationRoutesFile(operations = [], security = {}) {
       `// ${op.name} (${op.operationId})`,
       `router.${method}('${endpoint}', ${midArg}operationController.${fnName});`
     ];
-    if (method !== 'get') {
-      lines.push(`router.get('${endpoint}', ${midArg}operationController.${fnName});`);
-    }
+
     return lines.join('\n');
   });
 

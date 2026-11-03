@@ -12,8 +12,14 @@ function generateEntityRoutesFile(entity, options = {}) {
   const varName = naming.paramName;
   const hasAuth = !!options.hasAuth;
 
-  const authImport = hasAuth ? "const { authenticateToken } = require('../middleware/auth.middleware');\n" : "";
+  const authImport = hasAuth ? "const { authenticateToken, authorizeRoles } = require('../middleware/auth.middleware');\n" : "";
   const mid = hasAuth ? "authenticateToken, " : "";
+  const permission = (method, item = false) => {
+    if (!hasAuth || !options.operations) return mid;
+    const op = options.operations.find(o => o.entity === modelName && o.method === method && !o.route.includes('/operations/') && (o.route.includes(':') === item));
+    const roles = (op?.authorizedRoles && op.authorizedRoles.length) ? op.authorizedRoles : (options.defaultRoles || []);
+    return mid + (roles.length ? 'authorizeRoles(...' + JSON.stringify(roles) + '), ' : '(req, res) => res.status(403).json({ error: "UNRESOLVED_PERMISSION" }), ');
+  };
 
   return `/**
  * Rutas REST para ${modelName}
@@ -24,11 +30,11 @@ const express = require('express');
 const router = express.Router();
 const ${varName}Controller = require('../controllers/${varName}.controller');
 ${authImport}
-router.get('/', ${mid}${varName}Controller.getAll);
-router.get('/:id', ${mid}${varName}Controller.getById);
-router.post('/', ${mid}${varName}Controller.create);
-router.put('/:id', ${mid}${varName}Controller.update);
-router.delete('/:id', ${mid}${varName}Controller.delete);
+router.get('/', ${permission('GET')}${varName}Controller.getAll);
+router.get('/:id', ${permission('GET', true)}${varName}Controller.getById);
+router.post('/', ${permission('POST')}${varName}Controller.create);
+router.put('/:id', ${permission('PUT', true)}${varName}Controller.update);
+router.delete('/:id', ${permission('DELETE', true)}${varName}Controller.delete);
 
 module.exports = router;
 `;
@@ -70,7 +76,23 @@ module.exports = { upload };
 `;
 }
 
-function generateUploadRoutesFile() {
+function generateUploadRoutesFile(options = {}) {
+  if (options.privateUploads) return `const router = require('express').Router();
+const { authenticateToken, authorizeRoles } = require('../middleware/auth.middleware');
+const { upload } = require('../middleware/upload.middleware');
+const { signUpload, resolveFile, detectImage } = require('../services/upload.storage');
+router.use(authenticateToken, authorizeRoles(...${JSON.stringify(options.roles || [])}));
+router.post('/', upload.single('file'), (req, res, next) => {
+  try {
+    if (!req.file) return res.status(400).json({ message: 'Seleccione un archivo' });
+    return res.status(201).json({ success: true, token: signUpload(req.file, req.user) });
+  } catch (err) { return res.status(err.statusCode || 400).json({ success: false, message: err.message }); }
+});
+router.get('/files/:filename', (req, res) => {
+  try { const filename = resolveFile(req.params.filename); const mime = detectImage(require('fs').readFileSync(filename)); if (!mime) return res.sendStatus(415); res.type(mime).set('X-Content-Type-Options', 'nosniff').sendFile(filename); } catch (err) { res.status(err.statusCode || 404).json({ message: err.message }); }
+});
+module.exports = router;
+`;
   return `/**
  * Rutas de Carga de Archivos e Imágenes
  * Generado automáticamente por ICASE Studio

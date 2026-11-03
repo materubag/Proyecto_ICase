@@ -1,6 +1,6 @@
 const test = require('node:test');
 const assert = require('node:assert/strict');
-const { validateProjectSpec } = require('../src/services/codegen/projectSpecValidator');
+const { validateProjectSpec, operationNeedsExecutableBehavior } = require('../src/services/codegen/projectSpecValidator');
 
 test('validateProjectSpec blocks generation when no entities exist', () => {
   const emptySpec = {
@@ -80,4 +80,14 @@ test('validateProjectSpec passes clean spec and calculates coverage', () => {
   assert.equal(diag.coverage.requirementsTotal, 1);
   assert.equal(diag.coverage.requirementsCovered, 1);
   assert.equal(diag.coverage.coveragePercentage, 100);
+});
+
+test('operationNeedsExecutableBehavior matches quality-gate incomplete business operations', () => {
+  assert.equal(operationNeedsExecutableBehavior({
+    type: 'BUSINESS_LOGIC', operationId: 'UC-01', name: 'Gestionar órdenes', method: 'POST'
+  }), true);
+  assert.equal(operationNeedsExecutableBehavior({
+    type: 'BUSINESS_LOGIC', targetEntity: 'OrdenTrabajo', method: 'POST', action: 'CREATE',
+    steps: [{ step: 1, action: 'CREATE', entity: 'OrdenTrabajo' }]
+  }), false);
 });

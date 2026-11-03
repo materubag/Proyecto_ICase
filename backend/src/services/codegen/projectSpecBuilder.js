@@ -5,6 +5,7 @@
  */
 
 const crypto = require('crypto');
+const { buildScreenContract, inferScreenRoles, inferScreenEntity } = require('./screenContract');
 const prisma = require('../../config/prisma');
 const {
   toPascalCase,
@@ -15,11 +16,50 @@ const {
   toOpenApiType
 } = require('./typeMapper');
 const { normalizeCardinality } = require('./modelGenerator');
+const { SUPPORTED_STEP_ACTIONS } = require('./contractSchema');
 const designSystemService = require('../mockup/designSystemService');
 
 /**
  * Validates whether an element has a valid APPROVED status, detecting contradictions.
  */
+function adminRoleNames(roleList = []) {
+  const names = [...new Set((roleList || []).filter(Boolean))];
+  const admins = names.filter(name => /admin/i.test(String(name)));
+  return admins.length ? admins : names.slice(0, 1);
+}
+
+function formalizeCrudPermissions(operations, screens, securityRoles, actors) {
+  const allRoles = [...new Set([...(securityRoles || []), ...(actors || []).map(actor => actor.name)])];
+  const adminRoles = adminRoleNames(allRoles);
+  const rolesByEntity = new Map();
+  for (const screen of screens) {
+    const entityName = screen.targetEntity || screen.contract?.entityId;
+    if (!entityName) continue;
+    rolesByEntity.set(entityName, [...new Set([...(rolesByEntity.get(entityName) || []), ...(screen.roles || [])])]);
+  }
+  for (const screen of screens) {
+    const extraRoles = screen.roles || [];
+    if (!extraRoles.length) continue;
+    const routes = new Set((screen.contract?.dataSources || []).map(source => source.route).filter(Boolean));
+    if (screen.readEndpoint) routes.add(screen.readEndpoint);
+    if (screen.createEndpoint) routes.add(screen.createEndpoint);
+    for (const op of operations) {
+      const sameEntity = screen.targetEntity && (op.entity === screen.targetEntity || op.targetEntity === screen.targetEntity);
+      const sameRoute = routes.has(op.route);
+      if (!sameEntity && !sameRoute) continue;
+      op.authorizedRoles = [...new Set([...(op.authorizedRoles || []), ...extraRoles])];
+    }
+  }
+  for (const op of operations) {
+    const entityName = op.entity || op.targetEntity;
+    const screenRoles = rolesByEntity.get(entityName) || [];
+    op.authorizedRoles = [...new Set([...(op.authorizedRoles || []), ...screenRoles, ...adminRoles])];
+    if (op.authorizedRoles.length && (op.permissionSource === 'UNRESOLVED' || !op.permissionSource)) {
+      op.permissionSource = screenRoles.length ? 'SCREEN' : 'DEFAULT';
+    }
+  }
+}
+
 function checkApproval(item) {
   if (!item || item.isDeleted) return { approved: false, reason: 'DELETED' };
   const s = item.status || null;
@@ -189,7 +229,7 @@ async function buildProjectSpec(projectId, options = {}) {
   // 3. Normalize Entities
   const normalizedEntities = approvedEntities.map(ent => {
     const naming = deriveNaming(ent.name);
-    const attrs = normalizeAttributes(ent.attributes || []);
+    const attrs = normalizeAttributes((ent.attributes || []).map(a => ({ ...a, ...a.evidence?.fieldContract })));
     const pkAttr = attrs.find(a => a.isPk) || attrs[0];
 
     return {
@@ -199,6 +239,7 @@ async function buildProjectSpec(projectId, options = {}) {
       tableName: naming.tableName,
       endpoint: naming.endpoint,
       description: ent.description || '',
+      crudPermissions: ent.evidence?.crudPermissions || null,
       revision: ent.revision || 1,
       primaryKey: {
         fieldName: pkAttr.fieldName,
@@ -213,6 +254,7 @@ async function buildProjectSpec(projectId, options = {}) {
         unique: a.unique,
         isPk: a.isPk,
         autoIncrement: a.autoIncrement,
+        readOnly: a.readOnly,
         defaultValue: a.defaultValue,
         comment: a.comment
       }))
@@ -275,7 +317,8 @@ async function buildProjectSpec(projectId, options = {}) {
       entity: ent.modelName,
       route: baseRoute,
       method: 'GET',
-      authorizedRoles: approvedActors.map(a => a.name),
+      authorizedRoles: [],
+      permissionSource: 'UNRESOLVED',
       requirementIds: ent.requirementIds || [],
       input: {
         params: [],
@@ -315,7 +358,8 @@ async function buildProjectSpec(projectId, options = {}) {
       entity: ent.modelName,
       route: `${baseRoute}/:${pKey}`,
       method: 'GET',
-      authorizedRoles: approvedActors.map(a => a.name),
+      authorizedRoles: [],
+      permissionSource: 'UNRESOLVED',
       requirementIds: ent.requirementIds || [],
       input: {
         params: [{ name: pKey, type: 'string', required: true }],
@@ -348,7 +392,8 @@ async function buildProjectSpec(projectId, options = {}) {
       entity: ent.modelName,
       route: baseRoute,
       method: 'POST',
-      authorizedRoles: approvedActors.map(a => a.name),
+      authorizedRoles: [],
+      permissionSource: 'UNRESOLVED',
       requirementIds: ent.requirementIds || [],
       input: {
         params: [],
@@ -388,7 +433,8 @@ async function buildProjectSpec(projectId, options = {}) {
       entity: ent.modelName,
       route: `${baseRoute}/:${pKey}`,
       method: 'PUT',
-      authorizedRoles: approvedActors.map(a => a.name),
+      authorizedRoles: [],
+      permissionSource: 'UNRESOLVED',
       requirementIds: ent.requirementIds || [],
       input: {
         params: [{ name: pKey, type: 'string', required: true }],
@@ -428,7 +474,8 @@ async function buildProjectSpec(projectId, options = {}) {
       entity: ent.modelName,
       route: `${baseRoute}/:${pKey}`,
       method: 'DELETE',
-      authorizedRoles: approvedActors.map(a => a.name),
+      authorizedRoles: [],
+      permissionSource: 'UNRESOLVED',
       requirementIds: ent.requirementIds || [],
       input: {
         params: [{ name: pKey, type: 'string', required: true }],
@@ -450,6 +497,12 @@ async function buildProjectSpec(projectId, options = {}) {
         { code: 'NOT_FOUND', status: 404, message: `${ent.modelName} no encontrado` }
       ]
     });
+  }
+
+  for (const op of operations) {
+    const ent = normalizedEntities.find(e => e.modelName === op.entity);
+    const action = op.operationId.split('_').pop();
+    if (ent?.crudPermissions && Object.hasOwn(ent.crudPermissions, action)) { op.authorizedRoles = ent.crudPermissions[action]; op.permissionSource = 'EXPLICIT'; }
   }
 
   const usedRoutes = new Set();
@@ -476,7 +529,7 @@ async function buildProjectSpec(projectId, options = {}) {
   // 5.3 Specific business operations from approved UseCases
   for (const uc of approvedUseCases) {
     const ucRoles = approvedActors
-      .filter(a => uc.actorIds.includes(a.id) || uc.primaryActorId === a.id || (uc.secondaryActorIds || []).includes(a.id))
+      .filter(a => (uc.actorIds || []).includes(a.id) || uc.primaryActorId === a.id || (uc.secondaryActorIds || []).includes(a.id))
       .map(a => a.name);
 
     const baseEndpoint = toSnakeCasePlural(uc.name).replace(/_/g, '-');
@@ -489,34 +542,8 @@ async function buildProjectSpec(projectId, options = {}) {
     }
     usedRoutes.add(`POST ${route}`.toLowerCase());
 
-    // Resolve target entity matching this use case
-    const normalizeStr = s => (s || '').toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/[^a-z0-9]/g, '');
-    const ucClean = normalizeStr(uc.name);
-    const ucDescClean = normalizeStr(uc.description || '');
-
-    let matchedEntity = normalizedEntities.find(e => {
-      const entClean = normalizeStr(e.name);
-      const modelClean = normalizeStr(e.modelName);
-      if (entClean && (ucClean.includes(entClean) || ucDescClean.includes(entClean))) return true;
-      if (modelClean && (ucClean.includes(modelClean) || ucDescClean.includes(modelClean))) return true;
-
-      // Match significant words (e.g., 'orden', 'cotizacion', 'factura', 'obd', 'reporte', 'conocimiento')
-      const entWords = (e.name || '').toLowerCase().split(/[_\s]+/).filter(w => w.length >= 4);
-      return entWords.some(w => {
-        const nw = normalizeStr(w);
-        return ucClean.includes(nw) || ucDescClean.includes(nw);
-      });
-    });
-
-    if (!matchedEntity && normalizedEntities.length > 0) {
-      // Check if any requirement linked to this UC mentions an entity name
-      const ucReqs = approvedRequirements.filter(r => (uc.requirementIds || []).includes(r.id));
-      const reqText = normalizeStr(ucReqs.map(r => `${r.name} ${r.description || ''}`).join(' '));
-      matchedEntity = normalizedEntities.find(e => {
-        const entClean = normalizeStr(e.name);
-        return entClean && reqText.includes(entClean);
-      });
-    }
+    const targetRefs = [...new Set((uc.mainFlow || []).filter(f => typeof f === 'object' && f).map(f => f.entity || f.targetEntity).filter(Boolean))];
+    const matchedEntity = targetRefs.length === 1 ? normalizedEntities.find(e => [e.id, e.name, e.modelName].includes(targetRefs[0])) : null;
 
     // Separate narrative flow descriptions from executable structured instructions
     const narrativeSteps = [];
@@ -524,8 +551,9 @@ async function buildProjectSpec(projectId, options = {}) {
 
     if (Array.isArray(uc.mainFlow) && uc.mainFlow.length > 0) {
       uc.mainFlow.forEach((f, idx) => {
-        if (typeof f === 'object' && f !== null && f.action && ['CREATE', 'UPDATE', 'DELETE', 'STATUS_CHANGE', 'ASSOCIATE'].includes(String(f.action).toUpperCase().trim())) {
+        if (typeof f === 'object' && f !== null && f.action && SUPPORTED_STEP_ACTIONS.includes(String(f.action).toUpperCase().trim())) {
           executableSteps.push({
+            ...f,
             step: typeof f.step === 'number' ? f.step : executableSteps.length + 1,
             action: String(f.action).toUpperCase().trim(),
             entity: f.entity || f.targetEntity || (matchedEntity ? matchedEntity.modelName : null),
@@ -551,6 +579,7 @@ async function buildProjectSpec(projectId, options = {}) {
     const rules = approvedRules.filter(r => r.requirementIds.some(reqId => uc.requirementIds.includes(reqId)));
 
     operations.push({
+      ...uc.evidence?.executionContract,
       operationId: opId,
       name: uc.name,
       useCaseId: uc.id,
@@ -563,8 +592,18 @@ async function buildProjectSpec(projectId, options = {}) {
       narrativeDescription: uc.description || uc.name,
       narrativeSteps,
       steps: executableSteps,
-      authorizedRoles: ucRoles.length > 0 ? ucRoles : (roles.length > 0 ? roles : ['Usuario']),
-      input: {
+      authorizedRoles: (() => {
+        const contractRoles = uc.evidence?.executionContract?.authorizedRoles || [];
+        const backed = contractRoles.filter(role => ucRoles.includes(role));
+        return backed.length ? backed : ucRoles;
+      })(),
+      unresolved: [
+        ...(uc.evidence?.executionContract?.unresolved || []).filter(message => !/no está respaldado por los actores/.test(message)),
+        ...(uc.evidence?.executionContract?.authorizedRoles || [])
+          .filter(role => !ucRoles.includes(role) && approvedActors.some(actor => actor.name === role))
+          .map(role => `UNRESOLVED: el rol ${role} no está respaldado por los actores del caso de uso`)
+      ],
+      input: uc.evidence?.executionContract?.input || {
         params: [],
         query: [],
         bodySchema: {
@@ -620,6 +659,8 @@ async function buildProjectSpec(projectId, options = {}) {
       title: scr.description || scr.name,
       actorIds: scr.actorIds || [],
       requirementIds: scr.requirementIds || [],
+      purpose: scr.purpose,
+      contract: scr.evidence?.screenContract || null,
       components: scr.components || [],
       html: scr.html || null
     });
@@ -636,6 +677,8 @@ async function buildProjectSpec(projectId, options = {}) {
         name: node.name,
         route,
         title: node.name,
+        contract: node.evidence?.screenContract || null,
+        useCaseIds: node.useCaseIds || [],
         actorIds: node.actorIds || [],
         requirementIds: node.requirementIds || [],
         components: [],
@@ -643,6 +686,8 @@ async function buildProjectSpec(projectId, options = {}) {
         requiresMockup: false
       });
     } else {
+      if (!existing.contract && node.evidence?.screenContract) existing.contract = node.evidence.screenContract;
+      if (!existing.useCaseIds?.length && node.useCaseIds?.length) existing.useCaseIds = node.useCaseIds;
       if (!existing.actorIds?.length && node.actorIds?.length) existing.actorIds = node.actorIds;
       if (!existing.requirementIds?.length && node.requirementIds?.length) existing.requirementIds = node.requirementIds;
     }
@@ -707,99 +752,29 @@ async function buildProjectSpec(projectId, options = {}) {
     ));
 
     let screenRoles = approvedActors.filter(a => (cand.actorIds || []).includes(a.id)).map(a => a.name);
-
-    // Si la pantalla carece de actorIds directos, deducir el rol semántico aprobable
-    if (screenRoles.length === 0) {
-      const sText = `${cand.name || ''} ${cand.title || ''} ${route || ''}`.toLowerCase();
-      const findActor = (regex) => approvedActors.find(a => regex.test(a.name));
-      const adminAct = findActor(/admin/i) || { name: 'Administrador' };
-      const recepAct = findActor(/recep/i) || { name: 'Recepción' };
-      const mecAct = findActor(/mecanic|tecnic/i) || { name: 'Mecánico' };
-      const clientAct = findActor(/client/i) || { name: 'Cliente' };
-
-      if (/report|usuario|admin|indicador|inventario|stock|servicio|tarifa|proveedor|compra|venta.*mostrador/i.test(sText)) {
-        screenRoles = [adminAct.name];
-      } else if (/portal|mis.*vehic|solicitud.*cita|aprobac.*presupuesto|seguimiento.*avance/i.test(sText)) {
-        screenRoles = [clientAct.name];
-      } else if (/diag|obd|orden.*trabaj|bitacora|taller|conocimiento/i.test(sText)) {
-        screenRoles = [mecAct.name];
-      } else if (/recep|inspecc|agenda|cita|directorio|ficha.*client|expediente.*vehic/i.test(sText)) {
-        screenRoles = [recepAct.name];
-      } else {
-        screenRoles = [adminAct.name];
+    if (!screenRoles.length) {
+      screenRoles = inferScreenRoles({ name: cand.name, title: cand.title, route: cand.route }, approvedActors);
+      if (screenRoles.length) {
+        cand.actorIds = approvedActors.filter(a => screenRoles.includes(a.name)).map(a => a.id);
       }
     }
 
-    // Deducir entidad primaria de la pantalla según coincidencia semántica de palabras y sinónimos
-    const sText = `${cand.title || ''} ${cand.name || ''} ${route || ''}`.toLowerCase()
-      .normalize('NFD').replace(/[\u0300-\u036f]/g, '');
-
-    const screenWords = sText.split(/[^a-z0-9]+/).filter(w => w.length >= 3);
-    const synonymMap = {
-      usuario: ['usuario', 'user', 'cuenta', 'perfil'],
-      repuesto: ['producto', 'repuesto', 'item', 'insumo', 'material', 'pieza'],
-      inventario: ['producto', 'stock', 'almacen', 'inventario'],
-      stock: ['producto', 'stock'],
-      vehiculo: ['vehiculo', 'auto', 'coche', 'carro', 'movil'],
-      presupuesto: ['cotizacion', 'presupuesto', 'estimacion'],
-      avance: ['ordentrabajo', 'orden', 'bitacora', 'tarea'],
-      obd: ['obdcodigo', 'codigo', 'averia', 'falla', 'diagnostico'],
-      reporte: ['cita', 'orden', 'venta', 'tablero', 'metrica']
-    };
-
-    let matchedEntity = null;
-    let highestScore = 0;
-
-    for (const ent of normalizedEntities) {
-      const eName = (ent.name || '').toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '');
-      const mName = (ent.modelName || '').toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '');
-      const tName = (ent.tableName || '').toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '');
-
-      let score = 0;
-      for (const word of screenWords) {
-        const isRoleWord = ['cliente', 'admin', 'administrador', 'mecanico', 'recepcion'].includes(word);
-        const weight = isRoleWord ? 1 : 2;
-
-        if (word === eName || word === mName || word === tName) score += 10 * weight;
-        else if (word.length >= 3 && (eName.includes(word) || mName.includes(word) || tName.includes(word))) score += 7 * weight;
-        else if (word.length >= 4 && (word.startsWith(eName) || word.startsWith(mName) || word.startsWith(tName))) score += 6 * weight;
-
-        for (const [key, syns] of Object.entries(synonymMap)) {
-          if (syns.includes(word) && (eName.includes(key) || mName.includes(key) || tName.includes(key) || syns.includes(eName) || syns.includes(mName))) {
-            score += 6 * weight;
-          }
-        }
-      }
-
-      if (score > highestScore) {
-        highestScore = score;
-        matchedEntity = ent;
-      }
+    const declared = cand.contract || mockScreen.contract || {};
+    const explicitIds = (declared.actions || []).map(a => a.operationId);
+    for (const op of operations) if ((cand.useCaseIds || []).includes(op.useCaseId)) explicitIds.push(op.operationId);
+    const linkedOps = operations.filter(o => explicitIds.includes(o.operationId));
+    const entityRef = declared.entityId || cand.targetEntity || null;
+    let matchedEntity = entityRef
+      ? normalizedEntities.find(e => [e.id, e.name, e.modelName].filter(Boolean).includes(entityRef)) || null
+      : null;
+    if (!matchedEntity) matchedEntity = inferScreenEntity({ name: cand.name, title: cand.title, route: cand.route }, normalizedEntities);
+    if (matchedEntity && !linkedOps.length) {
+      linkedOps.push(...operations.filter(op =>
+        (op.entity === matchedEntity.modelName || op.targetEntity === matchedEntity.modelName) &&
+        ((op.method === 'GET' && !String(op.route || '').includes(':')) || op.method === 'POST')
+      ));
     }
-
-    // Multi-action linking
-    const screenReqIds = cand.requirementIds || [];
-    const linkedOps = operations.filter(o => {
-      if (o.route.toLowerCase() === route.toLowerCase()) return true;
-      if (matchedEntity && o.entity === matchedEntity.modelName) return true;
-      if (screenReqIds.length > 0 && (o.requirementIds || []).some(rId => screenReqIds.includes(rId))) return true;
-      if (o.entity && o.entity.toLowerCase() === toPascalCase(cand.name).toLowerCase()) return true;
-      return false;
-    });
-
-    // Priorizar operación de lectura/listado de la entidad primaria para poblar datos reales
-    let primaryOp = null;
-    if (matchedEntity) {
-      primaryOp = operations.find(o => o.entity === matchedEntity.modelName && o.method === 'GET' && !o.route.includes(':'))
-        || operations.find(o => o.route === `/api/${matchedEntity.endpoint}` && o.method === 'GET');
-    }
-    if (!primaryOp) {
-      const matchingTitleOp = linkedOps.find(o => {
-        const sWords = (cand.title || cand.name || '').toLowerCase().split(/\s+/).filter(w => w.length > 3);
-        return sWords.some(w => (o.name || '').toLowerCase().includes(w));
-      });
-      primaryOp = matchingTitleOp || linkedOps[0];
-    }
+    const primaryOp = linkedOps.find(o => o.method === 'GET' && !o.route.includes(':')) || null;
 
     const actions = linkedOps.map(op => ({
       actionId: `act_${(cand.id || toCamelCase(cand.name)).slice(0, 16)}_${op.operationId}`,
@@ -822,6 +797,10 @@ async function buildProjectSpec(projectId, options = {}) {
       name: cand.name,
       route,
       title: cand.title || cand.name,
+      requirementIds: cand.requirementIds || [],
+      actorIds: cand.actorIds || [],
+      purpose: cand.purpose,
+      contract: cand.contract || mockScreen.contract || null,
       roles: screenRoles,
       connectedOperationId: primaryOp?.operationId || actions[0]?.operationId || null,
       targetEntity: matchedEntity ? matchedEntity.modelName : null,
@@ -875,6 +854,26 @@ async function buildProjectSpec(projectId, options = {}) {
       });
     }
   }
+
+  for (const screen of screens) {
+    const ent = normalizedEntities.find(e => screen.id === 'scr_' + e.tableName);
+    if (ent) {
+      screen.targetEntity = ent.modelName;
+      screen.actions = operations.filter(o => o.entity === ent.modelName).map(o => ({ operationId: o.operationId, name: o.name }));
+    }
+    screen.contract = buildScreenContract(screen, { entities: normalizedEntities, relationships: normalizedRelationships, operations, screens });
+    if (!screen.targetEntity && screen.contract?.entityId) {
+      const inferred = normalizedEntities.find(e => [e.id, e.name, e.modelName].includes(screen.contract.entityId));
+      if (inferred) {
+        screen.targetEntity = inferred.modelName;
+        screen.readEndpoint = screen.readEndpoint || `/api/${inferred.endpoint}`;
+        screen.createEndpoint = screen.createEndpoint || `/api/${inferred.endpoint}`;
+      }
+    }
+    if (!screen.roles.length) screen.roles = [...new Set(screen.contract.actions.flatMap(a => a.permissions || []))];
+  }
+
+  formalizeCrudPermissions(operations, screens, roles, approvedActors);
 
   // 7. OpenAPI 3.0 Contract Generation
   const openApiPaths = {};
@@ -1021,6 +1020,7 @@ async function buildProjectSpec(projectId, options = {}) {
   };
 
   const rawSpec = {
+    uploads: screens.some(s => s.contract?.uploads?.private) ? { private: true, roles: [...new Set(screens.flatMap(s => s.contract?.uploads?.roles || []))] } : undefined,
     schemaVersion: '1.0.0',
     project: {
       id: project.id,

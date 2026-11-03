@@ -15,29 +15,136 @@ export default function ProjectCodeGen({ project, onNavigateTo }) {
   const [showAiModal, setShowAiModal] = useState(false);
   const [aiStatus, setAiStatus] = useState(null);
   const [aiLoading, setAiLoading] = useState(false);
+  const [aiLoadingBindings, setAiLoadingBindings] = useState(false);
   const [aiMessage, setAiMessage] = useState(null);
 
-  // Carga automática inicial de la previsualización
+  // Estados del Pipeline de Generación Asistida Persistente por IA
+  const [activeJob, setActiveJob] = useState(null);
+  const [jobLoading, setJobLoading] = useState(false);
+  const [selectedOptions, setSelectedOptions] = useState({});
+  const [customAnswers, setCustomAnswers] = useState({});
+  const [submittingAnswer, setSubmittingAnswer] = useState(false);
+  const [showLogs, setShowLogs] = useState(false);
+  const [activeTab, setActiveTab] = useState('files'); // 'files' | 'verification'
+  const [showQualityGateErrors, setShowQualityGateErrors] = useState(false);
+
+  // Carga automática inicial de la previsualización y trabajo activo
   useEffect(() => {
     if (project?.id) {
       loadPreview();
       loadAiStatus();
+      loadActiveJob();
     }
   }, [project?.id, includeDocker]);
+
+  // Sondeo reactivo del trabajo activo
+  useEffect(() => {
+    if (!project?.id) return;
+
+    const inProgress = activeJob && ['ANALYZING', 'WAITING_FOR_INPUT', 'GENERATING', 'VALIDATING', 'REPAIRING'].includes(activeJob.status);
+    if (!inProgress || activeJob.status === 'WAITING_FOR_INPUT') return;
+
+    const interval = setInterval(async () => {
+      try {
+        const res = await codegenApi.getActiveJob(project.id);
+        const job = (res && res.id) ? res : (res?.data || null);
+        if (job) {
+          setActiveJob(job);
+          if (job.status === 'COMPLETED') {
+            loadPreview();
+          }
+        }
+      } catch (_) {}
+    }, 1500);
+
+    return () => clearInterval(interval);
+  }, [project?.id, activeJob?.status]);
+
+  async function loadActiveJob() {
+    try {
+      const res = await codegenApi.getActiveJob(project.id);
+      const job = (res && res.id) ? res : (res?.data || null);
+      if (job) {
+        setActiveJob(job);
+      }
+    } catch (_) {}
+  }
+
+  async function handleStartGenerationJob() {
+    try {
+      setJobLoading(true);
+      setError(null);
+      const res = await codegenApi.startGenerationJob(project.id, {
+        scope: 'Cliente → Vehículo → Recepción',
+        maxTokens: 50000,
+        maxRepairAttempts: 3
+      });
+      const job = (res && res.id) ? res : (res?.data || null);
+      if (job) {
+        setActiveJob(job);
+      }
+    } catch (err) {
+      console.error('Error al iniciar trabajo de generación:', err);
+      setError(err.message || 'Error al iniciar generación asistida');
+    } finally {
+      setJobLoading(false);
+    }
+  }
+
+  async function handleAnswerClarification(questionId) {
+    if (!activeJob?.id) return;
+    try {
+      setSubmittingAnswer(true);
+      setError(null);
+      const optId = selectedOptions[questionId];
+      const custom = customAnswers[questionId];
+      const q = (activeJob.questions || []).find(item => item.questionId === questionId);
+
+      await codegenApi.submitJobInput(project.id, activeJob.id, {
+        questionId,
+        selectedOptionId: optId,
+        customAnswer: custom,
+        requirementIds: q?.requirementIds || []
+      });
+
+      const updated = await codegenApi.getActiveJob(project.id);
+      const job = (updated && updated.id) ? updated : (updated?.data || null);
+      if (job) setActiveJob(job);
+    } catch (err) {
+      console.error('Error al responder aclaración:', err);
+      setError(err.message || 'Error al registrar respuesta de aclaración');
+    } finally {
+      setSubmittingAnswer(false);
+    }
+  }
+
+  async function handleCancelJob() {
+    if (!activeJob?.id) return;
+    try {
+      await codegenApi.cancelJob(project.id, activeJob.id);
+      const updated = await codegenApi.getActiveJob(project.id);
+      if (updated?.data) setActiveJob(updated.data);
+    } catch (_) {}
+  }
 
   async function loadAiStatus() {
     try {
       const res = await codegenApi.getAiStatus(project.id);
-      if (res?.data) setAiStatus(res.data);
-    } catch (_) {}
+      setAiStatus(res || null);
+    } catch (err) {
+      setAiMessage(`No se pudo cargar el estado de operaciones: ${err.message}`);
+    }
   }
 
   async function handleProposeOperations() {
     try {
       setAiLoading(true);
       setAiMessage(null);
-      await codegenApi.proposeOperations(project.id);
-      setAiMessage('Propuestas de operaciones generadas exitosamente. Por favor revise y apruebe las que considere adecuadas.');
+      const created = await codegenApi.proposeOperations(project.id);
+      const count = Array.isArray(created) ? created.length : (created?.length || 0);
+      setAiMessage(count
+        ? `Se generaron ${count} propuestas. Revise, apruebe las adecuadas y pulse Aplicar.`
+        : 'No había operaciones incompletas para proponer.');
       await loadAiStatus();
     } catch (err) {
       setAiMessage(`Error al generar propuestas: ${err.message}`);
@@ -48,7 +155,7 @@ export default function ProjectCodeGen({ project, onNavigateTo }) {
 
   async function handleProposeBindings() {
     try {
-      setAiLoading(true);
+      setAiLoadingBindings(true);
       setAiMessage(null);
       await codegenApi.proposeBindings(project.id);
       setAiMessage('Propuestas de vinculación de mockups generadas exitosamente.');
@@ -56,7 +163,7 @@ export default function ProjectCodeGen({ project, onNavigateTo }) {
     } catch (err) {
       setAiMessage(`Error al vincular mockups: ${err.message}`);
     } finally {
-      setAiLoading(false);
+      setAiLoadingBindings(false);
     }
   }
 
@@ -76,7 +183,10 @@ export default function ProjectCodeGen({ project, onNavigateTo }) {
     try {
       setAiLoading(true);
       const res = await codegenApi.applyApprovedProposals(project.id);
-      setAiMessage(`Se aplicaron ${res.appliedCount || 0} propuestas aprobadas a la especificación.`);
+      const appliedCount = res?.appliedCount ?? res?.data?.appliedCount ?? 0;
+      setAiMessage(appliedCount
+        ? `Se aplicaron ${appliedCount} propuestas aprobadas a la especificación.`
+        : 'No había propuestas aprobadas para aplicar. Apruebe al menos una y vuelva a intentar.');
       await loadPreview();
       await loadAiStatus();
     } catch (err) {
@@ -245,8 +355,38 @@ export default function ProjectCodeGen({ project, onNavigateTo }) {
               disabled={loading}
               style={{ cursor: 'pointer' }}
             />
-            <span>Incluir Docker Compose (BD + API + React)</span>
+            <span>Incluir Docker</span>
           </label>
+
+          {/* Botón Principal: Generar Código Asistido por IA */}
+          <button
+            type="button"
+            className="btn btn-primary btn-sm"
+            onClick={handleStartGenerationJob}
+            disabled={jobLoading || (activeJob && ['ANALYZING', 'GENERATING', 'VALIDATING', 'REPAIRING'].includes(activeJob.status))}
+            style={{
+              display: 'inline-flex',
+              alignItems: 'center',
+              gap: '6px',
+              background: 'linear-gradient(135deg, #4f46e5 0%, #0284c7 100%)',
+              border: 'none',
+              color: '#ffffff',
+              fontWeight: 700,
+              padding: '6px 14px',
+              boxShadow: '0 2px 6px rgba(79, 70, 229, 0.35)',
+              cursor: 'pointer'
+            }}
+            title="Iniciar generación asistida por IA: analiza coherencia, pregunta decisiones, genera código, valida en entorno aislado y repara automáticamente"
+          >
+            <span className={`ms ms-xs ${jobLoading || (activeJob && ['ANALYZING', 'GENERATING', 'VALIDATING', 'REPAIRING'].includes(activeJob.status)) ? 'spin' : ''}`}>
+              {activeJob && ['ANALYZING', 'GENERATING', 'VALIDATING', 'REPAIRING'].includes(activeJob.status) ? 'sync' : 'auto_fix_high'}
+            </span>
+            <span>
+              {activeJob && ['ANALYZING', 'GENERATING', 'VALIDATING', 'REPAIRING'].includes(activeJob.status)
+                ? `Generando (${activeJob.status})...`
+                : 'Generar código'}
+            </span>
+          </button>
 
           {/* Botón Regenerar */}
           <button
@@ -258,7 +398,7 @@ export default function ProjectCodeGen({ project, onNavigateTo }) {
             title="Volver a generar el código desde los modelos aprobados"
           >
             <span className={`ms ms-xs ${loading ? 'spin' : ''}`}>sync</span>
-            <span>{loading ? 'Generando...' : 'Regenerar'}</span>
+            <span>{loading ? 'Generando...' : 'Previsualizar'}</span>
           </button>
 
           {/* Botón Asistente IA Operaciones & Mockups */}
@@ -378,20 +518,281 @@ export default function ProjectCodeGen({ project, onNavigateTo }) {
         </div>
       </div>
 
+      {/* 2.5 Panel de Pipeline Persistente Asistido por IA */}
+      {/* ANALYZING -> WAITING_FOR_INPUT -> GENERATING -> VALIDATING -> REPAIRING -> COMPLETED */}
+      {activeJob && (
+        <div style={{
+          background: '#ffffff',
+          borderBottom: '2px solid #e2e8f0',
+          padding: '14px 20px',
+          boxShadow: '0 1px 3px rgba(0,0,0,0.05)'
+        }}>
+          {/* Stepper Header */}
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '10px' }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+              <span className="ms ms-sm" style={{ color: '#4f46e5' }}>auto_awesome</span>
+              <strong style={{ fontSize: '0.92rem', color: '#1e293b' }}>
+                Trabajo de Generación Asistida: {activeJob.id}
+              </strong>
+              <span className="badge" style={{
+                background: activeJob.status === 'COMPLETED' ? '#dcfce7'
+                  : activeJob.status === 'WAITING_FOR_INPUT' ? '#fef3c7'
+                  : activeJob.status === 'BLOCKED' ? '#fee2e2'
+                  : activeJob.status === 'FAILED' ? '#fee2e2'
+                  : '#e0e7ff',
+                color: activeJob.status === 'COMPLETED' ? '#15803d'
+                  : activeJob.status === 'WAITING_FOR_INPUT' ? '#b45309'
+                  : activeJob.status === 'BLOCKED' ? '#b91c1c'
+                  : activeJob.status === 'FAILED' ? '#b91c1c'
+                  : '#4338ca',
+                fontWeight: 700,
+                fontSize: '0.72rem',
+                textTransform: 'uppercase'
+              }}>
+                {activeJob.status}
+              </span>
+            </div>
+
+            <div style={{ display: 'flex', alignItems: 'center', gap: '12px', fontSize: '0.78rem', color: '#64748b' }}>
+              <span>Reintentos: <strong>{activeJob.metrics?.repairAttempts || 0} / {activeJob.budget?.maxRepairAttempts || 3}</strong></span>
+              <span>Tokens IA: <strong>{activeJob.metrics?.totalTokens || 0}</strong></span>
+              {['ANALYZING', 'GENERATING', 'VALIDATING', 'REPAIRING'].includes(activeJob.status) && (
+                <button
+                  type="button"
+                  className="btn btn-ghost btn-xs"
+                  onClick={handleCancelJob}
+                  style={{ color: '#ef4444', fontSize: '0.72rem', cursor: 'pointer' }}
+                >
+                  Cancelar trabajo
+                </button>
+              )}
+            </div>
+          </div>
+
+          {/* Stage Progress Stepper */}
+          <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '12px', flexWrap: 'wrap' }}>
+            {[
+              { key: 'ANALYZING', label: '1. Análisis', icon: 'psychology' },
+              { key: 'WAITING_FOR_INPUT', label: '2. Aclaraciones', icon: 'quiz' },
+              { key: 'GENERATING', label: '3. Generación', icon: 'code' },
+              { key: 'VALIDATING', label: '4. Validación', icon: 'fact_check' },
+              { key: 'REPAIRING', label: '5. Reparación', icon: 'build' },
+              { key: 'COMPLETED', label: '6. Verificado', icon: 'check_circle' }
+            ].map((step, idx) => {
+              const isCurrent = activeJob.status === step.key;
+              const stageOrder = ['ANALYZING', 'WAITING_FOR_INPUT', 'GENERATING', 'VALIDATING', 'REPAIRING', 'COMPLETED'];
+              const currentIdx = stageOrder.indexOf(activeJob.status);
+              const isDone = currentIdx > idx || activeJob.status === 'COMPLETED';
+
+              return (
+                <div key={step.key} style={{
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: '6px',
+                  padding: '4px 10px',
+                  borderRadius: '16px',
+                  background: isCurrent ? '#4f46e5' : isDone ? '#ecfdf5' : '#f1f5f9',
+                  color: isCurrent ? '#ffffff' : isDone ? '#059669' : '#64748b',
+                  fontSize: '0.74rem',
+                  fontWeight: isCurrent || isDone ? 600 : 400
+                }}>
+                  <span className="ms ms-xs">{isDone ? 'check' : step.icon}</span>
+                  <span>{step.label}</span>
+                </div>
+              );
+            })}
+          </div>
+
+          {/* Progress Bar & Message */}
+          <div style={{ marginBottom: '10px' }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.78rem', color: '#475569', marginBottom: '4px' }}>
+              <span>{activeJob.stageMessage || 'Procesando...'}</span>
+              <span><strong>{activeJob.progress || 0}%</strong></span>
+            </div>
+            <div style={{ height: '6px', background: '#e2e8f0', borderRadius: '3px', overflow: 'hidden' }}>
+              <div style={{
+                height: '100%',
+                width: `${activeJob.progress || 0}%`,
+                background: activeJob.status === 'COMPLETED' ? '#10b981' : activeJob.status === 'BLOCKED' ? '#ef4444' : '#4f46e5',
+                transition: 'width 0.3s ease'
+              }} />
+            </div>
+          </div>
+
+          {/* Clarification Questions Card (when WAITING_FOR_INPUT) */}
+          {activeJob.status === 'WAITING_FOR_INPUT' && activeJob.questions?.length > 0 && (
+            <div style={{
+              marginTop: '14px',
+              padding: '16px',
+              background: '#fffbeb',
+              border: '1px solid #fde68a',
+              borderRadius: '8px'
+            }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '10px' }}>
+                <span className="ms ms-md" style={{ color: '#d97706' }}>help_outline</span>
+                <h4 style={{ margin: 0, fontSize: '0.95rem', fontWeight: 700, color: '#92400e' }}>
+                  Aclaración de Reglas de Negocio Requerida
+                </h4>
+              </div>
+
+              {activeJob.questions.map(q => (
+                <div key={q.questionId} style={{ marginTop: '10px' }}>
+                  <p style={{ margin: '0 0 8px 0', fontSize: '0.88rem', fontWeight: 600, color: '#78350f' }}>
+                    {q.question}
+                  </p>
+
+                  {q.requirementIds?.length > 0 && (
+                    <div style={{ display: 'flex', gap: '6px', marginBottom: '12px' }}>
+                      <span style={{ fontSize: '0.72rem', color: '#92400e' }}>Requisitos vinculados:</span>
+                      {q.requirementIds.map(rId => (
+                        <span key={rId} className="badge" style={{ background: '#fef3c7', color: '#92400e', fontSize: '0.7rem' }}>
+                          {rId}
+                        </span>
+                      ))}
+                    </div>
+                  )}
+
+                  {/* Opciones */}
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', marginBottom: '12px' }}>
+                    {(q.options || []).map(opt => (
+                      <label key={opt.id} style={{
+                        display: 'flex',
+                        alignItems: 'flex-start',
+                        gap: '8px',
+                        padding: '8px 12px',
+                        background: selectedOptions[q.questionId] === opt.id ? '#fef3c7' : '#ffffff',
+                        border: `1px solid ${selectedOptions[q.questionId] === opt.id ? '#d97706' : '#e5e7eb'}`,
+                        borderRadius: '6px',
+                        cursor: 'pointer',
+                        fontSize: '0.82rem'
+                      }}>
+                        <input
+                          type="radio"
+                          name={q.questionId}
+                          checked={selectedOptions[q.questionId] === opt.id || (!selectedOptions[q.questionId] && opt.id.includes('opcional'))}
+                          onChange={() => setSelectedOptions(prev => ({ ...prev, [q.questionId]: opt.id }))}
+                          style={{ marginTop: '2px' }}
+                        />
+                        <div>
+                          <span style={{ fontWeight: 600, color: '#1e293b' }}>{opt.label}</span>
+                        </div>
+                      </label>
+                    ))}
+                  </div>
+
+                  {/* Respuesta Personalizada */}
+                  {q.customAllowed && (
+                    <div style={{ marginBottom: '12px' }}>
+                      <label style={{ display: 'block', fontSize: '0.76rem', fontWeight: 600, color: '#78350f', marginBottom: '4px' }}>
+                        O respuesta personalizada:
+                      </label>
+                      <input
+                        type="text"
+                        placeholder={q.customPlaceholder || 'Escribe tu regla personalizada...'}
+                        value={customAnswers[q.questionId] || ''}
+                        onChange={e => setCustomAnswers(prev => ({ ...prev, [q.questionId]: e.target.value }))}
+                        style={{
+                          width: '100%',
+                          padding: '8px 12px',
+                          borderRadius: '6px',
+                          border: '1px solid #d1d5db',
+                          fontSize: '0.82rem'
+                        }}
+                      />
+                    </div>
+                  )}
+
+                  <button
+                    type="button"
+                    className="btn btn-primary btn-sm"
+                    onClick={() => handleAnswerClarification(q.questionId)}
+                    disabled={submittingAnswer}
+                    style={{
+                      display: 'inline-flex',
+                      alignItems: 'center',
+                      gap: '6px',
+                      background: '#d97706',
+                      border: 'none',
+                      fontWeight: 600,
+                      cursor: 'pointer'
+                    }}
+                  >
+                    <span className="ms ms-xs">check</span>
+                    <span>{submittingAnswer ? 'Guardando decisión...' : 'Confirmar Decisión y Reanudar Generación'}</span>
+                  </button>
+                </div>
+              ))}
+            </div>
+          )}
+
+          {/* Verification Report Summary (when COMPLETED or in progress) */}
+          {activeJob.verificationReport && (
+            <div style={{ marginTop: '12px', background: '#f8fafc', padding: '10px 14px', borderRadius: '6px', border: '1px solid #e2e8f0', fontSize: '0.8rem' }}>
+              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '6px' }}>
+                <strong style={{ color: activeJob.verificationReport.passed ? '#15803d' : '#b91c1c' }}>
+                  {activeJob.verificationReport.passed ? '✅ Verificación Superada' : '⚠️ Verificación con Observaciones'}: {activeJob.verificationReport.scope}
+                </strong>
+                <button
+                  type="button"
+                  className="btn btn-ghost btn-xs"
+                  onClick={() => setShowLogs(!showLogs)}
+                  style={{ fontSize: '0.72rem', cursor: 'pointer' }}
+                >
+                  {showLogs ? 'Ocultar bitácora' : `Ver bitácora (${activeJob.logs?.length || 0})`}
+                </button>
+              </div>
+
+              <div style={{ display: 'flex', gap: '16px', flexWrap: 'wrap', color: '#64748b', fontSize: '0.75rem' }}>
+                <span>Comprobaciones superadas: <strong>{activeJob.verificationReport.checks?.length || 0}</strong></span>
+                {activeJob.verificationReport.screenshots?.length > 0 && (
+                  <span>Capturas de navegador: <strong>{activeJob.verificationReport.screenshots.length}</strong> (desktop/mobile)</span>
+                )}
+              </div>
+
+              {/* Live logs terminal if expanded */}
+              {showLogs && activeJob.logs && (
+                <div style={{
+                  marginTop: '8px',
+                  padding: '8px 12px',
+                  background: '#0f172a',
+                  color: '#38bdf8',
+                  borderRadius: '4px',
+                  maxHeight: '160px',
+                  overflowY: 'auto',
+                  fontFamily: 'monospace',
+                  fontSize: '0.72rem',
+                  lineHeight: 1.4
+                }}>
+                  {activeJob.logs.map((l, i) => (
+                    <div key={i} style={{ color: l.level === 'ERROR' ? '#f87171' : l.level === 'WARN' ? '#fbbf24' : '#38bdf8' }}>
+                      [{new Date(l.timestamp).toLocaleTimeString()}] {l.message}
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+          )}
+        </div>
+      )}
+
       {/* Panel de Diagnóstico de Quality Gates y Estado de Especificación */}
-      {generatedData?.diagnostics && !generatedData.ready && !loading ? (
+      {generatedData?.diagnostics && generatedData.diagnostics.errors?.length > 0 && !loading ? (
         <div style={{
           padding: '16px 20px',
-          background: '#fff1f2',
-          borderBottom: '1px solid #fecdd3',
-          color: '#9f1239'
+          background: (generatedData.files || []).length ? '#fffbeb' : '#fff1f2',
+          borderBottom: `1px solid ${(generatedData.files || []).length ? '#fde68a' : '#fecdd3'}`,
+          color: (generatedData.files || []).length ? '#92400e' : '#9f1239'
         }}>
           <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '10px' }}>
             <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-              <span className="ms ms-md" style={{ color: '#e11d48' }}>gpp_bad</span>
-              <strong style={{ fontSize: '0.95rem' }}>Generación Bloqueada por Validación de Calidad (Quality Gates)</strong>
-              <span className="badge" style={{ background: '#ffe4e6', color: '#be123c', fontSize: '0.72rem', fontWeight: 700 }}>
-                {generatedData.diagnostics.errors.length} {generatedData.diagnostics.errors.length === 1 ? 'Error Bloqueante' : 'Errores Bloqueantes'}
+              <span className="ms ms-md" style={{ color: (generatedData.files || []).length ? '#d97706' : '#e11d48' }}>{(generatedData.files || []).length ? 'warning' : 'gpp_bad'}</span>
+              <strong style={{ fontSize: '0.95rem' }}>
+                {(generatedData.files || []).length
+                  ? 'Generación lista con observaciones de calidad'
+                  : 'Generación Bloqueada por Validación de Calidad (Quality Gates)'}
+              </strong>
+              <span className="badge" style={{ background: (generatedData.files || []).length ? '#fef3c7' : '#ffe4e6', color: (generatedData.files || []).length ? '#b45309' : '#be123c', fontSize: '0.72rem', fontWeight: 700 }}>
+                {generatedData.diagnostics.errors.length} {generatedData.diagnostics.errors.length === 1 ? 'observación' : 'observaciones'}
               </span>
             </div>
             {onNavigateTo && (
@@ -416,22 +817,40 @@ export default function ProjectCodeGen({ project, onNavigateTo }) {
             )}
           </div>
 
-          <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
-            {generatedData.diagnostics.errors.map((err, idx) => (
-              <div key={idx} style={{ background: '#ffffff', padding: '10px 14px', borderRadius: '6px', border: '1px solid #fda4af', fontSize: '0.82rem' }}>
-                <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '4px' }}>
-                  <span style={{ fontWeight: 700, color: '#be123c' }}>[{err.code}]</span>
-                  <span style={{ color: '#475569', fontWeight: 600 }}>Elemento: {err.element}</span>
-                </div>
-                <div style={{ color: '#0f172a' }}>{err.message}</div>
-                {err.action && (
-                  <div style={{ marginTop: '4px', color: '#0284c7', fontSize: '0.78rem' }}>
-                    💡 <strong>Acción necesaria:</strong> {err.action}
-                  </div>
-                )}
-              </div>
-            ))}
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '6px 0', borderBottom: showQualityGateErrors ? '1px dashed #fecdd3' : 'none', marginBottom: showQualityGateErrors ? '10px' : '0' }}>
+            <span style={{ fontSize: '0.8rem', color: (generatedData.files || []).length ? '#92400e' : '#881337' }}>
+              {(generatedData.files || []).length
+                ? `Hay ${generatedData.diagnostics.errors.length} observaciones, pero el código sí se generó.`
+                : `Hay ${generatedData.diagnostics.errors.length} errores que impiden generar el zip.`}
+            </span>
+            <button
+              type="button"
+              className="btn btn-ghost btn-xs"
+              onClick={() => setShowQualityGateErrors(!showQualityGateErrors)}
+              style={{ color: '#be123c', fontWeight: 600, cursor: 'pointer', textDecoration: 'underline' }}
+            >
+              {showQualityGateErrors ? 'Ocultar lista de bloqueos y ver código' : `Ver los ${generatedData.diagnostics.errors.length} bloqueos detallados`}
+            </button>
           </div>
+
+          {showQualityGateErrors && (
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', maxHeight: '240px', overflowY: 'auto' }}>
+              {generatedData.diagnostics.errors.map((err, idx) => (
+                <div key={idx} style={{ background: '#ffffff', padding: '10px 14px', borderRadius: '6px', border: '1px solid #fda4af', fontSize: '0.82rem' }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '4px' }}>
+                    <span style={{ fontWeight: 700, color: '#be123c' }}>[{err.code}]</span>
+                    <span style={{ color: '#475569', fontWeight: 600 }}>Elemento: {err.element}</span>
+                  </div>
+                  <div style={{ color: '#0f172a' }}>{err.message}</div>
+                  {err.action && (
+                    <div style={{ marginTop: '4px', color: '#0284c7', fontSize: '0.78rem' }}>
+                      💡 <strong>Acción necesaria:</strong> {err.action}
+                    </div>
+                  )}
+                </div>
+              ))}
+            </div>
+          )}
         </div>
       ) : generatedData?.ready && !loading ? (
         <div style={{
@@ -1055,21 +1474,21 @@ export default function ProjectCodeGen({ project, onNavigateTo }) {
                   type="button"
                   className="btn btn-primary btn-sm"
                   onClick={handleProposeOperations}
-                  disabled={aiLoading}
+                  disabled={aiLoading || aiLoadingBindings}
                   style={{ display: 'inline-flex', alignItems: 'center', gap: '6px' }}
                 >
                   <span className="ms ms-xs">psychology</span>
-                  <span>{aiLoading ? 'Analizando...' : 'Generar Pasos para Operaciones Incompletas'}</span>
+                  <span>{aiLoading ? 'Generando pasos...' : 'Generar Pasos para Operaciones Incompletas'}</span>
                 </button>
                 <button
                   type="button"
                   className="btn btn-outline btn-sm"
                   onClick={handleProposeBindings}
-                  disabled={aiLoading}
+                  disabled={aiLoading || aiLoadingBindings}
                   style={{ display: 'inline-flex', alignItems: 'center', gap: '6px', borderColor: '#6366f1', color: '#4f46e5' }}
                 >
                   <span className="ms ms-xs">link</span>
-                  <span>{aiLoading ? 'Analizando...' : 'Vincular Mockups Stitch a la API'}</span>
+                  <span>{aiLoadingBindings ? 'Vinculando mockups...' : 'Vincular Mockups Stitch a la API'}</span>
                 </button>
               </div>
 

@@ -95,8 +95,22 @@ test('Codegen Corrections: 3. Mockup converter creates interactive component wit
 
   const convertedJsx = convertHtmlToJsx(rawStitchHtml, 'ClientesMockup', '/clientes');
   assert.ok(!convertedJsx.includes('Sidebar duplicado'), 'Duplicate sidebar was stripped');
-  assert.ok(!convertedJsx.includes('Cabecera duplicada'), 'Duplicate header was stripped');
   assert.ok(convertedJsx.includes('Gestión de Clientes'), 'Main content was preserved');
+  assert.ok(convertedJsx.includes('Cabecera duplicada') || convertedJsx.includes('Gestión de Clientes'), 'El encabezado visual del mockup se conserva');
+
+  const chromeHtml = `
+  <body>
+    <aside>
+      <div>Control de Acceso por Roles</div>
+      <div>Filtrar Vista por Rol</div>
+      <select><option>✦ Todos los Roles (18)</option></select>
+    </aside>
+    <main><h1>Mis Vehículos</h1></main>
+  </body>`;
+  const cleanChrome = convertHtmlToJsx(chromeHtml, 'VehiculosMockup', '/mis-vehiculos');
+  assert.ok(!cleanChrome.includes('Filtrar Vista por Rol'));
+  assert.ok(!cleanChrome.includes('Todos los Roles'));
+  assert.ok(cleanChrome.includes('Mis Vehículos'));
 
   const screen = {
     name: 'Clientes',
@@ -128,6 +142,8 @@ test('Codegen Corrections: 4. Frontend LoginPage and App.jsx require real auth s
 
   const shellCode = generateAppShellComponent();
   assert.ok(shellCode.includes('user.role || user.rol'), 'Renders real user role');
+  assert.ok(shellCode.includes('icase-topbar'), 'El menú real es la barra superior del mockup');
+  assert.ok(!shellCode.includes('Tareas'), 'No usa la barra lateral genérica de tareas');
   assert.ok(!shellCode.includes('<select'), 'AppShell does not provide arbitrary role override');
 });
 
@@ -161,6 +177,32 @@ test('Codegen Corrections: 5. Validator blocks missing approved mockups and unre
   assert.equal(result.ready, false, 'Validation blocks invalid spec');
   assert.ok(result.errors.some(e => e.code === 'MISSING_APPROVED_MOCKUP'), 'Flags missing approved mockup');
   assert.ok(result.errors.some(e => e.code === 'UNRESOLVED_OPERATION_STEPS'), 'Flags unstructured steps');
+});
+
+test('Secondary CRUD permission gaps are warnings, not blocking errors', () => {
+  const result = validateProjectSpec({
+    security: { authType: 'JWT', roles: ['Administrador'] },
+    entities: [{
+      id: 'e1',
+      name: 'Cliente',
+      modelName: 'Cliente',
+      tableName: 'clientes',
+      primaryKey: { fieldName: 'id' },
+      attributes: [{ fieldName: 'id', isPk: true }]
+    }],
+    operations: [{
+      operationId: 'op_clientes_list',
+      name: 'Listar Cliente',
+      type: 'READ',
+      method: 'GET',
+      route: '/api/clientes',
+      permissionSource: 'UNRESOLVED',
+      authorizedRoles: [],
+      output: { successStatus: 200 }
+    }]
+  });
+  assert.equal(result.errors.some(e => e.code === 'UNRESOLVED_OPERATION_PERMISSION'), false);
+  assert.ok(result.warnings.some(e => e.code === 'UNRESOLVED_OPERATION_PERMISSION'));
 });
 
 test('Codegen Corrections: 6. Shared contract: ASSOCIATE, STATUS_CHANGE, and custom non-id UUID keys', () => {

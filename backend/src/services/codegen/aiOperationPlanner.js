@@ -29,6 +29,36 @@ REGLAS ESTRICTAS:
 /**
  * Builds deterministic proposal based on semantic analysis when offline or as robust baseline
  */
+function pickPrimaryEntity(operation, entities) {
+  const normalize = s => (s || '').toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/[^a-z0-9]/g, '');
+  const opNorm = normalize((operation.name || '') + ' ' + (operation.narrativeDescription || ''));
+  const ranked = entities.map(e => {
+    const eNorm = normalize(e.modelName || e.name);
+    let score = 0;
+    if (eNorm && opNorm.includes(eNorm)) score = eNorm.length * 2;
+    const tokens = String(e.name || e.modelName || '').split(/[\s_]+/).filter(t => t.length >= 4).map(normalize);
+    score += tokens.filter(t => opNorm.includes(t)).reduce((sum, t) => sum + t.length, 0);
+    return { e, score };
+  }).sort((a, b) => b.score - a.score);
+  if (ranked[0]?.score > 0) return ranked[0].e;
+  if (operation.targetEntity) return entities.find(e => [e.modelName, e.name].includes(operation.targetEntity)) || null;
+  return null;
+}
+
+function relatedEntities(primary, catalog) {
+  const entities = catalog.entities || [];
+  if (!primary) return entities;
+  const normalize = s => (s || '').toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/[^a-z0-9]/g, '');
+  const keys = new Set([primary.id, primary.name, primary.modelName].filter(Boolean).map(v => String(v)));
+  const keysNorm = new Set([...keys].map(normalize));
+  for (const r of catalog.relationships || []) {
+    const ends = [r.sourceEntity, r.targetEntity, r.source, r.target, r.sourceEntityId, r.targetEntityId].filter(Boolean).map(String);
+    if (ends.some(end => keys.has(end) || keysNorm.has(normalize(end)))) ends.forEach(end => keys.add(end));
+  }
+  const related = entities.filter(e => keys.has(e.id) || keys.has(e.name) || keys.has(e.modelName) || keysNorm.has(normalize(e.modelName)) || keysNorm.has(normalize(e.name)));
+  return related.length ? related : [primary];
+}
+
 function synthesizeSemanticSteps(operation, catalog) {
   const entities = catalog.entities || [];
   const rules = catalog.rules || [];
@@ -39,38 +69,8 @@ function synthesizeSemanticSteps(operation, catalog) {
 
   const normalize = s => (s || '').toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/[^a-z0-9]/g, '');
   const opNameNorm = normalize(operation.name);
-  const opDescNorm = normalize(operation.narrativeDescription || '');
-
-  // 1. Identify primary entity: prioritize operation name match first, then narrative description
-  let primaryEntity = entities.find(e => {
-    const eNorm = normalize(e.modelName || e.name);
-    return eNorm && opNameNorm.includes(eNorm);
-  });
-
-  if (!primaryEntity) {
-    primaryEntity = entities.find(e => {
-      const eNorm = normalize(e.modelName || e.name);
-      return eNorm && opDescNorm.includes(eNorm);
-    });
-  }
-
-  if (!primaryEntity && entities.length > 0) {
-    // Match significant words
-    const words = (operation.name || '').toLowerCase().split(/[\s_]+/).filter(w => w.length >= 4);
-    primaryEntity = entities.find(e => {
-      const eNorm = normalize(e.modelName || e.name);
-      return words.some(w => eNorm.includes(normalize(w)));
-    });
-  }
-
-  if (!primaryEntity && operation.targetEntity) {
-    primaryEntity = entities.find(e => (e.modelName || e.name) === operation.targetEntity);
-  }
-
-  if (!primaryEntity && entities.length > 0) {
-    primaryEntity = entities[0];
-    ambiguities.push(`No se pudo inferir con certeza la entidad principal. Se seleccionó '${primaryEntity.modelName}' como sugerencia.`);
-  }
+  const allowed = relatedEntities(pickPrimaryEntity(operation, entities), catalog);
+  let primaryEntity = pickPrimaryEntity(operation, entities);
 
   // 2. Synthesize steps from narrative steps or operation purpose
   if (narrativeSteps.length > 0) {
@@ -87,8 +87,7 @@ function synthesizeSemanticSteps(operation, catalog) {
       let formula = null;
       let targetField = null;
 
-      // Find matching entity mentioned in this step
-      const matchedStepEntity = entities.find(e => tNorm.includes(normalize(e.modelName || e.name)));
+      const matchedStepEntity = allowed.find(e => tNorm.includes(normalize(e.modelName || e.name)));
       if (matchedStepEntity) {
         stepEntity = matchedStepEntity.modelName;
       }
@@ -106,7 +105,7 @@ function synthesizeSemanticSteps(operation, catalog) {
         action = 'UPDATE';
       } else if (tNorm.includes('asociar') || tNorm.includes('vincular') || tNorm.includes('asignar')) {
         action = 'ASSOCIATE';
-        const otherEntity = entities.find(e => e.modelName !== stepEntity && tNorm.includes(normalize(e.modelName || e.name)));
+        const otherEntity = allowed.find(e => e.modelName !== stepEntity && tNorm.includes(normalize(e.modelName || e.name)));
         withEntity = otherEntity ? otherEntity.modelName : null;
         if (!withEntity) {
           ambiguities.push(`Paso ${idx + 1}: Se indicó asociación pero no se identificó la entidad destino en el texto.`);
@@ -186,7 +185,7 @@ function synthesizeSemanticSteps(operation, catalog) {
   // 3. Resolve authorized roles
   const authorizedRoles = (operation.authorizedRoles && operation.authorizedRoles.length > 0)
     ? operation.authorizedRoles
-    : (roles.length > 0 ? roles : ['Usuario']);
+    : [];
 
   return {
     contractVersion: OPERATION_CONTRACT_VERSION,
@@ -223,68 +222,77 @@ async function planOperationSteps(projectId, operation, catalog, options = {}) {
   };
 
   let proposal = null;
-  const provider = (options.providerOverride || env.AI_PROVIDER || 'mock').toLowerCase();
+  let providerMetadata = null;
+  const provider = options.skipLiveAi ? 'mock' : (options.providerOverride || env.AI_PROVIDER || 'mock').toLowerCase();
 
-  // If live AI provider is configured and available (e.g. Gemini)
-  if (provider === 'gemini' && env.GEMINI_API_KEY) {
-    try {
-      const GeminiProvider = require('../ai/GeminiProvider');
-      const gemini = new GeminiProvider();
-
-      const userPrompt = {
-        task: 'Proponer pasos estructurados ejecutables para la operación.',
-        operation: {
-          operationId: operation.operationId,
-          name: operation.name,
-          narrativeDescription: operation.narrativeDescription || '',
-          narrativeSteps: operation.narrativeSteps || []
-        },
-        relatedRequirements: (catalog.requirements || []).filter(r => (operation.requirementIds || []).includes(r.id)),
-        approvedEntities: (catalog.entities || []).map(e => ({
-          modelName: e.modelName,
-          tableName: e.tableName,
-          attributes: (e.attributes || []).map(a => ({ fieldName: a.fieldName, type: a.type, isPk: !!a.isPk }))
-        })),
-        approvedBusinessRules: (catalog.rules || []).map(r => ({
-          code: r.code || r.id,
-          name: r.name,
-          description: r.description,
-          field: r.field,
-          operator: r.operator,
-          value: r.value
-        })),
-        approvedRoles: catalog.roles || [],
-        expectedOutputSchema: {
-          contractVersion: OPERATION_CONTRACT_VERSION,
-          operationId: operation.operationId,
-          targetEntity: 'NombreModelo',
+  const userPrompt = {
+    task: 'Proponer pasos estructurados ejecutables para la operación.',
+    operation: {
+      operationId: operation.operationId,
+      name: operation.name,
+      narrativeDescription: operation.narrativeDescription || '',
+      narrativeSteps: operation.narrativeSteps || []
+    },
+    relatedRequirements: (catalog.requirements || []).filter(r => (operation.requirementIds || []).includes(r.id)),
+    approvedEntities: (catalog.entities || []).map(e => ({
+      modelName: e.modelName,
+      tableName: e.tableName,
+      attributes: (e.attributes || []).map(a => ({ fieldName: a.fieldName, type: a.type, isPk: !!a.isPk }))
+    })),
+    approvedBusinessRules: (catalog.rules || []).map(r => ({
+      code: r.code || r.id,
+      name: r.name,
+      description: r.description,
+      field: r.field,
+      operator: r.operator,
+      value: r.value
+    })),
+    approvedRoles: catalog.roles || [],
+    expectedOutputSchema: {
+      contractVersion: OPERATION_CONTRACT_VERSION,
+      operationId: operation.operationId,
+      targetEntity: 'NombreModelo',
+      action: 'CREATE|UPDATE|DELETE|STATUS_CHANGE|ASSOCIATE|QUERY|CALCULATION|VALIDATION',
+      transaction: true,
+      steps: [
+        {
+          step: 1,
           action: 'CREATE|UPDATE|DELETE|STATUS_CHANGE|ASSOCIATE|QUERY|CALCULATION|VALIDATION',
-          transaction: true,
-          steps: [
-            {
-              step: 1,
-              action: 'CREATE|UPDATE|DELETE|STATUS_CHANGE|ASSOCIATE|QUERY|CALCULATION|VALIDATION',
-              entity: 'NombreModelo',
-              description: 'Explicación del paso',
-              statusField: 'estado (opcional)',
-              newStatus: 'VALOR (opcional)',
-              withEntity: 'NombreModeloAsociado (opcional)',
-              targetField: 'campo (opcional)',
-              formula: 'formula (opcional)'
-            }
-          ],
-          authorizedRoles: ['Rol1'],
-          rationale: 'Explicación técnica de la decisión',
-          ambiguities: ['Lista de dudas o datos faltantes si aplica']
+          entity: 'NombreModelo',
+          description: 'Explicación del paso',
+          statusField: 'estado (opcional)',
+          newStatus: 'VALOR (opcional)',
+          withEntity: 'NombreModeloAsociado (opcional)',
+          targetField: 'campo (opcional)',
+          formula: 'formula (opcional)'
         }
-      };
+      ],
+      authorizedRoles: ['Rol1'],
+      rationale: 'Explicación técnica de la decisión',
+      ambiguities: ['Lista de dudas o datos faltantes si aplica']
+    }
+  };
 
-      const result = await gemini.extractDocumentBatch(userPrompt, {
+  // If live AI provider is configured and available (OpenAI or Gemini)
+  if (provider === 'openai' && env.OPENAI_API_KEY) {
+    try {
+      const OpenAIProvider = require('../ai/OpenAIProvider');
+      const openai = new OpenAIProvider();
+      const result = await openai.extractDocumentBatch(userPrompt, {
         prompt: SYSTEM_PROMPT,
-        model: options.modelOverride || env.GEMINI_MODEL
+        model: options.modelOverride || env.OPENAI_MODEL || 'gpt-4o-mini'
       });
 
       if (result?.data && Array.isArray(result.data.steps) && result.data.steps.length > 0) {
+        providerMetadata = {
+          provider: 'openai',
+          model: result.model,
+          usage: {
+            promptTokens: result.usage?.prompt_tokens || 0,
+            completionTokens: result.usage?.completion_tokens || 0,
+            totalTokens: result.usage?.total_tokens || 0
+          }
+        };
         proposal = {
           ...result.data,
           contractVersion: OPERATION_CONTRACT_VERSION,
@@ -295,7 +303,38 @@ async function planOperationSteps(projectId, operation, catalog, options = {}) {
         };
       }
     } catch (aiErr) {
-      console.warn(`[AIOperationPlanner] Falló llamada a proveedor '${provider}' (${aiErr.message}). Utilizando sintetizador semántico determinista.`);
+      console.warn(`[AIOperationPlanner] Falló llamada a proveedor 'openai' (${aiErr.message}). Utilizando sintetizador semántico determinista.`);
+    }
+  } else if (provider === 'gemini' && env.GEMINI_API_KEY) {
+    try {
+      const GeminiProvider = require('../ai/GeminiProvider');
+      const gemini = new GeminiProvider();
+      const result = await gemini.extractDocumentBatch(userPrompt, {
+        prompt: SYSTEM_PROMPT,
+        model: options.modelOverride || env.GEMINI_MODEL
+      });
+
+      if (result?.data && Array.isArray(result.data.steps) && result.data.steps.length > 0) {
+        providerMetadata = {
+          provider: 'gemini',
+          model: result.model,
+          usage: {
+            promptTokens: result.usage?.promptTokenCount || 0,
+            completionTokens: result.usage?.candidatesTokenCount || 0,
+            totalTokens: result.usage?.totalTokenCount || 0
+          }
+        };
+        proposal = {
+          ...result.data,
+          contractVersion: OPERATION_CONTRACT_VERSION,
+          operationId: operation.operationId,
+          name: operation.name,
+          route: operation.route || result.data.route || `/api/operations/${(operation.operationId || 'op').toLowerCase().replace(/[^a-z0-9]/g, '-')}`,
+          method: (operation.method || result.data.method || 'POST').toUpperCase()
+        };
+      }
+    } catch (aiErr) {
+      console.warn(`[AIOperationPlanner] Falló llamada a proveedor 'gemini' (${aiErr.message}). Utilizando sintetizador semántico determinista.`);
     }
   }
 
@@ -318,6 +357,7 @@ async function planOperationSteps(projectId, operation, catalog, options = {}) {
     validationErrors: validation.errors,
     validationWarnings: validation.warnings,
     proposal,
+    providerMetadata,
     dependencyHash: stored.dependencyHash
   };
 }

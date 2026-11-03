@@ -53,3 +53,7 @@ Analisis_*.md
 /mecanica_autron*
 *.zip
 
+
+# Local generator verification downloads and artifacts
+.verification/
+.review-autron5-export/

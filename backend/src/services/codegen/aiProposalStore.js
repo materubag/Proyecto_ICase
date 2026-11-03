@@ -12,7 +12,13 @@ const crypto = require('crypto');
 const proposalCache = new Map();
 
 function getStorageDir() {
-  const root = process.cwd().endsWith('backend') ? process.cwd() : path.join(process.cwd(), 'backend');
+  if (fs.existsSync(path.join(process.cwd(), '.cache', 'codegen_proposals'))) {
+    return path.join(process.cwd(), '.cache', 'codegen_proposals');
+  }
+  if (fs.existsSync(path.join(process.cwd(), 'backend', '.cache', 'codegen_proposals'))) {
+    return path.join(process.cwd(), 'backend', '.cache', 'codegen_proposals');
+  }
+  const root = (process.cwd().endsWith('backend') || !fs.existsSync(path.join(process.cwd(), 'backend'))) ? process.cwd() : path.join(process.cwd(), 'backend');
   const dir = path.join(root, '.cache', 'codegen_proposals');
   if (!fs.existsSync(dir)) {
     try {
@@ -230,7 +236,9 @@ function applyApprovedProposals(projectId, spec) {
           op.transaction = entry.proposal.transaction;
         }
         if (entry.proposal.authorizedRoles && entry.proposal.authorizedRoles.length > 0) {
-          op.authorizedRoles = entry.proposal.authorizedRoles;
+          const currentRoles = op.authorizedRoles || [];
+          const backed = entry.proposal.authorizedRoles.filter(role => currentRoles.includes(role));
+          op.authorizedRoles = backed.length ? backed : currentRoles;
         }
         appliedCount++;
       }
@@ -263,6 +271,8 @@ module.exports = {
   reviewProposal,
   checkAndInvalidateDependencies,
   getProposals,
+  loadProjectProposals,
+  persistProjectProposals,
   applyApprovedProposals,
   computeDependencyHash
 };

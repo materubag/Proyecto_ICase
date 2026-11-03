@@ -1,3 +1,4 @@
+const { buildFieldContract, renderFields } = require('./screenContract');
 /**
  * Mockup HTML to React JSX Converter & Functional Connector
  * Transforms Stitch HTML mockups into interactive, compilable React components
@@ -7,6 +8,32 @@
 
 const { toCamelCase } = require('./typeMapper');
 const { validateAndRepairJsx } = require('./jsxValidator');
+
+// A JSX attribute can contain `=>`, quoted `>` and nested object literals.
+// HTML tag regexes stop in the middle of those attributes and corrupt handlers.
+function replaceButtons(content, replace) {
+  let result = '', cursor = 0;
+  const opening = /<button\b/gi;
+  let match;
+  while ((match = opening.exec(content))) {
+    const attrsStart = opening.lastIndex;
+    let quote = null, braces = 0, end = attrsStart;
+    for (; end < content.length; end++) {
+      const char = content[end];
+      if (quote) { if (char === '\\') end++; else if (char === quote) quote = null; }
+      else if (char === '"' || char === "'" || char === '`') quote = char;
+      else if (char === '{') braces++;
+      else if (char === '}') braces--;
+      else if (char === '>' && braces === 0) break;
+    }
+    const close = content.indexOf('</button>', end);
+    if (close < 0) break;
+    result += content.slice(cursor, match.index) + replace(content.slice(match.index, close + 9), content.slice(attrsStart, end), content.slice(end + 1, close));
+    cursor = close + 9;
+    opening.lastIndex = cursor;
+  }
+  return result + content.slice(cursor);
+}
 
 /**
  * Converts Stitch HTML into clean, functional React JSX with dynamic data binding
@@ -18,88 +45,49 @@ const { validateAndRepairJsx } = require('./jsxValidator');
  * @param {Array} [screensNav] - Optional list of screens for intra-mockup navigation
  * @returns {string} Converted JSX code
  */
+function isChrome(block) {
+  return /filtrar\s+vista\s+por\s+rol|control de acceso por roles|todos los roles\s*\(/i.test(block || '');
+}
+
+function isSiteNavChrome(block) {
+  if (isChrome(block)) return true;
+  const text = String(block || '').replace(/<[^>]+>/g, ' ');
+  const navHits = (text.match(/recepci[oó]n|diagn[oó]stico|veh[ií]culo|inventario|cliente|bit[aá]cora|repuesto|mostrador|bah[ií]as|cit[ae]s/gi) || []).length;
+  const brand = /autron|\btaller\b|portal cliente/i.test(text);
+  return brand && navHits >= 2;
+}
+
+function stripRolePreviewChrome(html) {
+  if (!html) return html;
+  let next = String(html);
+  next = next.replace(/<(aside|nav|header)\b[^>]*>[\s\S]*?<\/\1>/gi, block => (isChrome(block) ? '' : block));
+  next = next.replace(/<select\b[^>]*>[\s\S]*?Todos los Roles[\s\S]*?<\/select>/gi, '');
+  next = next.replace(/<[^>]*>\s*Filtrar Vista por Rol\s*<\/[^>]*>/gi, '');
+  return next;
+}
+
 function convertHtmlToJsx(htmlContent, componentName, route, entityName = '', binding = null, screensNav = []) {
   if (!htmlContent) return '';
+  htmlContent = stripRolePreviewChrome(htmlContent);
+  // Task screens render forms/tables through ContractTask slots. Binding those
+  // inputs to formData here would crash: layout={slots => ...} has no formData.
+  const isTaskLayout = binding?.screenContract?.renderer === 'task';
 
-  // 1. Extract main content or body, avoiding duplicate headers, navbars or sidebars
+  // Site chrome (brand + Recepción/Diagnóstico/…) lives in AppShell so every
+  // screen of the same role shares one menu. Keep the page body of the mockup.
   let content = '';
-  const mainMatch = htmlContent.match(/<main[^>]*>([\s\S]*?)<\/main>/i);
-  if (mainMatch) {
-    const mainOpenMatch = htmlContent.match(/<main[^>]*>/i);
-    const mainOpen = mainOpenMatch ? mainOpenMatch[0] : '<main>';
-    content = `${mainOpen}${mainMatch[1]}</main>`;
-  } else {
-    const bodyMatch = htmlContent.match(/<body[^>]*>([\s\S]*?)<\/body>/i);
-    content = bodyMatch ? bodyMatch[1] : htmlContent;
-    // Strip duplicate header, navigation bars and sidebars when main is not explicitly wrapped
-    content = content.replace(/<header\b[^>]*>[\s\S]*?<\/header>/gi, '');
-    content = content.replace(/<nav\b[^>]*>[\s\S]*?<\/nav>/gi, '');
-    content = content.replace(/<aside\b[^>]*>[\s\S]*?<\/aside>/gi, '');
-  }
+  const bodyMatch = htmlContent.match(/<body[^>]*>([\s\S]*?)<\/body>/i);
+  content = bodyMatch ? bodyMatch[1] : htmlContent;
+  content = content.replace(/<aside\b[^>]*>[\s\S]*?<\/aside>/gi, block => {
+    if (isChrome(block) || isSiteNavChrome(block) || /\bsidebar\b/i.test(block)) return '';
+    return block;
+  });
+  content = content.replace(/<(header|nav)\b[^>]*>[\s\S]*?<\/\1>/gi, block => (isSiteNavChrome(block) ? '' : block));
 
   // 2. Remove script tags and comments
+  content = stripRolePreviewChrome(content);
   content = content.replace(/<script\b[^<]*(?:(?!<\/script>)<[^<]*)*<\/script>/gi, '');
   content = content.replace(/<!--[\s\S]*?-->/g, '');
-
-  // 3. Dynamic Table Injection: replace static tbody dummy rows with dynamic React mapping
-  const tbodyMatch = content.match(/<tbody\b([^>]*)>([\s\S]*?)<\/tbody>/i);
-  if (tbodyMatch) {
-    const tbodyAttrs = tbodyMatch[1] || '';
-
-    // Inspect columns from binding or dynamic row formatting
-    const boundCols = binding?.tableBindings?.[0]?.columns || [];
-    let dynamicRowCells = '';
-
-    if (boundCols.length > 0) {
-      dynamicRowCells = boundCols.map(c =>
-        `<td key="${c.fieldName}" style={{ padding: '12px 16px', fontSize: '0.875rem' }}>{item['${c.fieldName}'] !== undefined && item['${c.fieldName}'] !== null ? String(item['${c.fieldName}']) : '-'}</td>`
-      ).join('\n            ');
-      dynamicRowCells += `\n            <td style={{ padding: '12px 16px', fontSize: '0.875rem', whiteSpace: 'nowrap' }}>
-              <button type="button" onClick={() => executeRowEdit(item)} style={{ color: '#2563eb', background: 'transparent', border: 'none', cursor: 'pointer', fontSize: '0.85rem', fontWeight: 600, marginRight: '10px' }}>Editar</button>
-              <button type="button" onClick={() => executeRowDelete(item.id || item[Object.keys(item)[0]])} style={{ color: '#dc2626', background: 'transparent', border: 'none', cursor: 'pointer', fontSize: '0.85rem', fontWeight: 500 }}>Eliminar</button>
-            </td>`;
-    } else {
-      dynamicRowCells = `{Object.entries(item).filter(([k]) => !['password', 'password_hash', 'passwordHash', 'contrasena', 'clave', 'token', 'salt', 'createdAt', 'updatedAt'].includes(k)).slice(0, 6).map(([k, v]) => (
-              <td key={k} style={{ padding: '12px 16px', fontSize: '0.875rem' }}>
-                {typeof v === 'boolean' || k === 'activo' ? (
-                  <span style={{ padding: '2px 8px', borderRadius: '12px', fontSize: '0.75rem', fontWeight: 600, background: v ? '#ecfdf5' : '#fef2f2', color: v ? '#059669' : '#dc2626' }}>
-                    {v ? 'Activo' : 'Inactivo'}
-                  </span>
-                ) : typeof v === 'number' && (k.toLowerCase().includes('precio') || k.toLowerCase().includes('tarifa') || k.toLowerCase().includes('total')) ? (
-                  \`$\${Number(v).toFixed(2)}\`
-                ) : (v !== null && v !== undefined ? String(v) : '-')}
-              </td>
-            ))}
-            <td style={{ padding: '12px 16px', fontSize: '0.875rem', whiteSpace: 'nowrap' }}>
-              <button type="button" onClick={() => executeRowEdit(item)} style={{ color: '#2563eb', background: 'transparent', border: 'none', cursor: 'pointer', fontSize: '0.85rem', fontWeight: 600, marginRight: '10px' }}>Editar</button>
-              <button type="button" onClick={() => executeRowDelete(item.id || item[Object.keys(item)[0]])} style={{ color: '#dc2626', background: 'transparent', border: 'none', cursor: 'pointer', fontSize: '0.85rem', fontWeight: 500 }}>Eliminar</button>
-            </td>`;
-    }
-
-    const dynamicTbody = `<tbody${tbodyAttrs}>
-        {dataLoading ? (
-          <tr>
-            <td colSpan={12} style={{ textAlign: 'center', padding: '28px', color: '#64748b', fontSize: '0.9rem' }}>
-              Cargando registros...
-            </td>
-          </tr>
-        ) : (!Array.isArray(typeof displayedItems !== 'undefined' ? displayedItems : dataList) || (typeof displayedItems !== 'undefined' ? displayedItems : dataList).length === 0) ? (
-          <tr>
-            <td colSpan={12} style={{ textAlign: 'center', padding: '28px', color: '#94a3b8', fontSize: '0.9rem' }}>
-              No hay registros disponibles. Utilice el formulario para crear uno.
-            </td>
-          </tr>
-        ) : (
-          (typeof displayedItems !== 'undefined' ? displayedItems : (dataList.map ? dataList : [])).map((item, rowIdx) => (
-            <tr key={item.id || rowIdx} style={{ borderBottom: '1px solid #e2e8f0' }} className="hover:bg-gray-50">
-            ${dynamicRowCells}
-            </tr>
-          ))
-        )}
-      </tbody>`;
-
-    content = content.replace(/<tbody\b[^>]*>[\s\S]*?<\/tbody>/i, dynamicTbody);
-  }
 
   // 4. Convert class to className and for to htmlFor
   content = content.replace(/\bclass="/g, 'className="');
@@ -146,16 +134,16 @@ function convertHtmlToJsx(htmlContent, componentName, route, entityName = '', bi
     const isFileInput = cleanAttrs.includes('type="file"');
     const isVoid = ['input', 'img', 'br', 'hr'].includes(tag.toLowerCase());
 
-    if (isSearchInput) {
+    if (!isTaskLayout && isSearchInput) {
       cleanAttrs = cleanAttrs.replace(/\bvalue=["'][^"']*["']/gi, '');
       return `<${tag} ${cleanAttrs} value={searchQuery} onChange={handleSearchChange}${isVoid ? ' />' : '>'}`;
     }
 
-    if (isFileInput) {
+    if (!isTaskLayout && isFileInput) {
       return `<${tag} ${cleanAttrs} onChange={handleFileSelect}${isVoid ? ' />' : '>'}`;
     }
 
-    if (entityName || binding) {
+    if (!isTaskLayout && (entityName || binding)) {
       const nameMatch = cleanAttrs.match(/\bname=["']([^"']+)["']/i);
       const idMatch = cleanAttrs.match(/\bid=["']([^"']+)["']/i);
       const staticValMatch = cleanAttrs.match(/\bvalue=["']([^"']*)["']/i);
@@ -168,7 +156,7 @@ function convertHtmlToJsx(htmlContent, componentName, route, entityName = '', bi
       cleanAttrs = cleanAttrs.replace(/\bvalue=["'][^"']*["']/gi, '');
 
       if (key && !['submit', 'button', 'hidden', 'reset'].some(t => cleanAttrs.includes(`type="${t}"`))) {
-        return `<${tag} ${cleanAttrs} value={formData['${key}'] !== undefined ? formData['${key}'] : '${staticVal}'} onChange={handleInputChange}${isVoid ? ' />' : '>'}`;
+        return `<${tag} ${cleanAttrs} value={formData['${key}'] !== undefined ? formData['${key}'] : ''} onChange={handleInputChange}${isVoid ? ' />' : '>'}`;
       }
     }
 
@@ -227,89 +215,40 @@ function convertHtmlToJsx(htmlContent, componentName, route, entityName = '', bi
   content = content.replace(/\bonsubmit="[^"]*"|\bonsubmit='[^']*'/gi, '');
   content = content.replace(/\bonclick="[^"]*"|\bonclick='[^']*'/gi, '');
   content = content.replace(/<form\b([^>]*)>/gi, (match, attrs) => {
-    if (!attrs.includes('onSubmit')) {
+    if (!isTaskLayout && !attrs.includes('onSubmit')) {
       return `<form${attrs} onSubmit={handleSubmit}>`;
     }
     return match;
   });
 
-  // 11. Bind buttons to functional handlers
-  content = content.replace(/<button\b([^>]*)>([\s\S]*?)<\/button>/gi, (match, attrs, inner) => {
-    if (attrs.includes('onClick=')) return match;
-    const cleanInner = inner.replace(/<[^>]+>/g, '').trim().toLowerCase();
+  // Explicit contracts take precedence over label-based legacy conversion.
+  // Task layouts keep visual chrome only; ContractTask owns the live form.
+  if (!isTaskLayout && binding?.screenContract) {
+    const contract = binding.screenContract;
+    content = content.replace(/<form\b/gi, '<form data-contract-form="true"');
+    content = replaceButtons(content, (match, attrs, inner) => {
+      const id = attrs.match(/(?:data-action-id|id)=["']([^"']+)["']/i)?.[1];
+      const action = contract.actions.find(a => a.actionId === id || a.controlId === id);
+      const clean = attrs.replace(/onClick=\{[^}]*\}/g, '').replace(/type=["'][^"']+["']/g, '');
+      return action
+        ? '<button ' + clean + ' type="button" onClick={event => { const form = event.currentTarget.closest("form"); if (!form || form.reportValidity()) executeCustomAction(' + JSON.stringify(action.actionId || action.operationId) + '); }}>' + inner + '</button>'
+        : '<button ' + clean + ' type="button" onClick={() => setErrorMessage("UNRESOLVED: vincular control a una acci?n expl?cita")}>' + inner + '</button>';
+    });
+    content = content.replace(/<(input|select|textarea)\b([^>]*?)(?:\/>|>(?:[\s\S]*?<\/\1>)?)/gi, (match, tag, attrs) => {
+      const name = attrs.match(/(?:name|id)=["']([^"']+)["']/i)?.[1];
+      const field = contract.fields.find(f => f.fieldName === name);
+      if (!field) return match;
+      return field.mode === 'editable' ? renderFields([field]) : '<span className="field-automatic">Identificador generado por el sistema</span>';
+    });
+  }
 
-    // 1. Number increment / decrement buttons (e.g. + 100 km, +, -)
-    if (/\+\s*\d+/.test(cleanInner)) {
-      const numMatch = cleanInner.match(/\+\s*(\d+)/);
-      const inc = numMatch ? Number(numMatch[1]) : 100;
-      return `<button${attrs} onClick={() => handleIncrementValue('kilometraje', ${inc})}>${inner}</button>`;
-    }
-
-    // 2. Value setters: Time slots and fuel levels
-    if (/^\d{1,2}:\d{2}\s*(?:am|pm)?$/i.test(cleanInner)) {
-      return `<button${attrs} onClick={() => setFormData(prev => ({ ...prev, hora: '${cleanInner}' }))}>${inner}</button>`;
-    }
-    if (/^(?:1\/4|1\/2|3\/4|full|vacio|vacío)$/i.test(cleanInner)) {
-      return `<button${attrs} onClick={() => setFormData(prev => ({ ...prev, nivelCombustible: '${cleanInner}' }))}>${inner}</button>`;
-    }
-
-    // 3. Primary Actions (HIGHEST PRIORITY)
-    // New record / Add
-    if (/nuevo|nueva|crear|agregar|registrar|vincular|\+ nuevo|\+ registrar|\+ agregar/i.test(cleanInner)) {
-      return `<button${attrs} onClick={handleOpenCreate}>${inner}</button>`;
-    }
-
-    // Save / Submit / Confirm
-    if (/guardar|guardar cambios|confirmar|enviar|submit|guardar repuesto|aplicar movimiento|emitir orden|crear orden/i.test(cleanInner)) {
-      return `<button${attrs} onClick={handleSubmit}>${inner}</button>`;
-    }
-
-    // Export / Download
-    if (/exportar|descargar.*reporte|descargar/i.test(cleanInner)) {
-      return `<button${attrs} onClick={handleExport}>${inner}</button>`;
-    }
-
-    // Discard / Close / Cancel
-    if (/descartar|cancelar|close|cerrar/i.test(cleanInner)) {
-      return `<button${attrs} onClick={handleCancel}>${inner}</button>`;
-    }
-
-    // Filter / Search
-    if (/filtrar|buscar/i.test(cleanInner)) {
-      return `<button${attrs} onClick={handleFilter}>${inner}</button>`;
-    }
-
-    // 4. Pagination (NEVER set activeFilter on pagination)
-    if (/^(?:anterior|prev|siguiente|next|\d+)$/i.test(cleanInner)) {
-      return `<button${attrs} onClick={() => {}}>${inner}</button>`;
-    }
-
-    // 5. Tabs inside mockup
-    const tabMatch = cleanInner.match(/^(?:pestaña|tab|sección)\s*(\d+)/i);
-    if (tabMatch) {
-      return `<button${attrs} onClick={() => setActiveSubTab(${parseInt(tabMatch[1], 10)})}>${inner}</button>`;
-    }
-    if (/matriz|roles|auditor|políticas|permisos/i.test(cleanInner)) {
-      const tabIdx = cleanInner.includes('rol') ? 1 : cleanInner.includes('auditor') ? 2 : cleanInner.includes('política') ? 3 : 0;
-      return `<button${attrs} onClick={() => setActiveSubTab(${tabIdx})}>${inner}</button>`;
-    }
-
-    // 6. Generic Category Filters (Only explicit filters)
-    if (/^todos\b|^all\b/i.test(cleanInner)) {
-      return `<button${attrs} onClick={() => setActiveFilter('ALL')}>${inner}</button>`;
-    }
-    if (/crítico|urgente|alerta|bajo stock/i.test(cleanInner)) {
-      return `<button${attrs} onClick={() => setActiveFilter('CRITICAL')}>${inner}</button>`;
-    }
-    if (attrs.includes('rounded-full') || attrs.includes('pill')) {
-      const filterKey = cleanInner.replace(/[^a-zA-Z0-9áéíóúÁÉÍÓÚñÑ]/g, '').slice(0, 15);
-      if (filterKey.length >= 3 && !/nuevo|guardar|cancelar|exportar|buscar|confirmar|anterior|siguiente/.test(filterKey)) {
-        return `<button${attrs} onClick={() => setActiveFilter('${filterKey}')}>${inner}</button>`;
-      }
-    }
-
-    return match;
-  });
+  // An unbound control stays visible and explains the missing decision.
+  if (!isTaskLayout) {
+    content = replaceButtons(content, (match, attrs, inner) => {
+      if (attrs.includes('onClick=')) return match;
+      return '<button' + attrs + ' type="button" onClick={() => setErrorMessage("UNRESOLVED: vincular control a una acci?n expl?cita")}>' + inner + '</button>';
+    });
+  }
 
   // 12. Connect navigation links (<a>) inside mockup to onNavigate
   if (Array.isArray(screensNav) && screensNav.length > 0) {
@@ -319,13 +258,15 @@ function convertHtmlToJsx(htmlContent, componentName, route, entityName = '', bi
       if (!cleanInner || cleanInner.length < 3) return match;
 
       const targetScreen = screensNav.find(s => {
-        const sTitle = (s.title || s.name || '').toLowerCase();
+        const sTitle = (s.title || s.name || s.label || '').toLowerCase();
         const sRoute = (s.route || '').toLowerCase();
         const hrefMatch = attrs.match(/href=["']([^"']+)["']/i);
         const hrefVal = hrefMatch ? hrefMatch[1].toLowerCase() : '';
+        const innerNorm = cleanInner.normalize('NFD').replace(/[\u0300-\u036f]/g, '');
+        const titleNorm = sTitle.normalize('NFD').replace(/[\u0300-\u036f]/g, '');
 
         if (hrefVal && hrefVal !== '#' && hrefVal !== '/' && sRoute === hrefVal) return true;
-        if (cleanInner.length >= 4 && (sTitle.includes(cleanInner) || cleanInner.includes(sTitle))) return true;
+        if (cleanInner.length >= 4 && (sTitle.includes(cleanInner) || cleanInner.includes(sTitle) || titleNorm.includes(innerNorm) || innerNorm.includes(titleNorm.split(' ')[0]))) return true;
         return false;
       });
 
@@ -337,17 +278,173 @@ function convertHtmlToJsx(htmlContent, componentName, route, entityName = '', bi
     });
   }
 
+  // 3. Dynamic Table Injection: replace static tbody dummy rows with dynamic React mapping
+  const tbodyMatch = !isTaskLayout && content.match(/<tbody\b([^>]*)>([\s\S]*?)<\/tbody>/i);
+  if (tbodyMatch) {
+    const tbodyAttrs = tbodyMatch[1] || '';
+
+    // Inspect columns from binding or dynamic row formatting
+    const boundCols = binding?.tableBindings?.[0]?.columns || [];
+    let dynamicRowCells = '';
+
+    if (boundCols.length > 0) {
+      dynamicRowCells = boundCols.map(c =>
+        `<td key="${c.fieldName}" style={{ padding: '12px 16px', fontSize: '0.875rem' }}>{item['${c.fieldName}'] !== undefined && item['${c.fieldName}'] !== null ? String(item['${c.fieldName}']) : '-'}</td>`
+      ).join('\n            ');
+      dynamicRowCells += `\n            <td style={{ padding: '12px 16px', fontSize: '0.875rem', whiteSpace: 'nowrap' }}>
+              <button type="button" onClick={() => executeRowEdit(item)} style={{ color: '#2563eb', background: 'transparent', border: 'none', cursor: 'pointer', fontSize: '0.85rem', fontWeight: 600, marginRight: '10px' }}>Editar</button>
+              <button type="button" onClick={() => executeRowDelete(item.id || item[Object.keys(item)[0]])} style={{ color: '#dc2626', background: 'transparent', border: 'none', cursor: 'pointer', fontSize: '0.85rem', fontWeight: 500 }}>Eliminar</button>
+            </td>`;
+    } else {
+      dynamicRowCells = `{Object.entries(item).filter(([k]) => !['password', 'password_hash', 'passwordHash', 'contrasena', 'clave', 'token', 'salt', 'createdAt', 'updatedAt'].includes(k)).slice(0, 6).map(([k, v]) => (
+              <td key={k} style={{ padding: '12px 16px', fontSize: '0.875rem' }}>
+                {typeof v === 'boolean' || k === 'activo' ? (
+                  <span style={{ padding: '2px 8px', borderRadius: '12px', fontSize: '0.75rem', fontWeight: 600, background: v ? '#ecfdf5' : '#fef2f2', color: v ? '#059669' : '#dc2626' }}>
+                    {v ? 'Activo' : 'Inactivo'}
+                  </span>
+                ) : typeof v === 'number' && (k.toLowerCase().includes('precio') || k.toLowerCase().includes('tarifa') || k.toLowerCase().includes('total')) ? (
+                  \`$\${Number(v).toFixed(2)}\`
+                ) : (v !== null && v !== undefined ? String(v) : '-')}
+              </td>
+            ))}
+            <td style={{ padding: '12px 16px', fontSize: '0.875rem', whiteSpace: 'nowrap' }}>
+              <button type="button" onClick={() => executeRowEdit(item)} style={{ color: '#2563eb', background: 'transparent', border: 'none', cursor: 'pointer', fontSize: '0.85rem', fontWeight: 600, marginRight: '10px' }}>Editar</button>
+              <button type="button" onClick={() => executeRowDelete(item.id || item[Object.keys(item)[0]])} style={{ color: '#dc2626', background: 'transparent', border: 'none', cursor: 'pointer', fontSize: '0.85rem', fontWeight: 500 }}>Eliminar</button>
+            </td>`;
+    }
+
+    const dynamicTbody = `<tbody${tbodyAttrs}>
+        {dataLoading ? (
+          <tr>
+            <td colSpan={12} style={{ textAlign: 'center', padding: '28px', color: '#64748b', fontSize: '0.9rem' }}>
+              Cargando registros...
+            </td>
+          </tr>
+        ) : (!Array.isArray(typeof displayedItems !== 'undefined' ? displayedItems : dataList) || (typeof displayedItems !== 'undefined' ? displayedItems : dataList).length === 0) ? (
+          <tr>
+            <td colSpan={12} style={{ textAlign: 'center', padding: '28px', color: '#94a3b8', fontSize: '0.9rem' }}>
+              No hay registros disponibles. Utilice el formulario para crear uno.
+            </td>
+          </tr>
+        ) : (
+          (typeof displayedItems !== 'undefined' ? displayedItems : (dataList.map ? dataList : [])).map((item, rowIdx) => (
+            <tr key={item.id || rowIdx} style={{ borderBottom: '1px solid #e2e8f0' }} className="hover:bg-gray-50">
+            ${dynamicRowCells}
+            </tr>
+          ))
+        )}
+      </tbody>`;
+
+    content = content.replace(/<tbody\b[^>]*>[\s\S]*?<\/tbody>/gi, () => dynamicTbody);
+  }
+
+  if (isTaskLayout) content = wireTaskLayout(content, binding.screenContract);
+
   return content;
+}
+
+function fieldToken(value) {
+  return String(value || '').toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/[^a-z0-9]/g, '');
+}
+
+function matchContractField(attrs, fields = []) {
+  const name = attrs.match(/\b(?:name|id)=["']([^"']+)["']/i)?.[1] || '';
+  const placeholder = attrs.match(/\bplaceholder=["']([^"']+)["']/i)?.[1] || '';
+  const aria = attrs.match(/\baria-label=["']([^"']+)["']/i)?.[1] || '';
+  const haystack = fieldToken([name, placeholder, aria].join(' '));
+  if (!haystack) return null;
+  return fields.find(field => {
+    const keys = [field.fieldName, field.label, field.originalName, String(field.fieldName || '').replace(/Id$/i, '')]
+      .map(fieldToken).filter(key => key.length >= 3);
+    return keys.some(key => haystack === key || haystack.includes(key) || (key.includes(haystack) && haystack.length >= 4));
+  }) || null;
+}
+
+function bindFieldAttrs(attrs, field) {
+  let next = String(attrs || '')
+    .replace(/\bvalue=\{[^}]*\}/g, '')
+    .replace(/\bonChange=\{[\s\S]*?\}/g, '')
+    .replace(/\bvalue=["'][^"']*["']/gi, '')
+    .replace(/\bdefaultValue=["'][^"']*["']/gi, '')
+    .replace(/\bname=["'][^"']*["']/gi, '')
+    .replace(/\bid=["'][^"']*["']/gi, '');
+  const key = JSON.stringify(field.fieldName);
+  const isCheck = /\btype=["']checkbox["']/i.test(next);
+  const isFile = /\btype=["']file["']/i.test(next);
+  next += ` id={${key}} name={${key}}`;
+  if (isFile) return `${next} onChange={event => slots.updateFiles(${key}, Array.from(event.target.files || []))}`;
+  if (isCheck) return `${next} checked={Boolean(slots.values[${key}])} onChange={event => slots.setField(${key}, event.target.checked)}`;
+  return `${next} value={slots.values[${key}] ?? ''} onChange={event => slots.setField(${key}, event.target.value)}`;
+}
+
+function selectOptionsJsx(field) {
+  const key = JSON.stringify(field.fieldName);
+  if (field.relation) {
+    const valueField = JSON.stringify(field.relation.valueField || 'id');
+    return `<option value="">{slots.loading ? 'Cargando…' : 'Seleccionar'}</option>{(slots.optionsFor(${key}) || []).map(row => <option key={row[${valueField}]} value={row[${valueField}]}>{slots.labelFor(${key}, row)}</option>)}`;
+  }
+  if (field.options?.length) {
+    return `<option value="">Seleccionar</option>{(${JSON.stringify(field.options)}).map(option => <option key={option.value} value={option.value}>{option.label}</option>)}`;
+  }
+  return `<option value="">Seleccionar</option>`;
+}
+
+function liveTbody(attrs, columns) {
+  const cols = JSON.stringify((columns || []).map(column => ({ field: column.field, label: column.label, relation: column.relation || null, options: column.options || null })));
+  return `<tbody${attrs || ''}>{slots.loading ? <tr><td colSpan={12}>Cargando…</td></tr> : !(slots.rows || []).length ? <tr><td colSpan={12}>Sin registros</td></tr> : (slots.rows || []).map(row => (
+    <tr key={row[slots.valueField] || row.id}>
+      {(${cols}).length ? (${cols}).map(column => <td key={column.field} data-label={column.label}>{slots.display(row, column)}</td>) : Object.keys(row).slice(0, 6).map(key => <td key={key}>{String(row[key] ?? '')}</td>)}
+    </tr>
+  ))}</tbody>`;
+}
+
+function wireTaskLayout(content, contract = {}) {
+  const fields = (contract.fields || []).filter(field => field && field.mode !== 'automatic' && field.control !== 'hidden');
+  let next = content.replace(/<form\b([^>]*)>/gi, (match, attrs) => {
+    if (/onSubmit=\{/.test(attrs)) return match;
+    return `<form${attrs} data-contract-form="true" onSubmit={slots.submit}>`;
+  });
+  next = next.replace(/<(input)\b([^>]*?)(\/)?>/gi, (match, tag, attrs) => {
+    if (/type=["'](?:submit|button|hidden|reset)["']/i.test(attrs)) return match;
+    const isSearch = /buscar|search|filtrar/i.test(attrs);
+    if (isSearch) {
+      const clean = String(attrs).replace(/\bvalue=["'][^"']*["']/gi, '').replace(/\bvalue=\{[^}]*\}/g, '');
+      return `<input ${clean} value={slots.filter ?? ''} onChange={event => slots.setFilter(event.target.value)} />`;
+    }
+    const field = matchContractField(attrs, fields);
+    if (!field) return match;
+    return `<input ${bindFieldAttrs(attrs, field)} />`;
+  });
+  next = next.replace(/<textarea\b([^>]*)>([\s\S]*?)<\/textarea>/gi, (match, attrs) => {
+    const field = matchContractField(attrs, fields);
+    if (!field) return match;
+    return `<textarea ${bindFieldAttrs(attrs, field)}></textarea>`;
+  });
+  next = next.replace(/<select\b([^>]*)>([\s\S]*?)<\/select>/gi, (match, attrs) => {
+    const field = matchContractField(attrs, fields);
+    if (!field) return match;
+    return `<select ${bindFieldAttrs(attrs, field)}>${selectOptionsJsx(field)}</select>`;
+  });
+  next = next.replace(/<tbody\b([^>]*)>[\s\S]*?<\/tbody>/gi, (match, attrs) => liveTbody(attrs, contract.columns || []));
+  next = replaceButtons(next, (match, attrs, inner) => {
+    if (attrs.includes('onClick=')) return match;
+    const text = String(inner).replace(/<[^>]+>/g, '');
+    if (/buscar|filtrar|cerrar|cancelar|volver/i.test(text)) return match;
+    if (!/nuevo|guardar|crear|registrar|confirmar|diagn[oó]stico|vincular|agendar|enviar|actualizar|guardar\s*cambios/i.test(text + attrs) && !/\btype=["']submit["']/i.test(attrs)) return match;
+    const clean = attrs.replace(/\btype=["'][^"']+["']/gi, '');
+    return `<button${clean} type="button" onClick={slots.submit}>${inner}</button>`;
+  });
+  return next;
 }
 
 /**
  * Generates an interactive, functionally wired React Component from a Screen Mockup
  */
 function generateInteractiveMockupComponent(compName, screen, convertedJsx, operation = null, actions = [], entity = null) {
-  const isConnected = !!operation && !!operation.route || !!screen.readEndpoint;
+  const isConnected = Boolean(operation?.route || screen.readEndpoint || screen.contract?.actions?.some(a => a.route));
   const targetEndpoint = screen.readEndpoint || operation?.route || null;
   const httpMethod = (operation?.method || 'POST').toLowerCase();
-  const screenActions = (actions && actions.length > 0) ? actions : (screen.actions || []);
+  const screenActions = screen.contract?.actions || ((actions && actions.length > 0) ? actions : (screen.actions || []));
 
   // Determine read endpoint and write endpoint
   let readEndpoint = screen.readEndpoint
@@ -358,83 +455,14 @@ function generateInteractiveMockupComponent(compName, screen, convertedJsx, oper
   if (!readEndpoint && targetEndpoint) {
     readEndpoint = targetEndpoint.replace(/\/:[a-zA-Z0-9_]+$/, '');
   }
-  const writeEndpoint = screen.createEndpoint || readEndpoint || targetEndpoint;
+  const writeAction = (screen.contract?.actions || screenActions).find(a => a.method === 'POST');
+  const writeEndpoint = writeAction?.route || null;
   const entityTitle = screen.targetEntity || entity?.name || screen.title || screen.name;
 
-  // Prepare modal form fields if entity is known
-  const entityAttrs = (entity?.attributes || []).filter(a => {
-    const aName = a?.name || a?.fieldName;
-    return aName && !['id', 'passwordHash', 'password_hash', 'token', 'salt', 'createdAt', 'updatedAt'].includes(aName);
-  });
-
-  const modalFieldsJsx = entityAttrs.length > 0 ? entityAttrs.map(attr => {
-    const attrName = String(attr.name || attr.fieldName);
-    const attrType = String(attr.type || 'STRING').toUpperCase();
-    const isRole = /rol|role/i.test(attrName);
-    const isBool = attrType === 'BOOLEAN' || attrName === 'activo' || attrName === 'active';
-    const isNum = ['INTEGER', 'FLOAT', 'DECIMAL', 'NUMERIC', 'BIGINT'].includes(attrType);
-    const isDate = ['DATE', 'DATEONLY', 'TIME'].includes(attrType);
-
-    if (isRole) {
-      return `          <div style={{ marginBottom: '14px' }}>
-            <label style={{ display: 'block', fontSize: '0.8rem', fontWeight: 600, color: '#334155', marginBottom: '4px' }}>
-              ${attrName.charAt(0).toUpperCase() + attrName.slice(1)}:
-            </label>
-            <select
-              name="${attrName}"
-              value={formData['${attrName}'] !== undefined ? formData['${attrName}'] : 1}
-              onChange={handleInputChange}
-              style={{ width: '100%', height: '38px', padding: '0 10px', borderRadius: '6px', border: '1px solid #cbd5e1', fontSize: '0.85rem' }}
-            >
-              <option value="1">1 - Administrador</option>
-              <option value="2">2 - Cliente</option>
-              <option value="3">3 - Mecánico</option>
-              <option value="4">4 - Recepción</option>
-            </select>
-          </div>`;
-    }
-
-    if (isBool) {
-      return `          <div style={{ marginBottom: '14px', display: 'flex', alignItems: 'center', gap: '8px' }}>
-            <input
-              type="checkbox"
-              id="field_${attrName}"
-              name="${attrName}"
-              checked={formData['${attrName}'] !== undefined ? Boolean(formData['${attrName}']) : true}
-              onChange={handleInputChange}
-              style={{ width: '16px', height: '16px', borderRadius: '4px' }}
-            />
-            <label htmlFor="field_${attrName}" style={{ fontSize: '0.85rem', fontWeight: 600, color: '#334155', cursor: 'pointer' }}>
-              ${attrName.charAt(0).toUpperCase() + attrName.slice(1)}
-            </label>
-          </div>`;
-    }
-
-    const inputType = isNum ? 'number' : isDate ? 'date' : attrName.toLowerCase().includes('correo') ? 'email' : 'text';
-
-    return `          <div style={{ marginBottom: '14px' }}>
-            <label style={{ display: 'block', fontSize: '0.8rem', fontWeight: 600, color: '#334155', marginBottom: '4px' }}>
-              ${attrName.charAt(0).toUpperCase() + attrName.slice(1)}:
-            </label>
-            <input
-              type="${inputType}"
-              name="${attrName}"
-              placeholder="Ingrese ${attrName}..."
-              value={formData['${attrName}'] !== undefined ? formData['${attrName}'] : ''}
-              onChange={handleInputChange}
-              style={{ width: '100%', height: '38px', padding: '0 10px', borderRadius: '6px', border: '1px solid #cbd5e1', fontSize: '0.85rem' }}
-            />
-          </div>`;
-  }).join('\n') : `          <div style={{ marginBottom: '14px' }}>
-            <label style={{ display: 'block', fontSize: '0.8rem', fontWeight: 600, color: '#334155', marginBottom: '4px' }}>Nombre / Título:</label>
-            <input
-              type="text"
-              name="nombre"
-              value={formData['nombre'] !== undefined ? formData['nombre'] : ''}
-              onChange={handleInputChange}
-              style={{ width: '100%', height: '38px', padding: '0 10px', borderRadius: '6px', border: '1px solid #cbd5e1', fontSize: '0.85rem' }}
-            />
-          </div>`;
+  const fields = screen.contract?.fields || buildFieldContract(entity);
+  const entityAttrs = fields.filter(f => f.mode === 'editable');
+  const modalFieldsJsx = renderFields(fields);
+  const relationFields = fields.filter(f => f.relation?.endpoint);
 
   const displayAttrs = entityAttrs.slice(0, 6);
   const liveTableColumnsTh = displayAttrs.length > 0
@@ -467,7 +495,8 @@ import apiClient from '../../api/client';
  * Operación vinculada: ${operation?.name || operation?.operationId || (isConnected ? (readEndpoint || targetEndpoint) : 'SIN_OPERACION_VINCULADA')}
  */
 export default function ${compName}({ onNavigate } = {}) {
-  const [formData, setFormData] = useState({});
+  const [formData, setFormData] = useState(${JSON.stringify(Object.fromEntries(fields.filter(f => f.mode === "editable" && f.defaultValue != null && !["NOW", "UUIDV4"].includes(f.defaultValue)).map(f => [f.fieldName, f.defaultValue])))});
+  const [relationOptions, setRelationOptions] = useState({});
   const [editingId, setEditingId] = useState(null);
   const [activeSubTab, setActiveSubTab] = useState(0);
   const [activeFilter, setActiveFilter] = useState('ALL');
@@ -478,11 +507,11 @@ export default function ${compName}({ onNavigate } = {}) {
   const [resultMessage, setResultMessage] = useState(null);
   const [errorMessage, setErrorMessage] = useState(null);
   const [showCreateModal, setShowCreateModal] = useState(false);
-  const [dashboardMetrics, setDashboardMetrics] = useState({ citas: 4, ordenes: 3, productos: 6, usuarios: 6 });
+  const [dashboardMetrics] = useState({});
   const isOperationConnected = ${isConnected};
 
   const actionsMap = {
-${screenActions.map(a => `    '${a.actionId}': { name: '${a.name || a.actionId}', method: '${(a.method || 'POST').toLowerCase()}', route: '${a.route || ''}' }`).join(',\n')}
+${screenActions.map(a => `    [${JSON.stringify(a.actionId || a.operationId)}]: ${JSON.stringify({ name: a.name || a.actionId || a.operationId, method: (a.method || 'POST').toLowerCase(), route: a.route || '' })}`).join(',\n')}
   };
 
   const loadData = async () => {
@@ -498,27 +527,10 @@ ${screenActions.map(a => `    '${a.actionId}': { name: '${a.name || a.actionId}'
                 : (Array.isArray(res?.rows) ? res.rows : [])));
       setDataList(items);
 
-      // Si es una pantalla de métricas o tablero, cargar indicadores de soporte
-      if (/tablero|reporte|indicador/i.test('${compName}')) {
-        try {
-          const [cRes, oRes, pRes, uRes] = await Promise.allSettled([
-            apiClient.get('/api/citas'),
-            apiClient.get('/api/orden-trabajos'),
-            apiClient.get('/api/productos'),
-            apiClient.get('/api/usuarios')
-          ]);
-          const getLen = (r) => (r.status === 'fulfilled' && (Array.isArray(r.value) ? r.value.length : (Array.isArray(r.value?.data) ? r.value.data.length : 0)));
-          setDashboardMetrics({
-            citas: getLen(cRes) || 4,
-            ordenes: getLen(oRes) || 3,
-            productos: getLen(pRes) || 6,
-            usuarios: getLen(uRes) || 6
-          });
-        } catch (_) {}
-      }
     } catch (err) {
       console.error('Error cargando datos:', err);
       setDataList([]);
+      setErrorMessage(err.message || 'Error al cargar registros');
     } finally {
       setDataLoading(false);
     }` : ''}
@@ -526,6 +538,7 @@ ${screenActions.map(a => `    '${a.actionId}': { name: '${a.name || a.actionId}'
 
   useEffect(() => {
     ${readEndpoint ? 'loadData();' : ''}
+    ${relationFields.map(f => `apiClient.get(${JSON.stringify(f.relation.endpoint)}).then(res => setRelationOptions(prev => ({ ...prev, [${JSON.stringify(f.fieldName)}]: Array.isArray(res) ? res : res.data || [] }))).catch(err => setErrorMessage(err.message));`).join('\n')}
   }, []);
 
   const handleInputChange = (e) => {
@@ -630,14 +643,14 @@ ${screenActions.map(a => `    '${a.actionId}': { name: '${a.name || a.actionId}'
   const executeRowEdit = (item) => {
     if (!item) return;
     setFormData({ ...item });
-    setEditingId(item.id || item[Object.keys(item)[0]]);
+    setEditingId(item[${JSON.stringify(entity?.primaryKey?.fieldName || fields.find(f => f.isPk)?.fieldName || "id")}]);
     setShowCreateModal(true);
     setResultMessage('Registro cargado para edición. Modifique los campos deseados y guarde los cambios.');
   };
 
   const executeCustomAction = async (actionId, method, route) => {
-    const targetRoute = route || actionsMap[actionId]?.route || '${readEndpoint || targetEndpoint || ''}';
-    const targetMethod = method || actionsMap[actionId]?.method || 'post';
+    const targetRoute = actionsMap[actionId]?.route;
+    const targetMethod = actionsMap[actionId]?.method;
 
     if (!targetRoute) {
       setErrorMessage(\`La acción '\${actionId}' no tiene una ruta de API definida.\`);
@@ -724,6 +737,7 @@ ${screenActions.map(a => `    '${a.actionId}': { name: '${a.name || a.actionId}'
     setErrorMessage(null);
 
     try {
+      if (!${JSON.stringify(writeEndpoint)}) throw new Error('UNRESOLVED: definir operaci?n de escritura');
       const endpoint = editingId ? \`${writeEndpoint}/\${editingId}\` : '${writeEndpoint || targetEndpoint || ''}';
       const method = editingId ? 'put' : 'post';
 
@@ -820,7 +834,7 @@ ${modalFieldsJsx}
       )}
 
       {/* Barra de Acciones y Estado Operativo */}
-      <div style={{
+      {${Boolean(readEndpoint)} && <div style={{
         marginBottom: '16px',
         padding: '12px 18px',
         backgroundColor: '#ffffff',
@@ -865,10 +879,10 @@ ${modalFieldsJsx}
             📥 Exportar CSV
           </button>
         </div>
-      </div>
+      </div>}
 
       {/* Contenedor Visual Mockup con Enlaces Interactivos Directos */}
-      <div className="mockup-content-wrapper" onChange={handleInputChange} onSubmit={handleSubmit}>
+      <div className="mockup-content-wrapper">
         ${convertedJsx}
       </div>
 
@@ -975,5 +989,6 @@ ${modalFieldsJsx}
 
 module.exports = {
   convertHtmlToJsx,
-  generateInteractiveMockupComponent
+  generateInteractiveMockupComponent,
+  stripRolePreviewChrome
 };

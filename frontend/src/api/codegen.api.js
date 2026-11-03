@@ -115,5 +115,66 @@ export const codegenApi = {
       method: 'POST',
       body: {}
     });
+  },
+
+  /**
+   * Inicia un trabajo persistente de generación asistida por IA
+   */
+  startGenerationJob: (projectId, options = {}) => {
+    return request(`/projects/${projectId}/codegen/jobs/start`, {
+      method: 'POST',
+      body: options
+    });
+  },
+
+  /**
+   * Obtiene el trabajo activo de generación para un proyecto
+   */
+  getActiveJob: (projectId) => {
+    return request(`/projects/${projectId}/codegen/jobs/active`);
+  },
+
+  /**
+   * Obtiene el estado y logs de un trabajo de generación específico
+   */
+  getJobStatus: (projectId, jobId) => {
+    return request(`/projects/${projectId}/codegen/jobs/${jobId}`);
+  },
+
+  /**
+   * Envía la respuesta a una pregunta de aclaración de negocio
+   */
+  submitJobInput: (projectId, jobId, submission) => {
+    return request(`/projects/${projectId}/codegen/jobs/${jobId}/input`, {
+      method: 'POST',
+      body: submission
+    });
+  },
+
+  /**
+   * Cancela un trabajo de generación en ejecución
+   */
+  cancelJob: (projectId, jobId) => {
+    return request(`/projects/${projectId}/codegen/jobs/${jobId}/cancel`, {
+      method: 'POST',
+      body: {}
+    });
+  },
+
+  /**
+   * Obtiene las decisiones de negocio pendientes para el proyecto
+   */
+  getPendingDecisions: (projectId) => {
+    return request(`/projects/${projectId}/codegen/decisions`);
+  },
+
+  /**
+   * Guarda directamente una decisión de negocio
+   */
+  submitDecision: (projectId, submission) => {
+    return request(`/projects/${projectId}/codegen/decisions`, {
+      method: 'POST',
+      body: submission
+    });
   }
 };

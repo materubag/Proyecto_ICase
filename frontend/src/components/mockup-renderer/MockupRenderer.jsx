@@ -265,7 +265,7 @@ export default function MockupRenderer({
   project,
   allScreens = [],
   onSelectScreen,
-  themeConfig = { color: 'indigo', layout: 'sidebar', showShell: true }
+  themeConfig = { color: 'indigo', layout: 'sidebar', showShell: false }
 }) {
   if (!screen) {
     return (

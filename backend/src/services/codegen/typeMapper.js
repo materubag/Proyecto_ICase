@@ -345,6 +345,7 @@ function normalizeAttributes(rawAttributes = [], options = {}) {
       originalName: attr.name,
       dataType,
       isPk,
+      readOnly: Boolean(attr.readOnly),
       allowNull,
       unique: Boolean(attr.unique || attr.isUnique),
       autoIncrement: Boolean(attr.autoIncrement || (isPk && (dataType.includes('INTEGER') || dataType.includes('BIGINT')))),

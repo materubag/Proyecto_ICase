@@ -51,7 +51,7 @@ export default function ProjectPrototype({ project, onProjectUpdated }) {
   const [themeConfig, setThemeConfig] = useState({
     color: 'indigo', // 'indigo' | 'blue' | 'emerald' | 'violet' | 'slate'
     layout: 'sidebar', // 'sidebar' | 'topbar'
-    showShell: true // true = aplicación completa unificada, false = solo tarjeta de vista
+    showShell: false
   });
 
   // Cronómetro en vivo mientras genera
@@ -644,7 +644,7 @@ export default function ProjectPrototype({ project, onProjectUpdated }) {
                 title="Alternar entre ver la aplicación completa con navegación o solo la tarjeta"
               >
                 <span className="ms ms-xs">{themeConfig.showShell ? 'check_box' : 'check_box_outline_blank'}</span>
-                <span>Marco Unificado ({themeConfig.showShell ? 'Activo' : 'Inactivo'})</span>
+                <span>Solo contenido de la pantalla</span>
               </button>
             </div>
           </div>

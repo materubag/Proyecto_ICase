@@ -132,10 +132,15 @@ class CodeGeneratorService {
           // Verify spec freshness against current project elements
           const freshness = await projectSpecService.checkSpecFreshness(projectId, spec);
           if (!freshness.upToDate && !options.ignoreOutdated) {
-            const err = new Error(`La especificación aprobada está desactualizada respecto a los elementos del proyecto (${freshness.reason}). Se requiere una nueva validación y aprobación.`);
-            err.code = 'SPEC_OUTDATED';
-            err.details = freshness.details;
-            throw err;
+            if (options.allowUnapproved) {
+              spec = await buildProjectSpec(projectId, options);
+              spec.outdatedBaselineWarning = `La especificación aprobada previa está desactualizada (${freshness.reason}: ${freshness.details?.message || ''}). Mostrando previsualización con los elementos actuales del proyecto. Se requiere una nueva aprobación formal.`;
+            } else {
+              const err = new Error(`La especificación aprobada está desactualizada respecto a los elementos del proyecto (${freshness.reason}). Se requiere una nueva validación y aprobación.`);
+              err.code = 'SPEC_OUTDATED';
+              err.details = freshness.details;
+              throw err;
+            }
           }
         }
       } else {
@@ -150,6 +155,14 @@ class CodeGeneratorService {
     } catch (_) {}
 
     let diagnostics = validateProjectSpec(spec, options);
+    if (spec.outdatedBaselineWarning) {
+      if (!diagnostics.warnings) diagnostics.warnings = [];
+      diagnostics.warnings.push({
+        code: 'SPEC_OUTDATED',
+        message: spec.outdatedBaselineWarning,
+        element: 'ProjectBaseline'
+      });
+    }
 
     // If an approved spec was loaded from database but fails validation, and allowUnapproved is true,
     // fallback to building a fresh specification from current project elements
@@ -181,7 +194,9 @@ class CodeGeneratorService {
     const { spec, diagnostics } = await this.getProjectArtifacts(projectId, options);
 
     // If validation fails with blocking errors, return diagnostic report without generating broken code
-    if (!diagnostics.ready) {
+    const reviewOnly = options.reviewOnly === true;
+    const reviewable = reviewOnly && diagnostics.errors.every(error => ['UNDEFINED_OPERATION_BEHAVIOR', 'UNRESOLVED_SCREEN_CONTRACT', 'UNRESOLVED_OPERATION_CONTRACT', 'UNRESOLVED_PROJECT_CONTRACT', 'UNRESOLVED_OPERATION_PERMISSION'].includes(error.code));
+    if (!diagnostics.ready && !reviewable) {
       return {
         projectId: spec?.project?.id || projectId,
         projectName: spec?.project?.name || 'Proyecto',
@@ -209,7 +224,9 @@ class CodeGeneratorService {
     const safeDbName = projectName.toLowerCase().replace(/[^a-z0-9]/g, '_') + '_db';
 
     // 1. Root Configuration & Documentation
-    addFile('README.md', generateReadme(projectName, spec.entities), 'markdown');
+    if (reviewOnly) addFile('REVIEW_STATUS.json', JSON.stringify({ ready: false, notForDeployment: true, diagnostics }, null, 2), 'json');
+    const readme = generateReadme(projectName, spec.entities);
+    addFile('README.md', reviewOnly ? '# Paquete de revisión — ready=false\n\nNo aprobado para despliegue. Consulte REVIEW_STATUS.json: las operaciones pendientes responden 501 y los permisos sin fuente explícita se rechazan.\n\n' + readme : readme, 'markdown');
     addFile('icase.spec.json', JSON.stringify(spec, null, 2), 'json');
     addFile('openapi.json', JSON.stringify(spec.apiContract || {}, null, 2), 'json');
 
@@ -242,7 +259,7 @@ JWT_EXPIRATION=8h
     if (includeDocker) {
       addFile('backend/Dockerfile', generateDockerfile(), 'dockerfile');
     }
-    addFile('backend/src/server.js', generateServerFile(projectName), 'javascript');
+    addFile('backend/src/server.js', generateServerFile(projectName, { privateUploads: Boolean(spec.uploads?.private) }), 'javascript');
     addFile('backend/src/config/database.js', generateDatabaseConfig(projectName), 'javascript');
 
     // 2.3 Authentication and Authorization Layer setup
@@ -312,21 +329,23 @@ JWT_EXPIRATION=8h
     for (const entity of spec.entities) {
       const naming = deriveNaming(entity.name);
       addFile(`backend/src/controllers/${naming.paramName}.controller.js`, generateControllerFile(entity), 'javascript');
-      addFile(`backend/src/routes/${naming.paramName}.routes.js`, generateEntityRoutesFile(entity, { hasAuth }), 'javascript');
+      addFile(`backend/src/routes/${naming.paramName}.routes.js`, generateEntityRoutesFile(entity, { hasAuth, operations: spec.operations, defaultRoles: spec.security?.roles || spec.roles || [] }), 'javascript');
     }
 
     // Custom Business Operations (services, controllers, routes with transactional execution)
     const businessOps = (spec.operations || []).filter(o => o.type === 'BUSINESS_LOGIC');
     const hasOperations = businessOps.length > 0;
     if (hasOperations) {
-      addFile('backend/src/services/operation.service.js', generateOperationServiceFile(businessOps, spec.entities), 'javascript');
+      addFile('backend/src/services/operation.runtime.js', require('fs').readFileSync(require.resolve('./operationRuntime'), 'utf8'), 'javascript');
+      addFile('backend/src/services/operation.service.js', generateOperationServiceFile(businessOps, spec.entities, { reviewOnly }), 'javascript');
       addFile('backend/src/controllers/operation.controller.js', generateOperationControllerFile(businessOps), 'javascript');
       addFile('backend/src/routes/operation.routes.js', generateOperationRoutesFile(businessOps, spec.security), 'javascript');
     }
 
     // File & Image Upload Infrastructure (Multer)
     addFile('backend/src/middleware/upload.middleware.js', generateUploadMiddlewareFile(), 'javascript');
-    addFile('backend/src/routes/upload.routes.js', generateUploadRoutesFile(), 'javascript');
+    addFile('backend/src/routes/upload.routes.js', generateUploadRoutesFile({ privateUploads: Boolean(spec.uploads?.private), roles: spec.uploads?.roles || [] }), 'javascript');
+    addFile('backend/src/services/upload.storage.js', require('fs').readFileSync(require.resolve('./uploadStorageRuntime'), 'utf8'), 'javascript');
 
     // Central API Router index
     addFile('backend/src/routes/index.js', generateMasterRoutesIndexFile(spec.entities, { hasOperations, hasAuth }), 'javascript');
@@ -334,12 +353,14 @@ JWT_EXPIRATION=8h
     // 3. FRONTEND: React 18 + Vite SPA
     addFile('frontend/package.json', frontendGen.generateFrontendPackageJson(projectName), 'json');
     addFile('frontend/vite.config.js', frontendGen.generateViteConfig(), 'javascript');
+    addFile('frontend/tailwind.config.js', frontendGen.generateTailwindConfig(), 'javascript');
+    addFile('frontend/postcss.config.js', frontendGen.generatePostcssConfig(), 'javascript');
     addFile('frontend/index.html', frontendGen.generateIndexHtml(projectName), 'html');
     if (includeDocker) {
       addFile('frontend/Dockerfile', frontendGen.generateFrontendDockerfile(), 'dockerfile');
       addFile('frontend/nginx.conf', frontendGen.generateFrontendNginxConf(), 'nginx');
     }
-    addFile('frontend/src/main.jsx', frontendGen.generateMainJsx(), 'javascript');
+    addFile('frontend/src/main.jsx', reviewOnly ? frontendGen.generateMainJsx().replace('<App />', '<><div role="status" style={{padding:12,background:"#fffbeb",color:"#92400e"}}>Paquete de revision | ready=false | Contiene funciones pendientes</div><App /></>') : frontendGen.generateMainJsx(), 'javascript');
     addFile('frontend/src/index.css', frontendGen.generateFrontendCss(), 'css');
     addFile('frontend/src/api/client.js', frontendGen.generateApiClientJs(), 'javascript');
 
@@ -351,49 +372,50 @@ JWT_EXPIRATION=8h
 
     // Dynamic Entity CRUD Pages
     for (const entity of spec.entities) {
-      addFile(`frontend/src/pages/${entity.modelName}Page.jsx`, frontendGen.generateEntityViewPage(entity, spec.relationships), 'javascript');
+      addFile(`frontend/src/pages/${entity.modelName}Page.jsx`, frontendGen.generateEntityViewPage(entity, spec.relationships, spec.entities, { hasAuth, operations: spec.operations }), 'javascript');
     }
 
-    // Approved Mockup Visuals functionally connected
-    const screensNav = [];
-    let navIdx = 1;
-    for (const s of (spec.screens || [])) {
-      if (s.html) {
-        const cleanBase = toPascalCase(s.name.replace(/[^a-zA-Z0-9_]/g, '')) || 'Screen';
-        screensNav.push({
-          key: `mockup_${toCamelCase(cleanBase)}_${navIdx}`,
-          title: s.title || s.name,
-          route: s.route
-        });
-        navIdx++;
-      }
-    }
+    addFile('frontend/src/components/ContractTask.jsx', require('fs').readFileSync(require.resolve('./contractTaskRuntime.jsx'), 'utf8'), 'javascript');
+
+    // Operational screens: ContractTask pages (HTML mockups become layout, never a separate CRUD dump)
+    const { screenTabKey, compactNavLabel } = require('./screenContract');
+    const isLoginScreen = s => /iniciodesesi|accesoalsistema|login|auth/i.test((s.name || '') + (s.route || '') + (s.title || '') + (s.key || ''));
+    const operationalScreens = (spec.screens || []).filter(s => !isLoginScreen(s));
+    const screensNav = operationalScreens.map(s => ({
+      key: screenTabKey(s),
+      title: s.title || s.name,
+      label: compactNavLabel(s.title || s.name),
+      route: s.route
+    }));
 
     const compiledMockups = [];
     let mockupIdx = 1;
-    for (const scr of (spec.screens || [])) {
-      if (scr.html) {
-        const cleanBase = toPascalCase(scr.name.replace(/[^a-zA-Z0-9_]/g, '')) || 'Screen';
-        const compName = `${cleanBase}${mockupIdx > 1 ? mockupIdx : ''}Mockup`;
-        const key = `mockup_${toCamelCase(cleanBase)}_${mockupIdx}`;
-        mockupIdx++;
+    for (const scr of operationalScreens) {
+      const hasWork = scr.html || scr.contract?.renderer === 'task' || (scr.contract?.fields || []).length || (scr.actions || []).length;
+      if (!hasWork) continue;
+      const cleanBase = toPascalCase((scr.name || 'Screen').replace(/[^a-zA-Z0-9_]/g, '')) || 'Screen';
+      const compName = `${cleanBase}${mockupIdx > 1 ? mockupIdx : ''}Mockup`;
+      const key = screenTabKey(scr);
+      mockupIdx++;
 
-        const matchingOp = (spec.operations || []).find(o => o.operationId === scr.connectedOperationId);
-        const targetEntity = scr.targetEntity || scr.entity || '';
-        const entityObj = spec.entities.find(e => (e.modelName || e.name || '').toUpperCase() === targetEntity.toUpperCase());
-        const convertedJsx = convertHtmlToJsx(scr.html, compName, scr.route, targetEntity, scr.mockupBinding, screensNav);
-        const mockupCode = generateInteractiveMockupComponent(compName, scr, convertedJsx, matchingOp, scr.actions, entityObj);
+      const matchingOp = (spec.operations || []).find(o => o.operationId === scr.connectedOperationId);
+      const targetEntity = scr.targetEntity || scr.entity || '';
+      const entityObj = spec.entities.find(e => (e.modelName || e.name || '').toUpperCase() === String(targetEntity).toUpperCase());
+      const convertedJsx = convertHtmlToJsx(scr.html || '<main></main>', compName, scr.route, targetEntity, scr.contract ? { ...scr.mockupBinding, screenContract: scr.contract } : scr.mockupBinding, screensNav);
+      const mockupCode = (scr.contract?.renderer || 'task') === 'task'
+        ? require('./contractTaskGenerator').generateContractTask(compName, scr, convertedJsx, screensNav)
+        : generateInteractiveMockupComponent(compName, scr, convertedJsx, matchingOp, scr.actions, entityObj);
 
-        addFile(`frontend/src/pages/mockups/${compName}.jsx`, mockupCode, 'javascript');
-        compiledMockups.push({
-          compName,
-          key,
-          title: scr.title || scr.name,
-          route: scr.route,
-          fileName: `${compName}.jsx`,
-          roles: scr.roles || []
-        });
-      }
+      addFile(`frontend/src/pages/mockups/${compName}.jsx`, mockupCode, 'javascript');
+      compiledMockups.push({
+        compName,
+        key,
+        title: scr.title || scr.name,
+        route: scr.route,
+        fileName: `${compName}.jsx`,
+        roles: scr.roles || [],
+        order: scr.contract?.order
+      });
     }
 
     // Role-Aware Dashboard connected to entities and operational screens
@@ -407,11 +429,25 @@ JWT_EXPIRATION=8h
     // Main App Shell with Navigation & Dynamic Routing
     addFile(
       'frontend/src/App.jsx',
-      frontendGen.generateAppJsx(projectName, spec.entities, spec.screens, spec.actors, compiledMockups, { hasAuth }),
+      frontendGen.generateAppJsx(projectName, spec.entities.map(e => ({ ...e, permissions: [...new Set(spec.operations.filter(o => o.entity === e.modelName && o.method === 'GET').flatMap(o => o.authorizedRoles || []))] })), spec.screens, spec.actors, compiledMockups, { hasAuth }),
       'javascript'
     );
 
-    // 4. Verify all local imports resolve to existing files in the generated bundle
+    // 4. Apply any verified persisted patches from decision/repair store so they survive clean regenerations
+    try {
+      const codegenDecisionService = require('./codegenDecision.service');
+      const storedPatches = codegenDecisionService.getStoredPatches(spec.project.id);
+      for (const patch of storedPatches) {
+        if (patch.targetFile && patch.targetString && patch.replacementString) {
+          const matchingFile = files.find(f => f.path.replace(/\\/g, '/') === patch.targetFile.replace(/\\/g, '/'));
+          if (matchingFile && matchingFile.content.includes(patch.targetString)) {
+            matchingFile.content = matchingFile.content.replace(patch.targetString, patch.replacementString);
+          }
+        }
+      }
+    } catch (_) {}
+
+    // 5. Verify all local imports resolve to existing files in the generated bundle
     validateGeneratedFileImports(files);
 
     const isApprovedSpec = Boolean(spec.approvedAt && spec.hash);
@@ -419,7 +455,8 @@ JWT_EXPIRATION=8h
     return {
       projectId: spec.project.id,
       projectName,
-      ready: true,
+      ready: diagnostics.ready,
+      reviewOnly,
       isApprovedSpec,
       diagnostics,
       stats: {
