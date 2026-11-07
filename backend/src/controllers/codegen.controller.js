@@ -36,9 +36,16 @@ exports.getPreview = async (req, res) => {
     });
   } catch (error) {
     console.error('Error en codegen.getPreview:', error);
-    return res.status(error.message.includes('no encontrado') ? 404 : 400).json({
+    const isNotFound = error.message?.includes('no encontrado') || error.code === 'PROJECT_NOT_FOUND';
+    const isDbUnavailable = error.message?.includes("Can't reach database") || error.code === 'P1001';
+    const status = isNotFound ? 404 : isDbUnavailable ? 503 : 400;
+    const userMessage = isDbUnavailable
+      ? 'No se puede conectar a la base de datos PostgreSQL (puerto 5433). Verifique que el servicio o contenedor de Docker esté iniciado.'
+      : error.message;
+
+    return res.status(status).json({
       success: false,
-      error: { message: error.message, code: error.code, details: error.details }
+      error: { message: userMessage, code: error.code || (isDbUnavailable ? 'DATABASE_UNAVAILABLE' : undefined), details: error.details }
     });
   }
 };
@@ -60,12 +67,14 @@ exports.downloadZip = async (req, res) => {
       const fs = require('fs'), path = require('path');
       const appRoot = process.cwd().endsWith('backend') ? process.cwd() : path.join(process.cwd(), 'backend');
       const root = path.resolve(appRoot, '.verification');
-      let target = path.resolve(job.zipPath);
-      if (!fs.existsSync(target) || !target.startsWith(root + path.sep)) {
-        const candidate = path.resolve(root, path.basename(job.zipPath));
-        if (fs.existsSync(candidate)) target = candidate;
+      const baseFilename = path.basename(String(job.zipPath || '').replace(/\\/g, '/'));
+      let target = path.resolve(root, baseFilename);
+      if (!fs.existsSync(target)) {
+        target = path.resolve(job.zipPath);
       }
-      if (!target.startsWith(root + path.sep) || !fs.realpathSync(target).startsWith(fs.realpathSync(root) + path.sep)) throw new Error('INVALID_JOB_BUNDLE_PATH');
+      if (!fs.existsSync(target) || !fs.realpathSync(target).startsWith(fs.realpathSync(root) + path.sep)) {
+        throw new Error('INVALID_JOB_BUNDLE_PATH: El archivo ZIP no se encuentra en el directorio de verificación.');
+      }
       const buffer = fs.readFileSync(target);
       if (require('../services/codegen/exportIntegrity').sha256(buffer) !== job.zipSha256) throw new Error('JOB_BUNDLE_INTEGRITY_FAILED');
       res.setHeader('Content-Type', 'application/zip');
@@ -208,9 +217,14 @@ exports.getAiProposalStatus = async (req, res) => {
     });
   } catch (error) {
     console.error('Error en codegen.getAiProposalStatus:', error);
-    return res.status(400).json({
+    const isDbUnavailable = error.message?.includes("Can't reach database") || error.code === 'P1001';
+    return res.status(isDbUnavailable ? 503 : 400).json({
       success: false,
-      error: { message: error.message }
+      error: {
+        message: isDbUnavailable
+          ? 'No se puede conectar a la base de datos PostgreSQL (puerto 5433). Verifique que el servicio o contenedor de Docker esté iniciado.'
+          : error.message
+      }
     });
   }
 };

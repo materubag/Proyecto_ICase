@@ -104,22 +104,22 @@ export default function ProjectsDashboard({ onOpenProject }) {
   return (
     <div>
       {/* Dashboard header */}
-      <div style={{ marginBottom: '1.5rem' }}>
-        <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', flexWrap: 'wrap', gap: '1rem' }}>
+      <div style={{ marginBottom: '1.25rem' }}>
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: '1rem' }}>
           <div>
-            <h1 style={{ fontSize: '1.5rem', fontWeight: 700, letterSpacing: '-0.025em', color: 'var(--on-surface)', marginBottom: '4px' }}>
+            <h1 style={{ fontSize: '1.25rem', fontWeight: 600, letterSpacing: '-0.02em', color: 'var(--on-surface)', marginBottom: '2px' }}>
               Proyectos
             </h1>
             <p style={{ fontSize: '0.8125rem', color: 'var(--secondary)' }}>
-              {projects.length} proyecto{projects.length !== 1 ? 's' : ''} · Ingeniería de Software Asistida
+              {projects.length} proyecto{projects.length !== 1 ? 's' : ''}
             </p>
           </div>
           <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
-            <div className="search-bar" style={{ width: '240px' }}>
+            <div className="search-bar" style={{ width: '220px' }}>
               <span className="ms">search</span>
               <input
                 type="text"
-                placeholder="Buscar proyectos..."
+                placeholder="Buscar..."
                 value={search}
                 onChange={e => setSearch(e.target.value)}
               />
