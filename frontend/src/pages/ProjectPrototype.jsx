@@ -155,9 +155,8 @@ export default function ProjectPrototype({ project, onProjectUpdated }) {
             if (raw) {
               const meta = JSON.parse(raw);
               const prevVersions = meta.prevVersions || {};
-              // Detectar si alguna pantalla seleccionada tiene una versión más nueva
               const hasNewVersion = stored.some(s => {
-                const prevVer = prevVersions[s.id] || 0;
+                const prevVer = prevVersions[s.id] || prevVersions[s.route] || prevVersions[s.name] || 0;
                 return (s.version || 1) > prevVer;
               });
               if (hasNewVersion) {
@@ -198,7 +197,10 @@ export default function ProjectPrototype({ project, onProjectUpdated }) {
     try {
       const prevVersions = {};
       screens.forEach(s => {
-        if (s.id) prevVersions[s.id] = s.version || 1;
+        const ver = s.version || 1;
+        if (s.id) prevVersions[s.id] = ver;
+        if (s.route) prevVersions[s.route] = ver;
+        if (s.name) prevVersions[s.name] = ver;
       });
 
       setIsGenerating(true);
@@ -217,6 +219,11 @@ export default function ProjectPrototype({ project, onProjectUpdated }) {
           ids.push(node.id);
           continue;
         }
+        const actor = (project.actors || []).find(item => {
+          const actorName = (item.name || '').toLowerCase();
+          const wanted = (node.actorName || node.categoryName || '').toLowerCase();
+          return wanted && (actorName === wanted || actorName.includes(wanted) || wanted.includes(actorName));
+        });
         const candidate = await engineering(project.id, '/models', {
           kind: 'NavigationNode',
           name: node.name,
@@ -225,7 +232,7 @@ export default function ProjectPrototype({ project, onProjectUpdated }) {
             route: node.route,
             platform: node.platform,
             parentId: null,
-            actorIds: [],
+            actorIds: actor && node.category !== 'public' ? [actor.id] : [],
             useCaseIds: []
           },
           requirementIds: node.requirementIds
@@ -259,11 +266,10 @@ export default function ProjectPrototype({ project, onProjectUpdated }) {
       ]);
       setSelectedScreenId(normalized[0]?.id || null);
       setSelectorOpen(false);
-    } catch (error) {
-      setGenerationError(error.message || 'No se pudo generar el prototipo.');
-    } finally {
       setIsGenerating(false);
       localStorage.removeItem(STORAGE_KEY);
+    } catch (error) {
+      setGenerationError((error.message || 'No se pudo generar el prototipo.') + ' Si Stitch sigue trabajando, espera: la lista se actualizará sola al guardar cada pantalla.');
     }
   }
 

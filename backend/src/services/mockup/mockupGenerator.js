@@ -114,56 +114,35 @@ function generateHtmlMockup(screen) {
         </div>`;
     }).join('\n');
   } else {
-    // Prototipo minimalista estándar si no tiene componentes declarados
+    const fields = (screen.fields || []).length ? screen.fields : [];
+    const action = screen.primaryAction || 'Guardar';
+    const fieldInputs = (fields.length ? fields : ['Dato principal']).map(label => `
+          <div class="mockup-form-group">
+            <label class="mockup-label">${label}</label>
+            <input type="text" class="mockup-input" placeholder="${label}" />
+          </div>`).join('');
+    const headers = screen.tableHeaders || [];
+    const rows = screen.sampleRows || [];
     componentsHtml = `
       <div class="mockup-heading">
         <h2>${title}</h2>
         <p class="mockup-subtext">${description}</p>
       </div>
-
-      <div class="mockup-card">
-        <div class="mockup-card-title">Datos Principales</div>
-        <div class="mockup-form-grid">
-          <div class="mockup-form-group">
-            <label class="mockup-label">Código / Referencia</label>
-            <input type="text" class="mockup-input" placeholder="Ej: REG-001" />
-          </div>
-          <div class="mockup-form-group">
-            <label class="mockup-label">Nombre / Descripción</label>
-            <input type="text" class="mockup-input" placeholder="Detalle de la operación..." />
-          </div>
-        </div>
+      ${screen.nav?.length ? `<nav class="mockup-navbar"><div class="brand">${(screen.actors && screen.actors[0]) || 'Autron5'}</div><div class="nav-links">${screen.nav.map(item => `<span class="nav-item">${item}</span>`).join('')}</div></nav>` : ''}
+      ${fields.length ? `<div class="mockup-card">
+        <div class="mockup-card-title">${title}</div>
+        <div class="mockup-form-grid">${fieldInputs}</div>
         <div class="mockup-action-group">
-          <button class="btn-mockup btn-mockup-primary">Registrar</button>
-          <button class="btn-mockup btn-mockup-secondary">Limpiar</button>
+          <button class="btn-mockup btn-mockup-primary">${action}</button>
+          <button class="btn-mockup btn-mockup-secondary">Cancelar</button>
         </div>
-      </div>
-
-      <div class="mockup-card" style="padding: 0; overflow: hidden; margin-top: 1.25rem;">
-        <div style="padding: 0.9rem 1.25rem; border-bottom: 1px solid #f1f5f9; display: flex; justify-content: space-between; align-items: center;">
-          <span style="font-weight: 600; font-size: 0.9rem; color: #0f172a;">Historial Reciente</span>
-          <span style="font-size: 0.75rem; color: #64748b;">Actualizado</span>
-        </div>
+      </div>` : ''}
+      ${headers.length ? `<div class="mockup-card" style="padding: 0; overflow: hidden; margin-top: 1.25rem;">
         <table class="mockup-table">
-          <thead>
-            <tr><th>Código</th><th>Operación</th><th>Responsable</th><th>Estado</th></tr>
-          </thead>
-          <tbody>
-            <tr>
-              <td><code>REG-001</code></td>
-              <td>Atención registrada con éxito</td>
-              <td>Administrador</td>
-              <td><span class="mockup-badge success">Completado</span></td>
-            </tr>
-            <tr>
-              <td><code>REG-002</code></td>
-              <td>Solicitud pendiente de validación</td>
-              <td>Recepción</td>
-              <td><span class="mockup-badge pending">En Proceso</span></td>
-            </tr>
-          </tbody>
+          <thead><tr>${headers.map(h => `<th>${h}</th>`).join('')}</tr></thead>
+          <tbody>${(rows.length ? rows : [headers.map(() => '—')]).map(row => `<tr>${row.map(cell => `<td>${cell}</td>`).join('')}</tr>`).join('')}</tbody>
         </table>
-      </div>
+      </div>` : ''}
     `;
   }
 

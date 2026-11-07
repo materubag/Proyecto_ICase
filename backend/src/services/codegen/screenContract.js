@@ -96,28 +96,17 @@ function compactNavLabel(title) {
   return raw;
 }
 
+function isAuthScreen(screen = {}) {
+  const text = tokenNorm((screen.name || '') + ' ' + (screen.title || '') + ' ' + (screen.route || '') + ' ' + (screen.key || ''));
+  return /login|iniciodesesion|accesoalsistema|^auth$/.test(text);
+}
+
 function inferScreenEntity(screen, entities = []) {
   const text = tokenNorm((screen.name || '') + ' ' + (screen.title || '') + ' ' + (screen.route || ''));
-  if (!text || /login|iniciodesesion|accesoalsistema/.test(text) || !entities.length) return null;
-  const hintBoost = (names) => {
-    let extra = 0;
-    if (/cita/.test(text) && names.some(n => /cita/.test(n))) extra += 8;
-    if (/(recepcion|inspeccion|ingreso)/.test(text) && names.some(n => /(recepcion|inspeccion|ingreso)/.test(n))) extra += 8;
-    if (/diagnostico/.test(text) && names.some(n => /diagnostico/.test(n))) extra += 8;
-    if (/(orden|bitacora)/.test(text) && names.some(n => /(orden|bitacora|trabajo)/.test(n))) extra += 8;
-    if (/vehiculo/.test(text) && names.some(n => /vehiculo/.test(n))) extra += 5;
-    if (/cliente/.test(text) && names.some(n => /cliente/.test(n))) extra += 8;
-    if (/(repuesto|inventario)/.test(text) && names.some(n => /(repuesto|inventario|pieza|stock)/.test(n))) extra += 8;
-    if (/proveedor/.test(text) && names.some(n => /proveedor/.test(n))) extra += 8;
-    if (/usuario/.test(text) && names.some(n => /usuario/.test(n))) extra += 8;
-    if (/(servicio|tarifa)/.test(text) && names.some(n => /(servicio|tarifa)/.test(n))) extra += 8;
-    if (/(presupuesto|cotiz)/.test(text) && names.some(n => /(presupuesto|cotiz)/.test(n))) extra += 8;
-    if (/(conocimiento|averia)/.test(text) && names.some(n => /(conocimiento|averia|falla)/.test(n))) extra += 8;
-    return extra;
-  };
+  if (!text || isAuthScreen(screen) || !entities.length) return null;
   const ranked = entities.map(entity => {
     const names = [entity.modelName, entity.name, entity.tableName, entity.endpoint].filter(Boolean).map(tokenNorm);
-    let score = hintBoost(names);
+    let score = 0;
     for (const name of names) {
       if (!name || name.length < 3) continue;
       if (text === name) score += 10;
@@ -129,18 +118,7 @@ function inferScreenEntity(screen, entities = []) {
 }
 
 function inferScreenRoles(screen, actors = []) {
-  const text = tokenNorm((screen.name || '') + ' ' + (screen.title || '') + ' ' + (screen.route || ''));
-  const namesOf = (...hints) => actors.filter(a => hints.some(h => {
-    const actor = tokenNorm(a.name);
-    const hint = tokenNorm(h);
-    return actor && hint && (actor.includes(hint) || hint.includes(actor));
-  })).map(a => a.name);
-  if (/portalcliente|citascliente|misvehiculo|cotizacioncliente|seguimientodeavance/.test(text)) return namesOf('cliente');
-  if (/recepcion|directorio.*cliente|expedientedigital|agendaygestiondecitas/.test(text)) return namesOf('recepcion');
-  if (/diagnostico|ordendetrabajo|bitacora|basedeconocimiento|averiaobd/.test(text)) return namesOf('mecanico', 'tecnico');
-  if (/tablero|indicador|reporte|usuariosroles|auditoria|inventario|catalogomaestro|proveedor|mostrador/.test(text)) return namesOf('administrador', 'admin');
-  if (/login|iniciodesesion|accesoalsistema/.test(text)) return [];
-  return [];
+  return actors.filter(actor => (screen.actorIds || []).includes(actor.id)).map(actor => actor.name);
 }
 
 function screenTabKey(screen) {
@@ -180,7 +158,7 @@ function buildScreenContract(screen, spec) {
   const fields = baseFields.map(f => {
     const override = declaredFields.find(d => (d.fieldName || d.name) === f.fieldName) || {};
     const merged = { ...f, ...override, mode: f.isPk || f.fieldName === 'id' ? 'automatic' : override.mode || f.mode };
-    if (f.relation && (!override.relation || !override.relation.dataSource)) {
+    if (f.relation && override.relation !== null) {
       merged.relation = { ...f.relation, ...(override.relation || {}) };
     }
     return merged;
@@ -191,13 +169,11 @@ function buildScreenContract(screen, spec) {
   if (declaredFields.length) fields.sort((a, b) => declaredFields.findIndex(f => f.fieldName === a.fieldName) - declaredFields.findIndex(f => f.fieldName === b.fieldName));
 
   const listOp = listOperationFor(entity, spec.operations);
-  if (listOp && !actions.some(a => a.operationId === listOp.operationId)) {
+  if (listOp && !(declared.actions || []).length && !actions.some(a => a.operationId === listOp.operationId)) {
     actions = [{ actionId: 'consultar', name: 'Consultar ' + (entity.name || entity.modelName), operationId: listOp.operationId, method: 'GET', route: listOp.route, permissions: listOp.authorizedRoles || [], roles: listOp.authorizedRoles || [] }, ...actions];
   }
-  const writeOp = actions.find(a => a.method === 'POST' && String(a.route || '').includes('/operations/'))
-    || (entity && spec.operations.find(o => o.type === 'BUSINESS_LOGIC' && o.method === 'POST' && belongsToEntity(o, entity)))
-    || actions.find(a => a.method === 'POST')
-    || (entity && spec.operations.find(o => o.method === 'POST' && belongsToEntity(o, entity)));
+  const writeOp = actions.find(a => a.actionId === declared.primaryActionId)
+    || actions.find(a => a.method === 'POST');
   if (writeOp && !actions.some(a => a.operationId === writeOp.operationId || a.actionId === writeOp.actionId)) {
     actions.push({ actionId: 'confirmar', name: writeOp.name || ('Guardar ' + (entity?.name || '')), operationId: writeOp.operationId, method: writeOp.method || 'POST', route: writeOp.route, permissions: writeOp.authorizedRoles || [], roles: writeOp.authorizedRoles || [] });
   }
@@ -212,26 +188,44 @@ function buildScreenContract(screen, spec) {
     const name = action.route.replace(/^\/api\//, '').replace(/^\//, '');
     addSource(name, action.route, action.operationId);
   }
-  if (entity) {
+  if (entity && !Object.hasOwn(declared, 'dataSources')) {
     const naming = deriveNaming(entity.name);
     const route = `/api/${entity.endpoint || naming.endpoint}`;
     addSource(entity.endpoint || naming.endpoint, route, listOp?.operationId);
   }
   for (const field of fields) {
-    if (field.relation?.endpoint) {
+    if (field.mode === 'editable' && field.relation?.endpoint) {
       const name = field.relation.dataSource || field.relation.endpoint.replace(/^\/api\//, '');
       field.relation.dataSource = name;
       addSource(name, field.relation.endpoint);
     }
   }
 
-  const listSource = declared.listSource || (entity ? (entity.endpoint || deriveNaming(entity.name).endpoint) : [...sourcesByName.keys()][0]) || null;
+  const listSource = Object.hasOwn(declared, 'listSource') ? declared.listSource : (entity ? (entity.endpoint || deriveNaming(entity.name).endpoint) : [...sourcesByName.keys()][0]) || null;
   const editable = fields.filter(f => f.mode === 'editable' && !isPasswordField(f.fieldName) && f.list !== false);
   const columns = (declared.columns || editable.slice(0, 6).map(f => ({ field: f.fieldName, label: f.label || f.fieldName, relation: f.relation || null })))
     .filter(col => !isPasswordField(col.field));
   const confirmAction = actions.find(a => a.actionId === 'confirmar') || actions.find(a => a.method === 'POST');
-  const unresolved = [...(declared.unresolved || [])].filter(message => !/no está respaldado por los actores/.test(message));
-  if (!actions.length) unresolved.push('UNRESOLVED: definir operaciones explícitas para la pantalla');
+  const unresolved = [...(declared.unresolved || [])];
+  if (!isAuthScreen(screen) && fields.some(f => f.mode === 'editable') && !writeOp) {
+    unresolved.push('UNRESOLVED: ¿Qué operación aprobada ejecuta el formulario? Sin esa decisión se bloquea el envío; no se sustituye por CRUD.');
+  }
+  if (isAuthScreen(screen)) {
+    if (!actions.length) {
+      actions = [{
+        actionId: 'iniciar-sesion',
+        name: 'Iniciar sesión',
+        operationId: 'auth_login',
+        method: 'POST',
+        route: '/api/auth/login',
+        permissions: [],
+        roles: []
+      }];
+    }
+    unresolved.length = 0;
+  } else if (!actions.length) {
+    unresolved.push('UNRESOLVED: definir operaciones explícitas para la pantalla');
+  }
   for (const a of actions) if (a.unresolved) unresolved.push(`UNRESOLVED: operación ${a.operationId}`);
   for (const f of fields) if (f.relation && (!f.relation.endpoint || !f.relation.valueField || !f.relation.labelField)) unresolved.push(`UNRESOLVED: selector ${f.fieldName} requiere entidad, PK y etiqueta`);
 
@@ -288,4 +282,4 @@ function renderFields(fields, options = {}) {
   }).join('\n');
 }
 
-module.exports = { buildFieldContract, buildScreenContract, renderFields, inferTargetFromFieldName, screenTabKey, isLiveFormField, isPasswordField, inferScreenRoles, inferScreenEntity, compactNavLabel };
+module.exports = { buildFieldContract, buildScreenContract, renderFields, inferTargetFromFieldName, screenTabKey, isLiveFormField, isPasswordField, inferScreenRoles, inferScreenEntity, isAuthScreen, compactNavLabel };

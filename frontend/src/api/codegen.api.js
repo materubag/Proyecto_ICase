@@ -40,8 +40,8 @@ export const codegenApi = {
   /**
    * Descarga el archivo .zip directamente en el navegador
    */
-  downloadZip: async (projectId, includeDocker = true, defaultFilename = 'proyecto-api.zip') => {
-    const url = `${BASE_URL}/projects/${projectId}/codegen/download?includeDocker=${includeDocker}`;
+  downloadZip: async (projectId, includeDocker = true, defaultFilename = 'proyecto-api.zip', jobId = null) => {
+    const url = `${BASE_URL}/projects/${projectId}/codegen/download?includeDocker=${includeDocker}${jobId ? '&jobId=' + encodeURIComponent(jobId) : ''}`;
     const response = await fetch(url);
     if (!response.ok) {
       const errJson = await response.json().catch(() => ({}));
@@ -80,20 +80,20 @@ export const codegenApi = {
   /**
    * Solicita propuestas de IA para operaciones incompletas
    */
-  proposeOperations: (projectId, operationIds = []) => {
+  proposeOperations: (projectId, operationIds = [], options = {}) => {
     return request(`/projects/${projectId}/codegen/ai/propose-operations`, {
       method: 'POST',
-      body: { operationIds }
+      body: { operationIds, useLiveAi: options.useLiveAi === true }
     });
   },
 
   /**
    * Solicita propuestas de vinculación de mockups a la API
    */
-  proposeBindings: (projectId, screenIds = []) => {
+  proposeBindings: (projectId, screenIds = [], options = {}) => {
     return request(`/projects/${projectId}/codegen/ai/propose-bindings`, {
       method: 'POST',
-      body: { screenIds }
+      body: { screenIds, useLiveAi: options.useLiveAi === true }
     });
   },
 
@@ -160,6 +160,10 @@ export const codegenApi = {
       body: {}
     });
   },
+
+  reviewAll: (projectId, jobId) => request(`/projects/${projectId}/codegen/jobs/${jobId}/resume`, {
+    method: 'POST', body: { batchReview: true }
+  }),
 
   /**
    * Obtiene las decisiones de negocio pendientes para el proyecto

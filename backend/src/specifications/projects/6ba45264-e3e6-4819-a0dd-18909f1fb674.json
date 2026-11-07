@@ -1,0 +1,659 @@
+{
+  "projectId": "6ba45264-e3e6-4819-a0dd-18909f1fb674",
+  "requirementCodes": [
+    "RF-03",
+    "RF-04",
+    "RF-07",
+    "RF-15",
+    "RF-20",
+    "RF-27"
+  ],
+  "evidence": "Contratos de recepci?n confirmados y requisitos aprobados RF-03/04/07/15/20/27; auditor?a INFORME.md F10, F11, F16. Esta extensi?n no aprueba los mockups pendientes.",
+  "operations": [
+    {
+      "operationId": "op_clientes_list",
+      "authorizedRoles": [
+        "Administrador",
+        "Recepción",
+        "Mecánico",
+        "Cliente"
+      ],
+      "recordScope": [
+        {
+          "roles": [
+            "Cliente"
+          ],
+          "where": {
+            "usuarioId": {
+              "$ref": "user.id"
+            }
+          },
+          "immutableFields": [
+            "usuarioId"
+          ]
+        }
+      ]
+    },
+    {
+      "operationId": "op_clientes_getById",
+      "authorizedRoles": [
+        "Administrador",
+        "Recepción",
+        "Mecánico",
+        "Cliente"
+      ],
+      "recordScope": [
+        {
+          "roles": [
+            "Cliente"
+          ],
+          "where": {
+            "usuarioId": {
+              "$ref": "user.id"
+            }
+          },
+          "immutableFields": [
+            "usuarioId"
+          ]
+        }
+      ]
+    },
+    {
+      "operationId": "op_cotizaciones_list",
+      "authorizedRoles": [
+        "Administrador",
+        "Recepción",
+        "Mecánico",
+        "Cliente"
+      ],
+      "recordScope": [
+        {
+          "roles": [
+            "Cliente"
+          ],
+          "lookups": [
+            {
+              "id": "owner",
+              "entity": "CLIENTE",
+              "where": {
+                "usuarioId": {
+                  "$ref": "user.id"
+                }
+              }
+            }
+          ],
+          "where": {
+            "clienteId": {
+              "$ref": "steps.owner.id"
+            }
+          },
+          "immutableFields": [
+            "clienteId"
+          ]
+        }
+      ]
+    },
+    {
+      "operationId": "op_cotizaciones_getById",
+      "authorizedRoles": [
+        "Administrador",
+        "Recepción",
+        "Mecánico",
+        "Cliente"
+      ],
+      "recordScope": [
+        {
+          "roles": [
+            "Cliente"
+          ],
+          "lookups": [
+            {
+              "id": "owner",
+              "entity": "CLIENTE",
+              "where": {
+                "usuarioId": {
+                  "$ref": "user.id"
+                }
+              }
+            }
+          ],
+          "where": {
+            "clienteId": {
+              "$ref": "steps.owner.id"
+            }
+          },
+          "immutableFields": [
+            "clienteId"
+          ]
+        }
+      ]
+    },
+    {
+      "operationId": "op_vehiculos_list",
+      "authorizedRoles": [
+        "Administrador",
+        "Recepción",
+        "Mecánico",
+        "Cliente"
+      ],
+      "recordScope": [
+        {
+          "roles": [
+            "Cliente"
+          ],
+          "lookups": [
+            {
+              "id": "owner",
+              "entity": "CLIENTE",
+              "where": {
+                "usuarioId": {
+                  "$ref": "user.id"
+                }
+              }
+            }
+          ],
+          "where": {
+            "clienteId": {
+              "$ref": "steps.owner.id"
+            }
+          },
+          "immutableFields": [
+            "clienteId"
+          ]
+        }
+      ]
+    },
+    {
+      "operationId": "op_vehiculos_getById",
+      "authorizedRoles": [
+        "Administrador",
+        "Recepción",
+        "Mecánico",
+        "Cliente"
+      ],
+      "recordScope": [
+        {
+          "roles": [
+            "Cliente"
+          ],
+          "lookups": [
+            {
+              "id": "owner",
+              "entity": "CLIENTE",
+              "where": {
+                "usuarioId": {
+                  "$ref": "user.id"
+                }
+              }
+            }
+          ],
+          "where": {
+            "clienteId": {
+              "$ref": "steps.owner.id"
+            }
+          },
+          "immutableFields": [
+            "clienteId"
+          ]
+        }
+      ]
+    },
+    {
+      "operationId": "UC-17",
+      "name": "Consultar progreso de reparación propia",
+      "bindingVersion": 2,
+      "unresolved": [],
+      "targetEntity": "ORDENTRABAJO",
+      "businessRules": [],
+      "authorizedRoles": [
+        "Cliente"
+      ],
+      "input": {
+        "bodySchema": {
+          "type": "object",
+          "properties": {
+            "vehiculoId": {
+              "type": "integer"
+            }
+          },
+          "required": [
+            "vehiculoId"
+          ],
+          "additionalProperties": false
+        }
+      },
+      "resultStep": "ordenes",
+      "steps": [
+        {
+          "id": "cliente",
+          "action": "QUERY",
+          "entity": "CLIENTE",
+          "where": {
+            "usuarioId": {
+              "$ref": "user.id"
+            }
+          },
+          "attributes": [
+            "id"
+          ],
+          "requireMatch": true,
+          "errorStatus": 403,
+          "errorCode": "FORBIDDEN_RECORD"
+        },
+        {
+          "id": "vehiculo",
+          "action": "QUERY",
+          "entity": "VEHICULO",
+          "where": {
+            "id": {
+              "$ref": "payload.vehiculoId"
+            },
+            "clienteId": {
+              "$ref": "steps.cliente.0.id"
+            }
+          },
+          "attributes": [
+            "id"
+          ],
+          "requireMatch": true,
+          "errorStatus": 403,
+          "errorCode": "FORBIDDEN_RECORD"
+        },
+        {
+          "id": "ordenes",
+          "action": "QUERY",
+          "entity": "ORDENTRABAJO",
+          "where": {
+            "vehiculoId": {
+              "$ref": "payload.vehiculoId"
+            }
+          },
+          "attributes": [
+            "id",
+            "vehiculoId",
+            "estado",
+            "fechaApertura",
+            "fechaCierre"
+          ]
+        }
+      ],
+      "evidence": {
+        "requirementCodes": [
+          "RF-20"
+        ],
+        "scope": "user.id -> CLIENTE.usuarioId -> VEHICULO.clienteId -> ORDENTRABAJO.vehiculoId"
+      }
+    }
+  ],
+  "screens": [
+    {
+      "route": "/clientes",
+      "htmlHash": "287ff35551afd2da8f176c3b6e50d44b9528b96e58afe0829ebe3bf84a2cd7e4",
+      "contract": {
+        "controlBindings": {
+          "input": [
+            {
+              "index": 2,
+              "field": "nombre"
+            },
+            {
+              "index": 4,
+              "field": "telefono"
+            },
+            {
+              "index": 5,
+              "field": "correo"
+            }
+          ],
+          "button": [
+            {
+              "index": 19,
+              "actionId": "confirmar"
+            }
+          ]
+        },
+        "additionalControls": [
+          {
+            "beforeActionId": "confirmar",
+            "fields": [
+              "direccion"
+            ]
+          }
+        ],
+        "tableColumns": [
+          {
+            "index": 0,
+            "fields": [
+              {
+                "field": "nombre"
+              },
+              {
+                "field": "telefono"
+              },
+              {
+                "field": "correo"
+              }
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "route": "/vehiculos",
+      "htmlHash": "69163e66b6604f9b59903c477feaf7453137afe9acc303b5f66987210a65150a",
+      "contract": {
+        "controlBindings": {
+          "button": [
+            {
+              "index": 8,
+              "actionId": "confirmar",
+              "label": "Guardar vehículo"
+            }
+          ]
+        },
+        "additionalControls": [
+          {
+            "beforeActionId": "confirmar",
+            "fields": [
+              "clienteId",
+              "placa",
+              "marca",
+              "modelo",
+              "anio",
+              "vin",
+              "color"
+            ]
+          }
+        ],
+        "recordListAfterActionId": "confirmar"
+      }
+    },
+    {
+      "route": "/recepcion",
+      "htmlHash": "12eaca88d45c23369c895ee4bc1219ce53191b683fc21f2bbe64f9c3a56d0110",
+      "contract": {
+        "controlBindings": {
+          "input": [
+            {
+              "index": 0,
+              "field": "kilometraje"
+            }
+          ],
+          "textarea": [
+            {
+              "index": 0,
+              "field": "motivoIngreso"
+            }
+          ],
+          "button": [
+            {
+              "index": 3,
+              "field": "nivelCombustible",
+              "value": 0
+            },
+            {
+              "index": 4,
+              "field": "nivelCombustible",
+              "value": 0.25
+            },
+            {
+              "index": 5,
+              "field": "nivelCombustible",
+              "value": 0.5
+            },
+            {
+              "index": 6,
+              "field": "nivelCombustible",
+              "value": 0.75
+            },
+            {
+              "index": 7,
+              "field": "nivelCombustible",
+              "value": 1
+            },
+            {
+              "index": 13,
+              "actionId": "confirmar"
+            }
+          ]
+        },
+        "additionalControls": [
+          {
+            "beforeActionId": "confirmar",
+            "fields": [
+              "clienteId",
+              "vehiculoId",
+              "citaId",
+              "observaciones",
+              "evidencias"
+            ]
+          }
+        ],
+        "recordListAfterActionId": "confirmar"
+      }
+    },
+    {
+      "route": "/mis-vehiculos",
+      "roles": [
+        "Cliente"
+      ],
+      "targetEntity": "VEHICULO",
+      "contract": {
+        "entityId": "604afa06-aeec-496d-bfa0-22ea073f8f56",
+        "fields": [
+          {
+            "fieldName": "id",
+            "mode": "readonly"
+          },
+          {
+            "fieldName": "marca",
+            "mode": "readonly"
+          },
+          {
+            "fieldName": "modelo",
+            "mode": "readonly"
+          },
+          {
+            "fieldName": "anio",
+            "mode": "readonly"
+          },
+          {
+            "fieldName": "vin",
+            "mode": "readonly"
+          },
+          {
+            "fieldName": "color",
+            "mode": "readonly"
+          },
+          {
+            "fieldName": "kilometrajeActual",
+            "mode": "readonly"
+          },
+          {
+            "fieldName": "fechaRegistro",
+            "mode": "readonly"
+          },
+          {
+            "fieldName": "clienteId",
+            "mode": "readonly"
+          },
+          {
+            "fieldName": "placa",
+            "mode": "readonly"
+          }
+        ],
+        "actions": [
+          {
+            "actionId": "consultar",
+            "operationId": "op_vehiculos_list"
+          }
+        ],
+        "primaryActionId": "consultar",
+        "dataSources": [],
+        "listSource": "vehiculos",
+        "columns": [
+          {
+            "field": "placa",
+            "label": "Placa"
+          },
+          {
+            "field": "marca",
+            "label": "Marca"
+          },
+          {
+            "field": "modelo",
+            "label": "Modelo"
+          }
+        ],
+        "unresolved": [],
+        "purpose": "Consultar exclusivamente los veh?culos vinculados al cliente autenticado.",
+        "tableColumns": [
+          {
+            "index": 0,
+            "field": "placa"
+          },
+          {
+            "index": 1,
+            "fields": [
+              {
+                "field": "marca"
+              },
+              {
+                "field": "modelo"
+              }
+            ]
+          },
+          {
+            "index": 2,
+            "field": "anio"
+          },
+          {
+            "index": 4,
+            "field": "kilometrajeActual"
+          }
+        ]
+      }
+    },
+    {
+      "route": "/progreso-reparacion",
+      "htmlHash": "a3ef061d6e5d3afcb732dbf034f107432ad1dfdeff0aeb9989ebce42935e7291",
+      "roles": [
+        "Cliente"
+      ],
+      "targetEntity": "ORDENTRABAJO",
+      "contract": {
+        "entityId": "3a849f41-7ed2-432f-8ea1-cb5da5e66f1d",
+        "fields": [
+          {
+            "fieldName": "id",
+            "mode": "readonly",
+            "submit": false
+          },
+          {
+            "fieldName": "cotizacionId",
+            "mode": "readonly",
+            "submit": false
+          },
+          {
+            "fieldName": "vehiculoId",
+            "mode": "editable",
+            "submit": true,
+            "relation": {
+              "dataSource": "vehiculos",
+              "labelField": "placa",
+              "labelFields": [
+                "placa",
+                "marca",
+                "modelo"
+              ]
+            }
+          },
+          {
+            "fieldName": "usuarioId",
+            "mode": "readonly",
+            "submit": false
+          },
+          {
+            "fieldName": "fechaApertura",
+            "mode": "readonly",
+            "submit": false
+          },
+          {
+            "fieldName": "fechaCierre",
+            "mode": "readonly",
+            "submit": false
+          },
+          {
+            "fieldName": "estado",
+            "mode": "readonly",
+            "submit": false
+          },
+          {
+            "fieldName": "kilometraje",
+            "mode": "readonly",
+            "submit": false
+          },
+          {
+            "fieldName": "observaciones",
+            "mode": "readonly",
+            "submit": false
+          }
+        ],
+        "actions": [
+          {
+            "actionId": "consultar-progreso",
+            "operationId": "UC-17",
+            "name": "Consultar progreso"
+          }
+        ],
+        "primaryActionId": "consultar-progreso",
+        "listSource": null,
+        "dataSources": [
+          {
+            "name": "vehiculos",
+            "route": "/api/vehiculos",
+            "operationId": "op_vehiculos_list"
+          }
+        ],
+        "columns": [
+          {
+            "field": "id",
+            "label": "Orden"
+          },
+          {
+            "field": "estado",
+            "label": "Estado"
+          },
+          {
+            "field": "fechaApertura",
+            "label": "Apertura"
+          },
+          {
+            "field": "fechaCierre",
+            "label": "Cierre"
+          }
+        ],
+        "controlBindings": {
+          "button": [
+            {
+              "index": 5,
+              "actionId": "consultar-progreso",
+              "label": "Consultar progreso"
+            }
+          ]
+        },
+        "additionalControls": [
+          {
+            "beforeActionId": "consultar-progreso",
+            "fields": [
+              "vehiculoId"
+            ]
+          }
+        ],
+        "recordListAfterActionId": "consultar-progreso",
+        "unresolved": [],
+        "purpose": "Consultar el estado de las reparaciones del vehiculo propio."
+      }
+    }
+  ]
+}

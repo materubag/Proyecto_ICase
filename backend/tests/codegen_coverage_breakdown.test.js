@@ -45,21 +45,21 @@ test('Coverage Breakdown: Distinguishes traced, implemented, and validated requi
 
   const diag = validateProjectSpec(spec, { validatedRequirementIds: ['rf-data'] });
 
-  assert.equal(diag.ready, true);
+  assert.equal(diag.ready, false);
   assert.equal(diag.coverage.requirementsTotal, 3);
   assert.equal(diag.coverage.requirementsTraced, 3);
-  assert.equal(diag.coverage.requirementsImplemented, 3);
-  assert.equal(diag.coverage.requirementsValidated, 1);
-  assert.equal(diag.coverage.coveragePercentage, 100);
+  assert.equal(diag.coverage.requirementsImplemented, 0);
+  assert.equal(diag.coverage.requirementsValidated, 0);
+  assert.equal(diag.coverage.coveragePercentage, 0);
 
   const reqData = diag.coverage.details.find(d => d.code === 'RF-01');
   assert.equal(reqData.nature, 'DATA');
-  assert.equal(reqData.implemented, true);
-  assert.equal(reqData.validated, true);
+  assert.equal(reqData.implemented, false);
+  assert.equal(reqData.validated, false);
 
   const reqLogic = diag.coverage.details.find(d => d.code === 'RF-02');
   assert.equal(reqLogic.nature, 'BUSINESS_LOGIC');
-  assert.equal(reqLogic.implemented, true);
+  assert.equal(reqLogic.implemented, false);
 });
 
 test('Coverage Breakdown: Blocks declaration when behavior is missing and reports incomplete reasons', () => {

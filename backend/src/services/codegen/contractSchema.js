@@ -15,7 +15,10 @@ const SUPPORTED_STEP_ACTIONS = [
   'ASSOCIATE',
   'QUERY',
   'CALCULATION',
-  'VALIDATION'
+  'VALIDATION',
+  'ASSERT',
+  'FOR_EACH',
+  'RETURN'
 ];
 
 const SUPPORTED_HTTP_METHODS = ['GET', 'POST', 'PUT', 'PATCH', 'DELETE'];
@@ -96,7 +99,7 @@ function validateOperationContract(op, catalog = {}) {
       }
 
       const stepEntity = step.entity || op.targetEntity;
-      if (!stepEntity && act !== 'CALCULATION' && act !== 'VALIDATION') {
+      if (!stepEntity && !['CALCULATION', 'VALIDATION', 'ASSERT', 'FOR_EACH', 'RETURN'].includes(act)) {
         errors.push(`Paso ${stepNum}: Falta 'entity' objetivo para la acción '${act}'.`);
       } else if (stepEntity && entityMap.size > 0 && !entityMap.has(stepEntity)) {
         errors.push(`Paso ${stepNum}: Entidad '${stepEntity}' no existe en el catálogo.`);
@@ -119,7 +122,7 @@ function validateOperationContract(op, catalog = {}) {
       }
 
       if (act === 'CALCULATION') {
-        if (!step.targetField || !step.formula) {
+        if (!step.expression && (!step.targetField || !step.formula)) {
           errors.push(`Paso ${stepNum}: Acción CALCULATION requiere 'targetField' y 'formula'.`);
         }
       }
@@ -156,6 +159,7 @@ function validateBindingContract(binding, catalog = {}) {
   }
 
   const opSet = new Set((catalog.operations || []).map(o => o.operationId));
+  errors.push(...(binding.unresolved || []));
 
   // Table bindings check
   if (Array.isArray(binding.tableBindings)) {

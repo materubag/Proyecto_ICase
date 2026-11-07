@@ -101,6 +101,8 @@ services:
       TEST_DB_ADMIN_NAME: autron5_acceptance
     volumes:
       - ./backend/src:/usr/src/app/src
+      - ./backend/.verification:/usr/src/app/backend/.verification
+      - ./backend/.cache:/usr/src/app/backend/.cache
     ports:
       - "8080:8080"
     extra_hosts:

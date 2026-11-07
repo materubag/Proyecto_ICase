@@ -96,13 +96,11 @@ class CodegenDecisionService {
           }
         });
       } catch (dbErr) {
-        project = { id: projectId, name: 'Proyecto', requirements: [], entities: [] };
+        return this.analysisResult([], 'ANALYSIS_FAILED', 'PROJECT_READ_FAILED');
       }
     }
 
-    if (!project) {
-      return [];
-    }
+    if (!project) return this.analysisResult([], 'ANALYSIS_FAILED', 'PROJECT_NOT_FOUND');
 
     const pendingQuestions = [];
 
@@ -173,31 +171,17 @@ class CodegenDecisionService {
       }
     }
 
-    // Check 2: Dynamic AI Ambiguity Discovery for business rules & operational policies
-    // If not already covered by confirmed decisions or contract manifests, analyze requirements
-    const isReceptionConfirmed = confirmedKeys.has('receptionPolicy') ||
-      (confirmedKeys.has('odometerPolicy') && confirmedKeys.has('uploadFailurePolicy'));
+    // A decision for intake does not certify unrelated processes.
+    const dynamic = options.skipLiveAi
+      ? this.analysisResult([], 'NOT_ANALYZED', 'LIVE_AI_NOT_REQUESTED')
+      : await this.analyzeAmbiguitiesWithAI(project, confirmedKeys);
+    pendingQuestions.push(...dynamic);
+    return this.analysisResult(pendingQuestions, dynamic.analysis?.status || 'ANALYSIS_FAILED', dynamic.analysis?.reason, dynamic.analysis);
+  }
 
-    const intakeManifestPath = path.resolve(__dirname, '../../specifications/autron5/intake.contract.json');
-    let hasManifestPolicy = false;
-    if (fs.existsSync(intakeManifestPath) && project.name === 'Autron5') {
-      try {
-        const manifest = JSON.parse(fs.readFileSync(intakeManifestPath, 'utf8'));
-        if (manifest.userDecisions?.odometerPolicy && manifest.userDecisions?.uploadFailurePolicy) {
-          hasManifestPolicy = true;
-        }
-      } catch (_) {}
-    }
-
-    if (!isReceptionConfirmed && !hasManifestPolicy) {
-      // Perform dynamic AI analysis of project requirements to identify genuine business ambiguities
-      const dynamicAiQuestions = await this.analyzeAmbiguitiesWithAI(project, confirmedKeys);
-      if (dynamicAiQuestions && dynamicAiQuestions.length > 0) {
-        pendingQuestions.push(...dynamicAiQuestions);
-      }
-    }
-
-    return pendingQuestions;
+  analysisResult(questions, status, reason, metadata = {}) {
+    Object.defineProperty(questions, 'analysis', { value: { ...metadata, status, reason: reason || null }, enumerable: false });
+    return questions;
   }
 
   /**
@@ -206,74 +190,33 @@ class CodegenDecisionService {
    * Returns empty array [] if requirements are complete, consistent, and actionable.
    */
   async analyzeAmbiguitiesWithAI(project, confirmedKeys = new Set()) {
-    const approvedRequirements = (project.requirements || []).filter(r => r.status === 'APPROVED');
-    if (approvedRequirements.length === 0) return [];
-
+    const requirements = (project.requirements || []).filter(r => r.status === 'APPROVED');
+    if (!requirements.length) return this.analysisResult([], 'NOT_ANALYZED', 'NO_APPROVED_REQUIREMENTS');
     const provider = env.AI_PROVIDER || 'openai';
     const hasKey = (provider === 'gemini' && env.GEMINI_API_KEY) || (provider === 'openai' && env.OPENAI_API_KEY);
-
-    if (hasKey) {
-      try {
-        const promptSystem = `Eres un arquitecto de software analizando requisitos bajo norma ISO/IEC/IEEE 29148.
-Analiza los requisitos aprobados y entidades del proyecto.
-Determina si existe alguna AMBIGÜEDAD CRÍTICA O POLÍTICA DE NEGOCIO no resuelta que deba ser aclarada por el usuario antes de generar código (ej: reglas de anulación, auditoría de datos históricos, o tratamiento de cargas de archivos incompletas).
-
-REGLA CLAVE: Si los requisitos ya son claros, accionables y no tienen conflictos graves, debes retornar un array vacío: []
-Solo si existe una duda técnica real e ineludible, retorna un array JSON con 1 o 2 preguntas con el formato:
-[
-  {
-    "questionId": "identificador_unico",
-    "title": "Título conciso de la política",
-    "question": "Explicación exacta de la duda técnica o regla de negocio",
-    "requirementIds": ["RF-XX"],
-    "options": [
-      {
-        "id": "opt_1",
-        "label": "(Recomendado) Opción arquitectónicamente más segura",
-        "data": { "politica": "VALOR_SEGURO" }
-      },
-      {
-        "id": "opt_2",
-        "label": "Opción alternativa",
-        "data": { "politica": "VALOR_ALT" }
-      }
-    ],
-    "customAllowed": true
-  }
-]`;
-
-        const userContent = JSON.stringify({
-          projectName: project.name,
-          entities: (project.entities || []).map(e => ({ name: e.name, attrs: (e.attributes || []).map(a => a.name) })),
-          requirements: approvedRequirements.slice(0, 30).map(r => ({
-            code: r.code || r.id,
-            name: r.name,
-            description: r.description
-          }))
-        });
-
-        let resultData = null;
-        if (provider === 'openai' && env.OPENAI_API_KEY) {
-          const OpenAIProvider = require('../ai/OpenAIProvider');
-          const openai = new OpenAIProvider();
-          const res = await openai.extractDocumentBatch(userContent, { prompt: promptSystem, model: 'gpt-4o-mini' });
-          resultData = res?.data;
-        } else if (provider === 'gemini' && env.GEMINI_API_KEY) {
-          const GeminiProvider = require('../ai/GeminiProvider');
-          const gemini = new GeminiProvider();
-          const res = await gemini.extractDocumentBatch(userContent, { prompt: promptSystem });
-          resultData = res?.data;
-        }
-
-        if (Array.isArray(resultData)) {
-          return resultData.filter(q => q && q.questionId && !confirmedKeys.has(q.questionId));
-        }
-      } catch (aiErr) {
-        console.warn('[CodegenDecisionService] AI ambiguity analysis notice:', aiErr.message);
-      }
+    if (!hasKey) return this.analysisResult([], 'NOT_ANALYZED', 'PROVIDER_UNAVAILABLE');
+    const input = {
+      projectName: project.name,
+      entities: project.entities || [], requirements,
+      businessRules: (project.businessRules || []).filter(r => !r.status || r.status === 'APPROVED'),
+      useCases: (project.useCases || []).filter(u => !u.status || u.status === 'APPROVED'),
+      confirmedDecisions: this.getProjectDecisions(project.id),
+      confirmedQuestionIds: [...confirmedKeys]
+    };
+    const prompt = 'Analiza todos los requisitos, reglas, entidades, casos de uso y decisiones confirmadas. '
+      + 'No inventes reglas ni repitas decisiones resueltas. Devuelve un objeto JSON {"questions": []} si no hay dudas cr?ticas. '
+      + 'Si faltan decisiones imprescindibles, questions contiene questionId, title, question, requirementIds, options [{id,label,data}] y customAllowed. '
+      + 'Una pol?tica de un proceso no resuelve otros procesos.';
+    try {
+      const Provider = require(provider === 'gemini' ? '../ai/GeminiProvider' : '../ai/OpenAIProvider');
+      const result = await new Provider().extractDocumentBatch(input, { prompt, model: env[provider.toUpperCase() + '_MODEL'] });
+      const questions = Array.isArray(result?.data) ? result.data : result?.data?.questions;
+      if (!Array.isArray(questions)) return this.analysisResult([], 'ANALYSIS_FAILED', 'INVALID_PROVIDER_RESPONSE');
+      const pending = questions.filter(q => q && q.questionId && !confirmedKeys.has(q.questionId));
+      return this.analysisResult(pending, pending.length ? 'PENDING_DECISIONS' : 'NO_PENDING_DECISIONS', null, { provider, model: result.model || env[provider.toUpperCase() + '_MODEL'], usage: { totalTokens: result.usage?.total_tokens || result.usage?.totalTokenCount || 0 } });
+    } catch (error) {
+      return this.analysisResult([], 'ANALYSIS_FAILED', 'PROVIDER_ERROR');
     }
-
-    return [];
   }
 
   /**

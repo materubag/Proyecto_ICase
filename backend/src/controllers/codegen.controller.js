@@ -46,6 +46,33 @@ exports.getPreview = async (req, res) => {
 exports.downloadZip = async (req, res) => {
   try {
     const { projectId } = req.params;
+    let jobId = req.query.jobId;
+    if (!jobId) {
+      const active = codegenJobService.getActiveJob(projectId);
+      if (active && ['COMPLETED', 'BLOCKED'].includes(active.status) && active.zipPath && active.zipSha256) {
+        jobId = active.id;
+      }
+    }
+    if (jobId) {
+      const job = codegenJobService.getJob(jobId);
+      if (!job || job.projectId !== projectId) return res.status(404).json({ success: false, error: { message: 'Trabajo no encontrado.' } });
+      if (!['COMPLETED', 'BLOCKED'].includes(job.status) || !job.zipPath || !job.zipSha256) return res.status(409).json({ success: false, error: { message: 'El trabajo todavía no tiene un ZIP sellado.' } });
+      const fs = require('fs'), path = require('path');
+      const appRoot = process.cwd().endsWith('backend') ? process.cwd() : path.join(process.cwd(), 'backend');
+      const root = path.resolve(appRoot, '.verification');
+      let target = path.resolve(job.zipPath);
+      if (!fs.existsSync(target) || !target.startsWith(root + path.sep)) {
+        const candidate = path.resolve(root, path.basename(job.zipPath));
+        if (fs.existsSync(candidate)) target = candidate;
+      }
+      if (!target.startsWith(root + path.sep) || !fs.realpathSync(target).startsWith(fs.realpathSync(root) + path.sep)) throw new Error('INVALID_JOB_BUNDLE_PATH');
+      const buffer = fs.readFileSync(target);
+      if (require('../services/codegen/exportIntegrity').sha256(buffer) !== job.zipSha256) throw new Error('JOB_BUNDLE_INTEGRITY_FAILED');
+      res.setHeader('Content-Type', 'application/zip');
+      res.setHeader('Content-Disposition', `attachment; filename="${job.id}-${job.ready ? 'verificado' : 'revision'}.zip"`);
+      res.setHeader('Content-Length', buffer.length);
+      return res.end(buffer);
+    }
     const includeDocker = req.query.includeDocker !== 'false';
     const allowPartialScope = req.query.allowPartialScope === 'true';
 
@@ -56,7 +83,8 @@ exports.downloadZip = async (req, res) => {
       includeDocker,
       useApprovedSpec: true,
       allowUnapproved,
-      allowPartialScope
+      allowPartialScope,
+      reviewOnly: req.query.reviewOnly === 'true'
     });
 
     res.setHeader('Content-Type', 'application/zip');
@@ -149,7 +177,7 @@ exports.getAiProposalStatus = async (req, res) => {
     const { projectId } = req.params;
     const spec = await buildProjectSpec(projectId, { allowUnapproved: true });
 
-    const incompleteOperations = (spec.operations || []).filter(operationNeedsExecutableBehavior).map(op => ({
+    const incompleteOperations = (spec.operations || []).filter(op => operationNeedsExecutableBehavior(op, spec.entities)).map(op => ({
       operationId: op.operationId,
       name: op.name,
       type: op.type,
@@ -193,6 +221,7 @@ exports.getAiProposalStatus = async (req, res) => {
 exports.proposeOperationSteps = async (req, res) => {
   try {
     const { projectId } = req.params;
+    require('../services/codegen/codegenAiHold').assertAllowed(projectId);
     const { operationIds } = req.body || {};
     const spec = await buildProjectSpec(projectId, { allowUnapproved: true });
 
@@ -203,9 +232,10 @@ exports.proposeOperationSteps = async (req, res) => {
       roles: spec.roles || spec.security?.roles || [],
       requirements: spec.requirements || [],
       existingOperations: spec.operations || []
+      , operations: spec.operations || [], screens: spec.screens || [], confirmedDecisions: spec.confirmedDecisions || {}
     };
 
-    let targetOps = (spec.operations || []).filter(operationNeedsExecutableBehavior);
+    let targetOps = (spec.operations || []).filter(op => operationNeedsExecutableBehavior(op, spec.entities));
     if (Array.isArray(operationIds) && operationIds.length > 0) {
       targetOps = targetOps.filter(op => operationIds.includes(op.operationId));
     }
@@ -239,12 +269,16 @@ exports.proposeOperationSteps = async (req, res) => {
 exports.proposeMockupBindings = async (req, res) => {
   try {
     const { projectId } = req.params;
-    const { screenIds } = req.body || {};
+    const { screenIds, useLiveAi } = req.body || {};
+    if (useLiveAi) require('../services/codegen/codegenAiHold').assertAllowed(projectId);
     const spec = await buildProjectSpec(projectId, { allowUnapproved: true });
 
     const catalog = {
       entities: spec.entities || [],
       operations: spec.operations || [],
+      requirements: spec.requirements || [],
+      rules: spec.businessRules || [],
+      relationships: spec.relationships || [],
       roles: spec.roles || spec.security?.roles || []
     };
 
@@ -254,8 +288,12 @@ exports.proposeMockupBindings = async (req, res) => {
     }
 
     const results = [];
+    const effective = useLiveAi === true ? aiProposalStore.applyApprovedProposals(projectId, spec).spec : spec;
     for (const scr of targetScreens) {
-      const bindingResult = synthesizeMockupBindings(projectId, scr, catalog);
+      if (require('../services/codegen/screenContract').isAuthScreen(scr)) continue;
+      const bindingResult = useLiveAi === true
+        ? await require('../services/codegen/aiScreenPlanner').planScreen(projectId, scr, effective, spec)
+        : synthesizeMockupBindings(projectId, scr, catalog);
       results.push(bindingResult);
     }
 
@@ -368,10 +406,12 @@ exports.applyApprovedProposals = async (req, res) => {
 exports.startGenerationJob = async (req, res) => {
   try {
     const { projectId } = req.params;
-    const { scope, maxTokens, maxRepairAttempts, timeoutMs } = req.body || {};
+    const { scope, maxTokens, maxRepairAttempts, timeoutMs, enableAI, includeDocker } = req.body || {};
 
     const job = await codegenJobService.startJob(projectId, {
       scope,
+      enableAI: enableAI === true,
+      includeDocker: includeDocker !== false,
       maxTokens,
       maxRepairAttempts,
       timeoutMs
@@ -470,7 +510,7 @@ exports.submitJobInput = async (req, res) => {
 exports.resumeGenerationJob = async (req, res) => {
   try {
     const { jobId } = req.params;
-    const result = await codegenJobService.resumeJob(jobId);
+    const result = await codegenJobService.resumeJob(jobId, { batchReview: req.body?.batchReview === true });
 
     return res.status(200).json({
       success: true,
@@ -514,11 +554,13 @@ exports.cancelGenerationJob = async (req, res) => {
 exports.getPendingDecisions = async (req, res) => {
   try {
     const { projectId } = req.params;
-    const questions = await codegenDecisionService.getPendingDecisions(projectId);
+    if (req.query?.useLiveAi === 'true') require('../services/codegen/codegenAiHold').assertAllowed(projectId);
+    const questions = await codegenDecisionService.getPendingDecisions(projectId, { skipLiveAi: req.query?.useLiveAi !== 'true' });
 
     return res.status(200).json({
       success: true,
       count: questions.length,
+      analysis: questions.analysis,
       data: questions
     });
   } catch (error) {

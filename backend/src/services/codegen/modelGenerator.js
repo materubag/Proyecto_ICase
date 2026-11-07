@@ -101,7 +101,15 @@ ${attributeLines}
   }, {
     tableName: '${naming.tableName}',
     timestamps: true,
-    underscored: true
+    underscored: true${entity.indexes?.length ? ',\n    indexes: ' + JSON.stringify(entity.indexes.map(index => ({ ...index, fields: index.fields.map(field => normalizedAttrs.find(attr => attr.fieldName === field)?.columnName || toSnakeCase(field)) }))) : ''}${entity.systemWatchFields?.length ? `,
+    hooks: {
+      afterSave(instance, options) {
+        if (!${JSON.stringify(entity.systemWatchFields)}.some(field => instance.changed(field))) return;
+        const trigger = () => require('../services/system.scheduler').requestRun();
+        if (options.transaction) options.transaction.afterCommit(trigger);
+        else trigger();
+      }
+    }` : ''}
   });
 
   return ${naming.modelName};
@@ -218,7 +226,7 @@ function generateModelsIndexFile(entities = [], relationships = [], options = {}
 
     // Derive or use explicit Foreign Keys and Aliases
     const sourceFk = rel.foreignKey || `${toCamelCase(sourceName)}Id`;
-    const targetFk = rel.otherKey || `${toCamelCase(targetName)}Id`;
+    const targetFk = rel.otherKey || (card === 'N:1' ? rel.foreignKey : null) || `${toCamelCase(targetName)}Id`;
 
     let targetAs = rel.as;
     let sourceAs = rel.reverseAs;

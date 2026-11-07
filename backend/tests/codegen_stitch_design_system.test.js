@@ -44,7 +44,7 @@ test('Stitch & Design System: GoogleStitchService incorporates design system rul
 test('Stitch & Design System: Generates AppShell and shared UI components', () => {
   const appShellCode = frontendGen.generateAppShellComponent();
   assert.ok(appShellCode.includes('export default function AppShell'));
-  assert.ok(appShellCode.includes('var(--color-bg-app)'));
+  assert.ok(appShellCode.includes('icase-shell') && frontendGen.generateFrontendCss().includes('var(--color-bg-app)'));
 
   const formFieldCode = frontendGen.generateSharedFormFieldComponent();
   assert.ok(formFieldCode.includes('export default function FormField'));

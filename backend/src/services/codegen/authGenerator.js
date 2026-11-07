@@ -73,8 +73,9 @@ function authorizeRoles(...allowedRoles) {
       return next();
     }
 
+    const norm = (value) => String(value || '').toLowerCase().normalize('NFD').replace(/[\\u0300-\\u036f]/g, '').trim();
     const userRole = req.user.role || req.user.rol;
-    if (!userRole || !allowedRoles.includes(userRole)) {
+    if (!userRole || !allowedRoles.some((role) => norm(role) === norm(userRole))) {
       return res.status(403).json({
         success: false,
         code: 'FORBIDDEN',

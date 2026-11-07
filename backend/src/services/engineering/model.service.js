@@ -4,6 +4,7 @@ const entityDetector = require('../analysis/entityDetector');
 const technologyDetector = require('../analysis/technologyDetector');
 const kinds = ['Actor', 'UseCase', 'Entity', 'EntityAttribute', 'EntityRelationship', 'BusinessRule', 'NavigationNode', 'Architecture', 'Technology'];
 const platforms = ['WEB', 'MOBILE', 'BOTH', 'UNKNOWN'];
+const approvedState = kind => ({ status: 'APPROVED', ...(kind === 'NavigationNode' ? { reviewStatus: 'APPROVED' } : {}) });
 function platform(text) {
   const web = /\b(web|navegador|browser)\b/i.test(text);
   const mobile = /\b(móvil|movil|mobile|android|ios)\b/i.test(text);
@@ -127,7 +128,7 @@ async function review(projectId, id, input) {
       if (previous.revision !== c.content.targetRevision) d.fail('VERSION_CONFLICT', 'El modelo cambió desde que se propuso la revisión.');
       if (c.kind === 'Architecture') await tx.architectureComponent.deleteMany({ where: { architectureId: previous.id } });
       const impact = await require('./ImpactAnalysisService').analyze(projectId, c.kind, previous.id, tx);
-      const proposed = { ...data, status: 'APPROVED', requirementIds: c.requirementIds, evidence: c.evidence };
+      const proposed = { ...data, ...approvedState(c.kind), requirementIds: c.requirementIds, evidence: c.evidence };
       await tx.changeRequest.create({ data: { projectId, elementType: c.kind, elementId: previous.id, type: 'UPDATE', status: 'APPLIED', expectedRevision: previous.revision, previousState: d.json(previous), proposedState: d.json(content), reason: 'Revisión humana de modelo pendiente o desactualizado', impact: d.json(impact) } });
       promoted = await tx[delegate].update({ where: { id: previous.id }, data: { ...proposed, revision: { increment: 1 } } });
       await require('./ImpactAnalysisService').invalidate(tx, impact);
@@ -141,11 +142,11 @@ async function review(projectId, id, input) {
       const stale = staleWhere && await tx[delegate].findFirst({ where: { projectId, ...staleWhere, status: 'OUTDATED' } });
       if (stale) {
         const impact = await require('./ImpactAnalysisService').analyze(projectId, c.kind, stale.id, tx);
-        const proposed = { ...data, status: 'APPROVED', requirementIds: c.requirementIds, evidence: c.evidence };
+        const proposed = { ...data, ...approvedState(c.kind), requirementIds: c.requirementIds, evidence: c.evidence };
         await tx.changeRequest.create({ data: { projectId, elementType: c.kind, elementId: stale.id, type: 'UPDATE', status: 'APPLIED', expectedRevision: stale.revision, previousState: d.json(stale), proposedState: d.json(proposed), reason: 'Aprobación humana de candidato regenerado', impact: d.json(impact) } });
         promoted = await tx[delegate].update({ where: { id: stale.id }, data: { ...proposed, revision: { increment: 1 } } });
         await require('./ImpactAnalysisService').invalidate(tx, impact);
-      } else promoted = await tx[delegate].create({ data: { ...data, status: 'APPROVED', requirementIds: c.requirementIds, evidence: c.evidence } });
+      } else promoted = await tx[delegate].create({ data: { ...data, ...approvedState(c.kind), requirementIds: c.requirementIds, evidence: c.evidence } });
     }
     if (c.kind === 'Actor') await require('../analysis/actorIdentity').refresh(tx, projectId, [{...c,promotedId:promoted.id}]);
     for (const id of c.requirementIds) await d.link(tx, projectId, 'Requirement', id, c.kind, promoted.id);

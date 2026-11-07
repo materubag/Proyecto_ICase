@@ -9,8 +9,14 @@ function canonical(value) {
   return value;
 }
 function hash(value) { return crypto.createHash('sha256').update(JSON.stringify(canonical(value))).digest('hex'); }
-async function transaction(fn) {
-  try { return await prisma.$transaction(fn, { isolationLevel: 'Serializable', timeout: 20000 }); }
+async function transaction(fn, options = {}) {
+  try {
+    return await prisma.$transaction(fn, {
+      isolationLevel: options.isolationLevel || 'Serializable',
+      timeout: options.timeout || 20000,
+      maxWait: options.maxWait || 5000
+    });
+  }
   catch (e) { if (['P2034', 'P2002'].includes(e.code)) fail('VERSION_CONFLICT', 'Otro proceso modificó estos datos. Actualiza e intenta de nuevo.'); throw e; }
 }
 async function project(tx, id) { const p = await tx.project.findUnique({ where: { id } }); if (!p) fail('PROJECT_NOT_FOUND', undefined, 404); return p; }

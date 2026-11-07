@@ -5,20 +5,28 @@
  */
 
 const { toPascalCase, toCamelCase, deriveNaming } = require('./typeMapper');
+const mutates = (steps, model) => (steps || []).some(step =>
+  (step.entity === model && ['CREATE', 'UPDATE', 'DELETE'].includes(step.action)) || mutates(step.steps, model));
 
 function generateEntityRoutesFile(entity, options = {}) {
   const naming = deriveNaming(entity.name);
-  const modelName = naming.modelName;
+  const modelName = entity.modelName || naming.modelName;
   const varName = naming.paramName;
   const hasAuth = !!options.hasAuth;
 
   const authImport = hasAuth ? "const { authenticateToken, authorizeRoles } = require('../middleware/auth.middleware');\n" : "";
   const mid = hasAuth ? "authenticateToken, " : "";
   const permission = (method, item = false) => {
-    if (!hasAuth || !options.operations) return mid;
-    const op = options.operations.find(o => o.entity === modelName && o.method === method && !o.route.includes('/operations/') && (o.route.includes(':') === item));
-    const roles = (op?.authorizedRoles && op.authorizedRoles.length) ? op.authorizedRoles : (options.defaultRoles || []);
-    return mid + (roles.length ? 'authorizeRoles(...' + JSON.stringify(roles) + '), ' : '(req, res) => res.status(403).json({ error: "UNRESOLVED_PERMISSION" }), ');
+    // A raw mutation cannot bypass an executable business contract's input,
+    // relation, ownership or transaction checks. A role grant alone is not a
+    // second implementation of that process.
+    const guarded = ['POST', 'PUT', 'DELETE'].includes(method) && (options.operations || []).some(op => op.type === 'BUSINESS_LOGIC' && op.bindingVersion === 2 && mutates(op.steps, modelName));
+    if (guarded) return mid + '(req, res) => res.status(403).json({ code: "BUSINESS_CONTRACT_REQUIRED", message: "Use la operación de negocio con sus validaciones y permisos." }), ';
+    const op = (options.operations || []).find(o => o.entity === modelName && o.method === method && !o.route.includes('/operations/') && (o.route.includes(':') === item));
+    const contract = '(req, res, next) => { req.crudContract = ' + JSON.stringify(op || {}) + '; next(); }, ';
+    if (!hasAuth) return contract;
+    const roles = op?.authorizedRoles || [];
+    return mid + (roles.length ? 'authorizeRoles(...' + JSON.stringify(roles) + '), ' + contract : '(req, res) => res.status(403).json({ error: "UNRESOLVED_PERMISSION" }), ');
   };
 
   return `/**

@@ -1,5 +1,6 @@
 const env = require('../../config/env');
 const MockMockupProvider = require('./mock.mockup.provider');
+const { findCatalogEntry, navForActor, resolveActors } = require('./screenCatalog');
 
 class MockupService {
   constructor() {
@@ -38,14 +39,33 @@ class MockupService {
   }
 
   buildScreenPlan(project, requirements) {
-    return (project.navigationNodes || []).map(node => ({
-      id: node.id, name: node.name, title: node.name, route: node.route,
-      deviceType: (node.platform === 'MOBILE' ? 'MOBILE' : 'DESKTOP'),
-      platform: node.platform === 'UNKNOWN' ? project.platform : node.platform,
-      description: requirements.filter(r => node.requirementIds.includes(r.id)).map(r => r.description).join('\n'),
-      actors: (project.actors || []).filter(a => node.actorIds.includes(a.id)).map(a => a.name),
-      requirements: requirements.filter(r => node.requirementIds.includes(r.id))
-    }));
+    return (project.navigationNodes || []).map(node => {
+      const catalog = findCatalogEntry(node);
+      const linkedReqs = (node.requirementIds || []).length
+        ? requirements.filter(r => node.requirementIds.includes(r.id))
+        : [];
+      const actors = resolveActors(node, project, catalog);
+      const actorName = actors[0] || catalog?.actorName || '';
+      return {
+        id: node.id,
+        name: node.name,
+        title: node.name,
+        route: node.route,
+        deviceType: (node.platform === 'MOBILE' ? 'MOBILE' : 'DESKTOP'),
+        platform: node.platform === 'UNKNOWN' ? project.platform : node.platform,
+        purpose: catalog?.description || '',
+        description: catalog?.description || linkedReqs.map(r => r.description).filter(Boolean).join('\n'),
+        actors,
+        actorName,
+        archetype: catalog?.archetype || (/login|acceso/i.test(node.name || '') ? 'A' : 'B'),
+        fields: catalog?.fields || [],
+        primaryAction: catalog?.primaryAction || '',
+        tableHeaders: catalog?.tableHeaders || [],
+        sampleRows: catalog?.sampleRows || [],
+        nav: actorName && actorName !== 'Público' ? navForActor(catalog?.actorName || actorName, node.route) : [],
+        requirements: linkedReqs
+      };
+    });
   }
 
   /**
@@ -72,7 +92,13 @@ class MockupService {
       try {
         console.log(`[MockupService] Iniciando generación directa con Google Stitch API (MCP)...`);
         const stitchService = require('./GoogleStitchService');
-        return await stitchService.generateMockups(project, screens, relevantRequirements, prompt);
+        const visualRules = [
+          '100% en español.',
+          'Un solo propósito y un botón principal.',
+          'Usa el menú, campos y datos de ejemplo de esa pantalla.',
+          'No muestres códigos RF, hashes ni texto de requisitos técnicos.'
+        ].join('\n');
+        return await stitchService.generateMockups(project, screens, relevantRequirements, visualRules);
       } catch (stitchErr) {
         console.warn(`[MockupService] Error en Google Stitch directo (${stitchErr.message}). Activando respaldo de IA...`);
       }

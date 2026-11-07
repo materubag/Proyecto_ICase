@@ -15,7 +15,8 @@ test('Codegen Persistent Job: 1. Creates persistent job and returns 202-ready jo
   assert.ok(job.id.startsWith('job_'), 'Job ID has prefix');
   assert.equal(job.projectId, projectId);
   assert.ok(['ANALYZING', 'WAITING_FOR_INPUT', 'GENERATING'].includes(job.status));
-  assert.ok(job.budget.maxTokens === 30000);
+  assert.equal(job.budget.maxTokens, null, 'Token count does not stop generation');
+  assert.equal(job.budget.timeoutMs, null, 'Elapsed time does not stop generation');
   assert.ok(job.budget.maxRepairAttempts === 2);
   assert.ok(Array.isArray(job.logs), 'Logs array initialized');
 

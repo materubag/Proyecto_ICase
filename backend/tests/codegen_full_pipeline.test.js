@@ -124,6 +124,7 @@ test('E2E Generator Pipeline: Real Spec -> Validations -> File Generation -> Imp
       },
       {
         operationId: 'op_prestar_libro',
+        action: 'CREATE',
         name: 'Prestar Libro a Lector',
         type: 'BUSINESS_LOGIC',
         targetEntity: 'Prestamo',

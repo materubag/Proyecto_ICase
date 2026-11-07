@@ -248,7 +248,7 @@ test('Multi-Domain Validation: Domain 1 (Biblioteca) and Domain 2 (Clínica) gen
 
   // 3. Check generated Frontend UI for Clínica
   const { generateEntityViewPage } = require('../src/services/codegen/functionalPagesGenerator');
-  const citaPageCode = generateEntityViewPage(clinicaEntities[2], clinicaRels); // CitaMedica
+  const citaPageCode = generateEntityViewPage(clinicaEntities[2], clinicaRels, clinicaEntities); // CitaMedica
 
   // Must have real relational selector for medicoId and pacienteId
   assert.ok(citaPageCode.includes("apiRequest('/medicos')"));

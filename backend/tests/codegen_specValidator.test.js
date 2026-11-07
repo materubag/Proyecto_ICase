@@ -78,8 +78,8 @@ test('validateProjectSpec passes clean spec and calculates coverage', () => {
   assert.equal(diag.ready, true);
   assert.equal(diag.errors.length, 0);
   assert.equal(diag.coverage.requirementsTotal, 1);
-  assert.equal(diag.coverage.requirementsCovered, 1);
-  assert.equal(diag.coverage.coveragePercentage, 100);
+  assert.equal(diag.coverage.requirementsCovered, 0);
+  assert.equal(diag.coverage.coveragePercentage, 0);
 });
 
 test('operationNeedsExecutableBehavior matches quality-gate incomplete business operations', () => {

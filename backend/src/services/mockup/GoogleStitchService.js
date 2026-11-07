@@ -14,6 +14,40 @@ class GoogleStitchService {
     this.concurrency = parseInt(env.STITCH_CONCURRENCY || '4', 10);
   }
 
+  extractHtmlFromStitchDownload(raw) {
+    if (!raw) return null;
+    const trimmed = String(raw).trim();
+    if (trimmed.startsWith('{') || trimmed.startsWith('[')) {
+      try {
+        const parsed = JSON.parse(trimmed);
+        const encoded = parsed.dataString || parsed.html || parsed.content || parsed.data || parsed.fileContent;
+        if (typeof encoded === 'string' && encoded.trim()) {
+          return this.extractHtmlFromStitchDownload(encoded);
+        }
+      } catch (_) { /* no es JSON de descarga */ }
+    }
+    if (/<!DOCTYPE html/i.test(trimmed) || /<html[\s>]/i.test(trimmed)) {
+      return trimmed
+        .replace(/\\r\\n/g, '\n')
+        .replace(/\\n/g, '\n')
+        .replace(/\\r/g, '\r');
+    }
+    return null;
+  }
+
+  async downloadStitchHtml(htmlUrl) {
+    if (!htmlUrl) return null;
+    const response = await fetch(htmlUrl, {
+      headers: { 'X-Goog-Api-Key': this.apiKey }
+    });
+    const raw = await response.text();
+    if (!response.ok) {
+      console.warn(`[GoogleStitch] Descarga HTML HTTP ${response.status}: ${raw.slice(0, 180)}`);
+      return null;
+    }
+    return this.extractHtmlFromStitchDownload(raw);
+  }
+
   /**
    * Crea un proyecto nuevo en Google Stitch
    */
@@ -74,50 +108,43 @@ class GoogleStitchService {
   buildScreenPrompt(screen, project, totalScreens, screenIndex, userPrompt = '') {
     const title = screen.title || screen.name || `Pantalla ${screenIndex}`;
     const route = screen.route || '';
-    const description = screen.description || '';
+    const description = screen.purpose || screen.description || '';
     const actors = Array.isArray(screen.actors) ? screen.actors.filter(Boolean) : [];
     const requirements = Array.isArray(screen.requirements) ? screen.requirements.filter(Boolean) : [];
+    const fields = Array.isArray(screen.fields) ? screen.fields.filter(Boolean) : [];
+    const nav = Array.isArray(screen.nav) ? screen.nav.filter(Boolean) : [];
+    const sampleRows = Array.isArray(screen.sampleRows) ? screen.sampleRows : [];
+    const primaryAction = screen.primaryAction || '';
+    const archetype = screen.archetype || ( /login|acceso/i.test(title) ? 'A' : 'B');
 
-    const formattedReqs = requirements.map(req => {
+    const formattedReqs = requirements.slice(0, 6).map(req => {
       if (typeof req === 'object' && req !== null) {
-        const code = req.code || req.id || '';
         const desc = req.description || req.name || req.text || '';
-        return code && desc ? `- ${code}: ${desc}` : (desc ? `- ${desc}` : (code ? `- ${code}` : null));
+        return desc ? `- ${desc}` : null;
       }
       return `- ${String(req)}`;
     }).filter(Boolean);
 
     const sections = [];
+    sections.push(`Diseña UNA ÚNICA pantalla para "${project.name}".
+No diseñes el resto del sistema. Esta vista es la ${screenIndex} de ${totalScreens}.
 
-    sections.push(`Diseña UNA ÚNICA pantalla profesional, limpia y moderna para el sistema "${project.name}".
-Esta pantalla forma parte de un conjunto de ${totalScreens} pantallas.
-Debes diseñar únicamente la pantalla indicada a continuación.
+PANTALLA: ${title}
+RUTA: ${route || '/'}`);
 
-PANTALLA ${screenIndex} DE ${totalScreens}:
-${title}`);
-
-    if (route) {
-      sections.push(`RUTA:\n${route}`);
+    if (actors.length) sections.push(`ACTOR QUE USA ESTA PANTALLA:\n${actors.map(actor => `- ${actor}`).join('\n')}\nDiseña el menú y el contenido para ese rol, no para todos.`);
+    if (description) sections.push(`PROPÓSITO (qué debe poder hacer el usuario aquí):\n${description}`);
+    if (fields.length) sections.push(`CAMPOS VISIBLES (usa estas etiquetas, no "Código / Identificador"):\n${fields.map(field => `- ${field}`).join('\n')}`);
+    if (primaryAction) sections.push(`ACCIÓN PRINCIPAL:\n${primaryAction}`);
+    if (nav.length) sections.push(`MENÚ SUPERIOR DE ESTE ROL (mismos enlaces en todas sus pantallas; marca "${title}" como activa):\n${nav.map(item => `- ${item}`).join('\n')}`);
+    if (sampleRows.length) {
+      sections.push(`DATOS DE EJEMPLO OBLIGATORIOS (coherentes con el resto del taller):\n${sampleRows.map(row => `- ${Array.isArray(row) ? row.join(' · ') : row}`).join('\n')}`);
     }
-
-    if (description) {
-      sections.push(`PROPÓSITO:\n${description}`);
-    }
-
-    if (actors.length > 0) {
-      sections.push(`ACTORES Y ROLES:\n${actors.map(a => `- ${a}`).join('\n')}`);
-    }
-
-    if (formattedReqs.length > 0) {
-      sections.push(`REQUISITOS RELACIONADOS:\n${formattedReqs.join('\n')}`);
-    }
-
-    if (userPrompt && userPrompt.trim()) {
+    if (formattedReqs.length) sections.push(`EVIDENCIA FUNCIONAL (tradúcela a UI, no copies el texto técnico):\n${formattedReqs.join('\n')}`);
+    if (userPrompt && userPrompt.trim() && !/^generar un prototipo visual para:/i.test(userPrompt.trim())) {
       sections.push(`INSTRUCCIONES ADICIONALES:\n${userPrompt.trim()}`);
     }
-
-    sections.push(designSystemService.getStitchPromptContext(project.name, project.description));
-
+    sections.push(designSystemService.getStitchScreenVisualRules(archetype, project.name, project.description));
     return sections.join('\n\n');
   }
 
@@ -206,27 +233,21 @@ ${title}`);
       let html = null;
       if (htmlUrl) {
         try {
-          const htmlRes = await fetch(htmlUrl);
-          if (htmlRes.ok) {
-            html = await htmlRes.text();
-            html = html
-              .replace(/\\r\\n/g, '\n')
-              .replace(/\\n/g, '\n')
-              .replace(/\\r/g, '\r');
-          }
+          html = await this.downloadStitchHtml(htmlUrl);
         } catch (fetchHtmlErr) {
           console.warn(`[GoogleStitch] Error descargando HTML de ${htmlUrl}:`, fetchHtmlErr.message);
         }
       }
 
-      if (!html) {
+      const usedFallback = !html;
+      if (usedFallback) {
         html = generateHtmlMockup({
           ...screen,
           name: screenTitle || screen.name
         });
       }
 
-      console.log(`[GoogleStitch] ✓ "${screen.name}" generada exitosamente (${html ? 'con HTML interactivo' : 'básico'}).`);
+      console.log(`[GoogleStitch] ✓ "${screen.name}" generada exitosamente (${usedFallback ? 'fallback ICASE' : `HTML Stitch ${html.length} chars`}).`);
 
       return {
         id: screen.id,
@@ -252,12 +273,12 @@ ${title}`);
    */
   createFallbackScreen(screen, project) {
     const screenObj = {
+      ...screen,
       id: screen.id,
       name: screen.name,
       title: screen.name,
       route: screen.route,
-      description: screen.description,
-      components: screen.components || [],
+      description: screen.purpose || screen.description,
       layout: { type: 'grid' }
     };
     screenObj.html = generateHtmlMockup(screenObj);

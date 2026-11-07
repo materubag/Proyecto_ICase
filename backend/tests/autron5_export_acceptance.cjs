@@ -32,7 +32,14 @@ async function run() {
   }
   check('Sintaxis de todo el backend exportado');
   const { build, preview } = await import(pathToFileURL(path.join(directory, 'frontend/node_modules/vite/dist/node/index.js')).href);
+  const themes = spawnSync(process.execPath, ['scripts/compile-mockup-themes.cjs'], { cwd: path.join(directory, 'frontend'), encoding: 'utf8' });
+  assert.equal(themes.status, 0, themes.stderr);
   await build({ root: path.join(directory, 'frontend') });
+  const integrity = require('../src/services/codegen/exportIntegrity');
+  const testedPaths = [...new Set([...(exported.generatedFilePaths || []), ...walk(path.join(directory, 'frontend/dist')).map(file => path.relative(directory, file)), 'frontend/package-lock.json', 'backend/package-lock.json'])];
+  report.testedFiles = integrity.snapshotFiles(directory, testedPaths).map(f => ({ path: f.path, sha256: integrity.sha256(f.content) }));
+  report.testedSourceHash = integrity.fingerprint(integrity.snapshotFiles(directory, testedPaths));
+  report.startedAt = new Date().toISOString();
   check('Compilación Vite de las 18 pantallas, incluidos todos los mockups');
   const database = 'autron5_acceptance_' + crypto.randomBytes(6).toString('hex');
   const connection = { host: '127.0.0.1', port: 55439, user: 'icase_user', password: 'icase_password' };
@@ -52,6 +59,15 @@ async function run() {
     check(migrations.length + ' migraciones y claves foráneas en PostgreSQL temporal');
     models = require(path.join(directory, 'backend/src/models'));
     const password = 'Acceptance-' + crypto.randomBytes(8).toString('hex');
+    const bootstrap = spawnSync(process.execPath, ['src/seed-account.js'], {
+      cwd: path.join(directory, 'backend'), encoding: 'utf8',
+      env: { ...process.env, BOOTSTRAP_IDENTIFIER: 'bootstrap@isolated.test', BOOTSTRAP_PASSWORD: password, BOOTSTRAP_ROLE: spec.security.roles[0], BOOTSTRAP_PROFILE_JSON: JSON.stringify({ activo: true }) }
+    });
+    assert.equal(bootstrap.status, 0, bootstrap.stderr);
+    assert.ok(!bootstrap.stdout.includes(password));
+    assert.equal(await models.CLIENTE.count(), 0);
+    assert.equal(await models.VEHICULO.count(), 0);
+    check('Cuenta inicial mediante comando separado, hash real y ausencia de datos de demostración');
     const accounts = {};
     for (const name of spec.security.roles) {
       const role = await models.ROL.create({ nombre: name });
@@ -138,6 +154,50 @@ async function run() {
     const pending = spec.operations.find(op => op.type === 'BUSINESS_LOGIC' && !op.steps?.length && !op.targetEntity && op.authorizedRoles?.length);
     if (pending) assert.equal((await request('POST', pending.route, {}, accounts[pending.authorizedRoles[0]].token)).status, 501);
     check('GET no ejecuta escrituras; operaciones no implementadas devuelven 501');
+
+    // Ownership fixtures are inserted only in this disposable database. They do
+    // not certify order creation or quotation calculation business workflows.
+    const roleCliente = accounts.Cliente.user.rolId;
+    const secondUser = await models.USUARIO.create({ nombre: 'CLIENT B', correo: 'client-b@isolated.test', rolId: roleCliente, activo: true, passwordHash: await bcrypt.hash(password, 4) });
+    const loginB = await request('POST', '/api/auth/login', { identifier: secondUser.correo, password });
+    assert.equal(loginB.status, 200);
+    const tokenB = loginB.body.token;
+    const clientA = await models.CLIENTE.create({ nombre: 'OWNER-A', usuarioId: accounts.Cliente.user.id });
+    const clientB = await models.CLIENTE.create({ nombre: 'OWNER-B', usuarioId: secondUser.id });
+    const vehicleA = created(await invoke('UC-24', { clienteId: clientA.id, placa: 'ONLY-A-OWNED' }));
+    const vehicleB = created(await invoke('UC-24', { clienteId: clientB.id, placa: 'ONLY-B-OWNED' }));
+    const orderA = await models.ORDENTRABAJO.create({ vehiculoId: vehicleA.id, estado: 'AUDIT-A' });
+    await models.ORDENTRABAJO.create({ vehiculoId: vehicleB.id, estado: 'AUDIT-B' });
+    const clientToken = accounts.Cliente.token;
+    const ownList = await request('GET', '/api/vehiculos', undefined, clientToken);
+    assert.equal(ownList.status, 200);
+    assert.deepEqual(ownList.body.data.map(v => v.id), [vehicleA.id]);
+    assert.equal((await request('GET', '/api/vehiculos/' + vehicleB.id, undefined, clientToken)).status, 404);
+    assert.equal((await request('GET', '/api/vehiculos/' + vehicleA.id, undefined, tokenB)).status, 404);
+    assert.equal((await request('GET', '/api/clientes/' + clientB.id, undefined, clientToken)).status, 404);
+    assert.equal((await invoke('UC-17', { vehiculoId: vehicleB.id }, clientToken)).status, 403);
+    assert.equal((await invoke('UC-17', { vehiculoId: vehicleA.id }, tokenB)).status, 403);
+    const ownProgress = await invoke('UC-17', { vehiculoId: vehicleA.id }, clientToken);
+    assert.equal(ownProgress.status, 200, JSON.stringify(ownProgress.body));
+    assert.equal(ownProgress.body.data.data[0].id, orderA.id);
+    check('PostgreSQL real: clientes A/B aislados en listados, IDs y progreso; 404/403 cruzados (ordenes son fixtures)');
+    assert.equal((await request('POST', '/api/productos', {}, accounts.Administrador.token)).status, 400);
+    assert.equal((await request('POST', '/api/productos', { stock: '3' }, accounts.Administrador.token)).status, 400);
+    assert.equal((await request('POST', '/api/productos', { unknownAuditField: true }, accounts.Administrador.token)).status, 400);
+    const product = await request('POST', '/api/productos', { nombre: 'CRUD-AUDIT', stock: 2 }, accounts.Administrador.token);
+    assert.equal(product.status, 201, JSON.stringify(product.body));
+    assert.equal((await request('PUT', '/api/productos/' + product.body.data.id, { nombre: '' }, accounts.Administrador.token)).status, 200);
+    assert.equal((await models.PRODUCTO.findByPk(product.body.data.id)).nombre, '');
+    assert.equal((await request('PUT', '/api/productos/' + product.body.data.id, { nombre: null }, accounts.Administrador.token)).status, 200);
+    assert.equal((await models.PRODUCTO.findByPk(product.body.data.id)).nombre, null);
+    check('CRUD real: rechaza cuerpo vacio/campo desconocido/tipo incorrecto; permite vaciar y anular un campo nullable');
+    report.apiPassed = true;
+    if (process.argv.includes('--api-only')) {
+      report.scope = 'API de alta Cliente → Vehículo → Recepción; no valida órdenes ni interfaz';
+      report.passed = true;
+      report.skipped = ['BROWSER_JOURNEYS', 'ORDER_QUOTATION_AUTHORIZATION_FLOW'];
+      return;
+    }
     const browsersDir = path.join(root, '.verification/browsers');
     if (fs.existsSync(browsersDir)) {
       process.env.PLAYWRIGHT_BROWSERS_PATH = browsersDir;
@@ -148,15 +208,16 @@ async function run() {
     for (const [name, width, height] of [['desktop', 1440, 900], ['mobile', 390, 844]]) {
       const page = await browser.newPage({ viewport: { width, height } });
       currentPage = page;
-      page.on('pageerror', error => console.error('Browser runtime:', error.message));
+      const runtimeErrors = [];
+      page.on('pageerror', error => runtimeErrors.push(error.message));
       await page.goto('http://127.0.0.1:5199');
-      await page.locator('input[type=text]').fill(reception.email);
+      await page.locator('#identifier').fill(reception.email);
       await page.locator('input[type=password]').fill(password);
-      await page.getByRole('button', { name: /Iniciar Sesión/i }).click();
-      await page.getByRole('heading', { name: 'Clientes', exact: true }).waitFor();
+      await page.locator('[data-action-id=login]').click();
+      await page.locator('#nombre').waitFor();
       const clientName = 'PRUEBA navegador ' + name;
       await page.locator('#nombre').fill(clientName);
-      await page.getByRole('button', { name: 'Guardar cliente', exact: true }).click();
+      await page.locator('[data-action-id=confirmar]').click();
       await page.getByRole('status').filter({ hasText: 'Operación completada' }).waitFor();
       const screenshot = async stage => {
         const filename = path.join(directory, name + '-' + stage + '.png');
@@ -167,22 +228,22 @@ async function run() {
       await screenshot('cliente');
       if (name === 'mobile') {
         await page.getByRole('button', { name: 'Abrir navegación' }).click();
-        await page.getByRole('navigation', { name: 'Tareas', exact: true }).getByRole('button', { name: 'Vehículos', exact: true }).click();
+        await page.getByRole('navigation', { name: 'Pantallas del rol', exact: true }).getByRole('button', { name: 'Vehículos', exact: true }).click();
         assert.equal(await page.getByRole('button', { name: 'Abrir navegación' }).getAttribute('aria-expanded'), 'false');
       } else await page.getByRole('button', { name: 'Ir a vehículos', exact: true }).click();
-      await page.getByRole('heading', { name: 'Vehículos', exact: true }).waitFor();
+      await page.locator('#placa').waitFor();
       await page.locator('#clienteId').selectOption({ label: clientName });
       const plate = 'BROWSER-' + name;
       await page.locator('#placa').fill(plate);
-      await page.getByRole('button', { name: 'Guardar vehículo', exact: true }).click();
+      await page.locator('[data-action-id=confirmar]').click();
       await page.getByRole('status').filter({ hasText: 'Operación completada' }).waitFor();
       await screenshot('vehiculo');
       await page.getByRole('button', { name: 'Ir a recepción de vehículos', exact: true }).click();
-      await page.getByRole('heading', { name: 'Recepción de vehículos', exact: true }).waitFor();
+      await page.locator('#kilometraje').waitFor();
       await page.locator('#clienteId').selectOption({ label: clientName });
       await page.locator('#vehiculoId').selectOption({ label: plate });
       await page.locator('#kilometraje').fill('17');
-      await page.locator('#nivelCombustible').selectOption('0.25');
+      await page.locator('button[data-field=nivelCombustible][data-field-value="0.25"]').click();
       await page.locator('#motivoIngreso').fill('PRUEBA recepción ' + name);
       assert.equal(await page.locator('input#id, input#usuarioId, input#fechaRecepcion').count(), 0);
       await page.locator('#evidencias').setInputFiles({ name: 'prueba.png', mimeType: 'image/png', buffer: image });
@@ -190,12 +251,12 @@ async function run() {
       let intakePosts = 0;
       page.on('request', request => { if (request.method() === 'POST' && request.url().endsWith(operations['UC-16'].route)) intakePosts++; });
       await page.route('**/api/upload', route => route.fulfill({ status: 503, json: { message: 'PRUEBA carga fallida' } }));
-      await page.getByRole('button', { name: 'Confirmar recepción', exact: true }).click();
+      await page.locator('[data-action-id=confirmar]').click();
       await page.getByRole('alert').filter({ hasText: 'PRUEBA carga fallida' }).waitFor();
       assert.equal(await models.RECEPCION.count(), beforeFailure);
       assert.equal(intakePosts, 0);
       await page.unroute('**/api/upload');
-      await page.getByRole('button', { name: 'Confirmar recepción', exact: true }).click();
+      await page.locator('[data-action-id=confirmar]').click();
       await page.getByRole('status').filter({ hasText: 'Operación completada' }).waitFor();
       assert.equal(intakePosts, 1);
       await page.getByRole('row').filter({ hasText: 'PRUEBA recepción ' + name }).getByRole('button', { name: 'Ver fotografía 1' }).click();
@@ -204,13 +265,55 @@ async function run() {
       await page.getByRole('button', { name: 'Cerrar fotografía' }).click();
       await screenshot('recepcion');
       await page.reload();
-      await page.getByRole('button', { name: 'Ir a recepción de vehículos', exact: true }).click();
+      await page.locator('#kilometraje').waitFor();
       await page.getByText('PRUEBA recepción ' + name, { exact: true }).waitFor();
       const browserVehicle = await models.VEHICULO.findOne({ where: { placa: plate } });
       assert.equal(browserVehicle.kilometrajeActual, null);
+      assert.deepEqual(runtimeErrors, [], 'No browser runtime errors');
       await page.close();
       check('Navegador ' + name + ': flujo completo real, fallo de foto sin confirmar, reintento y persistencia tras recarga');
     }
+
+    for (const [label, email, expected, denied] of [['A', accounts.Cliente.email, vehicleA, vehicleB], ['B', secondUser.correo, vehicleB, vehicleA]]) {
+      const page = await browser.newPage({ viewport: { width: 1440, height: 900 } }); currentPage = page;
+      const browserErrors = []; page.on('pageerror', error => browserErrors.push(error.message));
+      await page.goto('http://127.0.0.1:5199');
+      await page.locator('#identifier').fill(email);
+      await page.locator('input[type=password]').fill(password);
+      await page.locator('[data-action-id=login]').click();
+      // Navigation labels come from the approved screen title, including accents.
+      await page.getByRole('navigation', { name: 'Pantallas del rol', exact: true }).getByRole('button', { name: /Veh.culos/, exact: true }).click();
+      await page.locator('tbody').getByText(expected.placa, { exact: true }).waitFor();
+      assert.equal(await page.locator('tbody').getByText(denied.placa, { exact: true }).count(), 0);
+      await page.reload();
+      await page.getByRole('navigation', { name: 'Pantallas del rol', exact: true }).getByRole('button', { name: /Veh.culos/, exact: true }).click();
+      await page.locator('tbody').getByText(expected.placa, { exact: true }).waitFor();
+      assert.equal(await page.locator('tbody').getByText(denied.placa, { exact: true }).count(), 0);
+      const deniedResponse = await page.evaluate(async id => {
+        const res = await fetch('/api/vehiculos/' + id, { headers: { Authorization: 'Bearer ' + localStorage.getItem('token') } }); return res.status;
+      }, denied.id);
+      assert.equal(deniedResponse, 404);
+      const progressKey = require('../src/services/codegen/screenContract').screenTabKey(spec.screens.find(s => s.route === '/progreso-reparacion'));
+      await page.locator('[data-screen-key="' + progressKey + '"]').click();
+      await page.locator('#vehiculoId').waitFor();
+      await page.locator('#vehiculoId option[value="' + expected.id + '"]').waitFor({ state: 'attached' });
+      assert.equal(await page.locator('#vehiculoId option[value="' + denied.id + '"]').count(), 0);
+      await page.locator('#vehiculoId').selectOption(String(expected.id));
+      await page.locator('[data-action-id=consultar-progreso]').click();
+      await page.locator('.contract-table').getByText('AUDIT-' + label, { exact: true }).waitFor();
+      assert.equal(await page.locator('.contract-table').getByText('AUDIT-' + (label === 'A' ? 'B' : 'A'), { exact: true }).count(), 0);
+      await page.reload();
+      await page.locator('#vehiculoId option[value="' + expected.id + '"]').waitFor({ state: 'attached' });
+      await page.locator('#vehiculoId').selectOption(String(expected.id));
+      await page.locator('[data-action-id=consultar-progreso]').click();
+      await page.locator('.contract-table').getByText('AUDIT-' + label, { exact: true }).waitFor();
+      assert.deepEqual(browserErrors, []);
+      const filename = path.join(directory, 'owner-' + label + '.png'); await page.screenshot({ path: filename, fullPage: true }); report.screenshots.push(filename);
+      await page.close();
+      check('Navegador real cliente ' + label + ': vehículos y progreso propios tras recarga; consulta cruzada denegada (órdenes fixture)');
+    }
+    report.browserPassed = true;
+    report.fixtureLimitations = ['Orders for progress ownership were inserted directly; order creation, quotation calculation and authorization are not certified'];
     report.database = database;
     report.passed = true;
   } catch (error) {
@@ -218,6 +321,8 @@ async function run() {
     if (currentPage && !currentPage.isClosed()) await currentPage.screenshot({ path: path.join(directory, 'failure.png'), fullPage: true });
     throw error;
   } finally {
+    report.completedAt = new Date().toISOString();
+    if (integrity.fingerprint(integrity.snapshotFiles(directory, testedPaths)) !== report.testedSourceHash) { report.passed = false; report.error = 'TESTED_FILES_CHANGED_DURING_RUN'; }
     fs.writeFileSync(path.join(directory, 'acceptance-results.json'), JSON.stringify(report, null, 2));
     await browser?.close();
     if (frontendServer) await new Promise(resolve => frontendServer.httpServer.close(resolve));

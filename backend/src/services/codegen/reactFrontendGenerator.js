@@ -15,6 +15,8 @@ function generateFrontendPackageJson(projectName = 'app') {
     version: '1.0.0',
     type: 'module',
     scripts: {
+      predev: 'node scripts/compile-mockup-themes.cjs',
+      prebuild: 'node scripts/compile-mockup-themes.cjs',
       dev: 'vite',
       build: 'vite build',
       preview: 'vite preview'
@@ -43,7 +45,7 @@ export default defineConfig({
     port: 3000,
     proxy: {
       '/api': {
-        target: process.env.VITE_API_URL || 'http://localhost:8080',
+        target: process.env.VITE_API_URL || 'http://localhost:8085',
         changeOrigin: true
       }
     }
@@ -116,8 +118,33 @@ function generateFrontendNginxConf() {
 function generateTailwindConfig() {
   return `/** @type {import('tailwindcss').Config} */
 export default {
-  content: ['./index.html', './src/**/*.{js,jsx}'],
-  theme: { extend: {} },
+  content: { relative: true, files: ['./index.html', './src/**/*.{js,jsx}'] },
+  theme: {
+    extend: {
+      colors: {
+        background: 'var(--background, var(--color-bg-app))',
+        surface: 'var(--surface, var(--color-surface))',
+        'surface-container': 'var(--surface-container, #f1f5f9)',
+        'surface-container-low': 'var(--surface-container-low, #f8fafc)',
+        'surface-container-lowest': 'var(--surface-container-lowest, #ffffff)',
+        'surface-container-high': 'var(--surface-container-high, #e2e8f0)',
+        'surface-container-highest': 'var(--surface-container-highest, #cbd5e1)',
+        'on-surface': 'var(--on-surface, var(--color-text-title))',
+        'on-surface-variant': 'var(--on-surface-variant, var(--color-text-muted))',
+        outline: 'var(--outline, var(--color-border))',
+        'outline-variant': 'var(--outline-variant, #e2e8f0)',
+        primary: 'var(--primary, var(--color-primary))',
+        'on-primary': 'var(--on-primary, #ffffff)',
+        'primary-container': 'var(--primary-container, var(--color-primary-subtle))',
+        'on-primary-container': 'var(--on-primary-container, var(--color-primary))',
+        secondary: 'var(--secondary, #64748b)',
+        'on-secondary': 'var(--on-secondary, #ffffff)',
+        error: 'var(--error, #b91c1c)',
+        'error-container': 'var(--error-container, #fee2e2)',
+        'on-error-container': 'var(--on-error-container, #991b1b)'
+      }
+    }
+  },
   plugins: []
 };
 `;
@@ -138,6 +165,7 @@ function generateFrontendCss() {
 @tailwind components;
 @tailwind utilities;
 
+@scope (:root) to (.mockup-screen) {
 /**
  * Global Stylesheet for Generated SPA
  * Follows DESIGN_SYSTEM.md (v3.0 - Estándar Esencial Minimalista)
@@ -161,29 +189,35 @@ function generateFrontendCss() {
 .icase-nav-overlay { display: none; }
 .icase-content { min-width: 0; flex: 1; }
 @media(max-width: 900px) {
+  .icase-topbar { gap: .5rem; padding: .5rem .75rem; }
+  .icase-brand { min-width: 0; gap: .45rem; }
+  .icase-session strong { display: none; }
   .icase-menu-toggle { display: inline-flex; margin-left: auto; padding: .45rem .7rem; border: 1px solid var(--color-border); background: #fff; border-radius: 8px; }
-  .icase-topnav { display: none; position: absolute; top: 64px; left: 0; right: 0; flex-direction: column; background: #fff; border-bottom: 1px solid var(--color-border); padding: .5rem; }
+  .icase-topnav { display: none; position: absolute; z-index: 21; top: 100%; left: 0; right: 0; flex-direction: column; background: #fff; border-bottom: 1px solid var(--color-border); padding: .5rem; }
   .icase-topnav[data-open=true] { display: flex; }
-  .icase-nav-overlay { display: block; position: fixed; inset: 64px 0 0; z-index: 19; border: 0; background: #0f172a66; }
+  .icase-nav-overlay { display: block; position: absolute; top: 100%; left: 0; right: 0; height: 100vh; z-index: 19; border: 0; background: #0f172a66; }
   .icase-session span { display: none; }
 }
 .contract-task { padding: 1rem; max-width: 1280px; margin: auto; }
 .contract-task:has(.mockup-screen) { max-width: none; padding: 0; }
-.contract-task:has(.mockup-screen) > nav { display: none; }
+.contract-task:has(.mockup-screen) > nav { display: flex; flex-wrap: wrap; gap: .5rem; padding: 1rem; }
 .icase-content:has(.mockup-screen) { padding: 0; }
 .icase-content:has(.mockup-screen) .icase-task-header { display: none; }
 .mockup-screen { min-width: 0; }
+.mockup-screen, .mockup-screen * { font-family: inherit; }
+.mockup-screen { background: var(--background, var(--color-bg-app)); color: var(--on-surface, var(--color-text-title)); }
 .mockup-screen [data-contract-form], .mockup-screen .contract-table { margin: 0; max-width: none; }
-.mockup-screen form[data-contract-form] { max-width: none; padding: 0; background: transparent; border: 0; border-radius: 0; }
-.mockup-live-region { padding: 1.25rem; }
+.mockup-screen form[data-contract-generic] { max-width: none; padding: 0; background: transparent; border: 0; border-radius: 0; }
+.mockup-live-region { padding: 1.5rem 1.25rem 2.5rem; max-width: 1100px; margin: 0 auto; border-top: 1px solid var(--color-border); background: var(--color-bg-app); }
+.mockup-live-region h2 { margin: 0 0 .35rem; font-size: 1.05rem; }
 .mockup-live-panel { display: none; }
 .contract-purpose { color: var(--color-text-muted); margin: 0 0 1.25rem; }
 .contract-task-grid { display: grid; grid-template-columns: minmax(0, 2fr) minmax(240px, 1fr); gap: 1.5rem; align-items: start; }
 .contract-panel, .contract-table { padding: 1.5rem; background: var(--color-surface); border: 1px solid var(--color-border); border-radius: var(--radius-md); margin-bottom: 1.5rem; min-width: 0; overflow-x: auto; }
-.contract-task table { width: 100%; border-collapse: collapse; }
+.contract-table table { width: 100%; border-collapse: collapse; }
 .contract-table button { padding: .65rem .85rem; border: 1px solid var(--color-border); background: white; color: var(--color-primary); border-radius: var(--radius-sm); cursor: pointer; }
 @media(max-width: 640px) { .contract-table table, .contract-table tbody, .contract-table tr { display: block; width: 100%; } .contract-table thead { display: none; } .contract-table tr { border: 1px solid var(--color-border); border-radius: var(--radius-sm); margin-bottom: 1rem; } .contract-task .contract-table td { display: grid; grid-template-columns: minmax(90px, 40%) minmax(0, 1fr); gap: .5rem; overflow-wrap: anywhere; } .contract-table td::before { content: attr(data-label); font-weight: 600; } }
-.contract-task td, .contract-task th { padding: .75rem; text-align: left; border-bottom: 1px solid var(--color-border); }
+.contract-table td, .contract-table th { padding: .75rem; text-align: left; border-bottom: 1px solid var(--color-border); }
 .contract-task nav { display: flex; flex-wrap: wrap; gap: .75rem; }
 .contract-task nav button { padding: .75rem; border: 1px solid var(--color-border); border-radius: var(--radius-sm); background: white; }
 .contract-image-preview { position: fixed; inset: 0; z-index: 50; background: #0f172aee; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 1rem; padding: 1rem; }
@@ -202,7 +236,7 @@ function generateFrontendCss() {
 .form-group input, .form-group select, .form-group textarea { width: 100%; max-width: 100%; padding: .65rem; border: 1px solid var(--color-border); border-radius: var(--radius-sm); }
 .form-group input[type=checkbox] { width: auto; }
 .mockup-content-wrapper { max-width: 100%; overflow-x: auto; padding: 1rem; }
-form[data-contract-form] { max-width: 760px; padding: 1.5rem; background: var(--color-surface); border: 1px solid var(--color-border); border-radius: var(--radius-md); }
+form[data-contract-generic] { max-width: 760px; padding: 1.5rem; background: var(--color-surface); border: 1px solid var(--color-border); border-radius: var(--radius-md); }
 button[data-action-id] { padding: .7rem 1.25rem; border: 0; border-radius: var(--radius-sm); background: var(--color-primary); color: white; font-weight: 600; cursor: pointer; }
 .field-automatic { display: block; margin-bottom: 1rem; color: var(--color-text-muted); font-size: .85rem; }
 @media(max-width: 640px) { table { display: block; max-width: 100%; overflow-x: auto; } input, select, textarea, button { min-height: 44px; } }
@@ -316,6 +350,20 @@ body {
   border-radius: 8px;
   padding: 20px;
 }
+}
+
+/* Runtime containers preserve each mockup theme; wide regions scroll locally. */
+.mockup-screen { max-width: 100%; min-width: 0; }
+.mockup-screen > [data-mockup-screen] { max-width: 100%; overflow-x: auto; }
+.mockup-screen .contract-table { max-width: 100%; min-width: 0; overflow-x: auto; }
+.mockup-screen .contract-table table { width: 100%; border-collapse: collapse; }
+.mockup-screen .contract-table td, .mockup-screen .contract-table th { padding: .45rem; text-align: left; }
+@media(max-width: 640px) {
+  .mockup-screen header { max-width: 100%; overflow-x: auto; }
+  .mockup-screen main { min-width: 0; }
+  .mockup-screen table { display: block; max-width: 100%; overflow-x: auto; }
+}
+
 `;
 }
 
@@ -332,24 +380,28 @@ const API_BASE = '/api';
 export async function apiRequest(endpoint, options = {}) {
   const cleanEndpoint = endpoint.startsWith('/') ? endpoint : \`/\${endpoint}\`;
   const url = cleanEndpoint.startsWith('/api') ? cleanEndpoint : \`\${API_BASE}\${cleanEndpoint}\`;
-
-  // Obtener token de autenticación de la sesión si existe
+  const { headers: extraHeaders = {}, body, ...rest } = options;
+  const isFormData = typeof FormData !== 'undefined' && body instanceof FormData;
   const token = typeof window !== 'undefined' && window.localStorage ? window.localStorage.getItem('token') : null;
+  const headers = {
+    ...(isFormData ? {} : { 'Content-Type': 'application/json' }),
+    ...(token ? { Authorization: \`Bearer \${token}\` } : {}),
+    ...extraHeaders
+  };
+  if (isFormData) delete headers['Content-Type'];
 
   const config = {
-    headers: {
-      'Content-Type': 'application/json',
-      ...(token ? { 'Authorization': \`Bearer \${token}\` } : {}),
-      ...options.headers
-    },
-    ...options
+    ...rest,
+    headers,
+    body: isFormData ? body : (body && typeof body === 'object' ? JSON.stringify(body) : body)
   };
 
-  if (config.body && typeof config.body === 'object') {
-    config.body = JSON.stringify(config.body);
+  let response;
+  try {
+    response = await fetch(url, config);
+  } catch (err) {
+    throw new Error('No se pudo conectar con el API. Arranca backend y frontend con docker compose (puerto 3005).');
   }
-
-  const response = await fetch(url, config);
   const json = await response.json().catch(() => ({}));
 
   if (!response.ok || json.success === false) {
@@ -605,39 +657,6 @@ export default function LoginPage({ onLoginSuccess }) {
           </button>
         </form>
 
-        {/* Acceso Rápido con Credenciales Semilla */}
-        <div style={{
-          marginTop: '20px',
-          padding: '12px 14px',
-          backgroundColor: '#eff6ff',
-          border: '1px solid #bfdbfe',
-          borderRadius: 'var(--radius-md, 8px)',
-          fontSize: '0.8125rem',
-          color: '#1e40af',
-          textAlign: 'left'
-        }}>
-          <strong style={{ display: 'block', marginBottom: '4px' }}>🔑 Credenciales de Acceso Rápido (Semilla):</strong>
-          <div>• <strong>Usuario:</strong> <code>admin</code> (o <code>admin@${domain}.com</code>)</div>
-          <div>• <strong>Contraseña:</strong> <code>admin123</code></div>
-          <button
-            type="button"
-            onClick={() => { setIdentifier('admin'); setPassword('admin123'); }}
-            style={{
-              marginTop: '6px',
-              padding: '0',
-              background: 'none',
-              border: 'none',
-              color: '#2563eb',
-              fontSize: '0.75rem',
-              fontWeight: 600,
-              cursor: 'pointer',
-              textDecoration: 'underline'
-            }}
-          >
-            Autocompletar formulario
-          </button>
-        </div>
-
         <div style={{ marginTop: '20px', textAlign: 'center', fontSize: '0.75rem', color: 'var(--color-text-muted)' }}>
           Autenticación JWT gestionada por backend Express + Sequelize
         </div>
@@ -695,7 +714,14 @@ ${hasAuth ? `import LoginPage from './pages/LoginPage';\n` : ''}${entityImports}
 ${mockupImports}
 
 export default function App() {
-  const [activeTab, setActiveTab] = useState(${defaultTab});
+  const [activeTab, updateActiveTab] = useState(() => {
+    const key = typeof window === 'undefined' ? '' : window.location.hash.slice(1);
+    return /^[a-zA-Z0-9_-]+$/.test(key) ? key : ${defaultTab};
+  });
+  const setActiveTab = key => {
+    updateActiveTab(key);
+    window.history.replaceState(null, '', '#' + encodeURIComponent(key));
+  };
   const allNavItems = [
 ${navEntries.join(',\n')}
   ];

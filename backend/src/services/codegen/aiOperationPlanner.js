@@ -12,6 +12,21 @@ const {
 } = require('./contractSchema');
 const { saveOperationProposal } = require('./aiProposalStore');
 
+function acceptanceExample(operation, catalog) {
+  const example = JSON.parse(JSON.stringify(require('./contractAcceptanceRunner').scenarioSchema));
+  const entity = (catalog.entities || []).find(entity => [entity.id, entity.name, entity.modelName].includes(operation.targetEntity));
+  const field = Object.keys(operation.input?.bodySchema?.properties || {})[0] || entity?.attributes?.find(a => !a.isPk && !/Id$/.test(a.fieldName))?.fieldName;
+  const definition = operation.input?.bodySchema?.properties?.[field] || {};
+  const sample = definition.enum?.[0] ?? (['integer', 'number'].includes(definition.type) ? definition.minimum ?? 1 : definition.type === 'boolean' ? true : 'Ejemplo API');
+  const screen = (catalog.screens || []).find(screen => screen.contract?.actions?.some(action => action.operationId === operation.operationId)) || (catalog.screens || []).find(screen => screen.requirementIds?.some(id => operation.requirementIds?.includes(id)));
+  example.requirementIds = operation.requirementIds || [];
+  example.users[0].role = operation.authorizedRoles?.[0] || '';
+  example.requests[0] = { id: 'created', operationId: operation.operationId, as: 'actorA', body: { [field || 'DECLARED_FIELD']: sample }, status: operation.output?.successStatus || 200, equals: [{ path: 'data.data.' + field, value: sample }] };
+  example.persistence[0] = { entity: entity?.modelName, where: { [entity?.primaryKey?.fieldName || 'id']: { $ref: 'responses.created.data.data.' + (entity?.primaryKey?.fieldName || 'id') } }, count: 1, fields: { [field || 'DECLARED_FIELD']: sample } };
+  example.browser = screen ? [{ as: 'actorA', screenId: screen.id, steps: [{ action: 'fill', field, value: 'Ejemplo navegador' }, { action: 'click', actionId: screen.contract?.primaryActionId || 'confirmar' }, { action: 'text', value: 'Ejemplo navegador' }, { action: 'reload' }, { action: 'text', value: 'Ejemplo navegador' }] }] : [];
+  return example;
+}
+
 /**
  * System prompt instructing the AI planner with strict boundaries
  */
@@ -20,186 +35,37 @@ Tu tarea es convertir casos de uso y requerimientos aprobados en pasos ejecutabl
 
 REGLAS ESTRICTAS:
 1. NUNCA inventes entidades, campos, reglas de negocio ni roles que no existan en el catálogo proporcionado.
-2. Utiliza exclusivamente las acciones estructuradas soportadas: CREATE, UPDATE, DELETE, STATUS_CHANGE, ASSOCIATE, QUERY, CALCULATION, VALIDATION.
+2. Usa bindingVersion=2 y transaction=true. Acciones implementadas: CREATE, UPDATE, QUERY, ASSERT, CALCULATION, FOR_EACH y RETURN. DELETE y STATUS_CHANGE dedicadas no están implementadas; los estados se cambian con UPDATE solo cuando su transición y campo están aprobados. Una asociación solo puede usar CREATE sobre una tabla intermedia explícita si están aprobados el modelo y sus claves foráneas; nunca deduzcas escrituras desde una relación o narrativa ambigua.
 3. Referencia exactamente los nombres de modelo ('modelName') y atributos ('fieldName') de las entidades aprobadas.
 4. Si falta información o algún paso narrativo es ambiguo, documéntalo en el arreglo 'ambiguities' con una recomendación.
 5. Explica tus decisiones en 'rationale'.
-6. La salida debe ser estrictamente un objeto JSON con el esquema solicitado.`;
+6. La salida debe ser estrictamente un objeto JSON con el esquema solicitado.
+7. Usa bodySchema cerrado (additionalProperties=false), tipos, required y restricciones. Conserva recordAccess, businessRules, preconditions y acceptanceCriteria existentes; nunca reduzcas permisos por registro ni cambies roles.
+8. Los filtros y fields usan referencias {$ref:'payload.campo'}, {$ref:'user.id'}, {$ref:'steps.paso.0.id'} o valores JSON. QUERY devuelve un array; admite filters:[{field:'fecha',operator:'gte',value:{$ref:'steps.desde'}}] (eq,gte,gt,lte,lt). UPDATE exige where explícito. RETURN usa value con un objeto de referencias para combinar resultados y su id puede ser resultStep. Cada paso tiene id. No escribas JavaScript, SQL, expresiones ni fórmulas.
+9. No conviertas alternativas de un caso de uso (crear, editar, eliminar) en una secuencia de escrituras. Devuelve la ambigüedad cuando se requieran comandos separados.
+10. Genera acceptanceScenarios declarativos para probar el comportamiento: id, requirementIds, users [{id,role}], fixtures [{id,entity,fields}], requests [{id,operationId,as,body,status,equals:[{path,value}]}], persistence [{entity,where,count,fields}], browser [{as,screenId,steps:[{action:'fill',field,value}|{action:'click',actionId}|{action:'reload'}|{action:'text',value}]}]. Referencias de pruebas: {$ref:'users.id.id'}, {$ref:'fixtures.id.id'}, {$ref:'responses.id.data.data.id'}. Incluye éxito, validación y rechazo de otro usuario cuando corresponde. No inventes una regla para obtener un resultado exitoso.
+11. Orden de ejecución de CADA escenario: crea usuarios, fixtures, ejecuta TODOS los requests, después TODOS los pasos browser, y AL FINAL comprueba persistence en otra conexión. Los requests y el navegador hacen escrituras independientes: utiliza valores distintos (ejemplo API y Navegador) y filtra por el id de la respuesta API para comprobar count=1; no esperes count=1 por título si has creado dos filas con ese mismo título. El navegador debe comprobar los datos DESPUÉS de reload.
+12. El runtime ya valida bodySchema ANTES de ejecutar steps. No crees pasos de escritura para validar entradas ni para devolver resultados. Una creación de un libro necesita UN único CREATE con TODOS los campos obligatorios sin default ni autoincremento; un campo automático de propietario puede tomar {$ref:'user.id'}. No crees primero una fila parcial para validar y después otra fila completa.
+13. CALCULATION usa {id,action:'CALCULATION',expression:{$op:'multiply',args:[{$ref:'payload.cantidad'},{$ref:'steps.precio.0.valor'}],scale:2}}. Operadores: add,subtract,multiply,divide,sum,choose,date_add_days,date_diff_days,all,count,group_count,date_start. sum usa items,field,scale; count usa items; group_count usa items,field y devuelve [{campo:valor,count:n}]; date_start usa date (YYYY-MM-DD),timeZone (IANA explícita) y devuelve el instante UTC de medianoche local. choose usa condition,then,else. La precisión y fórmulas deben proceder de decisiones aprobadas, nunca de JavaScript o SQL.
+14. FOR_EACH usa {id,action:'FOR_EACH',collection:{$ref:'payload.items'},steps:[...],result:{campo:{$ref:'steps.interno.id'}}}. item es el elemento actual; steps internos conservan acceso a los pasos anteriores del padre. ASSERT usa condition:{operator,left,right}, errorCode y errorMessage. Predicados: eq,neq,gt,gte,lt,lte,in,not_in,not_empty,is_empty,and,or (and/or usan conditions).
+15. QUERY permite comparar columnas de la misma entidad: filters:[{field:'stock',operator:'lte',valueField:'stockMinimo'}]. valueField y value son alternativas excluyentes. Ambos campos deben existir en el modelo. Una alerta de bajo stock definida como consulta NO crea ALERTA ni NOTIFICACION.
+16. Cada paso admite when con un predicado declarativo. Dentro de FOR_EACH, un CREATE con when:{operator:'or',conditions:[...]} se omite si ningún umbral aplica y el bucle continúa sin escribir. No uses ASSERT para saltar elementos, porque aborta la operación. Referencia el reloj del servidor con {$ref:'now'}; no declares estas capacidades existentes como preguntas de negocio.
+15. confirmedGenerationDecisions y confirmedProjectDecisions contienen decisiones del usuario ya guardadas. Usa ambas para completar el contrato; pregunta solo lo que siga faltando. Una decisión detallada posterior que sustituye explícitamente una opción anterior es la vigente; no vuelvas a preguntar por esa opción anterior. No deduzcas una sustitución entre reglas diferentes ni amplíes permisos. Las limitaciones del binding y los fallos de validación son problemas técnicos: intenta corregirlos con las capacidades implementadas y el validationFeedback, sin presentarlos como decisiones del usuario.`;
 
 /**
  * Builds deterministic proposal based on semantic analysis when offline or as robust baseline
  */
-function pickPrimaryEntity(operation, entities) {
-  const normalize = s => (s || '').toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/[^a-z0-9]/g, '');
-  const opNorm = normalize((operation.name || '') + ' ' + (operation.narrativeDescription || ''));
-  const ranked = entities.map(e => {
-    const eNorm = normalize(e.modelName || e.name);
-    let score = 0;
-    if (eNorm && opNorm.includes(eNorm)) score = eNorm.length * 2;
-    const tokens = String(e.name || e.modelName || '').split(/[\s_]+/).filter(t => t.length >= 4).map(normalize);
-    score += tokens.filter(t => opNorm.includes(t)).reduce((sum, t) => sum + t.length, 0);
-    return { e, score };
-  }).sort((a, b) => b.score - a.score);
-  if (ranked[0]?.score > 0) return ranked[0].e;
-  if (operation.targetEntity) return entities.find(e => [e.modelName, e.name].includes(operation.targetEntity)) || null;
-  return null;
-}
-
-function relatedEntities(primary, catalog) {
-  const entities = catalog.entities || [];
-  if (!primary) return entities;
-  const normalize = s => (s || '').toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/[^a-z0-9]/g, '');
-  const keys = new Set([primary.id, primary.name, primary.modelName].filter(Boolean).map(v => String(v)));
-  const keysNorm = new Set([...keys].map(normalize));
-  for (const r of catalog.relationships || []) {
-    const ends = [r.sourceEntity, r.targetEntity, r.source, r.target, r.sourceEntityId, r.targetEntityId].filter(Boolean).map(String);
-    if (ends.some(end => keys.has(end) || keysNorm.has(normalize(end)))) ends.forEach(end => keys.add(end));
-  }
-  const related = entities.filter(e => keys.has(e.id) || keys.has(e.name) || keys.has(e.modelName) || keysNorm.has(normalize(e.modelName)) || keysNorm.has(normalize(e.name)));
-  return related.length ? related : [primary];
-}
-
 function synthesizeSemanticSteps(operation, catalog) {
-  const entities = catalog.entities || [];
-  const rules = catalog.rules || [];
-  const roles = catalog.roles || [];
-  const narrativeSteps = operation.narrativeSteps || [];
-  const ambiguities = [];
-  const executableSteps = [];
-
-  const normalize = s => (s || '').toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/[^a-z0-9]/g, '');
-  const opNameNorm = normalize(operation.name);
-  const allowed = relatedEntities(pickPrimaryEntity(operation, entities), catalog);
-  let primaryEntity = pickPrimaryEntity(operation, entities);
-
-  // 2. Synthesize steps from narrative steps or operation purpose
-  if (narrativeSteps.length > 0) {
-    narrativeSteps.forEach((ns, idx) => {
-      const text = typeof ns === 'string' ? ns : (ns.description || ns.name || '');
-      const tNorm = normalize(text);
-
-      // Detect action
-      let action = 'CREATE';
-      let stepEntity = primaryEntity ? primaryEntity.modelName : null;
-      let statusField = null;
-      let newStatus = null;
-      let withEntity = null;
-      let formula = null;
-      let targetField = null;
-
-      const matchedStepEntity = allowed.find(e => tNorm.includes(normalize(e.modelName || e.name)));
-      if (matchedStepEntity) {
-        stepEntity = matchedStepEntity.modelName;
-      }
-
-      if (tNorm.includes('estado') || tNorm.includes('status') || tNorm.includes('aprobar') || tNorm.includes('cancelar') || tNorm.includes('completar') || tNorm.includes('cerrar')) {
-        action = 'STATUS_CHANGE';
-        statusField = 'estado';
-        if (tNorm.includes('aprobar')) newStatus = 'APROBADO';
-        else if (tNorm.includes('cancelar')) newStatus = 'CANCELADO';
-        else if (tNorm.includes('completar') || tNorm.includes('cerrar')) newStatus = 'COMPLETADO';
-        else newStatus = 'EN_PROCESO';
-      } else if (tNorm.includes('eliminar') || tNorm.includes('borrar') || tNorm.includes('desactivar')) {
-        action = 'DELETE';
-      } else if (tNorm.includes('actualizar') || tNorm.includes('modificar') || tNorm.includes('editar')) {
-        action = 'UPDATE';
-      } else if (tNorm.includes('asociar') || tNorm.includes('vincular') || tNorm.includes('asignar')) {
-        action = 'ASSOCIATE';
-        const otherEntity = allowed.find(e => e.modelName !== stepEntity && tNorm.includes(normalize(e.modelName || e.name)));
-        withEntity = otherEntity ? otherEntity.modelName : null;
-        if (!withEntity) {
-          ambiguities.push(`Paso ${idx + 1}: Se indicó asociación pero no se identificó la entidad destino en el texto.`);
-        }
-      } else if (tNorm.includes('calcular') || tNorm.includes('total') || tNorm.includes('subtotal') || tNorm.includes('iva') || tNorm.includes('descuento')) {
-        action = 'CALCULATION';
-        targetField = 'total';
-        formula = 'payload.subtotal || payload.monto || 0';
-      } else if (tNorm.includes('consultar') || tNorm.includes('buscar') || tNorm.includes('verificar disponibilidad')) {
-        action = 'QUERY';
-      } else if (tNorm.includes('validar') || tNorm.includes('comprobar')) {
-        action = 'VALIDATION';
-      } else {
-        action = 'CREATE';
-      }
-
-      const step = {
-        step: idx + 1,
-        action,
-        entity: stepEntity,
-        description: text
-      };
-
-      if (action === 'STATUS_CHANGE') {
-        step.statusField = statusField || 'estado';
-        step.newStatus = newStatus || 'ACTIVO';
-      }
-      if (action === 'ASSOCIATE' && withEntity) {
-        step.withEntity = withEntity;
-      }
-      if (action === 'CALCULATION') {
-        step.targetField = targetField;
-        step.formula = formula;
-      }
-
-      executableSteps.push(step);
-    });
-  } else if (primaryEntity) {
-    // Generate standard business action based on operation method and name
-    const isDelete = opNameNorm.includes('eliminar') || opNameNorm.includes('borrar');
-    const isUpdate = opNameNorm.includes('actualizar') || opNameNorm.includes('modificar');
-    const isStatus = opNameNorm.includes('cambiar estado') || opNameNorm.includes('aprobar') || opNameNorm.includes('cancelar');
-
-    if (isStatus) {
-      executableSteps.push({
-        step: 1,
-        action: 'STATUS_CHANGE',
-        entity: primaryEntity.modelName,
-        statusField: 'estado',
-        newStatus: opNameNorm.includes('aprobar') ? 'APROBADO' : opNameNorm.includes('cancelar') ? 'CANCELADO' : 'ACTIVO',
-        description: `Cambiar estado de ${primaryEntity.modelName}`
-      });
-    } else if (isDelete) {
-      executableSteps.push({
-        step: 1,
-        action: 'DELETE',
-        entity: primaryEntity.modelName,
-        description: `Eliminar registro de ${primaryEntity.modelName}`
-      });
-    } else if (isUpdate) {
-      executableSteps.push({
-        step: 1,
-        action: 'UPDATE',
-        entity: primaryEntity.modelName,
-        description: `Actualizar datos de ${primaryEntity.modelName}`
-      });
-    } else {
-      executableSteps.push({
-        step: 1,
-        action: 'CREATE',
-        entity: primaryEntity.modelName,
-        description: `Crear nuevo registro de ${primaryEntity.modelName}`
-      });
-    }
-  }
-
-  // 3. Resolve authorized roles
-  const authorizedRoles = (operation.authorizedRoles && operation.authorizedRoles.length > 0)
-    ? operation.authorizedRoles
-    : [];
-
+  const { executionProblems } = require('./executableContract');
+  const problems = executionProblems(operation, catalog.entities || []);
   return {
+    ...operation,
     contractVersion: OPERATION_CONTRACT_VERSION,
-    operationId: operation.operationId,
-    name: operation.name,
-    route: operation.route || `/api/operations/${(operation.operationId || 'op').toLowerCase().replace(/[^a-z0-9]/g, '-')}`,
-    method: (operation.method || 'POST').toUpperCase(),
-    targetEntity: primaryEntity ? primaryEntity.modelName : null,
-    action: executableSteps[0]?.action || 'CREATE',
-    transaction: executableSteps.length > 1,
-    steps: executableSteps,
-    authorizedRoles,
-    rationale: `Propuesta generada determinísticamente analizando la intención de '${operation.name}' frente al catálogo de entidades y atributos aprobados.`,
-    ambiguities
+    steps: problems.length ? [] : (operation.steps || []),
+    authorizedRoles: operation.authorizedRoles || [],
+    unresolved: problems,
+    ambiguities: problems,
+    rationale: 'Etapa determinista: conserva contratos expl?citos; no deduce escrituras, estados ni c?lculos desde narrativa o relaciones.'
   };
 }
 
@@ -212,17 +78,11 @@ function synthesizeSemanticSteps(operation, catalog) {
  * @returns {Promise<Object>} Proposal result with validation status
  */
 async function planOperationSteps(projectId, operation, catalog, options = {}) {
-  const dependencies = {
-    operationId: operation.operationId,
-    name: operation.name,
-    narrativeSteps: operation.narrativeSteps || [],
-    entities: (catalog.entities || []).map(e => ({ name: e.modelName, attrs: (e.attributes || []).map(a => a.fieldName) })),
-    rules: (catalog.rules || []).map(r => r.code || r.id),
-    roles: catalog.roles || []
-  };
+  require('./codegenAiHold').assertAllowed(projectId);
+  const dependencies = require('./aiProposalStore').operationDependencies(operation, catalog);
 
   let proposal = null;
-  let providerMetadata = null;
+  let providerMetadata = { mode: 'DETERMINISTIC', provider: null, model: null, outcome: 'SKIPPED', reason: 'NOT_REQUESTED', tokensUsed: 0 };
   const provider = options.skipLiveAi ? 'mock' : (options.providerOverride || env.AI_PROVIDER || 'mock').toLowerCase();
 
   const userPrompt = {
@@ -231,15 +91,17 @@ async function planOperationSteps(projectId, operation, catalog, options = {}) {
       operationId: operation.operationId,
       name: operation.name,
       narrativeDescription: operation.narrativeDescription || '',
-      narrativeSteps: operation.narrativeSteps || []
+      narrativeSteps: operation.narrativeSteps || [],
+      approvedContract: operation
     },
     relatedRequirements: (catalog.requirements || []).filter(r => (operation.requirementIds || []).includes(r.id)),
     approvedEntities: (catalog.entities || []).map(e => ({
       modelName: e.modelName,
       tableName: e.tableName,
-      attributes: (e.attributes || []).map(a => ({ fieldName: a.fieldName, type: a.type, isPk: !!a.isPk }))
+      attributes: e.attributes || []
     })),
     approvedBusinessRules: (catalog.rules || []).map(r => ({
+      ...r,
       code: r.code || r.id,
       name: r.name,
       description: r.description,
@@ -247,32 +109,52 @@ async function planOperationSteps(projectId, operation, catalog, options = {}) {
       operator: r.operator,
       value: r.value
     })),
-    approvedRoles: catalog.roles || [],
+    approvedRoles: operation.authorizedRoles || [],
+    approvedRelationships: catalog.relationships || [],
+    input: operation.input,
+    preconditions: operation.preconditions || [],
+    acceptanceCriteria: operation.acceptanceCriteria || [],
+    validationFeedback: options.validationFeedback || [],
+    confirmedGenerationDecisions: operation.generationDecisions || [],
+    confirmedProjectDecisions: catalog.confirmedDecisions || require('./codegenDecision.service').getProjectDecisions(projectId),
+    lockedAcceptanceScenarios: options.lockedScenarios,
+    repairPolicy: 'Al reparar, devuelve lockedAcceptanceScenarios sin cambios. Corrige la implementación; no cambies expectativas de pruebas para simular que funciona.',
+    acceptanceScenarioExample: acceptanceExample(operation, catalog),
+    responseContract: { note: 'La respuesta HTTP es {success:true,data:{success:true,data:resultado}}. No cambia según la entidad. Use status=operation.approvedContract.output.successStatus o 200. QUERY devuelve array, CREATE objeto. Los escenarios son objetos completos con requests y persistence; no use nombres alternativos de claves. Use modelos exactos del catálogo y referencias de pruebas a responses, users o fixtures, nunca payload ni steps.', successStatus: operation.output?.successStatus || 200 },
+    runtimeValidationHttp: { missingRequired: 400, unknownProperty: 400, incorrectType: 400, minimum: 422, maximum: 422, explanation: 'Convenciones ya implementadas por validateInput. No requieren otra decisión de negocio. Los ASSERT pueden declarar errorStatus explícito cuando exista una política aprobada.' },
+    screens: (catalog.screens || []).map(({ id, route, requirementIds, roles, contract }) => ({ id, route, requirementIds, roles, contract })),
     expectedOutputSchema: {
+      bindingVersion: 2,
+      input: { bodySchema: { type: 'object', additionalProperties: false, properties: {} } },
+      resultStep: 'step_1',
       contractVersion: OPERATION_CONTRACT_VERSION,
       operationId: operation.operationId,
       targetEntity: 'NombreModelo',
-      action: 'CREATE|UPDATE|DELETE|STATUS_CHANGE|ASSOCIATE|QUERY|CALCULATION|VALIDATION',
+      action: 'CREATE|UPDATE|QUERY',
       transaction: true,
       steps: [
         {
-          step: 1,
-          action: 'CREATE|UPDATE|DELETE|STATUS_CHANGE|ASSOCIATE|QUERY|CALCULATION|VALIDATION',
+          id: 'step_1', step: 1,
+          action: 'CREATE|UPDATE|QUERY',
           entity: 'NombreModelo',
           description: 'Explicación del paso',
           statusField: 'estado (opcional)',
           newStatus: 'VALOR (opcional)',
           withEntity: 'NombreModeloAsociado (opcional)',
           targetField: 'campo (opcional)',
-          formula: 'formula (opcional)'
+          fields: { campo: { $ref: 'payload.campo' } },
+          where: { id: { $ref: 'payload.id' } }
         }
       ],
       authorizedRoles: ['Rol1'],
       rationale: 'Explicación técnica de la decisión',
-      ambiguities: ['Lista de dudas o datos faltantes si aplica']
+      ambiguities: [],
+      unresolved: [],
+      acceptanceScenarios: []
     }
   };
 
+  if (provider !== 'mock') providerMetadata = { mode: 'AI', provider, model: options.modelOverride || env[provider.toUpperCase() + '_MODEL'] || null, outcome: 'SKIPPED', reason: 'PROVIDER_UNAVAILABLE', tokensUsed: 0 };
   // If live AI provider is configured and available (OpenAI or Gemini)
   if (provider === 'openai' && env.OPENAI_API_KEY) {
     try {
@@ -283,9 +165,10 @@ async function planOperationSteps(projectId, operation, catalog, options = {}) {
         model: options.modelOverride || env.OPENAI_MODEL || 'gpt-4o-mini'
       });
 
-      if (result?.data && Array.isArray(result.data.steps) && result.data.steps.length > 0) {
+      providerMetadata = { ...providerMetadata, outcome: 'INVALID_RESPONSE', reason: 'INVALID_OUTPUT', model: result?.model || providerMetadata.model, usage: { totalTokens: result?.usage?.total_tokens || result?.usage?.totalTokenCount || 0 } };
+      if (result?.data && Array.isArray(result.data.steps)) {
         providerMetadata = {
-          provider: 'openai',
+          mode: 'AI', outcome: 'SUCCEEDED', provider: 'openai',
           model: result.model,
           usage: {
             promptTokens: result.usage?.prompt_tokens || 0,
@@ -303,7 +186,7 @@ async function planOperationSteps(projectId, operation, catalog, options = {}) {
         };
       }
     } catch (aiErr) {
-      console.warn(`[AIOperationPlanner] Falló llamada a proveedor 'openai' (${aiErr.message}). Utilizando sintetizador semántico determinista.`);
+      providerMetadata = { ...providerMetadata, outcome: 'FAILED', reason: 'PROVIDER_ERROR', errorMessage: String(aiErr.message || 'Proveedor no disponible').replace(/sk-[A-Za-z0-9_-]+/g, '[REDACTED]').slice(0, 500), usage: { totalTokens: aiErr.usage?.total_tokens || aiErr.usage?.totalTokenCount || 0 } };
     }
   } else if (provider === 'gemini' && env.GEMINI_API_KEY) {
     try {
@@ -314,9 +197,10 @@ async function planOperationSteps(projectId, operation, catalog, options = {}) {
         model: options.modelOverride || env.GEMINI_MODEL
       });
 
-      if (result?.data && Array.isArray(result.data.steps) && result.data.steps.length > 0) {
+      providerMetadata = { ...providerMetadata, outcome: 'INVALID_RESPONSE', reason: 'INVALID_OUTPUT', model: result?.model || providerMetadata.model, usage: { totalTokens: result?.usage?.total_tokens || result?.usage?.totalTokenCount || 0 } };
+      if (result?.data && Array.isArray(result.data.steps)) {
         providerMetadata = {
-          provider: 'gemini',
+          mode: 'AI', outcome: 'SUCCEEDED', provider: 'gemini',
           model: result.model,
           usage: {
             promptTokens: result.usage?.promptTokenCount || 0,
@@ -334,7 +218,7 @@ async function planOperationSteps(projectId, operation, catalog, options = {}) {
         };
       }
     } catch (aiErr) {
-      console.warn(`[AIOperationPlanner] Falló llamada a proveedor 'gemini' (${aiErr.message}). Utilizando sintetizador semántico determinista.`);
+      providerMetadata = { ...providerMetadata, outcome: 'FAILED', reason: 'PROVIDER_ERROR', usage: { totalTokens: aiErr.usage?.total_tokens || aiErr.usage?.totalTokenCount || 0 } };
     }
   }
 
@@ -345,9 +229,12 @@ async function planOperationSteps(projectId, operation, catalog, options = {}) {
 
   // Validate proposal against contract schema
   const validation = validateOperationContract(proposal, catalog);
+  const problems = require('./executableContract').executionProblems(proposal, catalog.entities || []);
+  validation.errors.push(...problems);
+  validation.valid = validation.errors.length === 0;
 
   // Store proposal in review store
-  const stored = saveOperationProposal(projectId, operation.operationId, proposal, dependencies);
+  const stored = saveOperationProposal(projectId, operation.operationId, proposal, dependencies, { ...providerMetadata, validation: validation.valid ? 'PASSED' : 'REJECTED' });
 
   return {
     proposalId: stored.id,
@@ -358,6 +245,8 @@ async function planOperationSteps(projectId, operation, catalog, options = {}) {
     validationWarnings: validation.warnings,
     proposal,
     providerMetadata,
+    applied: false,
+    applicationReason: validation.valid ? 'PENDING_REVIEW' : 'INVALID_CONTRACT',
     dependencyHash: stored.dependencyHash
   };
 }

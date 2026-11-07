@@ -60,6 +60,7 @@ module.exports = {
     await queryInterface.createTable('${naming.tableName}', {
 ${attrLines.join(',\n')}
     });
+${(entity.indexes || []).map((index, position) => `    await queryInterface.addIndex('${naming.tableName}', ${JSON.stringify(index.fields.map(field => entity.attributes.find(attr => attr.fieldName === field)?.columnName || toSnakeCase(field)))}, { unique: ${index.unique === true}, name: '${naming.tableName}_reviewed_${position}' });`).join('\n')}
   },
 
   async down(queryInterface, Sequelize) {
@@ -273,12 +274,6 @@ ${removeConstraintLines.join('\n')}
  * Standalone migration runner script (backend/src/migrate.js)
  */
 function generateMigrationRunnerFile(spec = {}) {
-  const projectRoles = (spec.security?.roles || spec.roles || ['Administrador', 'Usuario']).filter(Boolean);
-  if (!projectRoles.some(r => /admin/i.test(r))) {
-    projectRoles.unshift('Administrador');
-  }
-  const serializedRoles = JSON.stringify(projectRoles);
-
   return `'use strict';
 
 /**
@@ -336,109 +331,9 @@ async function runMigrations() {
     console.log(\`[MIGRATE] OK: \${file}\`);
   }
 
+  ${spec.permissionMatrix ? "await require('./seed-permissions').seed();" : ''}
   console.log('[MIGRATE] Migraciones completadas exitosamente.');
 
-  // Sembrado automático de datos iniciales esenciales (Roles y Usuario Administrador)
-  await seedInitialData(sequelize, queryInterface);
-}
-
-async function seedInitialData(sequelize, queryInterface) {
-  try {
-    const tables = await queryInterface.showAllTables();
-    let defaultRoleId = 1;
-
-    const slug = (value) => String(value || 'usuario').normalize('NFD').replace(/[\\u0300-\\u036f]/g, '').toLowerCase().replace(/[^a-z0-9]+/g, '') || 'usuario';
-    const stamp = (desc, row) => {
-      if (desc.created_at) row.created_at = new Date();
-      if (desc.updated_at) row.updated_at = new Date();
-      if (desc.createdAt) row.createdAt = new Date();
-      if (desc.updatedAt) row.updatedAt = new Date();
-      if (desc.fecha_creacion) row.fecha_creacion = new Date();
-      if (desc.activo && row.activo === undefined) row.activo = true;
-      return row;
-    };
-
-    // 1. Sembrar cada rol del proyecto
-    const roleTable = tables.find(t => /^roles?$/i.test(t));
-    const initialRoles = ${serializedRoles};
-    let allRoles = [];
-    let roleNameCol = 'nombre';
-    let rolePkCol = 'id';
-    if (roleTable) {
-      const desc = await queryInterface.describeTable(roleTable).catch(() => ({}));
-      roleNameCol = Object.keys(desc).find(c => /^(nombre|name|titulo|title|rol)$/i.test(c)) || 'nombre';
-      rolePkCol = Object.keys(desc).find(c => desc[c].primaryKey) || 'id';
-      const [existingRoles] = await sequelize.query('SELECT * FROM "' + roleTable + '"').catch(() => [[]]);
-      allRoles = existingRoles || [];
-      for (const rName of initialRoles) {
-        if (allRoles.some(r => String(r[roleNameCol]) === String(rName))) continue;
-        const row = stamp(desc, { [roleNameCol]: rName });
-        await queryInterface.bulkInsert(roleTable, [row]).catch(() => {});
-      }
-      const [refreshed] = await sequelize.query('SELECT * FROM "' + roleTable + '"').catch(() => [[]]);
-      allRoles = refreshed || [];
-      const adminRole = allRoles.find(r => /admin/i.test(r[roleNameCol])) || allRoles[0];
-      if (adminRole) defaultRoleId = adminRole[rolePkCol];
-      console.log('[SEED] Roles: ' + allRoles.map(r => r[roleNameCol]).join(', '));
-    }
-
-    // 2. Sembrar un usuario por cada rol (contraseña hasheada, nunca el hash en claro)
-    const userTable = tables.find(t => /^(usuarios|users|auth_users|cuentas)$/i.test(t));
-    if (userTable) {
-      const bcrypt = require('bcryptjs');
-      const sharedPass = process.env.INITIAL_ADMIN_PASSWORD || process.env.ADMIN_PASSWORD || 'admin123';
-      const hash = await bcrypt.hash(sharedPass, 10);
-      const desc = await queryInterface.describeTable(userTable).catch(() => ({}));
-      const userCol = Object.keys(desc).find(c => /^(username|usuario|login|user)$/i.test(c));
-      const emailCol = Object.keys(desc).find(c => /^(email|correo|mail)$/i.test(c));
-      const passCol = Object.keys(desc).find(c => /^(password_?hash|password|contrasena|clave)$/i.test(c));
-      const roleCol = Object.keys(desc).find(c => /^(rol_?id|role_?id|id_?rol|rol|role)$/i.test(c));
-      const nameCol = Object.keys(desc).find(c => /^(nombre|name|nombre_completo)$/i.test(c));
-      const roleType = roleCol ? String((desc[roleCol].type || '')).toUpperCase() : '';
-      const seedRoles = allRoles.length ? allRoles : initialRoles.map((name, idx) => ({ [rolePkCol]: idx + 1, [roleNameCol]: name }));
-      const [existingUsers] = await sequelize.query('SELECT * FROM "' + userTable + '"').catch(() => [[]]);
-      const created = [];
-
-      for (const role of seedRoles) {
-        const roleName = role[roleNameCol] || role.nombre || 'Usuario';
-        const handle = slug(roleName);
-        const email = (roleName.match(/admin/i) && process.env.INITIAL_ADMIN_EMAIL)
-          ? process.env.INITIAL_ADMIN_EMAIL
-          : handle + '@local';
-        const username = (roleName.match(/admin/i) && (process.env.INITIAL_ADMIN_USER || process.env.ADMIN_USER))
-          ? (process.env.INITIAL_ADMIN_USER || process.env.ADMIN_USER)
-          : handle;
-        const already = (existingUsers || []).some(u =>
-          (emailCol && String(u[emailCol]) === email) || (userCol && String(u[userCol]) === username) || (nameCol && String(u[nameCol]) === roleName)
-        );
-        if (already) continue;
-
-        const row = stamp(desc, {});
-        if (userCol) row[userCol] = username;
-        if (emailCol) row[emailCol] = email;
-        if (passCol) row[passCol] = hash;
-        if (nameCol) row[nameCol] = roleName;
-        if (roleCol) {
-          row[roleCol] = (roleType.includes('INT') || typeof role[rolePkCol] === 'number')
-            ? (role[rolePkCol] || defaultRoleId)
-            : roleName;
-        }
-        await queryInterface.bulkInsert(userTable, [row]).catch(err => {
-          console.warn('[SEED WARN] No se pudo crear usuario ' + roleName + ':', err.message);
-        });
-        created.push({ role: roleName, email, username });
-      }
-
-      if (created.length) {
-        console.log('----------------------------------------------------');
-        console.log('[SEED] Usuarios semilla (contraseña hasheada, misma clave para todos): ' + sharedPass);
-        created.forEach(u => console.log('[SEED]   ' + u.role + ' → ' + (u.email || u.username)));
-        console.log('----------------------------------------------------');
-      }
-    }
-  } catch (seedErr) {
-    console.warn('[SEED WARN] Error en proceso de sembrado inicial:', seedErr.message);
-  }
 }
 
 if (require.main === module) {

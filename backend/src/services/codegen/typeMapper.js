@@ -355,6 +355,7 @@ function normalizeAttributes(rawAttributes = [], options = {}) {
       scale: attr.scale || null,
       comment: attr.description || attr.comment || null,
       isReserved
+      , ...Object.fromEntries(['minimum', 'maximum', 'minLength', 'maxLength', 'enum', 'format'].filter(key => attr[key] !== undefined).map(key => [key, attr[key]]))
     });
   }
 

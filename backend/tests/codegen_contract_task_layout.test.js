@@ -24,6 +24,7 @@ describe('Contract task layout does not close over formData', () => {
       renderer: 'task',
       purpose: 'Recepción',
       fields: [{ fieldName: 'placa', mode: 'editable' }],
+      tableColumns: [{ index: 0, field: 'placa' }],
       actions: [{ actionId: 'receive', operationId: 'receive', method: 'POST', route: '/api/operations/receive' }],
       navigation: []
     }
@@ -64,5 +65,12 @@ describe('Contract task layout does not close over formData', () => {
     assert.ok(jsx.includes('slots.submit'));
     assert.ok(jsx.includes('slots.rows'));
     assert.ok(!page.includes('formData'));
+  });
+
+  test('an approved dialog action does not also bind a reference mockup button', () => {
+    const contract = { ...screen.contract, actions: [{ actionId: 'uc02-register', name: 'Registrar actividad', supplemental: true, route: '/api/activity', method: 'POST' }] };
+    const jsx = convertHtmlToJsx('<main><button>Registrar actividad</button></main>', 'Activity', '/repairs', 'Order', { screenContract: contract });
+    assert(!jsx.includes('slots.execute("uc02-register")'));
+    assert(!jsx.includes('data-action-id="uc02-register"'));
   });
 });

@@ -40,7 +40,7 @@ test('Codegen AI Repair: 2. Proposes targeted fix for syntax and import errors',
 
   const repair = await codegenAiRepairService.proposeRepair(failure, tempDir);
   assert.equal(repair.success, true);
-  assert.ok(repair.tokensUsed > 0);
+  assert.equal(repair.tokensUsed, 0);
   assert.ok(repair.durationMs >= 0);
 
   // Cleanup

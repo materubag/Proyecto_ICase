@@ -76,6 +76,7 @@ async function startServer() {
       console.log('✅ Modelos sincronizados correctamente.');
     }
 
+${options.systemOperations ? "    require('./services/system.scheduler').start();" : ''}
     app.listen(PORT, () => {
       console.log(\`🚀 Servidor \${process.env.APP_NAME || '${projectName}'} ejecutándose en el puerto \${PORT}\`);
       console.log(\`📡 API disponible en: http://localhost:\${PORT}/api\`);
@@ -140,6 +141,7 @@ function generatePackageJson(projectName = 'app') {
       start: 'node src/server.js',
       dev: 'nodemon src/server.js',
       migrate: 'node src/migrate.js',
+      'seed:account': 'node src/seed-account.js',
       'migrate:cli': 'npx sequelize-cli db:migrate',
       'migrate:undo': 'npx sequelize-cli db:migrate:undo'
     },
@@ -168,7 +170,7 @@ function generateEnvExample(projectName = 'app') {
 PORT=8080
 NODE_ENV=development
 APP_NAME="${projectName}"
-AUTO_SYNC_DB=true
+AUTO_SYNC_DB=false
 
 # Conexión PostgreSQL
 DB_HOST=localhost
@@ -209,9 +211,11 @@ ${entityList || '- Sin entidades configuradas.'}
 docker compose up --build
 \`\`\`
 
-- Frontend disponible en: \`http://localhost:3000\`
-- Backend API disponible en: \`http://localhost:8080/api\`
-- PostgreSQL en puerto: \`5432\`
+- Frontend disponible en: \`http://localhost:3005\` (Nginx reenvía \`/api\` al backend)
+- Backend API disponible en: \`http://localhost:8085/api\`
+- PostgreSQL en puerto: \`5435\`
+
+No uses el puerto 8080 del Studio iCASE: el API generado publica **8085** para no chocar con iCASE. Si corres el frontend con \`npm run dev\`, el proxy de Vite apunta a \`http://localhost:8085\`.
 
 ### Opción 2: Ejecución Local
 

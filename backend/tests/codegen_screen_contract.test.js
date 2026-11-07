@@ -17,10 +17,10 @@ test('Shared field contract resolves nonstandard PK and readable FK label', () =
  assert.ok(code.includes('opt["claveCliente"]'));
  assert.ok(!code.includes('1 - Administrador'));
 });
-test('Portal Cliente screens infer Cliente role, not Administrador', () => {
+test('Screen titles never grant roles; actor links are required', () => {
   const actors = [{ id: 'a1', name: 'Administrador' }, { id: 'c1', name: 'Cliente' }, { id: 'r1', name: 'Recepción' }];
-  assert.deepEqual(inferScreenRoles({ name: 'Portal Cliente: Mis Vehículos', route: '/mis-vehiculos' }, actors), ['Cliente']);
-  assert.deepEqual(inferScreenRoles({ name: 'Recepción e Inspección de Vehículos', route: '/recepcion' }, actors), ['Recepción']);
+  assert.deepEqual(inferScreenRoles({ name: 'Portal Cliente: Mis Vehículos', route: '/mis-vehiculos' }, actors), []);
+  assert.deepEqual(inferScreenRoles({ name: 'Recepción e Inspección de Vehículos', route: '/recepcion', actorIds: ['r1'] }, actors), ['Recepción']);
 });
 
 test('Password storage fields become Contraseña inputs, never passwordHash', () => {

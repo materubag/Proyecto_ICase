@@ -11,6 +11,17 @@ const crypto = require('crypto');
 // In-memory registry with file backing
 const proposalCache = new Map();
 
+function operationDependencies(operation, catalog) {
+  return { operation, entities: catalog.entities || [], requirements: catalog.requirements || [], rules: catalog.rules || [], relationships: catalog.relationships || [], roles: catalog.roles || [] };
+}
+
+function bindingDependencies(screen, catalog) {
+  return { screenId: screen.id, route: screen.route, htmlHash: crypto.createHash('sha256').update(screen.html || '').digest('hex'),
+    ...(screen.confirmedDecisionContextHash ? { confirmedDecisionContextHash: screen.confirmedDecisionContextHash } : {}),
+    screenContract: screen.contract || null, ...(screen.generationDecisions ? { generationDecisions: screen.generationDecisions } : {}), entities: catalog.entities || [], operations: catalog.operations || [],
+    requirements: catalog.requirements || [], rules: catalog.rules || [], relationships: catalog.relationships || [], roles: catalog.roles || [] };
+}
+
 function getStorageDir() {
   if (fs.existsSync(path.join(process.cwd(), '.cache', 'codegen_proposals'))) {
     return path.join(process.cwd(), '.cache', 'codegen_proposals');
@@ -33,7 +44,9 @@ function getFilePath(projectId) {
 }
 
 function computeDependencyHash(dependencies) {
-  const serialized = JSON.stringify(dependencies, Object.keys(dependencies || {}).sort());
+  const canonical = value => Array.isArray(value) ? value.map(canonical)
+    : value && typeof value === 'object' ? Object.fromEntries(Object.keys(value).sort().map(key => [key, canonical(value[key])])) : value;
+  const serialized = JSON.stringify(canonical(dependencies || {}));
   return crypto.createHash('sha256').update(serialized).digest('hex');
 }
 
@@ -66,7 +79,7 @@ function persistProjectProposals(projectId, data) {
 /**
  * Saves or updates an AI proposal for an operation
  */
-function saveOperationProposal(projectId, operationId, proposal, dependencies = {}) {
+function saveOperationProposal(projectId, operationId, proposal, dependencies = {}, providerMetadata = {}) {
   const data = loadProjectProposals(projectId);
   const depHash = computeDependencyHash(dependencies);
 
@@ -77,10 +90,12 @@ function saveOperationProposal(projectId, operationId, proposal, dependencies = 
     id: `prop_op_${operationId}_v${version}`,
     operationId,
     type: 'OPERATION_STEPS',
+    providerMetadata,
     version,
     status: 'PENDING_REVIEW', // PENDING_REVIEW, APPROVED, REJECTED, INVALIDATED
     proposal,
     dependencyHash: depHash,
+    sourceDependencies: dependencies,
     createdAt: new Date().toISOString(),
     reviewedAt: null,
     reviewedBy: null,
@@ -95,7 +110,7 @@ function saveOperationProposal(projectId, operationId, proposal, dependencies = 
 /**
  * Saves or updates an AI proposal for a mockup binding
  */
-function saveBindingProposal(projectId, screenId, proposal, dependencies = {}) {
+function saveBindingProposal(projectId, screenId, proposal, dependencies = {}, providerMetadata = {}) {
   const data = loadProjectProposals(projectId);
   const depHash = computeDependencyHash(dependencies);
 
@@ -106,10 +121,12 @@ function saveBindingProposal(projectId, screenId, proposal, dependencies = {}) {
     id: `prop_bind_${screenId}_v${version}`,
     screenId,
     type: 'MOCKUP_BINDING',
+    providerMetadata,
     version,
     status: 'PENDING_REVIEW',
     proposal,
     dependencyHash: depHash,
+    sourceDependencies: dependencies,
     createdAt: new Date().toISOString(),
     reviewedAt: null,
     reviewedBy: null,
@@ -214,15 +231,33 @@ function getProposals(projectId) {
  * Applies approved proposals into a project specification object
  */
 function applyApprovedProposals(projectId, spec) {
-  const data = loadProjectProposals(projectId);
+  const catalog = { entities: spec.entities, operations: spec.operations, requirements: spec.requirements, rules: spec.businessRules || spec.rules, relationships: spec.relationships, roles: spec.security?.roles || spec.roles };
+  const dependencies = Object.fromEntries([
+    ...(spec.operations || []).map(op => [op.operationId, operationDependencies(op, catalog)]),
+    ...(spec.screens || []).map(screen => [screen.id, bindingDependencies(screen, catalog)])
+  ]);
+  const data = checkAndInvalidateDependencies(projectId, dependencies);
   const updatedSpec = JSON.parse(JSON.stringify(spec));
   let appliedCount = 0;
+  const applications = [];
+  for (const entry of [...Object.values(data.operations), ...Object.values(data.bindings)]) if (entry.status === 'INVALIDATED') applications.push({ proposalId: entry.id, applied: false, reason: 'STALE_DEPENDENCIES', validation: 'REJECTED' });
 
   // 1. Apply approved operation steps
   for (const [opId, entry] of Object.entries(data.operations)) {
     if (entry.status === 'APPROVED' && entry.proposal) {
       const op = (updatedSpec.operations || []).find(o => o.operationId === opId);
       if (op) {
+        const catalog = { entities: spec.entities, operations: spec.operations, screens: spec.screens, requirements: spec.requirements, rules: spec.businessRules || spec.rules, relationships: spec.relationships, roles: spec.security?.roles || spec.roles };
+        const currentHash = computeDependencyHash(operationDependencies(op, catalog));
+        const candidate = { ...op, ...entry.proposal, operationId: op.operationId, route: op.route, method: op.method, authorizedRoles: op.authorizedRoles };
+        const errors = [...require('./contractSchema').validateOperationContract(candidate, catalog).errors, ...require('./executableContract').executionProblems(candidate, spec.entities || [])];
+        if (entry.reviewedBy === 'CODEGEN_TECHNICAL_VALIDATION') errors.push(...require('./aiGenerationPolicy').validateGeneratedOperation(op, entry.proposal, catalog));
+        if (entry.dependencyHash !== currentHash || errors.length) {
+          if (entry.dependencyHash !== currentHash) { entry.status = 'INVALIDATED'; entry.invalidationReason = 'STALE_DEPENDENCIES'; persistProjectProposals(projectId, data); }
+          applications.push({ proposalId: entry.id, applied: false, reason: entry.dependencyHash !== currentHash ? 'STALE_DEPENDENCIES' : 'INVALID_CONTRACT', validation: 'REJECTED' });
+          continue;
+        }
+        for (const key of ['bindingVersion', 'input', 'resultStep', 'preconditions', 'acceptanceCriteria', 'acceptanceScenarios', 'errors', 'recordAccess', 'businessRules', 'unresolved']) if (entry.proposal[key] !== undefined) op[key] = entry.proposal[key];
         if (entry.proposal.steps && entry.proposal.steps.length > 0) {
           op.steps = entry.proposal.steps;
         }
@@ -241,6 +276,7 @@ function applyApprovedProposals(projectId, spec) {
           op.authorizedRoles = backed.length ? backed : currentRoles;
         }
         appliedCount++;
+        applications.push({ proposalId: entry.id, applied: true, validation: 'PASSED' });
       }
     }
   }
@@ -250,7 +286,20 @@ function applyApprovedProposals(projectId, spec) {
     if (entry.status === 'APPROVED' && entry.proposal) {
       const scr = (updatedSpec.screens || []).find(s => s.id === scrId || s.name === scrId || s.route === scrId);
       if (scr) {
+        const expected = entry.sourceDependencies;
+        const currentHash = computeDependencyHash(bindingDependencies(scr, { entities: spec.entities, operations: spec.operations, requirements: spec.requirements, rules: spec.businessRules || spec.rules, relationships: spec.relationships, roles: spec.security?.roles || spec.roles }));
+        const validation = require('./contractSchema').validateBindingContract(entry.proposal, { operations: spec.operations || [] });
+        if (!expected || entry.dependencyHash !== currentHash || !validation.valid) {
+          if (entry.dependencyHash !== currentHash) { entry.status = 'INVALIDATED'; entry.invalidationReason = 'STALE_DEPENDENCIES'; persistProjectProposals(projectId, data); }
+          applications.push({ proposalId: entry.id, applied: false, reason: !validation.valid ? 'INVALID_CONTRACT' : 'STALE_DEPENDENCIES', validation: 'REJECTED' });
+          continue;
+        }
         scr.mockupBinding = entry.proposal;
+        if (!entry.proposal.controlBindings) {
+          applications.push({ proposalId: entry.id, applied: false, reason: 'NO_EXECUTABLE_BINDING', validation: 'REJECTED' });
+          continue;
+        }
+        scr.contract = { ...scr.contract, ...(entry.proposal.screenContract || {}), controlBindings: entry.proposal.controlBindings };
         if (entry.proposal.connectedOperationId && !scr.connectedOperationId) {
           scr.connectedOperationId = entry.proposal.connectedOperationId;
         }
@@ -258,11 +307,17 @@ function applyApprovedProposals(projectId, spec) {
           scr.actions = entry.proposal.actions;
         }
         appliedCount++;
+        applications.push({ proposalId: entry.id, applied: true, validation: 'PASSED' });
       }
     }
   }
 
-  return { spec: updatedSpec, appliedCount };
+  if (appliedCount && updatedSpec.hash) {
+    updatedSpec.derivedFromHash = updatedSpec.hash;
+    delete updatedSpec.hash;
+    delete updatedSpec.approvedAt;
+  }
+  return { spec: updatedSpec, appliedCount, applications };
 }
 
 module.exports = {
@@ -275,4 +330,6 @@ module.exports = {
   persistProjectProposals,
   applyApprovedProposals,
   computeDependencyHash
+  , operationDependencies
+  , bindingDependencies
 };

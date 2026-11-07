@@ -149,10 +149,13 @@ test('Multi-Domain Acceptance: Complete generic pipeline on non-automotive domai
         targetEntity: 'Prestamo',
         requirementIds: ['req_b3'],
         authorizedRoles: ['Bibliotecario'],
+        bindingVersion: 2,
+        input: { bodySchema: { type: 'object', properties: { lectorId: { type: 'integer' }, libroId: { type: 'integer' }, fechaDevolucionLimite: { type: 'string', format: 'date' } }, required: ['lectorId', 'libroId', 'fechaDevolucionLimite'], additionalProperties: false } },
+        resultStep: '3',
         steps: [
           { step: 1, action: 'QUERY', entity: 'Lector', where: { idLector: { $ref: 'payload.lectorId' } }, requireMatch: true },
           { step: 2, action: 'QUERY', entity: 'Libro', where: { idLibro: { $ref: 'payload.libroId' } }, requireMatch: true },
-          { step: 3, action: 'CREATE', entity: 'Prestamo', fields: { lectorId: { $ref: 'payload.lectorId' }, libroId: { $ref: 'payload.libroId' }, fechaPrestamo: { $ref: 'now' } } }
+          { step: 3, action: 'CREATE', entity: 'Prestamo', fields: { lectorId: { $ref: 'payload.lectorId' }, libroId: { $ref: 'payload.libroId' }, fechaPrestamo: { $ref: 'now' }, fechaDevolucionLimite: { $ref: 'payload.fechaDevolucionLimite' } } }
         ],
         output: { successStatus: 201 }
       }
@@ -207,7 +210,7 @@ test('Multi-Domain Acceptance: Complete generic pipeline on non-automotive domai
   const fullContent = generated.files.map(f => f.content).join('\n');
   assert.ok(!fullContent.includes('autron'), 'Generated code contains no references to autron');
   assert.ok(!fullContent.includes('kilometraje'), 'Generated code contains no references to kilometraje');
-  assert.ok(!fullContent.includes('placa'), 'Generated code contains no references to placa');
+  assert.ok(!/\bplaca\b/.test(fullContent), 'Generated code contains no references to placa: ' + JSON.stringify(fullContent.match(/.{0,60}\bplaca\b.{0,60}/g)));
   assert.ok(!fullContent.includes('recepcion'), 'Generated code contains no references to recepcion');
 
   // 6. Verify Domain Entity Models & Routes are created properly

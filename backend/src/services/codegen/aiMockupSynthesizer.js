@@ -177,9 +177,8 @@ function synthesizeMockupBindings(projectId, screen, catalog = {}) {
     return screenNameNorm.includes(eNorm) || screenRouteNorm.includes(eNorm);
   });
 
-  if (!primaryEntity && entities.length > 0) {
-    primaryEntity = entities[0];
-  }
+  const entityRef = screen.contract?.entityId || screen.targetEntity;
+  primaryEntity = entities.find(e => [e.id, e.name, e.modelName].includes(entityRef)) || null;
 
   // 2. Data Sources & Table Bindings
   const dataSources = [];
@@ -192,7 +191,7 @@ function synthesizeMockupBindings(projectId, screen, catalog = {}) {
       !o.route.includes(':') &&
       primaryEntity &&
       (o.entity === primaryEntity.modelName || o.targetEntity === primaryEntity.modelName)
-    ) || operations.find(o => o.method === 'GET' && !o.route.includes(':'));
+    );
 
     const dsId = `ds_${primaryEntity ? primaryEntity.tableName : 'main'}_${tIdx + 1}`;
     if (listOp) {
@@ -253,11 +252,8 @@ function synthesizeMockupBindings(projectId, screen, catalog = {}) {
   const formBindings = [];
 
   forms.forEach((frm, fIdx) => {
-    const createOp = operations.find(o =>
-      (o.method === 'POST' || o.method === 'PUT') &&
-      primaryEntity &&
-      (o.entity === primaryEntity.modelName || o.targetEntity === primaryEntity.modelName)
-    ) || operations.find(o => o.method === 'POST');
+    const declaredAction = (screen.contract?.actions || []).find(a => a.actionId === screen.contract?.primaryActionId);
+    const createOp = operations.find(o => o.operationId === declaredAction?.operationId);
 
     const entAttrs = primaryEntity ? (primaryEntity.attributes || []) : [];
     const boundFields = [];
@@ -303,13 +299,8 @@ function synthesizeMockupBindings(projectId, screen, catalog = {}) {
     const bHint = btn.actionHint;
     let targetOp = null;
 
-    if (bHint.includes('eliminar') || bHint.includes('borrar') || bHint.includes('delete')) {
-      targetOp = operations.find(o => o.method === 'DELETE' && primaryEntity && o.entity === primaryEntity.modelName);
-    } else if (bHint.includes('guardar') || bHint.includes('crear') || bHint.includes('registrar')) {
-      targetOp = operations.find(o => o.method === 'POST' && primaryEntity && o.entity === primaryEntity.modelName);
-    } else if (bHint.includes('editar') || bHint.includes('actualizar')) {
-      targetOp = operations.find(o => o.method === 'PUT' && primaryEntity && o.entity === primaryEntity.modelName);
-    }
+    const declared = (screen.contract?.actions || []).find(action => action.controlId === btn.buttonId || action.selector === btn.selector || cleanText(action.name) === bHint);
+    targetOp = declared && operations.find(op => op.operationId === declared.operationId);
 
     if (targetOp) {
       actionButtons.push({
@@ -336,17 +327,14 @@ function synthesizeMockupBindings(projectId, screen, catalog = {}) {
     formBindings,
     actionButtons,
     selectorMap,
-    authorizedRoles: screen.roles || roles
+    authorizedRoles: screen.roles || [],
+    controlBindings: screen.contract?.controlBindings || null,
+    unresolved: formBindings.filter(form => !form.targetOperationId).map(form => `UNRESOLVED: ¿Qué operación aprobada ejecuta ${form.formId}? No se selecciona CRUD por nombre.`)
   };
 
   const validation = validateBindingContract(proposal, catalog);
 
-  const dependencies = {
-    screenId: screen.id,
-    route: screen.route,
-    htmlHash: cleanText(html).slice(0, 100),
-    entityAttributes: primaryEntity ? (primaryEntity.attributes || []).map(a => a.fieldName) : []
-  };
+  const dependencies = require('./aiProposalStore').bindingDependencies(screen, catalog);
 
   const stored = saveBindingProposal(projectId, screen.id || screen.name, proposal, dependencies);
 

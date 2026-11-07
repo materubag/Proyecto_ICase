@@ -89,7 +89,8 @@ class CodegenAiRepairService {
       anomalies,
       suggestions,
       durationMs,
-      tokensUsed: 150 // Coherence analysis uses local catalog analysis by default
+      tokensUsed: 0,
+      providerMetadata: { mode: 'DETERMINISTIC', outcome: 'SUCCEEDED' }
     };
   }
 
@@ -106,6 +107,8 @@ class CodegenAiRepairService {
     let targetRelativePath = file || '';
     if (file && directory) {
       const fullPath = path.isAbsolute(file) ? file : path.join(directory, file);
+      const root = fs.realpathSync(directory);
+      if (!path.resolve(fullPath).startsWith(path.resolve(directory) + path.sep) || (fs.existsSync(fullPath) && !fs.realpathSync(fullPath).startsWith(root + path.sep))) return { success: false, canAutoApply: false, tokensUsed: 0, diagnosis: 'Ruta de reparación fuera del paquete.', providerMetadata: { mode: 'DETERMINISTIC', outcome: 'REJECTED' } };
       if (fs.existsSync(fullPath)) {
         try {
           const content = fs.readFileSync(fullPath, 'utf8');
@@ -128,9 +131,9 @@ class CodegenAiRepairService {
         fixType: 'IMPORT_CORRECTION',
         rationale: 'El import no resuelve a un archivo generado existente en el bundle.',
         diagnosis: message,
-        tokensUsed: 120,
+        tokensUsed: 0,
         durationMs: Date.now() - startTime,
-        canAutoApply: true
+        canAutoApply: false
       };
     }
 
@@ -140,16 +143,17 @@ class CodegenAiRepairService {
         fixType: 'SYNTAX_CORRECTION',
         rationale: 'Error sintáctico detectado en el archivo generado.',
         diagnosis: message,
-        tokensUsed: 140,
+        tokensUsed: 0,
         durationMs: Date.now() - startTime,
-        canAutoApply: true
+        canAutoApply: false
       };
     }
 
     // Attempt AI-assisted analysis if provider is available
-    const provider = getAIProvider();
+    const provider = context.skipLiveAi ? new MockAIProvider() : getAIProvider();
+    let providerMetadata = { mode: provider instanceof MockAIProvider ? 'DETERMINISTIC' : 'AI', provider: provider instanceof MockAIProvider ? null : env.AI_PROVIDER, model: null, outcome: 'SKIPPED' };
     let aiExplanation = '';
-    let tokensUsed = 250;
+    let tokensUsed = 0;
     let providerUsage = null;
     let targetString = null;
     let replacementString = null;
@@ -178,19 +182,22 @@ Devuelve estrictamente un objeto JSON con el siguiente formato:
 
       if (typeof provider.extractDocumentBatch === 'function' && !(provider instanceof MockAIProvider)) {
         const resp = await provider.extractDocumentBatch(repairInput, { prompt: repairSystemPrompt });
+        providerMetadata = { ...providerMetadata, model: resp?.model || null, outcome: resp?.data ? 'SUCCEEDED' : 'INVALID_RESPONSE' };
         if (resp && resp.data) {
           aiExplanation = resp.data.diagnosis || resp.data.rationale || '';
           targetString = resp.data.targetString || null;
           replacementString = resp.data.replacementString || null;
           canAutoApply = !!(targetString && replacementString);
           providerUsage = resp.usage || null;
-          tokensUsed = providerUsage?.total_tokens || providerUsage?.totalTokenCount || 250;
+          tokensUsed = providerUsage?.total_tokens || providerUsage?.totalTokenCount || 0;
         }
       } else {
         aiExplanation = `Fallo detectado en etapa ${stage}: ${message}. Se requiere ajuste de esquema o contrato.`;
       }
     } catch (e) {
       aiExplanation = `Fallo de validación en etapa ${stage}: ${message}`;
+      providerMetadata = { ...providerMetadata, outcome: 'FAILED', reason: 'PROVIDER_ERROR' };
+      tokensUsed = e.usage?.total_tokens || e.usage?.totalTokenCount || 0;
     }
 
     return {
@@ -201,6 +208,7 @@ Devuelve estrictamente un objeto JSON con el siguiente formato:
       targetString,
       replacementString,
       providerUsage,
+      providerMetadata,
       tokensUsed,
       durationMs: Date.now() - startTime,
       canAutoApply
@@ -217,13 +225,14 @@ Devuelve estrictamente un objeto JSON con el siguiente formato:
     }
 
     const targetPath = path.resolve(directory, fix.targetFile);
-    if (!targetPath.startsWith(path.resolve(directory))) {
+    if (!targetPath.startsWith(path.resolve(directory) + path.sep) || (fs.realpathSync(path.dirname(targetPath)) !== fs.realpathSync(directory) && !fs.realpathSync(path.dirname(targetPath)).startsWith(fs.realpathSync(directory) + path.sep))) {
       throw new Error('Intento de modificar un archivo fuera del directorio aislado de generación.');
     }
 
     if (!fs.existsSync(targetPath)) {
       return { applied: false, reason: `Archivo '${fix.targetFile}' no existe en el paquete generado.` };
     }
+    if (!fs.realpathSync(targetPath).startsWith(fs.realpathSync(directory) + path.sep)) throw new Error('Archivo de reparación fuera del paquete.');
 
     const content = fs.readFileSync(targetPath, 'utf8');
     if (!content.includes(fix.targetString)) {

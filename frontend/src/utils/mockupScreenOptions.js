@@ -273,7 +273,6 @@ export const SCREEN_CATALOG = [
 
 export function screenOptions(project) {
   const functionalReqs = (project.requirements || []).filter(r => r.status === 'APPROVED' && r.type === 'FUNCTIONAL');
-  const matchedReqIds = new Set();
   const existingNodes = project.navigationNodes || [];
 
   const screens = SCREEN_CATALOG.map(def => {
@@ -281,8 +280,6 @@ export function screenOptions(project) {
       const text = ((r.description || r.name || '') + ' ' + (r.code || '')).normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase();
       return def.match.test(text);
     });
-
-    matched.forEach(r => matchedReqIds.add(r.id));
     const existingNode = existingNodes.find(n => n.route === def.route || n.name === def.name);
 
     // Unir requerimientos descubiertos
@@ -317,22 +314,10 @@ export function screenOptions(project) {
       isCore: def.isCore,
       description: def.description,
       proposed: !existingNode,
-      requirementIds: combinedReqIds.length ? combinedReqIds : (functionalReqs[0] ? [functionalReqs[0].id] : []),
+      requirementIds: combinedReqIds,
       functionalities
     };
   });
-
-  // Requerimientos restantes se asignan al panel administrativo para evitar requerimientos huérfanos
-  const unmatched = functionalReqs.filter(r => !matchedReqIds.has(r.id));
-  if (unmatched.length > 0 && screens.length > 0) {
-    const adminScreen = screens.find(s => s.route === '/usuarios') || screens[screens.length - 1];
-    unmatched.forEach(r => {
-      if (!adminScreen.requirementIds.includes(r.id)) {
-        adminScreen.requirementIds.push(r.id);
-        adminScreen.functionalities.push({ id: r.id, code: r.code, text: r.description || r.name });
-      }
-    });
-  }
 
   return screens;
 }

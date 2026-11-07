@@ -14,7 +14,7 @@ export default function AppShell({ title, user, onLogout, children, navItems = [
   const userRole = (user && (user.role || user.rol)) || '';
   const choose = key => { onSelectTab(key); setMenuOpen(false); };
   const links = navItems.filter(item => !item.isEntity).map(item => (
-    <button type="button" key={item.key} aria-current={item.key === activeTab ? 'page' : undefined} className={item.key === activeTab ? 'active' : ''} onClick={() => choose(item.key)}>{item.label}</button>
+    <button type="button" data-screen-key={item.key} key={item.key} aria-current={item.key === activeTab ? 'page' : undefined} className={item.key === activeTab ? 'active' : ''} onClick={() => choose(item.key)}>{item.label}</button>
   ));
   return <div className="icase-shell">
     <header className="icase-topbar">

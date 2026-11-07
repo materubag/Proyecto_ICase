@@ -22,44 +22,6 @@ const designSystemService = require('../mockup/designSystemService');
 /**
  * Validates whether an element has a valid APPROVED status, detecting contradictions.
  */
-function adminRoleNames(roleList = []) {
-  const names = [...new Set((roleList || []).filter(Boolean))];
-  const admins = names.filter(name => /admin/i.test(String(name)));
-  return admins.length ? admins : names.slice(0, 1);
-}
-
-function formalizeCrudPermissions(operations, screens, securityRoles, actors) {
-  const allRoles = [...new Set([...(securityRoles || []), ...(actors || []).map(actor => actor.name)])];
-  const adminRoles = adminRoleNames(allRoles);
-  const rolesByEntity = new Map();
-  for (const screen of screens) {
-    const entityName = screen.targetEntity || screen.contract?.entityId;
-    if (!entityName) continue;
-    rolesByEntity.set(entityName, [...new Set([...(rolesByEntity.get(entityName) || []), ...(screen.roles || [])])]);
-  }
-  for (const screen of screens) {
-    const extraRoles = screen.roles || [];
-    if (!extraRoles.length) continue;
-    const routes = new Set((screen.contract?.dataSources || []).map(source => source.route).filter(Boolean));
-    if (screen.readEndpoint) routes.add(screen.readEndpoint);
-    if (screen.createEndpoint) routes.add(screen.createEndpoint);
-    for (const op of operations) {
-      const sameEntity = screen.targetEntity && (op.entity === screen.targetEntity || op.targetEntity === screen.targetEntity);
-      const sameRoute = routes.has(op.route);
-      if (!sameEntity && !sameRoute) continue;
-      op.authorizedRoles = [...new Set([...(op.authorizedRoles || []), ...extraRoles])];
-    }
-  }
-  for (const op of operations) {
-    const entityName = op.entity || op.targetEntity;
-    const screenRoles = rolesByEntity.get(entityName) || [];
-    op.authorizedRoles = [...new Set([...(op.authorizedRoles || []), ...screenRoles, ...adminRoles])];
-    if (op.authorizedRoles.length && (op.permissionSource === 'UNRESOLVED' || !op.permissionSource)) {
-      op.permissionSource = screenRoles.length ? 'SCREEN' : 'DEFAULT';
-    }
-  }
-}
-
 function checkApproval(item) {
   if (!item || item.isDeleted) return { approved: false, reason: 'DELETED' };
   const s = item.status || null;
@@ -240,6 +202,7 @@ async function buildProjectSpec(projectId, options = {}) {
       endpoint: naming.endpoint,
       description: ent.description || '',
       crudPermissions: ent.evidence?.crudPermissions || null,
+      requirementIds: ent.requirementIds || [],
       revision: ent.revision || 1,
       primaryKey: {
         fieldName: pkAttr.fieldName,
@@ -256,7 +219,8 @@ async function buildProjectSpec(projectId, options = {}) {
         autoIncrement: a.autoIncrement,
         readOnly: a.readOnly,
         defaultValue: a.defaultValue,
-        comment: a.comment
+        comment: a.comment,
+        ...Object.fromEntries(['minimum', 'maximum', 'minLength', 'maxLength', 'enum', 'format'].filter(key => a[key] !== undefined).map(key => [key, a[key]]))
       }))
     };
   });
@@ -609,9 +573,7 @@ async function buildProjectSpec(projectId, options = {}) {
         bodySchema: {
           type: 'object',
           description: uc.description || uc.name,
-          properties: {
-            payload: { type: 'object' }
-          }
+          properties: {}
         }
       },
       output: {
@@ -644,6 +606,16 @@ async function buildProjectSpec(projectId, options = {}) {
     });
   }
 
+  const generationDecisions = require('./codegenDecision.service').getProjectDecisions(projectId);
+  const confirmedDecisionContextHash = computeCanonicalHash(generationDecisions);
+  const commandContracts = require('./commandContracts').applyCommandContracts(projectId, operations, normalizedEntities, approvedRequirements, roles, generationDecisions);
+  normalizedRelationships.push(...commandContracts.relationships);
+  const { attachDecisions } = require('./generationClarifications');
+  for (const operation of operations) {
+    attachDecisions(operation, generationDecisions);
+    operation.confirmedDecisionContextHash = confirmedDecisionContextHash;
+  }
+
   // 6. Screens & Navigation
   const screens = [];
   const processedRoutes = new Set();
@@ -667,7 +639,7 @@ async function buildProjectSpec(projectId, options = {}) {
   }
 
   // 6.2 Screens from approved navigation nodes (primary UX model in ICASE)
-  for (const node of approvedNavNodes) {
+  for (const node of project.navigationNodes.filter(node => !node.isDeleted)) {
     const route = node.route || `/${toCamelCase(node.name)}`;
     const existing = screenCandidates.find(s => s.id === node.id || s.route.toLowerCase() === route.toLowerCase() || s.name === node.name);
     if (!existing) {
@@ -684,12 +656,14 @@ async function buildProjectSpec(projectId, options = {}) {
         components: [],
         html: null,
         requiresMockup: false
+        , sourceApproval: checkApproval(node)
       });
     } else {
       if (!existing.contract && node.evidence?.screenContract) existing.contract = node.evidence.screenContract;
       if (!existing.useCaseIds?.length && node.useCaseIds?.length) existing.useCaseIds = node.useCaseIds;
       if (!existing.actorIds?.length && node.actorIds?.length) existing.actorIds = node.actorIds;
       if (!existing.requirementIds?.length && node.requirementIds?.length) existing.requirementIds = node.requirementIds;
+      existing.sourceApproval = checkApproval(node);
     }
   }
 
@@ -746,18 +720,11 @@ async function buildProjectSpec(projectId, options = {}) {
     const html = mockScreen.html || cand.html || null;
     const isApprovedMockup = Boolean(html && (
       effectiveVersion?.status === 'APPROVED' ||
-      effectiveVersion?.status === 'PENDING_REVIEW' ||
       artifact?.approvedVersionId === effectiveVersion?.id ||
       options.allowUnapproved
     ));
 
     let screenRoles = approvedActors.filter(a => (cand.actorIds || []).includes(a.id)).map(a => a.name);
-    if (!screenRoles.length) {
-      screenRoles = inferScreenRoles({ name: cand.name, title: cand.title, route: cand.route }, approvedActors);
-      if (screenRoles.length) {
-        cand.actorIds = approvedActors.filter(a => screenRoles.includes(a.name)).map(a => a.id);
-      }
-    }
 
     const declared = cand.contract || mockScreen.contract || {};
     const explicitIds = (declared.actions || []).map(a => a.operationId);
@@ -768,12 +735,6 @@ async function buildProjectSpec(projectId, options = {}) {
       ? normalizedEntities.find(e => [e.id, e.name, e.modelName].filter(Boolean).includes(entityRef)) || null
       : null;
     if (!matchedEntity) matchedEntity = inferScreenEntity({ name: cand.name, title: cand.title, route: cand.route }, normalizedEntities);
-    if (matchedEntity && !linkedOps.length) {
-      linkedOps.push(...operations.filter(op =>
-        (op.entity === matchedEntity.modelName || op.targetEntity === matchedEntity.modelName) &&
-        ((op.method === 'GET' && !String(op.route || '').includes(':')) || op.method === 'POST')
-      ));
-    }
     const primaryOp = linkedOps.find(o => o.method === 'GET' && !o.route.includes(':')) || null;
 
     const actions = linkedOps.map(op => ({
@@ -809,6 +770,7 @@ async function buildProjectSpec(projectId, options = {}) {
       actions,
       html,
       hasApprovedMockup: isApprovedMockup,
+      sourceApproval: cand.sourceApproval || null,
       mockupVersion: effectiveVersion?.version || null,
       mockupArtifactId: artifact?.id || null,
       requiresMockup: cand.requiresMockup !== undefined ? cand.requiresMockup : (artifact ? true : false),
@@ -855,6 +817,9 @@ async function buildProjectSpec(projectId, options = {}) {
     }
   }
 
+  const extension = require('./projectContractExtensions').loadExtension(projectId);
+  require('./projectContractExtensions').applyExtension(extension, approvedRequirements, operations, screens, { reviewedGroups: commandContracts.groups });
+  require('./commandContracts').applyCommandRecordScopes(commandContracts.recordScopes, operations, normalizedEntities, generationDecisions);
   for (const screen of screens) {
     const ent = normalizedEntities.find(e => screen.id === 'scr_' + e.tableName);
     if (ent) {
@@ -873,7 +838,24 @@ async function buildProjectSpec(projectId, options = {}) {
     if (!screen.roles.length) screen.roles = [...new Set(screen.contract.actions.flatMap(a => a.permissions || []))];
   }
 
-  formalizeCrudPermissions(operations, screens, roles, approvedActors);
+  // Permissions come exclusively from approved entity/operation contracts.
+  // A screen or an administrator role never grants implicit API access.
+
+  require('./commandContracts').applyCommandScreens(commandContracts.screenDefinitions, screens, operations, generationDecisions);
+  require('./commandContracts').applyCommandScreenActions(commandContracts.screenActions, screens, operations, generationDecisions);
+  require('./commandContracts').applyCommandWorkspaces(commandContracts.workspaces, screens, operations, generationDecisions);
+  if (commandContracts.credentialChangeContract) {
+    const login = screens.find(screen => screen.route === '/login');
+    if (login) {
+      login.sourceHtml = login.html;
+      login.html = '<main style="max-width:440px;margin:48px auto;padding:28px;background:white;border:1px solid #dbe3ef;border-radius:16px;color:#172033"><h1>Autron5</h1><h2>Iniciar sesión</h2><form><label for="correo">Correo electrónico</label><input id="correo" name="correo" type="email" required style="display:block;width:100%;padding:10px;margin:8px 0 20px;border:1px solid #cbd5e1;border-radius:6px"/><label for="contrasena">Contraseña</label><input id="contrasena" name="contrasena" type="password" required style="display:block;width:100%;padding:10px;margin:8px 0 20px;border:1px solid #cbd5e1;border-radius:6px"/><button type="submit" style="padding:12px 20px;background:#4f46e5;color:white;border:0;border-radius:8px">Iniciar sesión</button></form><p>Para recuperar el acceso, contacta con Administración.</p></main>';
+      login.contract = { renderer: 'task', fields: [{ fieldName: 'identifier', mode: 'editable' }, { fieldName: 'password', mode: 'editable' }], actions: [{ actionId: 'login', name: 'Iniciar sesión', method: 'POST', route: '/api/auth/login' }], primaryActionId: 'login', controlBindings: { input: [{ index: 0, field: 'identifier' }, { index: 1, field: 'password' }], button: [{ index: 0, actionId: 'login' }] }, unresolved: [] };
+    }
+  }
+  for (const screen of screens) {
+    attachDecisions(screen, generationDecisions, 'SCREEN');
+    screen.confirmedDecisionContextHash = confirmedDecisionContextHash;
+  }
 
   // 7. OpenAPI 3.0 Contract Generation
   const openApiPaths = {};
@@ -961,6 +943,7 @@ async function buildProjectSpec(projectId, options = {}) {
 
   // 9. Dependency Manifest for Real Freshness / Invalidation Tracking
   const dependencyManifest = {
+    sourceFingerprint: computeCanonicalHash({ project, mockupArtifacts, extensionHash: extension?.hash || null, commandContractsHash: commandContracts.hash }),
     requirements: approvedRequirements.map(r => ({
       id: r.id,
       code: r.code,
@@ -1020,8 +1003,16 @@ async function buildProjectSpec(projectId, options = {}) {
   };
 
   const rawSpec = {
+    reviewedAcceptance: commandContracts.reviewedAcceptance,
+    credentialChangeContract: commandContracts.credentialChangeContract,
+    permissionMatrix: commandContracts.permissionMatrix,
+    confirmedDecisions: generationDecisions,
+    commandGroups: commandContracts.groups,
+    unresolved: commandContracts.blockers,
+      acceptanceScenarios: extension?.contract.acceptanceScenarios || [],
     uploads: screens.some(s => s.contract?.uploads?.private) ? { private: true, roles: [...new Set(screens.flatMap(s => s.contract?.uploads?.roles || []))] } : undefined,
     schemaVersion: '1.0.0',
+    projectContractExtension: extension ? { hash: extension.hash, evidence: extension.contract.evidence } : null,
     project: {
       id: project.id,
       name: project.name,
@@ -1056,6 +1047,12 @@ async function buildProjectSpec(projectId, options = {}) {
       description: a.description || ''
     })),
     entities: normalizedEntities,
+    businessRules: approvedRules.map(rule => ({
+      id: rule.id, name: rule.name, description: rule.description,
+      requirementIds: rule.requirementIds || [], field: rule.field,
+      operator: rule.operator, value: rule.value, evidence: rule.evidence || {},
+      revision: rule.revision || 1, status: 'APPROVED'
+    })),
     relationships: normalizedRelationships,
     operations,
     screens,

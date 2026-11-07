@@ -1,5 +1,7 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { codegenApi } from '../api/codegen.api';
+import { groupQualityIssues, completedBatchAnswers, diagnosticText } from '../utils/codegenQualityGroups';
+import './ProjectCodeGen.css';
 
 export default function ProjectCodeGen({ project, onNavigateTo }) {
   const [includeDocker, setIncludeDocker] = useState(true);
@@ -17,6 +19,7 @@ export default function ProjectCodeGen({ project, onNavigateTo }) {
   const [aiLoading, setAiLoading] = useState(false);
   const [aiLoadingBindings, setAiLoadingBindings] = useState(false);
   const [aiMessage, setAiMessage] = useState(null);
+  const [useLiveAi, setUseLiveAi] = useState(true);
 
   // Estados del Pipeline de Generación Asistida Persistente por IA
   const [activeJob, setActiveJob] = useState(null);
@@ -27,6 +30,8 @@ export default function ProjectCodeGen({ project, onNavigateTo }) {
   const [showLogs, setShowLogs] = useState(false);
   const [activeTab, setActiveTab] = useState('files'); // 'files' | 'verification'
   const [showQualityGateErrors, setShowQualityGateErrors] = useState(false);
+  const quality = useMemo(() => groupQualityIssues(generatedData?.diagnostics?.errors || []), [generatedData]);
+  const batchAnswers = completedBatchAnswers(activeJob?.questions, selectedOptions, customAnswers);
 
   // Carga automática inicial de la previsualización y trabajo activo
   useEffect(() => {
@@ -50,7 +55,7 @@ export default function ProjectCodeGen({ project, onNavigateTo }) {
         const job = (res && res.id) ? res : (res?.data || null);
         if (job) {
           setActiveJob(job);
-          if (job.status === 'COMPLETED') {
+          if (['COMPLETED', 'WAITING_FOR_INPUT', 'BLOCKED'].includes(job.status)) {
             loadPreview();
           }
         }
@@ -75,9 +80,10 @@ export default function ProjectCodeGen({ project, onNavigateTo }) {
       setJobLoading(true);
       setError(null);
       const res = await codegenApi.startGenerationJob(project.id, {
-        scope: 'Cliente → Vehículo → Recepción',
-        maxTokens: 50000,
-        maxRepairAttempts: 3
+        scope: 'Requisitos, operaciones y pantallas del proyecto',
+        maxRepairAttempts: 3,
+        enableAI: useLiveAi,
+        includeDocker
       });
       const job = (res && res.id) ? res : (res?.data || null);
       if (job) {
@@ -127,6 +133,25 @@ export default function ProjectCodeGen({ project, onNavigateTo }) {
     } catch (_) {}
   }
 
+  async function handleReviewAll() {
+    if (!activeJob?.id) return handleStartGenerationJob();
+    setJobLoading(true); setError(null);
+    try {
+      await codegenApi.reviewAll(project.id, activeJob.id);
+      await loadActiveJob();
+    } catch (err) { setError(err.message || 'No se pudo iniciar la revisión completa'); }
+    finally { setJobLoading(false); }
+  }
+
+  async function handleSaveBatchAnswers() {
+    if (!activeJob?.id || !batchAnswers.length) return;
+    setSubmittingAnswer(true); setError(null);
+    try {
+      for (const answer of batchAnswers) await codegenApi.submitJobInput(project.id, activeJob.id, answer);
+    } catch (err) { setError(err.message || 'No se pudieron guardar todas las respuestas'); }
+    finally { await loadActiveJob(); setSubmittingAnswer(false); }
+  }
+
   async function loadAiStatus() {
     try {
       const res = await codegenApi.getAiStatus(project.id);
@@ -140,7 +165,7 @@ export default function ProjectCodeGen({ project, onNavigateTo }) {
     try {
       setAiLoading(true);
       setAiMessage(null);
-      const created = await codegenApi.proposeOperations(project.id);
+      const created = await codegenApi.proposeOperations(project.id, [], { useLiveAi });
       const count = Array.isArray(created) ? created.length : (created?.length || 0);
       setAiMessage(count
         ? `Se generaron ${count} propuestas. Revise, apruebe las adecuadas y pulse Aplicar.`
@@ -157,8 +182,9 @@ export default function ProjectCodeGen({ project, onNavigateTo }) {
     try {
       setAiLoadingBindings(true);
       setAiMessage(null);
-      await codegenApi.proposeBindings(project.id);
-      setAiMessage('Propuestas de vinculación de mockups generadas exitosamente.');
+      const results = await codegenApi.proposeBindings(project.id, [], { useLiveAi });
+      const entries = Array.isArray(results) ? results : results?.data || [];
+      setAiMessage(`Vinculaciones válidas: ${entries.filter(entry => entry.valid).length}/${entries.length}. Revise las propuestas y sus bloqueos antes de aplicar.`);
       await loadAiStatus();
     } catch (err) {
       setAiMessage(`Error al vincular mockups: ${err.message}`);
@@ -236,7 +262,7 @@ export default function ProjectCodeGen({ project, onNavigateTo }) {
       setDownloading(true);
       setError(null);
       const safeName = (project.name || 'proyecto').toLowerCase().replace(/[^a-z0-9]/g, '_');
-      await codegenApi.downloadZip(project.id, includeDocker, `${safeName}-fullstack.zip`);
+      await codegenApi.downloadZip(project.id, includeDocker, `${safeName}-fullstack.zip`, activeJob?.id || null);
     } catch (err) {
       console.error('Error al descargar ZIP:', err);
       setError(err.message || 'Error al descargar archivo');
@@ -320,7 +346,7 @@ export default function ProjectCodeGen({ project, onNavigateTo }) {
   };
 
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', height: '100%', overflow: 'hidden', background: 'var(--surface)' }}>
+    <div className="codegen-page" tabIndex={0} aria-label="Generación de código">
       {/* 1. Header de Acción y Configuración */}
       <div style={{
         padding: '12px 20px',
@@ -333,11 +359,11 @@ export default function ProjectCodeGen({ project, onNavigateTo }) {
         background: 'var(--surface-container-low, #fff)'
       }}>
         <div>
-          <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap' }}>
             <span className="ms ms-md" style={{ color: 'var(--primary, #0056b3)' }}>terminal</span>
             <h2 style={{ margin: 0, fontSize: '1.15rem', fontWeight: 600 }}>Generador Full-Stack (Frontend + Backend + BD)</h2>
             <span className="badge" style={{ background: '#dcfce7', color: '#15803d', fontSize: '0.72rem', fontWeight: 600 }}>
-              Full-Stack Ejecutable
+              {activeJob?.ready ? 'Aplicación verificada' : 'Verificación pendiente'}
             </span>
           </div>
           <p style={{ margin: '2px 0 0 0', fontSize: '0.8rem', color: 'var(--on-surface-variant, #666)' }}>
@@ -346,6 +372,10 @@ export default function ProjectCodeGen({ project, onNavigateTo }) {
         </div>
 
         <div style={{ display: 'flex', alignItems: 'center', gap: '12px', flexWrap: 'wrap' }}>
+          <label style={{ fontSize: '0.82rem' }}>
+            <input type="checkbox" checked={useLiveAi} onChange={event => setUseLiveAi(event.target.checked)} />
+            {' '}Usar IA para generar y conectar (consume tokens)
+          </label>
           {/* Switch Docker */}
           <label style={{ display: 'flex', alignItems: 'center', gap: '6px', fontSize: '0.82rem', cursor: 'pointer', userSelect: 'none' }}>
             <input
@@ -384,7 +414,10 @@ export default function ProjectCodeGen({ project, onNavigateTo }) {
             <span>
               {activeJob && ['ANALYZING', 'GENERATING', 'VALIDATING', 'REPAIRING'].includes(activeJob.status)
                 ? `Generando (${activeJob.status})...`
-                : 'Generar código'}
+                : activeJob?.status === 'INTERRUPTED' || (activeJob?.status === 'BLOCKED' && (activeJob.planningBlockers?.length > 0 || activeJob.stageMessage?.startsWith('Se alcanzó el presupuesto de tiempo o tokens.') ||
+                    activeJob.verificationReport?.errors?.some(error => error.code === 'UNRESOLVED_ACCEPTANCE_SCENARIOS')))
+                  ? 'Reanudar generación'
+                  : useLiveAi ? 'Generar y conectar con IA' : 'Generar desde contratos'}
             </span>
           </button>
 
@@ -437,11 +470,11 @@ export default function ProjectCodeGen({ project, onNavigateTo }) {
             type="button"
             className="btn btn-primary btn-sm"
             onClick={handleDownload}
-            disabled={downloading || loading || files.length === 0}
+            disabled={downloading || loading || (activeJob ? !activeJob.zipSha256 || !['COMPLETED', 'BLOCKED'].includes(activeJob.status) : files.length === 0)}
             style={{ display: 'inline-flex', alignItems: 'center', gap: '6px', fontWeight: 600 }}
           >
             <span className="ms ms-xs">download</span>
-            <span>{downloading ? 'Descargando...' : 'Descargar Proyecto Full-Stack (.ZIP)'}</span>
+            <span>{downloading ? 'Descargando...' : activeJob?.ready ? 'Descargar aplicación verificada (.ZIP)' : 'Descargar paquete de revisión (.ZIP)'}</span>
           </button>
         </div>
       </div>
@@ -454,6 +487,8 @@ export default function ProjectCodeGen({ project, onNavigateTo }) {
         display: 'flex',
         alignItems: 'center',
         justifyContent: 'space-between',
+        flexWrap: 'wrap',
+        gap: '8px',
         fontSize: '0.78rem',
         color: 'var(--on-surface-variant, #64748b)'
       }}>
@@ -528,8 +563,8 @@ export default function ProjectCodeGen({ project, onNavigateTo }) {
           boxShadow: '0 1px 3px rgba(0,0,0,0.05)'
         }}>
           {/* Stepper Header */}
-          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '10px' }}>
-            <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '10px', flexWrap: 'wrap', gap: '8px' }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap', minWidth: 0 }}>
               <span className="ms ms-sm" style={{ color: '#4f46e5' }}>auto_awesome</span>
               <strong style={{ fontSize: '0.92rem', color: '#1e293b' }}>
                 Trabajo de Generación Asistida: {activeJob.id}
@@ -569,6 +604,10 @@ export default function ProjectCodeGen({ project, onNavigateTo }) {
             </div>
           </div>
 
+          {activeJob.batchReview && <p style={{ color: '#4338ca', fontSize: '0.82rem', marginBottom: '12px' }}>
+            Revisión en lote: {activeJob.batchReview.phase === 'COMPLETE' ? 'terminada' : `${activeJob.batchReview.phase === 'SCREENS' ? 'pantallas' : 'operaciones'} ${activeJob.batchReview.completed}/${activeJob.batchReview.total}`}.
+            {' '}{activeJob.batchReview.questions?.length || 0} aclaraciones reunidas; {activeJob.batchReview.blockers?.length || 0} contratos con fallos técnicos.
+          </p>}
           {/* Stage Progress Stepper */}
           <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '12px', flexWrap: 'wrap' }}>
             {[
@@ -620,6 +659,17 @@ export default function ProjectCodeGen({ project, onNavigateTo }) {
           </div>
 
           {/* Clarification Questions Card (when WAITING_FOR_INPUT) */}
+          {['BLOCKED', 'WAITING_FOR_INPUT'].includes(activeJob.status) && activeJob.planningBlockers?.length > 0 && (
+            <div role="alert" style={{ marginTop: '14px', padding: '16px', background: '#fff1f2', border: '1px solid #fecdd3', borderRadius: '8px', color: '#9f1239' }}>
+              <strong>La propuesta no pasó la validación del contrato.</strong>
+              {activeJob.planningBlockers.map(blocker => (
+                <div key={blocker.operationId}>
+                  <p>{blocker.operationId}: {blocker.name}</p>
+                  <ul>{(blocker.errors || []).map((message, index) => <li key={index}>{diagnosticText(message)}</li>)}</ul>
+                </div>
+              ))}
+            </div>
+          )}
           {activeJob.status === 'WAITING_FOR_INPUT' && activeJob.questions?.length > 0 && (
             <div style={{
               marginTop: '14px',
@@ -635,14 +685,24 @@ export default function ProjectCodeGen({ project, onNavigateTo }) {
                 </h4>
               </div>
 
+              {activeJob.questions.length > 1 && <div style={{ display: 'flex', flexWrap: 'wrap', alignItems: 'center', gap: '12px', marginBottom: '12px' }}>
+                <button type="button" className="btn btn-primary btn-sm" disabled={submittingAnswer || !batchAnswers.length} onClick={handleSaveBatchAnswers}>Guardar respuestas del lote ({batchAnswers.length})</button>
+                <span style={{ fontSize: '0.8rem' }}>Se guardan las respuestas completadas. Las demás quedan pendientes.</span>
+              </div>}
               {activeJob.questions.map(q => (
                 <div key={q.questionId} style={{ marginTop: '10px' }}>
+                  {q.title && <h5 style={{ margin: '16px 0 8px', color: '#78350f', fontSize: '0.95rem' }}>{q.title}</h5>}
                   <p style={{ margin: '0 0 8px 0', fontSize: '0.88rem', fontWeight: 600, color: '#78350f' }}>
                     {q.question}
                   </p>
+                  {q.details?.length > 0 && (
+                    <ol style={{ paddingLeft: '20px', color: '#78350f', fontSize: '0.85rem', lineHeight: 1.6 }}>
+                      {q.details.map((detail, index) => <li key={index}>{diagnosticText(detail)}</li>)}
+                    </ol>
+                  )}
 
                   {q.requirementIds?.length > 0 && (
-                    <div style={{ display: 'flex', gap: '6px', marginBottom: '12px' }}>
+                    <div className="codegen-requirements" style={{ display: 'flex', flexWrap: 'wrap', gap: '6px', marginBottom: '12px' }}>
                       <span style={{ fontSize: '0.72rem', color: '#92400e' }}>Requisitos vinculados:</span>
                       {q.requirementIds.map(rId => (
                         <span key={rId} className="badge" style={{ background: '#fef3c7', color: '#92400e', fontSize: '0.7rem' }}>
@@ -669,7 +729,7 @@ export default function ProjectCodeGen({ project, onNavigateTo }) {
                         <input
                           type="radio"
                           name={q.questionId}
-                          checked={selectedOptions[q.questionId] === opt.id || (!selectedOptions[q.questionId] && opt.id.includes('opcional'))}
+                          checked={selectedOptions[q.questionId] === opt.id}
                           onChange={() => setSelectedOptions(prev => ({ ...prev, [q.questionId]: opt.id }))}
                           style={{ marginTop: '2px' }}
                         />
@@ -684,15 +744,18 @@ export default function ProjectCodeGen({ project, onNavigateTo }) {
                   {q.customAllowed && (
                     <div style={{ marginBottom: '12px' }}>
                       <label style={{ display: 'block', fontSize: '0.76rem', fontWeight: 600, color: '#78350f', marginBottom: '4px' }}>
-                        O respuesta personalizada:
+                        {q.options?.length ? 'O respuesta personalizada:' : 'Tu respuesta a los puntos anteriores:'}
                       </label>
-                      <input
-                        type="text"
+                      <textarea
+                        rows={3}
+                        aria-label="Respuesta personalizada"
                         placeholder={q.customPlaceholder || 'Escribe tu regla personalizada...'}
                         value={customAnswers[q.questionId] || ''}
                         onChange={e => setCustomAnswers(prev => ({ ...prev, [q.questionId]: e.target.value }))}
                         style={{
                           width: '100%',
+                          boxSizing: 'border-box',
+                          resize: 'vertical',
                           padding: '8px 12px',
                           borderRadius: '6px',
                           border: '1px solid #d1d5db',
@@ -706,7 +769,7 @@ export default function ProjectCodeGen({ project, onNavigateTo }) {
                     type="button"
                     className="btn btn-primary btn-sm"
                     onClick={() => handleAnswerClarification(q.questionId)}
-                    disabled={submittingAnswer}
+                    disabled={submittingAnswer || (!customAnswers[q.questionId]?.trim() && !selectedOptions[q.questionId])}
                     style={{
                       display: 'inline-flex',
                       alignItems: 'center',
@@ -718,8 +781,13 @@ export default function ProjectCodeGen({ project, onNavigateTo }) {
                     }}
                   >
                     <span className="ms ms-xs">check</span>
-                    <span>{submittingAnswer ? 'Guardando decisión...' : 'Confirmar Decisión y Reanudar Generación'}</span>
+                    <span>{submittingAnswer ? 'Guardando decisión...' : activeJob.planningBlockers?.length > 0 ? 'Guardar decisión' : activeJob.questions.length > 1 ? 'Guardar respuesta' : 'Confirmar Decisión y Reanudar Generación'}</span>
                   </button>
+                  {activeJob.planningBlockers?.length > 0 && (
+                    <p style={{ margin: '8px 0 0', fontSize: '0.8rem', color: '#78350f' }}>
+                      Se guardará tu respuesta. La IA no se reanudará automáticamente porque quedan tareas técnicas pendientes.
+                    </p>
+                  )}
                 </div>
               ))}
             </div>
@@ -741,6 +809,13 @@ export default function ProjectCodeGen({ project, onNavigateTo }) {
                   {showLogs ? 'Ocultar bitácora' : `Ver bitácora (${activeJob.logs?.length || 0})`}
                 </button>
               </div>
+
+              {activeJob.status === 'BLOCKED' && activeJob.verificationReport.errors?.some(error => error.code === 'UNRESOLVED_ACCEPTANCE_SCENARIOS') && (
+                <p style={{ margin: '8px 0', color: '#92400e' }}>
+                  No se generaron pruebas de aceptación ejecutables. Pulsa Reanudar generación para completar los contratos y volver a verificar.
+                  Las migraciones aprobadas no comprueban por sí solas que las funciones de negocio operen correctamente.
+                </p>
+              )}
 
               <div style={{ display: 'flex', gap: '16px', flexWrap: 'wrap', color: '#64748b', fontSize: '0.75rem' }}>
                 <span>Comprobaciones superadas: <strong>{activeJob.verificationReport.checks?.length || 0}</strong></span>
@@ -788,7 +863,7 @@ export default function ProjectCodeGen({ project, onNavigateTo }) {
               <span className="ms ms-md" style={{ color: (generatedData.files || []).length ? '#d97706' : '#e11d48' }}>{(generatedData.files || []).length ? 'warning' : 'gpp_bad'}</span>
               <strong style={{ fontSize: '0.95rem' }}>
                 {(generatedData.files || []).length
-                  ? 'Generación lista con observaciones de calidad'
+                  ? 'Paquete de revisión generado: quedan contratos pendientes'
                   : 'Generación Bloqueada por Validación de Calidad (Quality Gates)'}
               </strong>
               <span className="badge" style={{ background: (generatedData.files || []).length ? '#fef3c7' : '#ffe4e6', color: (generatedData.files || []).length ? '#b45309' : '#be123c', fontSize: '0.72rem', fontWeight: 700 }}>
@@ -819,9 +894,7 @@ export default function ProjectCodeGen({ project, onNavigateTo }) {
 
           <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '6px 0', borderBottom: showQualityGateErrors ? '1px dashed #fecdd3' : 'none', marginBottom: showQualityGateErrors ? '10px' : '0' }}>
             <span style={{ fontSize: '0.8rem', color: (generatedData.files || []).length ? '#92400e' : '#881337' }}>
-              {(generatedData.files || []).length
-                ? `Hay ${generatedData.diagnostics.errors.length} observaciones, pero el código sí se generó.`
-                : `Hay ${generatedData.diagnostics.errors.length} errores que impiden generar el zip.`}
+              {quality.totals.operations} mensajes en {quality.counts.operations} operaciones; {quality.totals.screens} en {quality.counts.screens} pantallas; {quality.counts.requirements} requisitos sin comportamiento comprobado.
             </span>
             <button
               type="button"
@@ -829,25 +902,33 @@ export default function ProjectCodeGen({ project, onNavigateTo }) {
               onClick={() => setShowQualityGateErrors(!showQualityGateErrors)}
               style={{ color: '#be123c', fontWeight: 600, cursor: 'pointer', textDecoration: 'underline' }}
             >
-              {showQualityGateErrors ? 'Ocultar lista de bloqueos y ver código' : `Ver los ${generatedData.diagnostics.errors.length} bloqueos detallados`}
+              {showQualityGateErrors ? 'Ocultar detalles' : `Ver ${quality.groups.length} elementos (${quality.total} detalles)`}
             </button>
+          </div>
+
+          <div style={{ display: 'flex', flexWrap: 'wrap', gap: '12px', alignItems: 'center', marginBottom: '12px' }}>
+            <button type="button" className="btn btn-primary btn-sm" onClick={handleReviewAll} disabled={jobLoading || !useLiveAi || (activeJob && ['ANALYZING', 'GENERATING', 'VALIDATING', 'REPAIRING'].includes(activeJob.status))}>Revisar todo en lote</button>
+            <span style={{ fontSize: '0.8rem' }}>Revisa todos los casos y reúne las aclaraciones pendientes en una sola lista.</span>
           </div>
 
           {showQualityGateErrors && (
             <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', maxHeight: '240px', overflowY: 'auto' }}>
-              {generatedData.diagnostics.errors.map((err, idx) => (
-                <div key={idx} style={{ background: '#ffffff', padding: '10px 14px', borderRadius: '6px', border: '1px solid #fda4af', fontSize: '0.82rem' }}>
+              {quality.groups.map(group => (
+                <details key={group.key} style={{ background: '#ffffff', padding: '10px 14px', borderRadius: '6px', border: '1px solid #fda4af', fontSize: '0.82rem' }}>
+                  <summary style={{ cursor: 'pointer', fontWeight: 700 }}>{group.element} · {group.issues.length} {group.issues.length === 1 ? 'detalle' : 'detalles'}</summary>
+                  {group.issues.map((err, idx) => <div key={idx} style={{ padding: '8px 0' }}>
                   <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '4px' }}>
                     <span style={{ fontWeight: 700, color: '#be123c' }}>[{err.code}]</span>
                     <span style={{ color: '#475569', fontWeight: 600 }}>Elemento: {err.element}</span>
                   </div>
-                  <div style={{ color: '#0f172a' }}>{err.message}</div>
+                  <div style={{ color: '#0f172a' }}>{diagnosticText(err.message)}</div>
                   {err.action && (
                     <div style={{ marginTop: '4px', color: '#0284c7', fontSize: '0.78rem' }}>
-                      💡 <strong>Acción necesaria:</strong> {err.action}
+                      💡 <strong>Acción necesaria:</strong> {diagnosticText(err.action)}
                     </div>
                   )}
-                </div>
+                  </div>)}
+                </details>
               ))}
             </div>
           )}
@@ -964,7 +1045,7 @@ export default function ProjectCodeGen({ project, onNavigateTo }) {
       ) : null}
 
       {/* 3. Área Principal: Explorador estilo IDE (2 Columnas) */}
-      <div style={{ flex: 1, minHeight: 0, display: 'flex', overflow: 'hidden' }}>
+      <div className="codegen-workspace">
         {/* Panel Izquierdo: Explorador de Archivos */}
         <div style={{
           width: '290px',
@@ -1469,6 +1550,7 @@ export default function ProjectCodeGen({ project, onNavigateTo }) {
             {/* Cuerpo del Modal */}
             <div style={{ padding: '20px 24px', overflowY: 'auto', flex: 1, display: 'flex', flexDirection: 'column', gap: '20px' }}>
               {/* Acciones Generales de Generación de Propuestas */}
+              <label><input type="checkbox" checked={useLiveAi} onChange={event => setUseLiveAi(event.target.checked)} /> Usar proveedor de IA configurado (consume tokens). Desmarcado: análisis local.</label>
               <div style={{ display: 'flex', gap: '12px', flexWrap: 'wrap' }}>
                 <button
                   type="button"
@@ -1567,6 +1649,9 @@ export default function ProjectCodeGen({ project, onNavigateTo }) {
                       </div>
                     </div>
 
+                    <p style={{ fontSize: '0.8rem', color: '#475569', margin: '4px 0' }}>
+                      {entry.providerMetadata?.mode || 'ORIGEN NO REGISTRADO'} · {entry.providerMetadata?.provider || 'local'} · {entry.providerMetadata?.model || 'sin modelo'} · {entry.providerMetadata?.outcome || 'sin resultado'} · validación: {entry.providerMetadata?.validation || 'pendiente'}
+                    </p>
                     <p style={{ fontSize: '0.8rem', color: '#475569', margin: '4px 0' }}>
                       <em>{entry.proposal?.rationale}</em>
                     </p>

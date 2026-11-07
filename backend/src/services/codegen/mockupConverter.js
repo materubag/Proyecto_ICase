@@ -46,7 +46,7 @@ function replaceButtons(content, replace) {
  * @returns {string} Converted JSX code
  */
 function isChrome(block) {
-  return /filtrar\s+vista\s+por\s+rol|control de acceso por roles|todos los roles\s*\(/i.test(block || '');
+  return /filtrar\s+vista\s+por\s+rol|control de acceso por roles|todos los roles\s*\(|vista\s+\d+\s+de\s+\d+/i.test(block || '');
 }
 
 function isSiteNavChrome(block) {
@@ -54,39 +54,59 @@ function isSiteNavChrome(block) {
   const text = String(block || '').replace(/<[^>]+>/g, ' ');
   const navHits = (text.match(/recepci[oó]n|diagn[oó]stico|veh[ií]culo|inventario|cliente|bit[aá]cora|repuesto|mostrador|bah[ií]as|cit[ae]s/gi) || []).length;
   const brand = /autron|\btaller\b|portal cliente/i.test(text);
+  if (/vista\s+\d+\s+de\s+\d+/i.test(text)) return true;
+  if (/\(\s*\/[a-z0-9\-_/]+\)/.test(text) && /taller|mec[aá]nica|administraci[oó]n/i.test(text)) return true;
   return brand && navHits >= 2;
 }
 
 function stripRolePreviewChrome(html) {
   if (!html) return html;
   let next = String(html);
-  next = next.replace(/<(aside|nav|header)\b[^>]*>[\s\S]*?<\/\1>/gi, block => (isChrome(block) ? '' : block));
+  // Preserve the original navigation, header and side panels.
+  next = next.replace(/<(p|span)\b[^>]*>[^<]*Vista\s+\d+\s+de\s+\d+[^<]*<\/\1>/gi, '');
   next = next.replace(/<select\b[^>]*>[\s\S]*?Todos los Roles[\s\S]*?<\/select>/gi, '');
   next = next.replace(/<[^>]*>\s*Filtrar Vista por Rol\s*<\/[^>]*>/gi, '');
   return next;
 }
 
+function extractStitchCss(html) {
+  const chunks = [];
+  const styleRe = /<style\b[^>]*>([\s\S]*?)<\/style>/gi;
+  let match;
+  while ((match = styleRe.exec(html || ''))) chunks.push(match[1]);
+  return chunks.join('\n').replace(/<\/style>/gi, '').trim();
+}
+
 function convertHtmlToJsx(htmlContent, componentName, route, entityName = '', binding = null, screensNav = []) {
   if (!htmlContent) return '';
+  const visual = require('./mockupVisualContract').extractVisualContract(htmlContent);
+  const stitchCss = extractStitchCss(htmlContent);
   htmlContent = stripRolePreviewChrome(htmlContent);
+  const controls = binding?.screenContract?.controlBindings || {};
+  for (const tag of ['input', 'textarea', 'select', 'button']) {
+    let index = 0;
+    htmlContent = htmlContent.replace(new RegExp('<' + tag + '\\b', 'gi'), opening => {
+      const position = index++;
+      const control = (controls[tag] || []).find(item => item.index === position);
+      return !control ? opening : opening
+        + (control.field ? ' data-field="' + control.field + '"' : '')
+        + (control.actionId ? ' data-action-id="' + control.actionId + '"' : '')
+        + (control.label ? ' data-action-label="' + control.label + '"' : '')
+        + (control.value !== undefined ? ' data-field-value="' + control.value + '"' : '');
+    });
+  }
   // Task screens render forms/tables through ContractTask slots. Binding those
   // inputs to formData here would crash: layout={slots => ...} has no formData.
   const isTaskLayout = binding?.screenContract?.renderer === 'task';
 
-  // Site chrome (brand + Recepción/Diagnóstico/…) lives in AppShell so every
-  // screen of the same role shares one menu. Keep the page body of the mockup.
   let content = '';
   const bodyMatch = htmlContent.match(/<body[^>]*>([\s\S]*?)<\/body>/i);
   content = bodyMatch ? bodyMatch[1] : htmlContent;
-  content = content.replace(/<aside\b[^>]*>[\s\S]*?<\/aside>/gi, block => {
-    if (isChrome(block) || isSiteNavChrome(block) || /\bsidebar\b/i.test(block)) return '';
-    return block;
-  });
-  content = content.replace(/<(header|nav)\b[^>]*>[\s\S]*?<\/\1>/gi, block => (isSiteNavChrome(block) ? '' : block));
 
   // 2. Remove script tags and comments
   content = stripRolePreviewChrome(content);
   content = content.replace(/<script\b[^<]*(?:(?!<\/script>)<[^<]*)*<\/script>/gi, '');
+  content = content.replace(/<style\b[^>]*>[\s\S]*?<\/style>/gi, '');
   content = content.replace(/<!--[\s\S]*?-->/g, '');
 
   // 4. Convert class to className and for to htmlFor
@@ -197,6 +217,7 @@ function convertHtmlToJsx(htmlContent, componentName, route, entityName = '', bi
 
   // 10. Process inline onclick attributes for modal opening / closing before stripping
   content = content.replace(/\bonclick="([^"]*)"|\bonclick='([^']*)'/gi, (match, code1, code2) => {
+    if (isTaskLayout) return '';
     const code = code1 || code2 || '';
     const idMatch = code.match(/getElementById\(['"]([^'"]+)['"]\)/);
     if (idMatch) {
@@ -340,24 +361,44 @@ function convertHtmlToJsx(htmlContent, componentName, route, entityName = '', bi
 
   if (isTaskLayout) content = wireTaskLayout(content, binding.screenContract);
 
-  return content;
+  for (const screen of screensNav || []) {
+    const path = String(screen.route || '').replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+    if (!path) continue;
+    const key = JSON.stringify(screen.key);
+    const hrefRe = new RegExp(`<a\\b([^>]*?)href=["']${path}["']([^>]*)>([\\s\\S]*?)</a>`, 'gi');
+    content = content.replace(hrefRe, `<button type="button"$1$2 onClick={() => onNavigate(${key})}>$3</button>`);
+  }
+
+  if (stitchCss) {
+    const id = visual.id;
+    const css = `@scope ([data-mockup-screen="${id}"]) { ${stitchCss.replace(/(^|[{},]\s*)(:root|html|body)(?=[\s,{.#[:>])/gm, '$1:scope')} }`;
+    content = `<style dangerouslySetInnerHTML={{ __html: ${JSON.stringify(css)} }} />${content}`;
+  }
+  const bodyClass = htmlContent.match(/<body\b[^>]*\bclass=["']([^"']*)["']/i)?.[1] || '';
+  const fonts = visual.fonts.map(href => `<link rel="stylesheet" href=${JSON.stringify(href)} />`).join('');
+  return `<div data-mockup-screen="${visual.id}">${fonts}<div className=${JSON.stringify(bodyClass)}>${content}</div></div>`;
 }
 
 function fieldToken(value) {
   return String(value || '').toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/[^a-z0-9]/g, '');
 }
 
-function matchContractField(attrs, fields = []) {
+function matchContractField(attrs, fields = [], hint = '') {
+  const declared = attrs.match(/\bdata-field=["']([^"']+)["']/i)?.[1];
+  if (declared) return fields.find(field => field.fieldName === declared) || null;
   const name = attrs.match(/\b(?:name|id)=["']([^"']+)["']/i)?.[1] || '';
   const placeholder = attrs.match(/\bplaceholder=["']([^"']+)["']/i)?.[1] || '';
   const aria = attrs.match(/\baria-label=["']([^"']+)["']/i)?.[1] || '';
-  const haystack = fieldToken([name, placeholder, aria].join(' '));
+  const haystack = fieldToken([name, placeholder, aria, hint].join(' '));
   if (!haystack) return null;
-  return fields.find(field => {
+  const exact = fields.filter(field => fieldToken(field.fieldName) === fieldToken(name));
+  if (exact.length === 1) return exact[0];
+  const candidates = fields.filter(field => {
     const keys = [field.fieldName, field.label, field.originalName, String(field.fieldName || '').replace(/Id$/i, '')]
       .map(fieldToken).filter(key => key.length >= 3);
     return keys.some(key => haystack === key || haystack.includes(key) || (key.includes(haystack) && haystack.length >= 4));
-  }) || null;
+  });
+  return candidates.length === 1 ? candidates[0] : null;
 }
 
 function bindFieldAttrs(attrs, field) {
@@ -366,6 +407,7 @@ function bindFieldAttrs(attrs, field) {
     .replace(/\bonChange=\{[\s\S]*?\}/g, '')
     .replace(/\bvalue=["'][^"']*["']/gi, '')
     .replace(/\bdefaultValue=["'][^"']*["']/gi, '')
+    .replace(/\b(?:defaultChecked|checked)(?:=\{[^}]*\}|=["'][^"']*["'])?/gi, '')
     .replace(/\bname=["'][^"']*["']/gi, '')
     .replace(/\bid=["'][^"']*["']/gi, '');
   const key = JSON.stringify(field.fieldName);
@@ -374,7 +416,11 @@ function bindFieldAttrs(attrs, field) {
   next += ` id={${key}} name={${key}}`;
   if (isFile) return `${next} onChange={event => slots.updateFiles(${key}, Array.from(event.target.files || []))}`;
   if (isCheck) return `${next} checked={Boolean(slots.values[${key}])} onChange={event => slots.setField(${key}, event.target.checked)}`;
-  return `${next} value={slots.values[${key}] ?? ''} onChange={event => slots.setField(${key}, event.target.value)}`;
+  const numeric = /INTEGER|FLOAT|DECIMAL|NUMBER|BIGINT/.test(field.dataType || '');
+  const fromEvent = numeric
+    ? `event.target.value === '' ? '' : Number(event.target.value)`
+    : `event.target.value`;
+  return `${next} value={slots.values[${key}] ?? ''} onChange={event => slots.setField(${key}, ${fromEvent})}`;
 }
 
 function selectOptionsJsx(field) {
@@ -389,13 +435,18 @@ function selectOptionsJsx(field) {
   return `<option value="">Seleccionar</option>`;
 }
 
-function liveTbody(attrs, columns) {
-  const cols = JSON.stringify((columns || []).map(column => ({ field: column.field, label: column.label, relation: column.relation || null, options: column.options || null })));
-  return `<tbody${attrs || ''}>{slots.loading ? <tr><td colSpan={12}>Cargando…</td></tr> : !(slots.rows || []).length ? <tr><td colSpan={12}>Sin registros</td></tr> : (slots.rows || []).map(row => (
-    <tr key={row[slots.valueField] || row.id}>
-      {(${cols}).length ? (${cols}).map(column => <td key={column.field} data-label={column.label}>{slots.display(row, column)}</td>) : Object.keys(row).slice(0, 6).map(key => <td key={key}>{String(row[key] ?? '')}</td>)}
-    </tr>
-  ))}</tbody>`;
+function liveTbody(attrs, template, columns) {
+  const row = template.match(/<tr\b([^>]*)>([\s\S]*?)<\/tr>/i);
+  const cells = [...(row?.[2] || '').matchAll(/<td\b([^>]*)>([\s\S]*?)<\/td>/gi)];
+  const count = cells.length || 1;
+  if (!Array.isArray(columns)) return '<tbody' + attrs + ' data-unresolved-display="true"><tr><td colSpan={' + count + '}>Listado pendiente de vinculacion</td></tr></tbody>';
+  const rendered = cells.map((cell, index) => {
+    const binding = columns.find(c => c.index === index);
+    const descriptors = binding?.fields || (binding ? [binding] : []);
+    const body = descriptors.length ? descriptors.map(c => '<div>{slots.display(row, ' + JSON.stringify(c) + ')}</div>').join('') : '<span aria-label="Dato no vinculado">?</span>';
+    return '<td' + cell[1] + '>' + body + '</td>';
+  }).join('');
+  return '<tbody' + attrs + '>{slots.loading ? <tr><td colSpan={' + count + '}>Cargando...</td></tr> : !(slots.rows || []).length ? <tr><td colSpan={' + count + '}>Sin registros</td></tr> : (slots.rows || []).map(row => <tr' + (row?.[1] || '') + ' key={row[slots.valueField] || row.id}>' + rendered + '</tr>)}</tbody>';
 }
 
 function wireTaskLayout(content, contract = {}) {
@@ -404,35 +455,55 @@ function wireTaskLayout(content, contract = {}) {
     if (/onSubmit=\{/.test(attrs)) return match;
     return `<form${attrs} data-contract-form="true" onSubmit={slots.submit}>`;
   });
-  next = next.replace(/<(input)\b([^>]*?)(\/)?>/gi, (match, tag, attrs) => {
+  next = next.replace(/<(input)\b([^>]*?)(\/)?>/gi, (match, tag, attrs, _closing, offset) => {
     if (/type=["'](?:submit|button|hidden|reset)["']/i.test(attrs)) return match;
     const isSearch = /buscar|search|filtrar/i.test(attrs);
     if (isSearch) {
       const clean = String(attrs).replace(/\bvalue=["'][^"']*["']/gi, '').replace(/\bvalue=\{[^}]*\}/g, '');
       return `<input ${clean} value={slots.filter ?? ''} onChange={event => slots.setFilter(event.target.value)} />`;
     }
-    const field = matchContractField(attrs, fields);
-    if (!field) return match;
+    const labels = [...String(next).slice(0, offset).matchAll(/<label\b[^>]*>([\s\S]*?)<\/label>/gi)];
+    const hint = labels.at(-1)?.[1]?.replace(/<[^>]*>/g, ' ') || '';
+    const field = matchContractField(attrs, fields, hint);
+    if (!field) return `<input ${String(attrs).replace(/\b(?:value|defaultValue)=["'][^"']*["']/gi, '')} disabled data-unresolved-control="true" />`;
     return `<input ${bindFieldAttrs(attrs, field)} />`;
   });
-  next = next.replace(/<textarea\b([^>]*)>([\s\S]*?)<\/textarea>/gi, (match, attrs) => {
-    const field = matchContractField(attrs, fields);
-    if (!field) return match;
+  next = next.replace(/<textarea\b([^>]*)>([\s\S]*?)<\/textarea>/gi, (match, attrs, _inner, offset) => {
+    const labels = [...String(next).slice(0, offset).matchAll(/<label\b[^>]*>([\s\S]*?)<\/label>/gi)];
+    const field = matchContractField(attrs, fields, labels.at(-1)?.[1]?.replace(/<[^>]*>/g, ' ') || '');
+    if (!field) return `<textarea ${attrs} disabled data-unresolved-control="true"></textarea>`;
     return `<textarea ${bindFieldAttrs(attrs, field)}></textarea>`;
   });
-  next = next.replace(/<select\b([^>]*)>([\s\S]*?)<\/select>/gi, (match, attrs) => {
-    const field = matchContractField(attrs, fields);
-    if (!field) return match;
+  next = next.replace(/<select\b([^>]*)>([\s\S]*?)<\/select>/gi, (match, attrs, _inner, offset) => {
+    const nearby = String(next).slice(Math.max(0, offset - 350), offset).replace(/<[^>]+>/g, ' ');
+    const field = matchContractField(attrs, fields, nearby);
+    if (!field) return `<select ${attrs} disabled data-unresolved-control="true"><option value="">UNRESOLVED: selector sin contrato</option></select>`;
     return `<select ${bindFieldAttrs(attrs, field)}>${selectOptionsJsx(field)}</select>`;
   });
-  next = next.replace(/<tbody\b([^>]*)>[\s\S]*?<\/tbody>/gi, (match, attrs) => liveTbody(attrs, contract.columns || []));
+  let tableIndex = 0;
+  next = next.replace(/<tbody\b([^>]*)>([\s\S]*?)<\/tbody>/gi, (match, attrs, inner) => liveTbody(attrs, inner, tableIndex++ === 0 ? contract.tableColumns : undefined));
   next = replaceButtons(next, (match, attrs, inner) => {
     if (attrs.includes('onClick=')) return match;
-    const text = String(inner).replace(/<[^>]+>/g, '');
-    if (/buscar|filtrar|cerrar|cancelar|volver/i.test(text)) return match;
-    if (!/nuevo|guardar|crear|registrar|confirmar|diagn[oó]stico|vincular|agendar|enviar|actualizar|guardar\s*cambios/i.test(text + attrs) && !/\btype=["']submit["']/i.test(attrs)) return match;
+    attrs = attrs.replace(/\sdisabled(?:=["'][^"']*["'])?(?=\s|$)/gi, '');
+    const boundField = attrs.match(/data-field=["']([^"']+)["']/)?.[1];
+    const boundValue = attrs.match(/data-field-value=["']([^"']+)["']/)?.[1];
+    if (boundField && boundValue !== undefined) return `<button${attrs.replace(/\btype=["'][^"']+["']/gi, '')} type="button" aria-pressed={slots.values[${JSON.stringify(boundField)}] === ${Number(boundValue)}} onClick={() => slots.setField(${JSON.stringify(boundField)}, ${Number(boundValue)})}>${inner}</button>`;
+    const text = String(inner).replace(/<svg\b[\s\S]*?<\/svg>/gi, '').replace(/<span\b[^>]*class(?:Name)?=["'][^"']*material-symbols[^"']*["'][^>]*>[\s\S]*?<\/span>/gi, '').replace(/<[^>]+>/g, '');
+    const explicit = attrs.match(/data-action-id=["']([^"']+)["']/)?.[1];
+    const label = attrs.match(/data-action-label=["']([^"']+)["']/)?.[1];
+    if (label) inner = (inner.match(/<span\b[^>]*class(?:Name)?=["'][^"']*material-symbols[^"']*["'][^>]*>[\s\S]*?<\/span>/i)?.[0] || '') + '<span>' + label + '</span>';
+    const action = (contract.actions || []).find(a => !a.supplemental && (explicit ? a.actionId === explicit : fieldToken(a.name) === fieldToken(text)));
+    if (!action) return `<button${attrs.replace(/\btype=["'][^"']+["']/gi, '')} type="button" disabled data-unresolved-control="true" title="Control pendiente de vinculación">${inner}</button>`;
     const clean = attrs.replace(/\btype=["'][^"']+["']/gi, '');
-    return `<button${clean} type="button" onClick={slots.submit}>${inner}</button>`;
+    const added = (contract.additionalControls || []).filter(item => item.beforeActionId === action.actionId).flatMap(item => item.fields).map(name => {
+      const field = fields.find(f => f.fieldName === name);
+      if (!field) throw new Error('ADDITIONAL_CONTROL_FIELD_NOT_FOUND: ' + name);
+      const styles = 'className="w-full p-2.5 border border-outline-variant rounded-lg bg-surface-container-lowest text-on-surface"';
+      const attrs = bindFieldAttrs(styles + (field.control === 'files' ? ' type="file" accept="image/*" multiple' : ''), field);
+      const control = field.relation || field.options ? `<select ${attrs}>${selectOptionsJsx(field)}</select>` : `<input ${attrs} />`;
+      return `<div className="mb-3" data-added-control=${JSON.stringify(name)}><label htmlFor=${JSON.stringify(name)}>${field.label || name}${field.required ? ' *' : ''}</label>${control}</div>`;
+    }).join('');
+    return `${added}<button${clean} data-action-id=${JSON.stringify(action.actionId)} type="button" disabled={slots.busy || slots.loading} onClick={() => slots.execute(${JSON.stringify(action.actionId)})}>${inner}</button>${contract.recordListAfterActionId === action.actionId ? '{slots.table}' : ''}`;
   });
   return next;
 }

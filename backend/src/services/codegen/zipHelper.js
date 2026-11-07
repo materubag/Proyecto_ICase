@@ -35,6 +35,12 @@ function getDosDateTime(date = new Date()) {
  * Creates a valid ZIP buffer from an array of { path: string, content: string | Buffer }
  */
 function createZipBuffer(files = []) {
+  const seen = new Set();
+  for (const file of files) {
+    const name = String(file.path).replace(/\\/g, '/');
+    if (!name || name.startsWith('/') || name.split('/').some(p => ['..', '.', ''].includes(p)) || /[:\x00]/.test(name) || seen.has(name.toLowerCase())) throw new Error('INVALID_OR_DUPLICATE_ZIP_PATH: ' + name);
+    seen.add(name.toLowerCase());
+  }
   const localHeaders = [];
   const centralHeaders = [];
   let currentOffset = 0;

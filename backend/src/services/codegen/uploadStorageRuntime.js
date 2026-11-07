@@ -15,24 +15,26 @@ function detectImage(buffer) {
   return null;
 }
 
-function signUpload(file, user) {
+function signUpload(file, user, context = {}) {
   const bytes = fs.readFileSync(file.path);
   const formatoMime = detectImage(bytes);
   if (!formatoMime) {
     fs.unlinkSync(file.path);
     throw Object.assign(new Error('Se requiere una fotografía PNG, JPEG o WebP'), { statusCode: 415 });
   }
-  return jwt.sign({ purpose: 'icase-upload', ownerId: user.id, filename: file.filename, pesoBytes: bytes.length, formatoMime }, process.env.JWT_SECRET, { expiresIn: '8h' });
+  const archivoId = require('crypto').createHash('sha256').update(String(user.id) + ':' + file.filename).digest('hex');
+  return jwt.sign({ purpose: 'icase-upload', ownerId: user.id, archivoId, filename: file.filename, pesoBytes: bytes.length, formatoMime, ...context }, process.env.JWT_SECRET, { expiresIn: '8h' });
 }
 
-function readUpload(token, user) {
+function readUpload(token, user, context) {
   let upload;
   try { upload = jwt.verify(token, process.env.JWT_SECRET); }
   catch { throw Object.assign(new Error('Carga inválida o vencida'), { statusCode: 422, code: 'INVALID_UPLOAD' }); }
   if (upload.purpose !== 'icase-upload' || String(upload.ownerId) !== String(user?.id)) throw Object.assign(new Error('La carga no pertenece al usuario autenticado'), { statusCode: 403 });
   const filename = resolveFile(upload.filename);
   if (!fs.existsSync(filename) || fs.statSync(filename).size !== upload.pesoBytes) throw Object.assign(new Error('El archivo seleccionado no está disponible'), { statusCode: 422, code: 'UPLOAD_MISSING' });
-  return { urlOriginal: '/api/upload/files/' + upload.filename, pesoBytes: upload.pesoBytes, formatoMime: upload.formatoMime };
+  if (context === 'recepcion' && upload.diagnosticoId) throw Object.assign(new Error('La carga pertenece a un diagnóstico'), { statusCode: 403 });
+  return { archivoId: upload.archivoId || require('crypto').createHash('sha256').update(String(user.id) + ':' + upload.filename).digest('hex'), urlOriginal: '/api/upload/files/' + upload.filename, pesoBytes: upload.pesoBytes, formatoMime: upload.formatoMime };
 }
 
 module.exports = { resolveFile, signUpload, readUpload, detectImage };

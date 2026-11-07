@@ -140,6 +140,21 @@ IDENTIDAD APROBADA DEL PROYECTO:
 - Identidad de Marca: Color de acción ${primaryColor}.`;
   }
 
+  getStitchScreenVisualRules(archetype = 'B', projectName = 'App', projectDescription = '') {
+    const primaryColor = '#4F46E5';
+    const archetypes = {
+      A: `ARQUETIPO A — Focal / Login: tarjeta central 440-480px, máximo 3 campos, un botón de ancho completo, sin menú de módulos.`,
+      B: `ARQUETIPO B — Formulario guiado: cabecera con logo y menú del rol, cuerpo 1200px, formulario a la izquierda y resumen a la derecha, un botón principal.`,
+      C: `ARQUETIPO C — Listado / tablero: máximo 4 KPIs, tabla aireada, búsqueda simple, badges de estado.`
+    };
+    return `SISTEMA DE DISEÑO OFICIAL OBLIGATORIO (FUENTE: DESIGN_SYSTEM.md v3.0):
+- Paleta primaria ${primaryColor}, superficie blanca, bordes #E2E8F0, textos Slate.
+- 100% en español. Un propósito. Un CTA principal.
+- Prohibido mostrar códigos RF, hashes o jerga de requisitos.
+- ${archetypes[archetype] || archetypes.B}
+IDENTIDAD: "${projectName}" — ${projectDescription || 'Operación del sistema'}.`;
+  }
+
   /**
    * Reports Stitch capabilities and explicit limitations
    */

@@ -13,6 +13,7 @@ test('Business Operations: Generates real transactional execution and rollback o
       name: 'Prestar Libro',
       type: 'BUSINESS_LOGIC',
       targetEntity: 'Prestamo',
+      action: 'CREATE',
       route: '/api/operations/prestar-libro',
       method: 'POST',
       authorizedRoles: ['Bibliotecario'],
@@ -21,7 +22,7 @@ test('Business Operations: Generates real transactional execution and rollback o
           code: 'BR_STOCK_DISPONIBLE',
           name: 'Disponibilidad de Ejemplares',
           description: 'El libro debe contar con al menos un ejemplar disponible',
-          condition: 'payload.ejemplaresDisponibles > 0'
+          field: 'ejemplaresDisponibles', operator: 'gt', value: 0
         }
       ]
     }
@@ -41,11 +42,11 @@ test('Business Operations: Generates real transactional execution and rollback o
   // 3. Must rollback on error
   assert.ok(serviceCode.includes('await t.rollback()'), 'Must rollback transaction on error');
   // 4. Must enforce business rule condition
-  assert.ok(serviceCode.includes('payload.ejemplaresDisponibles > 0'), 'Must generate rule verification code');
-  assert.ok(serviceCode.includes("err.code = 'BUSINESS_RULE_VIOLATION'"), 'Must mark rule violation code');
-  assert.ok(serviceCode.includes('err.statusCode = 422'), 'Must throw 422 for unfulfilled business rule');
+  assert.ok(serviceCode.includes('evaluatePredicate') && serviceCode.includes('payload.ejemplaresDisponibles'), 'Must generate a declarative rule');
+  assert.ok(serviceCode.includes('code: "BUSINESS_RULE_VIOLATION"'), 'Must mark rule violation code');
+  assert.ok(serviceCode.includes('statusCode: 422'), 'Must throw 422 for unfulfilled business rule');
   // 5. Must perform real model creation or mutation
-  assert.ok(serviceCode.includes('await models.Prestamo.create(payload, { transaction: t })'), 'Must mutate target model inside transaction');
+  assert.ok(serviceCode.includes('await models.Prestamo.create(Object.fromEntries('), 'Must mutate target model inside transaction');
   // 6. Must NOT contain simulator flags _rejectRule or _failRule
   assert.equal(serviceCode.includes('_rejectRule'), false, '_rejectRule simulator must be removed');
   assert.equal(serviceCode.includes('_failRule'), false, '_failRule simulator must be removed');
@@ -62,6 +63,7 @@ test('Business Operations: Unexecutable rule blocks generation with diagnostic',
       name: 'Operacion Invalida',
       type: 'BUSINESS_LOGIC',
       targetEntity: 'Factura',
+      action: 'CREATE',
       route: '/api/operations/facturar',
       businessRules: [
         {
@@ -99,7 +101,7 @@ test('Business Operations: Operation without targetEntity or steps does NOT defa
   assert.throws(() => {
     generateOperationServiceFile(operations, entities);
   }, (err) => {
-    assert.equal(err.code, 'UNDEFINED_OPERATION_BEHAVIOR');
+    assert.equal(err.code, 'UNRESOLVED_OPERATION_CONTRACT');
     return true;
   }, 'Should throw UNDEFINED_OPERATION_BEHAVIOR instead of defaulting to EntidadTrampa');
 });

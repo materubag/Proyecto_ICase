@@ -1,0 +1,168 @@
+[
+  {
+    "targetId": "UC-12",
+    "details": [
+      "La decisión confirma desactivar mediante activo=false y que solo Administrador podrá hacerlo, pero no define en el contrato actual un comando independiente con su identificador de usuario y validación de no desactivar al último Administrador activo. Recomiendo definirlo como operación separada, conservando esa transición aprobada.",
+      "La recuperación asistida requiere campos para vencimiento y cambio obligatorio que no existen en USUARIO, además de emitir y aplicar la contraseña temporal. Recomiendo incorporar y aprobar los campos y contratos faltantes antes de generar escrituras."
+    ]
+  },
+  {
+    "targetId": "UC-14",
+    "details": [
+      "UC-14 requiere cuatro contratos independientes, con sus rutas y esquemas separados. Recomendación: incorporar esos comandos al catálogo como operaciones distintas antes de generar sus pasos ejecutables.",
+      "Las decisiones establecen un plazo mínimo de dos horas antes del inicio para cancelación y solicitud de reprogramación; el flujo debe además rechazar citas cuya atención ya comenzó, finalizadas o canceladas. Recomendación: incluir esas validaciones en los contratos ejecutables de cancelación y solicitud de reprogramación."
+    ]
+  },
+  {
+    "targetId": "UC-16",
+    "details": [
+      "La pantalla aprobada filtra vehículos por el cliente seleccionado y pide validar esa correspondencia en el servidor, pero el bodySchema cerrado no contiene clienteId. Con las entradas actuales el servidor puede comprobar que vehiculoId existe, pero no comparar el vehículo con un cliente seleccionado que no recibe. Recomendación: alinear el contrato de pantalla con una fuente confiable de la selección o aprobar un campo de entrada adicional antes de exigir esa comparación."
+    ]
+  },
+  {
+    "targetId": "UC-17",
+    "details": [
+      "El binding no puede expresar la comprobación de propiedad del vehículo a través de todos los registros CLIENTE vinculados al usuario autenticado."
+    ]
+  },
+  {
+    "targetId": "UC-18",
+    "details": [
+      "La ruta aprobada identifica la cotización con :cotizacionId, pero el esquema de salida solo representa bodySchema y no define parámetros de ruta. Los pasos requieren payload.cotizacionId.",
+      "La regla de aprobación parcial requiere que itemsAprobadosIds contenga al menos un ítem y menos que el total. El esquema puede imponer lista no vacía y unicidad, pero no expresar esta comparación dinámica entre la lista y los ítems consultados.",
+      "claveOperacion debe devolver el resultado anterior al repetir la misma clave y contenido, y rechazar con HTTP 409 una clave reutilizada con contenido distinto. Ninguna entidad aprobada contiene una clave de idempotencia ni existe una restricción que garantice esa conducta ante concurrencia.",
+      "El binding no especifica una forma de comprobar el resultado de UPDATE ni de confirmar que solo una solicitud concurrente cambió ENVIADA. La condición where restringe la transición, pero no garantiza por sí sola la respuesta idempotente aprobada ni la verificación de concurrencia.",
+      "El bodySchema no puede expresar que motivo sea obligatorio únicamente para RECHAZAR y APROBAR_PARCIALMENTE, ni que itemsAprobadosIds se acepte únicamente para APROBAR_PARCIALMENTE. El plan incorpora una comprobación declarativa del motivo; la restricción condicional de propiedades requiere soporte adicional."
+    ]
+  },
+  {
+    "targetId": "UC-19",
+    "details": [
+      "El comando aprobado identifica la cotización en la ruta /api/cotizaciones/:cotizacionId/decision, pero el esquema de salida disponible solo define bodySchema y las referencias de pasos no especifican acceso a parámetros de ruta.",
+      "AUDITORIA.detalle es STRING. No hay una serialización declarativa aprobada para incluir decisión, estados anterior y nuevo, identificadores y cambios de estado de los ítems, y motivo cuando corresponda.",
+      "La idempotencia requiere reconocer claveOperacion, comparar el contenido de una repetición y garantizar unicidad bajo concurrencia. No existe un modelo o restricción aprobados que almacenen esa clave para este comando.",
+      "La actualización de cotización y de varios COTIZACIONITEM debe comprobar la transición desde ENVIADA y evitar decisiones concurrentes. El contrato declarativo no especifica bloqueo, comparación-and-set ni cómo convertir una actualización que no afecta filas en HTTP 409.",
+      "La pantalla /cotizaciones-cliente no declara una acción para enviar la decisión, ni controles asociados a decision, itemsAprobadosIds, motivo y claveOperacion."
+    ]
+  },
+  {
+    "targetId": "UC-22",
+    "details": [
+      "No se proporcionó el contenido de la matriz aprobada de pares rol-permiso.",
+      "La pantalla /seguridad/roles-permisos y su acción asignar-permiso están aprobadas en la decisión confirmada, pero no aparecen en el catálogo de pantallas proporcionado.",
+      "La decisión confirma registrar quién realizó el cambio y cuándo, pero el mapeo completo de AUDITORIA para esta asociación no está aprobado.",
+      "La decisión aprueba unicidad compuesta e idempotencia concurrente, pero el modelo suministrado no declara la restricción única sobre ROLPERMISO.rolId y ROLPERMISO.permisoId."
+    ]
+  },
+  {
+    "targetId": "UC-23",
+    "details": [
+      "UC-23 debe dividirse en contratos de operación independientes para proponer alta, proponer modificación y resolver propuesta. Definir operationId, ruta y bodySchema de cada comando; no encadenarlos en una misma operación.",
+      "Precisar cómo se almacenará la huella o versión del OBDCODIGO original necesaria para detectar cambios concurrentes. La decisión exige este control, pero no define un atributo aprobado que lo persista.",
+      "La regla confirmada de alta define codigo y descripcionCaso obligatorios; sintoma, causa, solucion y componente opcionales; casoResuelto con valor inicial false, y casoResuelto=true requiere solucion no vacía. Asegurar que el contrato del comando de propuesta de alta incorpore estas restricciones y que datosPropuestos no admita propiedades adicionales.",
+      "La decisión asigna proponer a Mecánico y resolver a Administrador. Expresar esos permisos en contratos separados para evitar que authorizedRoles conjunto conceda a ambos roles las acciones del otro."
+    ]
+  },
+  {
+    "targetId": "UC-27",
+    "details": [
+      "El catálogo muestra fechaRegistro sin defaultValue, aunque la decisión confirmada aprueba asignarla mediante un default persistente del servidor.",
+      "La pantalla /reparaciones declara una acción para UC-02 con un contrato distinto; no declara una acción propia para UC-27."
+    ]
+  },
+  {
+    "targetId": "UC-33",
+    "details": [
+      "UC-33 no puede ejecutar conjuntamente adjuntar evidencia y registrar fallas: la decisión confirmada requiere comandos separados y reutilizar UC-08 y UC-06.",
+      "La autorización aprobada requiere comprobar que el Mecánico está asignado a la orden a la que pertenece el diagnóstico. El catálogo no establece una relación explícita entre DIAGNOSTICO y ORDENMECANICO u ORDEN_TRABAJO.",
+      "La rama de evidencia aprobó EVIDENCIAMULTIMEDIA.archivoId, su restricción única y una fechaCarga asignada por el servidor, pero archivoId no aparece en el catálogo actual del modelo. La relación con el archivo privado tampoco está representada allí.",
+      "La pantalla /diagnosticos aún no declara en el contrato proporcionado los controles y acciones separados aprobados para adjuntar-evidencia y registrar-fallas."
+    ]
+  },
+  {
+    "targetId": "UC-46",
+    "details": [
+      "No existe PROPUESTAOBDCODIGO en el catálogo de entidades aprobado, por lo que no se pueden construir pasos CREATE para guardar una propuesta sin modificar OBDCODIGO.",
+      "La decisión de conocimiento aprobada indica que Mecánico envía propuestas y Administrador las resuelve, mientras UC-46 conserva authorizedRoles=[Administrador].",
+      "Las reglas aprobadas requieren aplicar trim a codigo y descripcionCaso, inicializar casoResuelto en false y exigir solucion no vacía cuando casoResuelto sea true. El esquema de entrada por sí solo no implementa esas reglas condicionales ni el default.",
+      "No hay un flujo ejecutable de UC-23 disponible en el catálogo para resolver una propuesta y publicar el código mediante CREATE o UPDATE.",
+      "La pantalla /conocimiento vincula su acción de alta directa a op_obd_codigos_create y todavía no declara una acción de propuesta asociada con UC-46 o UC-23."
+    ]
+  },
+  {
+    "targetId": "UC-48",
+    "details": [
+      "La decisión exige identificar cada ciclo y evitar duplicados concurrentes con una restricción única sobre programacionId, tipoAlerta y cicloId. ALERTA dispone de programacionId, pero no de cicloId ni de esa restricción única; PROGRAMACIONMANTENIMIENTO tampoco declara un identificador de ciclo.",
+      "La regla confirmada compara el reloj del servidor en America/Guayaquil con fechaProxima menos 7 días. Aunque el binding tiene referencia al reloj y cálculos de fecha, no se especifica un cálculo de fecha que acepte explícitamente esa zona horaria para esta comparación.",
+      "ALERTA.mensaje debe identificar la placa del vehículo y el umbral que activó el aviso. El binding no ofrece generación de texto mediante una plantilla o interpolación ejecutable.",
+      "La decisión establece ejecución interna automática, no ejecución por un rol ni un endpoint público para Mecánico. El catálogo de roles aprobados no incluye una identidad técnica.",
+      "Con las limitaciones anteriores no se puede verificar una ejecución exitosa que genere y persista la alerta según los criterios aprobados. No se proporcionó una pantalla o acción de usuario para esta ejecución interna."
+    ]
+  },
+  {
+    "targetId": "22c0b6de-02b7-4aba-93fa-b8e1baf264b4",
+    "details": [
+      "El esquema de UC-20 incluye el campo opcional direccion, pero no existe un control HTML para capturarlo.",
+      "La ficha muestra datos preexistentes y parece editable, pero UC-20 solo respalda CREATE; no hay una operación UPDATE aprobada para guardar cambios.",
+      "La pantalla presenta un directorio, pero no hay una operación GET aprobada para cargarlo. La búsqueda y los controles de navegación o filtrado no se vinculan al envío.",
+      "La narrativa de UC-20 menciona al rol Cliente, mientras que los roles y permisos aprobados autorizan Recepción; se usa Recepción para esta operación."
+    ]
+  },
+  {
+    "targetId": "97c0f666-cc34-465e-b8ee-e29badc7c9a6",
+    "details": [
+      "No hay controles para los campos obligatorios clienteId y placa. El input índice 0 es una búsqueda y no se conecta al envío.",
+      "No hay un botón de guardado en el HTML. El botón índice 8 está aprobado para abrir el formulario, no para ejecutar UC-24; no se conecta como confirmación.",
+      "El botón índice 3 dice «Actualizar expediente», pero UC-24 registra vehículos y no existe una operación de consulta de expediente en el catálogo proporcionado.",
+      "El contrato autoriza la operación para Recepción, mientras que la descripción narrativa de UC-24 menciona al rol Cliente."
+    ]
+  },
+  {
+    "targetId": "138d5557-7010-4cb6-ac58-4bf684f57b04",
+    "details": [
+      "Los radios envían nombres de roles como texto, pero rolId requiere un entero. Aunque existe el origen de datos /api/roles, no tiene una operación de consulta aprobada vinculada ni se especifica la correspondencia entre las opciones y sus IDs reales.",
+      "La pantalla muestra opciones para Cliente, Mecánico, Recepción y Administrador, pero la operación solo está autorizada para Administrador y no se especifica la política que determina cuáles roles puede asignar."
+    ]
+  },
+  {
+    "targetId": "372b918e-550f-43c1-ae4b-5d61da7d61e4",
+    "details": [
+      "El bodySchema requiere vehiculoId y nuevoKilometraje, pero no hay controles adecuados para ninguno: el input 0 es una búsqueda y los selectores 0 y 1 son filtros. No se conectan porque reutilizarlos enviaría datos con un significado distinto.",
+      "Las filas y sus botones no exponen un control seleccionable que permita obtener el identificador real del vehículo para vehiculoId.",
+      "La operación está autorizada para Cliente, mientras que el HTML muestra una identidad de Asesor de Recepción; no se puede determinar con el HTML qué rol representa la sesión."
+    ]
+  },
+  {
+    "targetId": "58d09917-605e-4bdd-a154-6eb47dba9b38",
+    "details": [
+      "UC-17 requiere vehiculoId, pero el HTML no tiene un control que lo capture. Las filas actuales representan clientes y no muestran identificadores de vehículos; por ello no se puede vincular el campo requerido ni confirmar que los botones de fila proporcionen el vehiculoId real.",
+      "La decisión confirmada establece que la pantalla debe listar vehículos propios y que cada acción de fila consulta ese vehículo, pero ese cambio no está reflejado en el HTML existente. Los botones «Ver Ficha» se vinculan a la consulta según esa decisión, pendiente de que las filas expongan el identificador real del vehículo.",
+      "El distintivo del HTML indica «Recepción», mientras que UC-17 autoriza únicamente a «Cliente». La decisión confirmada destina esta pantalla al rol Cliente, pero la interfaz no refleja ese rol.",
+      "El botón «Guardar cliente» (button índice 5) no se conecta: registra un cliente y no corresponde a la consulta de progreso."
+    ]
+  },
+  {
+    "targetId": "46e3981e-a9f3-4dc9-894a-7b112fed3af1",
+    "details": [
+      "No existe un control input, select, textarea o button para vehiculoId, campo requerido por el bodySchema. El vehículo visible es contenido estático y el botón «Cambiar» está aprobado para cambiar el cliente, no para seleccionar el vehículo.",
+      "El control input 0 presenta kilometraje con formato y unidades («45.820 km») y es de tipo text. No puede determinarse que envíe el entero sin formato requerido por kilometraje.",
+      "El botón «Tomar foto» (button 12) puede iniciar la carga de evidencias, pero el HTML no contiene un control de archivo ni expone los tokens necesarios para completar el campo evidencias.",
+      "No hay controles para los campos opcionales citaId y observaciones."
+    ]
+  },
+  {
+    "targetId": "1db063c9-8594-4bab-a1ce-0aefb10bdfe9",
+    "details": [
+      "La operación requiere fechaDesde y fechaHasta, pero el HTML no contiene controles para esos campos. No se asignan el input 0 (búsqueda) ni el select 0 (estado de órdenes), porque tienen otros propósitos. Los controles requeridos quedan pendientes de incorporar antes de poder enviar una solicitud completa.",
+      "La decisión confirmada sitúa UC-04 en /indicadores y reserva /reportes para auditoría, mientras que esta pantalla figura en /reportes pero muestra el tablero. Se vincula el botón principal a UC-04 por su correspondencia con «Filtrar período», pero la ruta y el contrato de pantalla deben aclararse."
+    ]
+  },
+  {
+    "targetId": "36c0afe4-626f-4966-9f1d-7520cbcdac16",
+    "details": [
+      "El esquema de UC-01-crear-venta requiere items, incluidos repuestoId y cantidad. El control de cantidad permite vincular items[].cantidad, pero el HTML no contiene un control que exponga el repuestoId real: repuesto-search es un buscador de texto y los repuestos de la tabla son contenido estático.",
+      "La decisión confirmada exige clienteId, pero el esquema de UC-01-crear-venta lo declara opcional. Además, cliente-input muestra texto y no permite verificar que se conserve el identificador real del cliente seleccionado.",
+      "El botón principal dice «Cobrar venta», pero UC-01-crear-venta crea una venta BORRADOR y no registra un cobro. Confirmar la venta requiere UC-01-confirmar-venta y un ventaId que esta pantalla no captura. El botón queda vinculado a la creación, no a un cobro ni a la confirmación final."
+    ]
+  }
+]

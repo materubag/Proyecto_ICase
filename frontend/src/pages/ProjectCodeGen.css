@@ -1,0 +1,56 @@
+.codegen-page {
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+  height: 100%;
+  min-height: 0;
+  min-width: 0;
+  overflow-y: auto;
+  overflow-x: hidden;
+  scrollbar-gutter: stable;
+  background: var(--surface);
+  overflow-wrap: anywhere;
+}
+
+/* Keep long clarification forms in the page's scrollable flow. */
+.codegen-page > * {
+  flex-shrink: 0;
+  min-width: 0;
+}
+
+.codegen-requirements .badge {
+  max-width: 100%;
+  white-space: normal;
+  overflow-wrap: anywhere;
+}
+
+.codegen-page .btn {
+  max-width: 100%;
+  white-space: normal;
+}
+
+/* Preserve the explorer's own scrolling without collapsing it below the form. */
+.codegen-workspace {
+  display: flex;
+  flex: 1 0 420px;
+  min-height: 420px;
+  overflow: hidden;
+}
+
+@media (max-width: 640px) {
+  .codegen-workspace {
+    flex-direction: column;
+    flex: 0 0 640px;
+  }
+
+  .codegen-workspace > :first-child {
+    width: 100% !important;
+    min-width: 0 !important;
+    height: 200px;
+    flex-shrink: 0;
+  }
+
+  .codegen-workspace > :last-child {
+    min-height: 0;
+  }
+}

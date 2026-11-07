@@ -12,7 +12,9 @@ async function run() {
   if (!result.files.length || !result.reviewOnly || result.ready) throw new Error('No se produjo una exportación de revisión válida');
   const root = path.resolve(__dirname, '../../.verification');
   fs.mkdirSync(root, { recursive: true });
-  const directory = fs.mkdtempSync(path.join(root, 'autron5-review-'));
+  const requested = process.argv.indexOf('--directory');
+  const directory = requested < 0 ? fs.mkdtempSync(path.join(root, 'autron5-review-')) : path.resolve(process.argv[requested + 1] || '');
+  if (!directory.startsWith(root + path.sep) || !path.basename(directory).startsWith('autron5-review-')) throw new Error('INVALID_REGENERATION_DIRECTORY');
   for (const file of result.files) {
     const target = path.resolve(directory, file.path);
     if (!target.startsWith(directory + path.sep)) throw new Error('Ruta de exportación inválida');
@@ -20,10 +22,9 @@ async function run() {
     fs.writeFileSync(target, file.content);
   }
   const zip = directory + '.zip';
-  fs.writeFileSync(zip, createZipBuffer(result.files));
-  const report = { directory, zip, ready: false, reviewOnly: true, files: result.files.length, blockers: result.diagnostics.errors };
+  const report = { directory, zip: null, ready: false, reviewOnly: true, files: result.files.length, generatedFilePaths: result.files.map(f => f.path), blockers: result.diagnostics.errors };
   fs.writeFileSync(path.join(root, 'autron5-last-export.json'), JSON.stringify(report, null, 2));
-  console.log(JSON.stringify({ directory, zip, ready: false, files: result.files.length, blockers: report.blockers.length }));
+  console.log(JSON.stringify({ directory, zip: report.zip, ready: false, files: result.files.length, blockers: report.blockers.length }));
 }
 
 run().catch(error => { console.error(error); process.exitCode = 1; }).finally(() => prisma.$disconnect());

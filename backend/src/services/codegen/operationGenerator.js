@@ -6,112 +6,16 @@
  */
 
 const { toCamelCase, toPascalCase, deriveNaming } = require('./typeMapper');
+const { executionProblems } = require('./executableContract');
 
 function evaluateSafeCondition(rule) {
-  const ruleCode = rule.code || rule.id || 'RULE';
-  const ruleDesc = (rule.description || rule.name || ruleCode).replace(/['"\\]/g, '\\$&');
-
-  // Case 1: Structured condition object { field, operator, value }
-  if (rule.field && rule.operator) {
-    const op = String(rule.operator).toLowerCase();
-    const fld = `payload.${rule.field}`;
-    const val = JSON.stringify(rule.value !== undefined ? rule.value : null);
-
-    let expr = '';
-    switch (op) {
-      case 'eq':
-      case '==':
-      case '===':
-        expr = `${fld} === ${val}`;
-        break;
-      case 'neq':
-      case '!=':
-      case '!==':
-        expr = `${fld} !== ${val}`;
-        break;
-      case 'gt':
-      case '>':
-        expr = `${fld} > ${val}`;
-        break;
-      case 'gte':
-      case '>=':
-        expr = `${fld} >= ${val}`;
-        break;
-      case 'lt':
-      case '<':
-        expr = `${fld} < ${val}`;
-        break;
-      case 'lte':
-      case '<=':
-        expr = `${fld} <= ${val}`;
-        break;
-      case 'in':
-        expr = `Array.isArray(${val}) && ${val}.includes(${fld})`;
-        break;
-      case 'not_in':
-        expr = `Array.isArray(${val}) && !${val}.includes(${fld})`;
-        break;
-      case 'not_empty':
-        expr = `${fld} !== undefined && ${fld} !== null && ${fld} !== ''`;
-        break;
-      default:
-        throw new Error(`Operador no soportado '${rule.operator}' en regla ${ruleCode}`);
-    }
-
-    return `      // Regla estructurada: ${ruleDesc} (${ruleCode})
-      if (!(${expr})) {
-        const err = new Error('Violación de regla de negocio (${ruleCode}): ${ruleDesc}');
-        err.statusCode = 422;
-        err.code = 'BUSINESS_RULE_VIOLATION';
-        err.rule = '${ruleCode}';
-        throw err;
-      }`;
-  }
-
-  // Case 2: Field with min, max or enum constraints
-  if (rule.field && (rule.min !== undefined || rule.max !== undefined || rule.enum)) {
-    const parts = [`payload.${rule.field} !== undefined && payload.${rule.field} !== null`];
-    if (rule.min !== undefined) parts.push(`payload.${rule.field} >= ${JSON.stringify(rule.min)}`);
-    if (rule.max !== undefined) parts.push(`payload.${rule.field} <= ${JSON.stringify(rule.max)}`);
-    if (rule.enum) parts.push(`${JSON.stringify(rule.enum)}.includes(payload.${rule.field})`);
-
-    return `      // Regla de campo: ${rule.field} (${ruleDesc})
-      if (!(${parts.join(' && ')})) {
-        const err = new Error('Violación de regla de negocio (${ruleCode}): ${ruleDesc}');
-        err.statusCode = 422;
-        err.code = 'BUSINESS_RULE_VIOLATION';
-        err.rule = '${ruleCode}';
-        throw err;
-      }`;
-  }
-
-  // Case 3: Explicit safe condition expression (only safe payload identifiers, no eval, assignments or globals)
-  if (rule.condition && typeof rule.condition === 'string') {
-    const rawCond = rule.condition.trim();
-    const isSafe = /^[\s\w.><=!&|()+\-*/%"'0-9]+$/.test(rawCond) &&
-      !/(eval|Function|require|process|global|window|prototype|__proto__|constructor|import|;\s*)/.test(rawCond);
-
-    if (!isSafe) {
-      const err = new Error(`Expresión de condición no permitida o insegura en regla '${ruleCode}': '${rawCond}'`);
-      err.code = 'UNSAFE_RULE_CONDITION';
-      throw err;
-    }
-
-    return `      // Regla: ${ruleDesc} (${ruleCode})
-      if (!(${rawCond})) {
-        const err = new Error('Violación de regla de negocio: ${ruleDesc}');
-        err.statusCode = 422;
-        err.code = 'BUSINESS_RULE_VIOLATION';
-        err.rule = '${ruleCode}';
-        throw err;
-      }`;
-  }
-
-  // If none of the executable condition formats are provided, fail generation
-  const err = new Error(`La regla de negocio '${ruleCode}' ('${ruleDesc}') no tiene una definición estructurada ejecutable.`);
-  err.code = 'UNEXECUTABLE_BUSINESS_RULE';
-  err.ruleCode = ruleCode;
-  throw err;
+  const code = rule.code || rule.id || 'RULE';
+  if (!rule.field || !/^[A-Za-z_][A-Za-z0-9_]*$/.test(rule.field) || typeof rule.condition === 'string') throw Object.assign(new Error('Regla declarativa requerida: ' + code), { code: 'UNEXECUTABLE_BUSINESS_RULE' });
+  const operators = { '==':'eq', '===':'eq', '!=':'neq', '!==':'neq', '>':'gt', '>=':'gte', '<':'lt', '<=':'lte' };
+  const predicates = rule.operator ? [{ left: { $ref: 'payload.' + rule.field }, operator: operators[rule.operator] || rule.operator, right: rule.value }]
+    : [ ...(rule.min !== undefined ? [{ operator: 'gte', right: rule.min }] : []), ...(rule.max !== undefined ? [{ operator: 'lte', right: rule.max }] : []), ...(rule.enum ? [{ operator: 'in', right: rule.enum }] : []) ].map(p => ({ ...p, left: { $ref: 'payload.' + rule.field } }));
+  if (!predicates.length) throw Object.assign(new Error('Regla sin predicado: ' + code), { code: 'UNEXECUTABLE_BUSINESS_RULE' });
+  return predicates.map(p => '      if (!require("./operation.runtime").evaluatePredicate(' + JSON.stringify(p) + ', { payload, user })) throw Object.assign(new Error(' + JSON.stringify(rule.description || code) + '), { statusCode: 422, code: "BUSINESS_RULE_VIOLATION" });').join('\n');
 }
 
 function buildOperationNameMap(operations = []) {
@@ -142,6 +46,11 @@ function generateOperationServiceFile(operations = [], entities = [], options = 
     
     // Explicit target entity without defaulting to entities[0]
     const targetModel = op.targetEntity || op.entity || null;
+    const problems = executionProblems(op, entities);
+    if (problems.length) {
+      if (!options.reviewOnly) throw Object.assign(new Error(problems.join(' ')), { code: 'UNRESOLVED_OPERATION_CONTRACT', operationId: op.operationId });
+      return '  async ' + fnName + '() { throw Object.assign(new Error("Contrato pendiente de resolución"), { statusCode: 501, code: "UNRESOLVED_OPERATION" }); },';
+    }
 
     if (options.reviewOnly && ((op.unresolved || []).length || (!targetModel && (!op.steps || op.steps.length === 0)))) {
       return '  async ' + fnName + '() { const err = new Error(' + JSON.stringify('UNRESOLVED: ' + op.operationId) + '); err.statusCode = 501; err.code = "UNRESOLVED_OPERATION"; throw err; },';
@@ -158,29 +67,31 @@ function generateOperationServiceFile(operations = [], entities = [], options = 
 
     // Deterministic mutation logic based on op.action or op.steps
     let mutationLogic = '';
-    const effectiveAction = (op.action || (op.method === 'POST' ? 'CREATE' : op.method === 'DELETE' ? 'DELETE' : (op.method === 'PUT' || op.method === 'PATCH') ? 'UPDATE' : '')).toUpperCase();
+    const effectiveAction = (op.action || '').toUpperCase();
 
     // Resolve primary key for target entity
     const targetPk = (entities.find(e => e.modelName === targetModel || e.name === targetModel)?.primaryKey?.fieldName) || 'id';
+    const targetFields = (entities.find(e => e.modelName === targetModel || e.name === targetModel)?.attributes || []).filter(a => !a.isPk && !a.readOnly).map(a => a.fieldName);
+    const projectedPayload = 'Object.fromEntries(' + JSON.stringify(targetFields) + '.filter(key => payload[key] !== undefined).map(key => [key, payload[key]]))';
 
     if (op.bindingVersion === 2) {
       mutationLogic = '      const { executeSteps } = require("./operation.runtime");\n      const record = await executeSteps(models, ' + JSON.stringify(op) + ', payload, user, t);';
     } else if (op.steps && Array.isArray(op.steps) && op.steps.length > 0) {
       const stepResults = [];
       const stepLines = op.steps.map((step, sIdx) => {
-        const stepNum = step.step || (sIdx + 1);
+        const stepNum = sIdx + 1;
         const stepEntity = step.entity || targetModel;
         const action = (step.action || '').toUpperCase();
         const stepPk = (entities.find(e => e.modelName === stepEntity || e.name === stepEntity)?.primaryKey?.fieldName) || 'id';
 
         if (action === 'CREATE') {
           stepResults.push(`stepResult_${stepNum}`);
-          const createData = step.fields || step.data ? JSON.stringify(step.fields || step.data) : 'payload';
+          const createData = JSON.stringify(step.fields || step.data || {});
           return `      // Paso ${stepNum}: Crear ${stepEntity}\n      const stepResult_${stepNum} = await models.${stepEntity}.create(${createData}, { transaction: t });`;
         }
         if (action === 'UPDATE') {
           stepResults.push(`stepResult_${stepNum}`);
-          const updateData = step.fields || step.data ? JSON.stringify(step.fields || step.data) : 'payload';
+          const updateData = JSON.stringify(step.fields || step.data || {});
           return `      // Paso ${stepNum}: Actualizar ${stepEntity}\n      const stepResult_${stepNum} = await models.${stepEntity}.update(${updateData}, { where: { ${stepPk}: payload.${stepPk} || payload.id }, transaction: t });`;
         }
         if (action === 'DELETE') {
@@ -209,17 +120,9 @@ function generateOperationServiceFile(operations = [], entities = [], options = 
           const queryLimit = step.limit ? `, limit: ${step.limit}` : '';
           return `      // Paso ${stepNum}: Consultar ${stepEntity}\n      const stepResult_${stepNum} = await models.${stepEntity}.findAll({ where: ${filterObj}${queryLimit}, transaction: t });`;
         }
-        if (action === 'CALCULATION') {
+        if (action === 'VALIDATION' && step.condition && typeof step.condition === 'object') {
           stepResults.push(`stepResult_${stepNum}`);
-          const targetFld = step.targetField || 'calculatedValue';
-          const rawFormula = String(step.formula || '0').replace(/[^a-zA-Z0-9_+\-*/.() ]/g, '');
-          return `      // Paso ${stepNum}: Cálculo de ${targetFld}\n      const stepResult_${stepNum} = Number(${rawFormula});\n      payload.${targetFld} = stepResult_${stepNum};`;
-        }
-        if (action === 'VALIDATION') {
-          stepResults.push(`stepResult_${stepNum}`);
-          const conditionExpr = step.condition || 'true';
-          const errorMsg = (step.errorMessage || 'Validación de paso no satisfecha').replace(/['"\\]/g, '\\$&');
-          return `      // Paso ${stepNum}: Validación de paso\n      if (!(${conditionExpr})) {\n        const err = new Error('${errorMsg}');\n        err.statusCode = 422;\n        err.code = 'VALIDATION_FAILED';\n        throw err;\n      }\n      const stepResult_${stepNum} = true;`;
+          return '      if (!require("./operation.runtime").evaluatePredicate(' + JSON.stringify(step.condition) + ', { payload, user })) throw Object.assign(new Error(' + JSON.stringify(step.errorMessage || 'Validaci?n no satisfecha') + '), { statusCode: 422, code: "VALIDATION_FAILED" });\n      const stepResult_' + stepNum + ' = true;';
         }
 
         // Unknown step without executable action - never emit comment-only steps
@@ -232,7 +135,7 @@ function generateOperationServiceFile(operations = [], entities = [], options = 
       mutationLogic = `${stepLines}\n      const record = ${stepResults[stepResults.length - 1] || '{ stepsExecuted: ' + op.steps.length + ' }'};`;
     } else if (effectiveAction === 'CREATE' && targetModel) {
       mutationLogic = `      // Creación explícita en modelo ${targetModel} dentro de transacción
-      const record = await models.${targetModel}.create(payload, { transaction: t });`;
+      const record = await models.${targetModel}.create(${projectedPayload}, { transaction: t });`;
     } else if (effectiveAction === 'UPDATE' && targetModel) {
       mutationLogic = `      // Actualización explícita en modelo ${targetModel} dentro de transacción
       const targetId = payload.${targetPk} || payload.id;
@@ -249,7 +152,7 @@ function generateOperationServiceFile(operations = [], entities = [], options = 
         err.code = 'NOT_FOUND';
         throw err;
       }
-      await record.update(payload, { transaction: t });`;
+      await record.update(${projectedPayload}, { transaction: t });`;
     } else if (effectiveAction === 'DELETE' && targetModel) {
       mutationLogic = `      // Eliminación explícita en modelo ${targetModel} dentro de transacción
       const targetId = payload.${targetPk} || payload.id;
@@ -345,7 +248,7 @@ function generateOperationControllerFile(operations = []) {
       });
     } catch (error) {
       console.error('Error en operación ${fnName}:', error.code || error.name || 'OPERATION_ERROR');
-      return res.status(error.statusCode || 400).json({
+      return res.status(error.statusCode || (error.name === 'SequelizeUniqueConstraintError' ? 409 : 400)).json({
         success: false,
         error: error.code || 'OPERATION_ERROR',
         code: error.code || 'OPERATION_ERROR',
@@ -376,6 +279,7 @@ function generateOperationRoutesFile(operations = [], security = {}) {
   const nameMap = buildOperationNameMap(operations);
 
   const routeLines = operations.map((op, idx) => {
+    if (op.invocation === 'SYSTEM') return '';
     const fnName = nameMap.get(op.operationId || idx);
     const method = (op.method || 'POST').toLowerCase();
     const endpoint = op.route.replace(/^\/api\/operations\/?/, '/').replace(/^\/?/, '/');
@@ -383,8 +287,6 @@ function generateOperationRoutesFile(operations = [], security = {}) {
     const middlewares = [];
     if (hasAuth) {
       const roles = [...(op.authorizedRoles || [])];
-      const adminRole = (security.roles || []).find(r => /admin/i.test(r));
-      if (adminRole && roles.length && !roles.includes(adminRole)) roles.push(adminRole);
       if (roles.length > 0) {
         const rolesList = roles.map(r => `'${r}'`).join(', ');
         middlewares.push(`authenticateToken`, `authorizeRoles(${rolesList})`);

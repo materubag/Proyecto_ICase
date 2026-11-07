@@ -1,221 +1,69 @@
-/**
- * Controller Generator for Express + Sequelize
- * Produces functional, production-ready REST controllers with input sanitization,
- * explicit field projection and standard JSON envelopes.
- */
-
 const { buildFieldContract, isPasswordField } = require('./screenContract');
-const { toPascalCase, toCamelCase, deriveNaming, normalizeAttributes } = require('./typeMapper');
+const { deriveNaming, toOpenApiType } = require('./typeMapper');
 
 function generateControllerFile(entity) {
   const naming = deriveNaming(entity.name);
-  const modelName = naming.modelName;
-  const varName = naming.paramName;
-  const normalizedAttrs = normalizeAttributes(entity.attributes || []);
-  const fieldContract = buildFieldContract(entity);
-  const allowedFields = fieldContract.filter(a => a.mode === 'editable').map(a => a.fieldName);
-  const passwordField = fieldContract.find(a => isPasswordField(a.fieldName))?.fieldName
-    || normalizedAttrs.find(a => isPasswordField(a.fieldName))?.fieldName
-    || null;
-  const passwordBlock = passwordField ? `
-const bcrypt = require('bcryptjs');
-const PASSWORD_FIELD = ${JSON.stringify(passwordField)};
-async function applyPassword(body, target, required) {
-  const plain = body.password ?? body.contrasena ?? body.contraseña ?? body.clave ?? body[PASSWORD_FIELD];
-  if (plain === undefined || plain === null || plain === '') {
-    if (required) {
-      const err = new Error('La contraseña es obligatoria');
-      err.statusCode = 400;
-      throw err;
-    }
-    return;
+  const fields = buildFieldContract(entity).filter(f => f.mode === 'editable');
+  const properties = Object.fromEntries(fields.map(f => [f.fieldName, {
+    ...toOpenApiType(f.dataType || f.type), nullable: f.allowNull === true,
+    ...(f.required && /STRING|TEXT/.test(f.dataType || f.type) ? { minLength: 1 } : {}),
+    ...Object.fromEntries(['minimum','maximum','minLength','maxLength','enum','format'].filter(k => f[k] !== undefined).map(k => [k, f[k]]))
+  }]));
+  const schema = { type: 'object', properties, additionalProperties: false, required: fields.filter(f => f.required).map(f => f.fieldName) };
+  const password = fields.find(f => isPasswordField(f.fieldName))?.fieldName;
+  const pk = entity.primaryKey?.fieldName || 'id';
+  return 'const models = require("../models");\n'
+    + 'const { scopeFor, scopedWhere, inputFor, sanitize } = require("../services/crud.runtime");\n'
+    + 'const model = models[' + JSON.stringify(naming.modelName) + '];\n'
+    + 'const schema = ' + JSON.stringify(schema) + ';\n'
+    + 'const pk = ' + JSON.stringify(pk) + ';\n'
+    + 'const passwordField = ' + JSON.stringify(password || null) + ';\n'
+    + `
+function respondError(res, error) {
+  const status = error.statusCode || (/Sequelize.*(Validation|Constraint)/.test(error.name) ? 422 : 500);
+  return res.status(status).json({ success: false, code: error.code || (status === 500 ? 'INTERNAL_ERROR' : 'INVALID_INPUT'), message: status === 500 ? 'Error interno' : error.message });
+}
+async function prepare(req, scope, updating) {
+  const declared = req.crudContract?.input?.bodySchema || {};
+  const properties = Object.fromEntries(Object.entries(schema.properties).map(([key, value]) => [key, { ...value, ...declared.properties?.[key] }]));
+  const data = inputFor(req.body, { ...schema, ...declared, properties, additionalProperties: false, required: [...new Set([...(schema.required || []), ...(declared.required || [])])] }, scope, updating);
+  if (passwordField && Object.hasOwn(data, passwordField)) {
+    if (typeof data[passwordField] !== 'string' || /^\\$2[aby]\\$/.test(data[passwordField])) throw Object.assign(new Error('INVALID_PASSWORD'), { statusCode: 400 });
+    data[passwordField] = await require('bcryptjs').hash(data[passwordField], 12);
   }
-  target[PASSWORD_FIELD] = /^\\$2[aby]\\$/.test(String(plain)) ? String(plain) : await bcrypt.hash(String(plain), 10);
+  return data;
 }
-` : '';
-
-  return `/**
- * Controlador REST para ${modelName}
- * Generado automáticamente por ICASE Studio
- */
-
-const { ${modelName} } = require('../models');
-${passwordBlock}function sanitize(value) {
-  if (value?.toJSON) value = value.toJSON();
-  if (Array.isArray(value)) return value.map(sanitize);
-  if (value && typeof value === 'object') return Object.fromEntries(Object.entries(value).filter(([key]) => !['password', 'passwordHash', 'password_hash', 'contrasena', 'token', 'salt'].includes(key)).map(([key, item]) => [key, sanitize(item)]));
-  return value;
-}
-
-/**
- * Obtener todos los registros de ${modelName}
- * GET /api/${naming.endpoint}
- */
 exports.getAll = async (req, res) => {
   try {
-    let items;
-    try {
-      items = await ${modelName}.findAll({ include: { all: true, nested: false } });
-    } catch (e) {
-      items = await ${modelName}.findAll();
-    }
-    return res.status(200).json({
-      success: true,
-      count: items.length,
-      data: sanitize(items)
-    });
-  } catch (error) {
-    console.error('Error al obtener ${modelName}:', error);
-    return res.status(500).json({
-      success: false,
-      message: 'Error interno del servidor al consultar ${modelName}',
-      error: error.message
-    });
-  }
+    const scope = await scopeFor(models, req.crudContract, req.user);
+    const rows = await model.findAll({ where: scopedWhere(scope) });
+    return res.json({ success: true, count: rows.length, data: sanitize(rows, [passwordField]) });
+  } catch (error) { return respondError(res, error); }
 };
-
-/**
- * Obtener un registro de ${modelName} por su ID
- * GET /api/${naming.endpoint}/:id
- */
 exports.getById = async (req, res) => {
   try {
-    const { id } = req.params;
-    let item;
-    try {
-      item = await ${modelName}.findByPk(id, { include: { all: true, nested: false } });
-    } catch (e) {
-      item = await ${modelName}.findByPk(id);
-    }
-
-    if (!item) {
-      return res.status(404).json({
-        success: false,
-        message: \`${modelName} con ID \${id} no encontrado\`
-      });
-    }
-
-    return res.status(200).json({
-      success: true,
-      data: sanitize(item)
-    });
-  } catch (error) {
-    console.error('Error al obtener ${modelName} por ID:', error);
-    return res.status(500).json({
-      success: false,
-      message: 'Error interno al consultar registro',
-      error: error.message
-    });
-  }
+    const scope = await scopeFor(models, req.crudContract, req.user);
+    const row = await model.findOne({ where: scopedWhere(scope, pk, req.params.id) });
+    if (!row) return res.status(404).json({ code: 'RECORD_NOT_FOUND' });
+    return res.json({ success: true, data: sanitize(row, [passwordField]) });
+  } catch (error) { return respondError(res, error); }
 };
-
-/**
- * Crear un nuevo registro de ${modelName}
- * POST /api/${naming.endpoint}
- */
-exports.create = async (req, res) => {
+for (const action of ['create', 'update', 'delete']) exports[action] = async (req, res) => {
   try {
-    // Sanitización: Permitir únicamente campos declarados en la entidad
-    const allowed = ${JSON.stringify(allowedFields.filter(f => !isPasswordField(f)))};
-    const dataToCreate = {};
-    for (const key of allowed) {
-      const value = req.body[key];
-      if (value !== undefined && value !== '') dataToCreate[key] = value;
-    }
-    if (dataToCreate.fechaCreacion === undefined && allowed.includes('fechaCreacion')) dataToCreate.fechaCreacion = new Date();
-    if (dataToCreate.activo === undefined && allowed.includes('activo')) dataToCreate.activo = true;
-${passwordField ? '    await applyPassword(req.body, dataToCreate, true);\n' : ''}
-    const newItem = await ${modelName}.create(dataToCreate);
-    return res.status(201).json({
-      success: true,
-      message: '${modelName} creado exitosamente',
-      data: sanitize(newItem)
+    const result = await models.sequelize.transaction(async transaction => {
+      const scope = await scopeFor(models, req.crudContract, req.user, transaction);
+      let row;
+      if (action !== 'create') {
+        row = await model.findOne({ where: scopedWhere(scope, pk, req.params.id), transaction, lock: transaction.LOCK.UPDATE });
+        if (!row) throw Object.assign(new Error('RECORD_NOT_FOUND'), { statusCode: 404, code: 'RECORD_NOT_FOUND' });
+      }
+      if (action === 'delete') { await row.destroy({ transaction }); return null; }
+      const data = await prepare(req, scope, action === 'update');
+      return action === 'create' ? model.create(data, { transaction }) : row.update(data, { transaction });
     });
-  } catch (error) {
-    console.error('Error al crear ${modelName}:', error);
-    return res.status(400).json({
-      success: false,
-      message: 'Error de validación al crear ${modelName}',
-      error: error.message
-    });
-  }
-};
-
-/**
- * Actualizar un registro existente de ${modelName}
- * PUT /api/${naming.endpoint}/:id
- */
-exports.update = async (req, res) => {
-  try {
-    const { id } = req.params;
-    const item = await ${modelName}.findByPk(id);
-
-    if (!item) {
-      return res.status(404).json({
-        success: false,
-        message: \`${modelName} con ID \${id} no encontrado para actualizar\`
-      });
-    }
-
-    // Sanitización: Permitir únicamente campos declarados en la entidad
-    const allowed = ${JSON.stringify(allowedFields.filter(f => !isPasswordField(f)))};
-    const dataToUpdate = {};
-    for (const key of allowed) {
-      const value = req.body[key];
-      if (value !== undefined && value !== '') dataToUpdate[key] = value;
-    }
-${passwordField ? '    await applyPassword(req.body, dataToUpdate, false);\n' : ''}
-    await item.update(dataToUpdate);
-
-    return res.status(200).json({
-      success: true,
-      message: '${modelName} actualizado exitosamente',
-      data: sanitize(item)
-    });
-  } catch (error) {
-    console.error('Error al actualizar ${modelName}:', error);
-    return res.status(400).json({
-      success: false,
-      message: 'Error al actualizar registro',
-      error: error.message
-    });
-  }
-};
-
-/**
- * Eliminar un registro de ${modelName}
- * DELETE /api/${naming.endpoint}/:id
- */
-exports.delete = async (req, res) => {
-  try {
-    const { id } = req.params;
-    const item = await ${modelName}.findByPk(id);
-
-    if (!item) {
-      return res.status(404).json({
-        success: false,
-        message: \`${modelName} con ID \${id} no encontrado para eliminar\`
-      });
-    }
-
-    await item.destroy();
-
-    return res.status(200).json({
-      success: true,
-      message: '${modelName} eliminado exitosamente'
-    });
-  } catch (error) {
-    console.error('Error al eliminar ${modelName}:', error);
-    return res.status(500).json({
-      success: false,
-      message: 'Error interno al eliminar registro',
-      error: error.message
-    });
-  }
+    return res.status(action === 'create' ? 201 : 200).json({ success: true, data: sanitize(result, [passwordField]) });
+  } catch (error) { return respondError(res, error); }
 };
 `;
 }
-
-module.exports = {
-  generateControllerFile
-};
+module.exports = { generateControllerFile };
