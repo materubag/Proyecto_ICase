@@ -755,6 +755,14 @@ REGLAS ESTRICTAS DE MODELADO:
       }).catch(err => console.warn('[DiagramAiService] No se pudo actualizar architecture.softwareDiagram:', err.message));
     }
 
+    if (diagramType === 'ER' && validation.isValid) {
+      try {
+        await this.syncEntitiesFromER(projectId, mermaidCode);
+      } catch (syncErr) {
+        console.warn('[DiagramAiService] No se pudieron auto-sincronizar entidades desde E/R:', syncErr.message);
+      }
+    }
+
     return {
       success: true,
       diagramType,
@@ -817,6 +825,14 @@ REGLAS ESTRICTAS DE MODELADO:
       validation.isValid ? null : validation.errors.join('; ')
     );
 
+    if (diagramType === 'ER' && validation.isValid) {
+      try {
+        await this.syncEntitiesFromER(projectId, normalized);
+      } catch (syncErr) {
+        console.warn('[DiagramAiService] No se pudieron auto-sincronizar entidades desde E/R guardado:', syncErr.message);
+      }
+    }
+
     return {
       success: true,
       diagramType,
@@ -828,6 +844,97 @@ REGLAS ESTRICTAS DE MODELADO:
       artifactVersionId: persisted.id,
       updatedAt: persisted.createdAt || new Date().toISOString()
     };
+  }
+
+  /**
+   * Synchronizes parsed entities, attributes and relationships from a Mermaid ER diagram into PostgreSQL tables.
+   */
+  async syncEntitiesFromER(projectId, mermaidCode) {
+    if (!mermaidCode || !mermaidCode.includes('{')) return;
+    const clean = mermaidCode.trim();
+    const entityRegex = /^\s*([A-Za-z0-9_]+)\s*\{([\s\S]*?)\}/gm;
+    let match;
+    const parsedEntities = [];
+    while ((match = entityRegex.exec(clean)) !== null) {
+      const entityName = match[1].trim();
+      const rawBody = match[2].trim();
+      const lines = rawBody.split('\n').map(l => l.trim()).filter(Boolean);
+      const attrs = [];
+      for (const line of lines) {
+        const parts = line.split(/\s+/);
+        const type = parts[0] || 'string';
+        const name = parts[1] || '';
+        const isPk = parts.slice(2).some(p => p.toUpperCase() === 'PK');
+        attrs.push({ type, name, isPk });
+      }
+      parsedEntities.push({ name: entityName, attributes: attrs });
+    }
+
+    const relRegex = /([A-Za-z0-9_]+)\s*([|}>o+]{1,2}(?:--|\.\.)[|{<o+]{1,2})\s*([A-Za-z0-9_]+)(?:\s*:\s*"?([^"\n]*)"?)?/g;
+    const parsedRels = [];
+    while ((match = relRegex.exec(clean)) !== null) {
+      parsedRels.push({
+        source: match[1].trim(),
+        cardinality: match[2].trim(),
+        target: match[3].trim(),
+        label: (match[4] || '').trim()
+      });
+    }
+
+    if (parsedEntities.length === 0) return;
+
+    await prisma.$transaction(async (tx) => {
+      for (const ent of parsedEntities) {
+        let existing = await tx.entity.findFirst({
+          where: { projectId, name: ent.name }
+        });
+        if (!existing) {
+          existing = await tx.entity.create({
+            data: {
+              projectId,
+              name: ent.name,
+              status: 'APPROVED',
+              reviewStatus: 'APPROVED',
+              description: `Entidad ${ent.name} generada desde diagrama E/R`
+            }
+          });
+        }
+        for (const attr of ent.attributes) {
+          const attrExists = await tx.entityAttribute.findFirst({
+            where: { entityId: existing.id, name: attr.name }
+          });
+          if (!attrExists) {
+            await tx.entityAttribute.create({
+              data: {
+                entityId: existing.id,
+                name: attr.name,
+                type: attr.type,
+                isPk: attr.isPk,
+                status: 'APPROVED'
+              }
+            });
+          }
+        }
+      }
+
+      for (const rel of parsedRels) {
+        const relExists = await tx.entityRelationship.findFirst({
+          where: { projectId, source: rel.source, target: rel.target }
+        });
+        if (!relExists) {
+          await tx.entityRelationship.create({
+            data: {
+              projectId,
+              source: rel.source,
+              target: rel.target,
+              cardinality: rel.cardinality,
+              description: rel.label,
+              status: 'APPROVED'
+            }
+          });
+        }
+      }
+    });
   }
 
   /**

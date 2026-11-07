@@ -4,7 +4,8 @@
   "description": "Backend API for ICASE (Integrated Computer-Aided Software Engineering) Tool",
   "main": "src/server.js",
   "scripts": {
-    "test": "node --require ./tests/fixtures/offline.cjs --test tests/document_extraction.test.js tests/requirement_flow.test.js tests/engineering.test.js tests/audio.test.js tests/pipeline.test.js tests/fase3.test.js tests/gemini_multipdf_whisper.test.js tests/actor_identity.test.js tests/objective_classification.test.js tests/analysis_jobs.test.js",
+    "test": "node --require ./tests/fixtures/offline.cjs --test tests/document_extraction.test.js tests/requirement_flow.test.js tests/engineering.test.js tests/audio.test.js tests/pipeline.test.js tests/fase3.test.js tests/gemini_multipdf_whisper.test.js tests/actor_identity.test.js tests/objective_classification.test.js tests/analysis_jobs.test.js tests/codegen_typeMapper.test.js tests/codegen_modelGenerator.test.js tests/codegen_specValidator.test.js tests/codegen_multi_domain.test.js",
+    "test:codegen": "node --require ./tests/fixtures/codegen-offline.cjs --test tests/codegen_typeMapper.test.js tests/codegen_modelGenerator.test.js tests/codegen_specValidator.test.js tests/codegen_multi_domain.test.js tests/codegen_full_pipeline.test.js tests/codegen_snapshot_hash.test.js tests/codegen_dependency_freshness.test.js tests/codegen_real_business_operations.test.js tests/codegen_coverage_breakdown.test.js tests/codegen_auth_security.test.js tests/codegen_migrations_constraints.test.js tests/codegen_stitch_design_system.test.js tests/codegen_screen_contract.test.js tests/codegen_operation_runtime.test.js tests/codegen_decisions_service.test.js tests/codegen_persistent_job.test.js tests/codegen_ai_repair.test.js tests/codegen_generic_domain_acceptance.test.js tests/codegen_autron5_full_lifecycle.test.js tests/codegen_ai_verification_and_repair.test.js tests/codegen_contract_integrity_regression.test.js tests/codegen_contract_task_layout.test.js tests/codegen_audit_regressions.test.js tests/codegen_audit_repairs.test.js tests/codegen_ai_generation_pipeline.test.js",
     "test:extraction": "node --require ./tests/fixtures/offline.cjs --test tests/document_extraction.test.js tests/requirement_flow.test.js",
     "test:requirements:integration": "node tests/requirement_flow.integration.js",
     "test:integration": "node tests/engineering.integration.js",
@@ -13,7 +14,11 @@
     "prisma:generate": "prisma generate",
     "prisma:migrate": "prisma migrate dev",
     "prisma:push": "prisma db push",
-    "prisma:studio": "prisma studio"
+    "prisma:studio": "prisma studio",
+    "test:codegen:browser": "node tests/codegen_screen_contract_browser.cjs",
+    "test:autron5": "node tests/autron5_export_acceptance.cjs",
+    "export:autron5:review": "node scripts/export-autron5-review.cjs",
+    "test:codegen:acceptance": "node tests/codegen_ai_export_acceptance.cjs"
   },
   "keywords": [
     "icase",
@@ -29,11 +34,18 @@
     "cors": "^2.8.5",
     "dotenv": "^16.4.5",
     "express": "^4.19.2",
+    "json5": "^2.2.3",
     "multer": "^2.4.0",
-    "pdf-parse": "^2.4.5"
+    "pdf-parse": "^2.4.5",
+    "playwright-core": "1.63.0"
   },
   "devDependencies": {
+    "bcryptjs": "^3.0.3",
+    "jsonwebtoken": "^9.0.3",
     "nodemon": "^3.1.4",
-    "prisma": "^5.19.1"
+    "pg": "^8.23.1",
+    "pg-hstore": "^2.3.4",
+    "prisma": "^5.19.1",
+    "sequelize": "^6.37.8"
   }
 }

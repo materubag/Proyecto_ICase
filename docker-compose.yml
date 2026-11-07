@@ -23,6 +23,29 @@ services:
       - icase_network
 
   # ============================================================================
+  # 1b. PostgreSQL aislada para verificación de código generado
+  # ============================================================================
+  # La generación ejecuta migraciones y pruebas contra esta instancia (puerto
+  # 55439). Nunca debe usarse icase_postgres / 5433 para eso.
+  postgres_codegen:
+    image: postgres:16-alpine
+    container_name: icase_postgres_codegen
+    restart: always
+    environment:
+      POSTGRES_USER: icase_user
+      POSTGRES_PASSWORD: icase_password
+      POSTGRES_DB: autron5_acceptance
+    volumes:
+      - postgres_codegen_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U icase_user -d autron5_acceptance"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+    networks:
+      - icase_network
+
+  # ============================================================================
   # 2. Backend REST API - Node.js + Express + Prisma
   # ============================================================================
   backend:
@@ -71,11 +94,23 @@ services:
       AI_ANALYSIS_STRATEGY: ${AI_ANALYSIS_STRATEGY:-rules-first}
       AI_MAX_CHUNKS: ${AI_MAX_CHUNKS:-20}
       AI_CHUNK_MAX_LENGTH: ${AI_CHUNK_MAX_LENGTH:-350}
-      AI_FALLBACK_CONFIDENCE_THRESHOLD: ${AI_FALLBACK_CONFIDENCE_THRESHOLD:-0.65}
+      TEST_DB_HOST: postgres_codegen
+      CODEGEN_TEST_DB_PORT: 5432
+      TEST_DB_USER: icase_user
+      TEST_DB_PASSWORD: icase_password
+      TEST_DB_ADMIN_NAME: autron5_acceptance
+    volumes:
+      - ./backend/src:/usr/src/app/src
+      - ./backend/.verification:/usr/src/app/backend/.verification
+      - ./backend/.cache:/usr/src/app/backend/.cache
     ports:
       - "8080:8080"
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
     depends_on:
       postgres:
+        condition: service_healthy
+      postgres_codegen:
         condition: service_healthy
     networks:
       - icase_network
@@ -136,6 +171,8 @@ services:
 
 volumes:
   postgres_data:
+    driver: local
+  postgres_codegen_data:
     driver: local
   ollama_data:
     driver: local

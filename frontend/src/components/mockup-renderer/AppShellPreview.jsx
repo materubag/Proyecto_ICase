@@ -131,7 +131,7 @@ export default function AppShellPreview({
   project,
   allScreens = [],
   onSelectScreen,
-  themeConfig = { color: 'indigo', layout: 'sidebar', showShell: true },
+  themeConfig = { color: 'indigo', layout: 'sidebar', showShell: false },
   children
 }) {
   const currentTheme = THEMES[themeConfig?.color] || THEMES.indigo;
@@ -155,35 +155,28 @@ export default function AppShellPreview({
     return groups;
   }, [screenList]);
 
-  const availableRoles = useMemo(() => Object.keys(groupedByRole), [groupedByRole]);
-
-  // 2. Rol activo actual simulado (por defecto 'ALL' o el rol de la pantalla seleccionada)
-  const [selectedRoleFilter, setSelectedRoleFilter] = useState('ALL');
-
-  // Si se selecciona un rol en particular, filtrar solo las pantallas de ese rol
+  const currentActor = resolveScreenActor(screen || {});
   const visibleGroups = useMemo(() => {
-    if (selectedRoleFilter === 'ALL') return groupedByRole;
-    return {
-      [selectedRoleFilter]: groupedByRole[selectedRoleFilter] || []
-    };
-  }, [groupedByRole, selectedRoleFilter]);
+    if (!currentActor || !groupedByRole[currentActor]) return groupedByRole;
+    return { [currentActor]: groupedByRole[currentActor] };
+  }, [groupedByRole, currentActor]);
 
   // Perfil del usuario simulado según el rol
   const userProfile = useMemo(() => {
-    if (selectedRoleFilter === 'Mecánico') {
+    if (currentActor === 'Mecánico') {
       return { name: 'Ing. Javier Morales', role: 'Técnico Mecánico Especialista', initials: 'JM', icon: 'build' };
     }
-    if (selectedRoleFilter === 'Recepción') {
+    if (currentActor === 'Recepción') {
       return { name: 'Elena Ramírez', role: 'Atención y Recepción de Vehículos', initials: 'ER', icon: 'directions_car' };
     }
-    if (selectedRoleFilter === 'Cliente' || selectedRoleFilter === 'Portal del Cliente') {
+    if (currentActor === 'Cliente' || currentActor === 'Portal del Cliente') {
       return { name: 'Carlos Mendoza', role: 'Cliente Particular', initials: 'CM', icon: 'person' };
     }
-    if (selectedRoleFilter === 'Administrador') {
+    if (currentActor === 'Administrador') {
       return { name: 'Lic. Roberto Gómez', role: 'Administrador General del Sistema', initials: 'RG', icon: 'admin_panel_settings' };
     }
-    return { name: 'Usuario Principal', role: 'Superusuario (Todos los Roles)', initials: 'SA', icon: 'shield' };
-  }, [selectedRoleFilter]);
+    return { name: currentActor || 'Usuario', role: currentActor || 'Sesión', initials: (currentActor || 'U').slice(0, 2).toUpperCase(), icon: getRoleIcon(currentActor) };
+  }, [currentActor]);
 
   if (!showShell) {
     return <div className="standalone-mockup-wrapper">{children}</div>;
@@ -243,31 +236,8 @@ export default function AppShellPreview({
           <span>https://app.{project?.name ? project.name.toLowerCase().replace(/[^a-z0-9]/g, '') : 'sistema'}.com{route}</span>
         </div>
 
-        {/* Selector de Simulación de Rol */}
         <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-          <span style={{ fontSize: '0.725rem', color: '#64748b', fontWeight: 600 }}>Perfil Activo:</span>
-          <select
-            value={selectedRoleFilter}
-            onChange={e => setSelectedRoleFilter(e.target.value)}
-            style={{
-              padding: '3px 8px',
-              borderRadius: '6px',
-              border: `1px solid ${currentTheme.primaryBorder}`,
-              backgroundColor: currentTheme.primaryLight,
-              color: currentTheme.badgeText,
-              fontWeight: 600,
-              fontSize: '0.725rem',
-              cursor: 'pointer',
-              outline: 'none'
-            }}
-          >
-            <option value="ALL">✦ Todos los Roles ({screenList.length} vistas)</option>
-            {availableRoles.map(r => (
-              <option key={r} value={r}>
-                {r} ({groupedByRole[r]?.length || 0})
-              </option>
-            ))}
-          </select>
+          <span style={{ fontSize: '0.725rem', color: '#64748b', fontWeight: 600 }}>{currentActor}</span>
         </div>
       </div>
 
@@ -293,7 +263,7 @@ export default function AppShellPreview({
 
             {/* Enlaces de navegación con selector de rol */}
             <div style={{ display: 'flex', gap: '4px', overflowX: 'auto', padding: '4px 0' }}>
-              {screenList.map(s => {
+              {(groupedByRole[currentActor] || screenList).map(s => {
                 const isActive = (s.id === screen?.id) || (s.name === screen?.name);
                 return (
                   <button
@@ -373,43 +343,12 @@ export default function AppShellPreview({
                     {project?.name || 'Sistema ICASE'}
                   </div>
                   <div style={{ fontSize: '0.7rem', color: '#64748b' }}>
-                    Control de Acceso por Roles
+                    {currentActor || 'Pantalla'}
                   </div>
                 </div>
               </div>
 
-              {/* Selector de Rol en Sidebar */}
-              <div style={{ padding: '10px 12px 6px', borderBottom: '1px solid rgba(255,255,255,0.04)' }}>
-                <div style={{ fontSize: '0.675rem', fontWeight: 700, textTransform: 'uppercase', color: '#64748b', letterSpacing: '0.05em', marginBottom: '4px' }}>
-                  Filtrar Vista por Rol
-                </div>
-                <select
-                  value={selectedRoleFilter}
-                  onChange={e => setSelectedRoleFilter(e.target.value)}
-                  style={{
-                    width: '100%',
-                    backgroundColor: 'rgba(255,255,255,0.06)',
-                    color: '#ffffff',
-                    border: '1px solid rgba(255,255,255,0.1)',
-                    borderRadius: '6px',
-                    padding: '5px 8px',
-                    fontSize: '0.75rem',
-                    outline: 'none',
-                    cursor: 'pointer'
-                  }}
-                >
-                  <option value="ALL" style={{ backgroundColor: '#0f172a', color: '#fff' }}>
-                    ✦ Todos los Roles ({screenList.length})
-                  </option>
-                  {availableRoles.map(r => (
-                    <option key={r} value={r} style={{ backgroundColor: '#0f172a', color: '#fff' }}>
-                      {r} ({groupedByRole[r]?.length || 0})
-                    </option>
-                  ))}
-                </select>
-              </div>
-
-              {/* Módulos agrupados por Rol / Actor */}
+              {/* Módulos del rol de esta pantalla */}
               <div style={{ padding: '8px', maxHeight: '420px', overflowY: 'auto' }}>
                 {Object.entries(visibleGroups).map(([roleName, screensInRole]) => {
                   if (!screensInRole || screensInRole.length === 0) return null;

@@ -75,7 +75,6 @@ ReactDOM.createRoot(document.getElementById('root')).render(<App />);
 <head>
   <meta charset="UTF-8">
   <title>Test App</title>
-  <script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
 </head>
 <body>
   <div id="root"></div>

@@ -1,0 +1,228 @@
+{
+  "schemaVersion": "1.0.0",
+  "approvedAt": "2026-10-27T00:00:00.000Z",
+  "hash": "canonical_clinica_hash_9876",
+  "project": {
+    "id": "proj_hospital",
+    "name": "Hospital San Lucas",
+    "platform": "WEB",
+    "status": "APPROVED"
+  },
+  "technologies": [
+    {
+      "name": "React",
+      "category": "FRONTEND",
+      "version": "18.3.1"
+    },
+    {
+      "name": "Express",
+      "category": "BACKEND",
+      "version": "4.19.2"
+    },
+    {
+      "name": "PostgreSQL",
+      "category": "DATABASE",
+      "version": "16"
+    },
+    {
+      "name": "Sequelize",
+      "category": "ORM",
+      "version": "6.37.3"
+    }
+  ],
+  "security": {
+    "authType": "JWT",
+    "roles": [
+      "Recepcionista",
+      "Doctor",
+      "Director"
+    ],
+    "tokenExpiry": "8h"
+  },
+  "entities": [
+    {
+      "id": "ent_rol",
+      "name": "Rol",
+      "modelName": "Rol",
+      "tableName": "roles",
+      "primaryKey": {
+        "fieldName": "idRol",
+        "type": "INTEGER"
+      },
+      "attributes": [
+        {
+          "fieldName": "idRol",
+          "name": "idRol",
+          "type": "INTEGER",
+          "isPk": true,
+          "allowNull": false,
+          "autoIncrement": true
+        },
+        {
+          "fieldName": "nombre",
+          "name": "nombre",
+          "type": "STRING",
+          "isPk": false,
+          "allowNull": false,
+          "unique": true
+        }
+      ]
+    },
+    {
+      "id": "ent_usuario",
+      "name": "Usuario",
+      "modelName": "Usuario",
+      "tableName": "usuarios",
+      "primaryKey": {
+        "fieldName": "idUsuario",
+        "type": "INTEGER"
+      },
+      "attributes": [
+        {
+          "fieldName": "idUsuario",
+          "name": "idUsuario",
+          "type": "INTEGER",
+          "isPk": true,
+          "allowNull": false,
+          "autoIncrement": true
+        },
+        {
+          "fieldName": "email",
+          "name": "email",
+          "type": "STRING",
+          "isPk": false,
+          "allowNull": false,
+          "unique": true
+        },
+        {
+          "fieldName": "password",
+          "name": "password",
+          "type": "STRING",
+          "isPk": false,
+          "allowNull": false
+        },
+        {
+          "fieldName": "rolId",
+          "name": "rolId",
+          "type": "INTEGER",
+          "isPk": false,
+          "allowNull": false
+        }
+      ]
+    },
+    {
+      "id": "ent_paciente",
+      "name": "Paciente",
+      "modelName": "Paciente",
+      "tableName": "pacientes",
+      "primaryKey": {
+        "fieldName": "codigoPaciente",
+        "type": "UUID"
+      },
+      "attributes": [
+        {
+          "fieldName": "codigoPaciente",
+          "name": "codigoPaciente",
+          "type": "UUID",
+          "isPk": true,
+          "allowNull": false,
+          "defaultValue": "UUIDV4"
+        },
+        {
+          "fieldName": "nombreCompleto",
+          "name": "nombreCompleto",
+          "type": "STRING",
+          "isPk": false,
+          "allowNull": false
+        },
+        {
+          "fieldName": "documento",
+          "name": "documento",
+          "type": "STRING",
+          "isPk": false,
+          "allowNull": false,
+          "unique": true
+        },
+        {
+          "fieldName": "activo",
+          "name": "activo",
+          "type": "BOOLEAN",
+          "isPk": false,
+          "allowNull": false,
+          "defaultValue": true
+        }
+      ]
+    }
+  ],
+  "relationships": [
+    {
+      "id": "rel_usuario_rol",
+      "source": "Usuario",
+      "target": "Rol",
+      "sourceEntityId": "ent_usuario",
+      "targetEntityId": "ent_rol",
+      "cardinality": "N:1",
+      "foreignKey": "rolId"
+    }
+  ],
+  "operations": [
+    {
+      "operationId": "op_pacientes_list",
+      "name": "Listar Pacientes",
+      "type": "CRUD",
+      "method": "GET",
+      "route": "/api/pacientes",
+      "entity": "Paciente",
+      "authorizedRoles": [
+        "Recepcionista",
+        "Doctor",
+        "Director"
+      ],
+      "output": {
+        "successStatus": 200
+      }
+    },
+    {
+      "operationId": "op_registrar_paciente",
+      "name": "Registrar Paciente",
+      "type": "BUSINESS_LOGIC",
+      "method": "POST",
+      "route": "/api/operations/registrar-paciente",
+      "targetEntity": "Paciente",
+      "authorizedRoles": [
+        "Recepcionista",
+        "Director"
+      ],
+      "businessRules": [
+        {
+          "code": "BR_DOC_VALIDO",
+          "name": "Documento Válido",
+          "description": "El documento debe tener al menos 6 caracteres",
+          "condition": "payload.documento && String(payload.documento).length >= 6",
+          "errorMessage": "El documento del paciente debe contener al menos 6 caracteres."
+        }
+      ],
+      "output": {
+        "successStatus": 201
+      }
+    }
+  ],
+  "screens": [
+    {
+      "id": "scr_pacientes",
+      "name": "GestionPacientes",
+      "route": "/pacientes",
+      "title": "Gestión de Pacientes",
+      "roles": [
+        "Recepcionista",
+        "Doctor",
+        "Director"
+      ],
+      "connectedOperationId": "op_pacientes_list",
+      "requiresMockup": false,
+      "hasApprovedMockup": true,
+      "html": null,
+      "components": []
+    }
+  ]
+}

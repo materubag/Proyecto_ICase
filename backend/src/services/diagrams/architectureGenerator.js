@@ -89,6 +89,9 @@ class ArchitectureGenerator {
    * Método de generación con soporte a componentes y compatibilidad.
    */
   generate(architecture = {}, technologies = {}) {
+    if ((!architecture || Object.keys(architecture).length === 0) && (!technologies || Object.keys(technologies).length === 0)) {
+      return 'flowchart TD';
+    }
     if (architecture.components && architecture.components.length > 0) {
       const lines = ['flowchart TD'];
       const layers = {};

@@ -14,7 +14,7 @@ class OpenAIProvider extends AIProvider {
         { role: 'system', content: options.prompt || require('../analysis/extractionContract').prompt },
         { role: 'user', content: JSON.stringify(input) }
       ],
-      ...(reasoningEffort ? { reasoning_effort: reasoningEffort } : {})
+      ...(reasoningEffort && (model.startsWith('o1') || model.startsWith('o3')) ? { reasoning_effort: reasoningEffort } : {})
     };
 
     const response = await fetch('https://api.openai.com/v1/chat/completions', {
@@ -102,7 +102,7 @@ Reglas:
             { role: 'system', content: systemPrompt },
             { role: 'user', content: input.customPrompt || userMessage }
           ],
-          ...(reasoningEffort ? { reasoning_effort: reasoningEffort } : {})
+          ...(reasoningEffort && (model.startsWith('o1') || model.startsWith('o3')) ? { reasoning_effort: reasoningEffort } : {})
         })
       });
     }

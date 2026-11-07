@@ -5,12 +5,47 @@
 
 const env = require('../../config/env');
 const { generateHtmlMockup } = require('./mockupGenerator');
+const designSystemService = require('./designSystemService');
 
 class GoogleStitchService {
   constructor() {
     this.apiUrl = 'https://stitch.googleapis.com/mcp';
     this.apiKey = env.GOOGLE_STITCH_API_KEY || '';
     this.concurrency = parseInt(env.STITCH_CONCURRENCY || '4', 10);
+  }
+
+  extractHtmlFromStitchDownload(raw) {
+    if (!raw) return null;
+    const trimmed = String(raw).trim();
+    if (trimmed.startsWith('{') || trimmed.startsWith('[')) {
+      try {
+        const parsed = JSON.parse(trimmed);
+        const encoded = parsed.dataString || parsed.html || parsed.content || parsed.data || parsed.fileContent;
+        if (typeof encoded === 'string' && encoded.trim()) {
+          return this.extractHtmlFromStitchDownload(encoded);
+        }
+      } catch (_) { /* no es JSON de descarga */ }
+    }
+    if (/<!DOCTYPE html/i.test(trimmed) || /<html[\s>]/i.test(trimmed)) {
+      return trimmed
+        .replace(/\\r\\n/g, '\n')
+        .replace(/\\n/g, '\n')
+        .replace(/\\r/g, '\r');
+    }
+    return null;
+  }
+
+  async downloadStitchHtml(htmlUrl) {
+    if (!htmlUrl) return null;
+    const response = await fetch(htmlUrl, {
+      headers: { 'X-Goog-Api-Key': this.apiKey }
+    });
+    const raw = await response.text();
+    if (!response.ok) {
+      console.warn(`[GoogleStitch] Descarga HTML HTTP ${response.status}: ${raw.slice(0, 180)}`);
+      return null;
+    }
+    return this.extractHtmlFromStitchDownload(raw);
   }
 
   /**
@@ -73,71 +108,51 @@ class GoogleStitchService {
   buildScreenPrompt(screen, project, totalScreens, screenIndex, userPrompt = '') {
     const title = screen.title || screen.name || `Pantalla ${screenIndex}`;
     const route = screen.route || '';
-    const description = screen.description || '';
+    const description = screen.purpose || screen.description || '';
     const actors = Array.isArray(screen.actors) ? screen.actors.filter(Boolean) : [];
     const requirements = Array.isArray(screen.requirements) ? screen.requirements.filter(Boolean) : [];
+    const fields = Array.isArray(screen.fields) ? screen.fields.filter(Boolean) : [];
+    const nav = Array.isArray(screen.nav) ? screen.nav.filter(Boolean) : [];
+    const sampleRows = Array.isArray(screen.sampleRows) ? screen.sampleRows : [];
+    const primaryAction = screen.primaryAction || '';
+    const archetype = screen.archetype || ( /login|acceso/i.test(title) ? 'A' : 'B');
 
-    const formattedReqs = requirements.map(req => {
+    const formattedReqs = requirements.slice(0, 6).map(req => {
       if (typeof req === 'object' && req !== null) {
-        const code = req.code || req.id || '';
         const desc = req.description || req.name || req.text || '';
-        return code && desc ? `- ${code}: ${desc}` : (desc ? `- ${desc}` : (code ? `- ${code}` : null));
+        return desc ? `- ${desc}` : null;
       }
       return `- ${String(req)}`;
     }).filter(Boolean);
 
     const sections = [];
+    sections.push(`Diseña UNA ÚNICA pantalla para "${project.name}".
+No diseñes el resto del sistema. Esta vista es la ${screenIndex} de ${totalScreens}.
 
-    sections.push(`Diseña UNA ÚNICA pantalla profesional, limpia y moderna para el sistema "${project.name}".
-Esta pantalla forma parte de un conjunto de ${totalScreens} pantallas.
-Debes diseñar únicamente la pantalla indicada a continuación.
+PANTALLA: ${title}
+RUTA: ${route || '/'}`);
 
-PANTALLA ${screenIndex} DE ${totalScreens}:
-${title}`);
-
-    if (route) {
-      sections.push(`RUTA:\n${route}`);
+    if (actors.length) sections.push(`ACTOR QUE USA ESTA PANTALLA:\n${actors.map(actor => `- ${actor}`).join('\n')}\nDiseña el menú y el contenido para ese rol, no para todos.`);
+    if (description) sections.push(`PROPÓSITO (qué debe poder hacer el usuario aquí):\n${description}`);
+    if (fields.length) sections.push(`CAMPOS VISIBLES (usa estas etiquetas, no "Código / Identificador"):\n${fields.map(field => `- ${field}`).join('\n')}`);
+    if (primaryAction) sections.push(`ACCIÓN PRINCIPAL:\n${primaryAction}`);
+    if (nav.length) sections.push(`MENÚ SUPERIOR DE ESTE ROL (mismos enlaces en todas sus pantallas; marca "${title}" como activa):\n${nav.map(item => `- ${item}`).join('\n')}`);
+    if (sampleRows.length) {
+      sections.push(`DATOS DE EJEMPLO OBLIGATORIOS (coherentes con el resto del taller):\n${sampleRows.map(row => `- ${Array.isArray(row) ? row.join(' · ') : row}`).join('\n')}`);
     }
-
-    if (description) {
-      sections.push(`PROPÓSITO:\n${description}`);
-    }
-
-    if (actors.length > 0) {
-      sections.push(`ACTORES Y ROLES:\n${actors.map(a => `- ${a}`).join('\n')}`);
-    }
-
-    if (formattedReqs.length > 0) {
-      sections.push(`REQUISITOS RELACIONADOS:\n${formattedReqs.join('\n')}`);
-    }
-
-    if (userPrompt && userPrompt.trim()) {
+    if (formattedReqs.length) sections.push(`EVIDENCIA FUNCIONAL (tradúcela a UI, no copies el texto técnico):\n${formattedReqs.join('\n')}`);
+    if (userPrompt && userPrompt.trim() && !/^generar un prototipo visual para:/i.test(userPrompt.trim())) {
       sections.push(`INSTRUCCIONES ADICIONALES:\n${userPrompt.trim()}`);
     }
-
-    sections.push(`SISTEMA DE DISEÑO GLOBAL OBLIGATORIO (COHERENCIA TOTAL ENTRE TODAS LAS PANTALLAS):
-- Esta pantalla pertenece a una aplicación web unificada de nivel corporativo para "${project.name}".
-- PALETA DE COLORES GLOBAL:
-  * Color Primario / Acento: Índigo (#4F46E5 / Tailwind indigo-600) para botones principales, enlaces activos y badges destacados.
-  * Fondo General: Slate muy suave (#F8FAFC / bg-slate-50).
-  * Tarjetas y Paneles: Blanco puro (#FFFFFF / bg-white) con borde fino (border border-slate-200) y sombra suave (shadow-sm rounded-xl).
-  * Textos: Slate oscuro (#0F172A / text-slate-900) para títulos y Slate (#64748B / text-slate-500) para subtítulos y etiquetas.
-- CONTENIDO DEDICADO SIN BARRAS EXTERNAS DUPLICADAS:
-  * NO generes barras de navegación externas oscuras ni menús inventados en esta vista.
-  * Diseña exclusivamente el ÁREA DE TRABAJO del módulo "${title}" (la tarjeta principal con formulario, tabla de registros, filtros y botones de acción).
-- 100% EN ESPAÑOL: Todos los textos, botones, formularios, tablas, placeholders y estados deben estar exclusivamente en español (sin anglicismos).
-- FORMULARIOS MODERNOS Y ESTANDARIZADOS:
-  * Inputs con borde gris sutil (border-slate-300), bordes redondeados (rounded-lg), padding cómodo (px-3 py-2) y focus con anillo índigo (focus:ring-2 focus:ring-indigo-500).
-- BOTONES HOMOGÉNEOS:
-  * Acción principal: bg-indigo-600 hover:bg-indigo-700 text-white font-medium px-5 py-2.5 rounded-lg shadow-sm.
-  * Acción secundaria: bg-slate-100 hover:bg-slate-200 text-slate-700 font-medium px-4 py-2.5 rounded-lg border border-slate-300.
-- TABLAS Y LISTADOS UNIFORMES:
-  * Encabezados claros en bg-slate-100 con texto en mayúsculas pequeñas (text-xs uppercase tracking-wider font-semibold text-slate-600).
-  * Filas con hover:bg-slate-50 y bordes inferiores finos.
-  * Badges de estado estilizados (ej. verde suave para completado, amarillo suave para en proceso).
-- COHERENCIA DE DATOS: Utiliza identificadores claros (ej: REG-001, CLI-101), nombres realistas y coherencia con el dominio automotriz/operativo.`);
-
+    sections.push(designSystemService.getStitchScreenVisualRules(archetype, project.name, project.description));
     return sections.join('\n\n');
+  }
+
+  /**
+   * Informa de las capacidades y límites de la integración con Google Stitch
+   */
+  getCapabilities() {
+    return designSystemService.getStitchCapabilities(this.apiKey);
   }
 
   /**
@@ -218,27 +233,21 @@ ${title}`);
       let html = null;
       if (htmlUrl) {
         try {
-          const htmlRes = await fetch(htmlUrl);
-          if (htmlRes.ok) {
-            html = await htmlRes.text();
-            html = html
-              .replace(/\\r\\n/g, '\n')
-              .replace(/\\n/g, '\n')
-              .replace(/\\r/g, '\r');
-          }
+          html = await this.downloadStitchHtml(htmlUrl);
         } catch (fetchHtmlErr) {
           console.warn(`[GoogleStitch] Error descargando HTML de ${htmlUrl}:`, fetchHtmlErr.message);
         }
       }
 
-      if (!html) {
+      const usedFallback = !html;
+      if (usedFallback) {
         html = generateHtmlMockup({
           ...screen,
           name: screenTitle || screen.name
         });
       }
 
-      console.log(`[GoogleStitch] ✓ "${screen.name}" generada exitosamente (${html ? 'con HTML interactivo' : 'básico'}).`);
+      console.log(`[GoogleStitch] ✓ "${screen.name}" generada exitosamente (${usedFallback ? 'fallback ICASE' : `HTML Stitch ${html.length} chars`}).`);
 
       return {
         id: screen.id,
@@ -264,12 +273,12 @@ ${title}`);
    */
   createFallbackScreen(screen, project) {
     const screenObj = {
+      ...screen,
       id: screen.id,
       name: screen.name,
       title: screen.name,
       route: screen.route,
-      description: screen.description,
-      components: screen.components || [],
+      description: screen.purpose || screen.description,
       layout: { type: 'grid' }
     };
     screenObj.html = generateHtmlMockup(screenObj);

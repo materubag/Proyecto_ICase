@@ -1,0 +1,1228 @@
+{
+  "version": "autron5.intake.v1",
+  "projectId": "6ba45264-e3e6-4819-a0dd-18909f1fb674",
+  "sourceDocument": "AUTRON_Propuesta_Overleaf.pdf",
+  "sourceRequirements": [
+    "RF-03",
+    "RF-04",
+    "RF-07",
+    "RF-17",
+    "RNF-05",
+    "RNF-06",
+    "RNF-11"
+  ],
+  "userDecisions": {
+    "requiredIdentityFields": {
+      "CLIENTE": [
+        "nombre"
+      ],
+      "VEHICULO": [
+        "clienteId",
+        "placa"
+      ]
+    },
+    "requiredReceiptFields": [
+      "vehiculoId",
+      "kilometraje",
+      "nivelCombustible",
+      "motivoIngreso"
+    ],
+    "evidenceRequired": false,
+    "odometerPolicy": "RECEIPT_ONLY",
+    "fuelUnit": "FRACTION_0_1",
+    "uploadFailurePolicy": "DO_NOT_CONFIRM"
+  },
+  "operations": [
+    {
+      "code": "UC-20",
+      "entity": "CLIENTE",
+      "input": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "nombre": {
+            "type": "string",
+            "minLength": 1
+          },
+          "telefono": {
+            "type": "string"
+          },
+          "correo": {
+            "type": "string"
+          },
+          "direccion": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "nombre"
+        ]
+      },
+      "resultStep": "cliente",
+      "steps": [
+        {
+          "step": 1,
+          "id": "cliente",
+          "action": "CREATE",
+          "entity": "CLIENTE",
+          "fields": {
+            "nombre": {
+              "$ref": "payload.nombre"
+            },
+            "telefono": {
+              "$ref": "payload.telefono"
+            },
+            "correo": {
+              "$ref": "payload.correo"
+            },
+            "direccion": {
+              "$ref": "payload.direccion"
+            },
+            "fechaCreacion": {
+              "$ref": "now"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "code": "UC-24",
+      "entity": "VEHICULO",
+      "input": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "clienteId": {
+            "type": "integer"
+          },
+          "placa": {
+            "type": "string",
+            "minLength": 1
+          },
+          "marca": {
+            "type": "string"
+          },
+          "modelo": {
+            "type": "string"
+          },
+          "anio": {
+            "type": "integer"
+          },
+          "vin": {
+            "type": "string"
+          },
+          "color": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "clienteId",
+          "placa"
+        ]
+      },
+      "resultStep": "vehiculo",
+      "steps": [
+        {
+          "step": 1,
+          "id": "cliente",
+          "action": "QUERY",
+          "entity": "CLIENTE",
+          "where": {
+            "id": {
+              "$ref": "payload.clienteId"
+            }
+          },
+          "requireMatch": true
+        },
+        {
+          "step": 2,
+          "id": "vehiculo",
+          "action": "CREATE",
+          "entity": "VEHICULO",
+          "fields": {
+            "clienteId": {
+              "$ref": "payload.clienteId"
+            },
+            "placa": {
+              "$ref": "payload.placa"
+            },
+            "marca": {
+              "$ref": "payload.marca"
+            },
+            "modelo": {
+              "$ref": "payload.modelo"
+            },
+            "anio": {
+              "$ref": "payload.anio"
+            },
+            "vin": {
+              "$ref": "payload.vin"
+            },
+            "color": {
+              "$ref": "payload.color"
+            },
+            "fechaRegistro": {
+              "$ref": "now"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "code": "UC-16",
+      "entity": "RECEPCION",
+      "input": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "vehiculoId": {
+            "type": "integer"
+          },
+          "citaId": {
+            "type": "integer"
+          },
+          "kilometraje": {
+            "type": "integer"
+          },
+          "nivelCombustible": {
+            "type": "number",
+            "minimum": 0,
+            "maximum": 1
+          },
+          "motivoIngreso": {
+            "type": "string",
+            "minLength": 1
+          },
+          "observaciones": {
+            "type": "string"
+          },
+          "evidencias": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "additionalProperties": false,
+              "properties": {
+                "token": {
+                  "type": "string",
+                  "minLength": 1
+                },
+                "observaciones": {
+                  "type": "string"
+                }
+              },
+              "required": [
+                "token"
+              ]
+            }
+          }
+        },
+        "required": [
+          "vehiculoId",
+          "kilometraje",
+          "nivelCombustible",
+          "motivoIngreso"
+        ]
+      },
+      "resultStep": "recepcion",
+      "uploadFields": [
+        "evidencias"
+      ],
+      "steps": [
+        {
+          "step": 1,
+          "id": "vehiculo",
+          "action": "QUERY",
+          "entity": "VEHICULO",
+          "where": {
+            "id": {
+              "$ref": "payload.vehiculoId"
+            }
+          },
+          "requireMatch": true
+        },
+        {
+          "step": 2,
+          "id": "cita",
+          "action": "QUERY",
+          "entity": "CITA",
+          "when": {
+            "$ref": "payload.citaId"
+          },
+          "where": {
+            "id": {
+              "$ref": "payload.citaId"
+            },
+            "vehiculoId": {
+              "$ref": "payload.vehiculoId"
+            }
+          },
+          "requireMatch": true
+        },
+        {
+          "step": 3,
+          "id": "recepcion",
+          "action": "CREATE",
+          "entity": "RECEPCION",
+          "fields": {
+            "vehiculoId": {
+              "$ref": "payload.vehiculoId"
+            },
+            "citaId": {
+              "$ref": "payload.citaId"
+            },
+            "kilometraje": {
+              "$ref": "payload.kilometraje"
+            },
+            "nivelCombustible": {
+              "$ref": "payload.nivelCombustible"
+            },
+            "motivoIngreso": {
+              "$ref": "payload.motivoIngreso"
+            },
+            "observaciones": {
+              "$ref": "payload.observaciones"
+            },
+            "usuarioId": {
+              "$ref": "user.id"
+            },
+            "fechaRecepcion": {
+              "$ref": "now"
+            }
+          }
+        },
+        {
+          "step": 4,
+          "id": "evidencias",
+          "action": "CREATE",
+          "entity": "EVIDENCIAMULTIMEDIA",
+          "forEach": {
+            "$ref": "payload.evidencias"
+          },
+          "fields": {
+            "recepcionId": {
+              "$ref": "steps.recepcion.id"
+            },
+            "usuarioId": {
+              "$ref": "user.id"
+            },
+            "urlOriginal": {
+              "$ref": "item.urlOriginal"
+            },
+            "pesoBytes": {
+              "$ref": "item.pesoBytes"
+            },
+            "formatoMime": {
+              "$ref": "item.formatoMime"
+            },
+            "observaciones": {
+              "$ref": "item.observaciones"
+            },
+            "fechaCarga": {
+              "$ref": "now"
+            }
+          }
+        }
+      ]
+    }
+  ],
+  "screens": [
+    {
+      "nodeId": "22c0b6de-02b7-4aba-93fa-b8e1baf264b4",
+      "useCaseId": "37a1003e-7201-4792-992d-3ea27d857fea",
+      "route": "/clientes",
+      "title": "Clientes",
+      "contract": {
+        "renderer": "task",
+        "order": 1,
+        "entityId": "a181b2af-d54c-4da1-b0dc-ea225b79f529",
+        "actorIds": [
+          "332b70bc-8d38-4f5e-b880-9553b15782bb"
+        ],
+        "purpose": "Registrar los datos del cliente y consultar su directorio.",
+        "summary": "Registrar los datos del cliente y consultar su directorio.",
+        "primaryActionId": "confirmar",
+        "actions": [
+          {
+            "actionId": "confirmar",
+            "operationId": "UC-20",
+            "name": "Guardar cliente"
+          }
+        ],
+        "fields": [
+          {
+            "fieldName": "nombre",
+            "columnName": "nombre",
+            "dataType": "DataTypes.STRING",
+            "isPk": false,
+            "readOnly": false,
+            "allowNull": false,
+            "unique": false,
+            "autoIncrement": false,
+            "defaultValue": null,
+            "length": null,
+            "precision": null,
+            "scale": null,
+            "comment": null,
+            "isReserved": false,
+            "label": "Nombre",
+            "mode": "editable",
+            "required": true,
+            "relation": null
+          },
+          {
+            "fieldName": "telefono",
+            "columnName": "telefono",
+            "dataType": "DataTypes.STRING",
+            "isPk": false,
+            "readOnly": false,
+            "allowNull": true,
+            "unique": false,
+            "autoIncrement": false,
+            "defaultValue": null,
+            "length": null,
+            "precision": null,
+            "scale": null,
+            "comment": null,
+            "isReserved": false,
+            "label": "Teléfono",
+            "mode": "editable",
+            "required": false,
+            "relation": null
+          },
+          {
+            "fieldName": "correo",
+            "columnName": "correo",
+            "dataType": "DataTypes.STRING",
+            "isPk": false,
+            "readOnly": false,
+            "allowNull": true,
+            "unique": false,
+            "autoIncrement": false,
+            "defaultValue": null,
+            "length": null,
+            "precision": null,
+            "scale": null,
+            "comment": null,
+            "isReserved": false,
+            "label": "Correo electrónico",
+            "mode": "editable",
+            "required": false,
+            "relation": null
+          },
+          {
+            "fieldName": "direccion",
+            "columnName": "direccion",
+            "dataType": "DataTypes.STRING",
+            "isPk": false,
+            "readOnly": false,
+            "allowNull": true,
+            "unique": false,
+            "autoIncrement": false,
+            "defaultValue": null,
+            "length": null,
+            "precision": null,
+            "scale": null,
+            "comment": null,
+            "isReserved": false,
+            "label": "Dirección",
+            "mode": "editable",
+            "required": false,
+            "relation": null
+          },
+          {
+            "fieldName": "id",
+            "columnName": "id",
+            "dataType": "DataTypes.INTEGER",
+            "isPk": true,
+            "readOnly": false,
+            "allowNull": false,
+            "unique": false,
+            "autoIncrement": true,
+            "defaultValue": null,
+            "length": null,
+            "precision": null,
+            "scale": null,
+            "comment": null,
+            "isReserved": false,
+            "label": "id",
+            "mode": "automatic",
+            "required": false,
+            "relation": null
+          },
+          {
+            "fieldName": "usuarioId",
+            "columnName": "usuario_id",
+            "dataType": "DataTypes.INTEGER",
+            "isPk": false,
+            "readOnly": false,
+            "allowNull": true,
+            "unique": false,
+            "autoIncrement": false,
+            "defaultValue": null,
+            "length": null,
+            "precision": null,
+            "scale": null,
+            "comment": null,
+            "isReserved": false,
+            "label": "USUARIO",
+            "mode": "automatic",
+            "required": false,
+            "relation": {
+              "entityId": "947e190f-847a-4045-9b63-7432fb551d61",
+              "endpoint": "/api/usuarios",
+              "valueField": "id",
+              "labelField": "nombre"
+            }
+          },
+          {
+            "fieldName": "fechaCreacion",
+            "columnName": "fecha_creacion",
+            "dataType": "DataTypes.DATE",
+            "isPk": false,
+            "readOnly": false,
+            "allowNull": true,
+            "unique": false,
+            "autoIncrement": false,
+            "defaultValue": null,
+            "length": null,
+            "precision": null,
+            "scale": null,
+            "comment": null,
+            "isReserved": false,
+            "label": "fecha Creacion",
+            "mode": "automatic",
+            "required": false,
+            "relation": null
+          }
+        ],
+        "dataSources": [
+          {
+            "name": "clientes",
+            "operationId": "op_clientes_list",
+            "route": "/api/clientes"
+          }
+        ],
+        "listSource": "clientes",
+        "listTitle": "Clientes registrados",
+        "columns": [
+          {
+            "field": "nombre",
+            "label": "Cliente"
+          },
+          {
+            "field": "telefono",
+            "label": "Teléfono"
+          },
+          {
+            "field": "correo",
+            "label": "Correo"
+          }
+        ],
+        "navigation": [
+          {
+            "route": "/vehiculos",
+            "label": "Ir a vehículos"
+          },
+          {
+            "route": "/recepcion",
+            "label": "Ir a recepción de vehículos"
+          }
+        ],
+        "unresolved": []
+      },
+      "html": "<main><header><h1>Clientes</h1><p>Registrar los datos del cliente y consultar su directorio.</p></header><div class=\"contract-task-grid\"><section data-contract-slot=\"form\"></section><aside class=\"contract-panel\"><section data-contract-slot=\"summary\"></section></aside></div><section data-contract-slot=\"table\"></section></main>"
+    },
+    {
+      "nodeId": "97c0f666-cc34-465e-b8ee-e29badc7c9a6",
+      "useCaseId": "a2b3d1d8-10b0-4f71-9075-f49f271e52ac",
+      "route": "/vehiculos",
+      "title": "Vehículos",
+      "contract": {
+        "renderer": "task",
+        "order": 2,
+        "entityId": "604afa06-aeec-496d-bfa0-22ea073f8f56",
+        "actorIds": [
+          "332b70bc-8d38-4f5e-b880-9553b15782bb"
+        ],
+        "purpose": "Registrar el vehículo y asociarlo con su cliente responsable.",
+        "summary": "Registrar el vehículo y asociarlo con su cliente responsable.",
+        "primaryActionId": "confirmar",
+        "actions": [
+          {
+            "actionId": "confirmar",
+            "operationId": "UC-24",
+            "name": "Guardar vehículo"
+          }
+        ],
+        "fields": [
+          {
+            "fieldName": "clienteId",
+            "columnName": "cliente_id",
+            "dataType": "DataTypes.INTEGER",
+            "isPk": false,
+            "readOnly": false,
+            "allowNull": false,
+            "unique": false,
+            "autoIncrement": false,
+            "defaultValue": null,
+            "length": null,
+            "precision": null,
+            "scale": null,
+            "comment": null,
+            "isReserved": false,
+            "label": "Cliente",
+            "mode": "editable",
+            "required": true,
+            "relation": {
+              "entityId": "a181b2af-d54c-4da1-b0dc-ea225b79f529",
+              "endpoint": "/api/clientes",
+              "dataSource": "clientes",
+              "valueField": "id",
+              "labelField": "nombre",
+              "labelFields": [
+                "nombre"
+              ]
+            }
+          },
+          {
+            "fieldName": "placa",
+            "columnName": "placa",
+            "dataType": "DataTypes.STRING",
+            "isPk": false,
+            "readOnly": false,
+            "allowNull": false,
+            "unique": false,
+            "autoIncrement": false,
+            "defaultValue": null,
+            "length": null,
+            "precision": null,
+            "scale": null,
+            "comment": null,
+            "isReserved": false,
+            "label": "Placa",
+            "mode": "editable",
+            "required": true,
+            "relation": null
+          },
+          {
+            "fieldName": "marca",
+            "columnName": "marca",
+            "dataType": "DataTypes.STRING",
+            "isPk": false,
+            "readOnly": false,
+            "allowNull": true,
+            "unique": false,
+            "autoIncrement": false,
+            "defaultValue": null,
+            "length": null,
+            "precision": null,
+            "scale": null,
+            "comment": null,
+            "isReserved": false,
+            "label": "Marca",
+            "mode": "editable",
+            "required": false,
+            "relation": null
+          },
+          {
+            "fieldName": "modelo",
+            "columnName": "modelo",
+            "dataType": "DataTypes.STRING",
+            "isPk": false,
+            "readOnly": false,
+            "allowNull": true,
+            "unique": false,
+            "autoIncrement": false,
+            "defaultValue": null,
+            "length": null,
+            "precision": null,
+            "scale": null,
+            "comment": null,
+            "isReserved": false,
+            "label": "Modelo",
+            "mode": "editable",
+            "required": false,
+            "relation": null
+          },
+          {
+            "fieldName": "anio",
+            "columnName": "anio",
+            "dataType": "DataTypes.INTEGER",
+            "isPk": false,
+            "readOnly": false,
+            "allowNull": true,
+            "unique": false,
+            "autoIncrement": false,
+            "defaultValue": null,
+            "length": null,
+            "precision": null,
+            "scale": null,
+            "comment": null,
+            "isReserved": false,
+            "label": "Año",
+            "mode": "editable",
+            "required": false,
+            "relation": null
+          },
+          {
+            "fieldName": "vin",
+            "columnName": "vin",
+            "dataType": "DataTypes.STRING",
+            "isPk": false,
+            "readOnly": false,
+            "allowNull": true,
+            "unique": false,
+            "autoIncrement": false,
+            "defaultValue": null,
+            "length": null,
+            "precision": null,
+            "scale": null,
+            "comment": null,
+            "isReserved": false,
+            "label": "VIN",
+            "mode": "editable",
+            "required": false,
+            "relation": null
+          },
+          {
+            "fieldName": "color",
+            "columnName": "color",
+            "dataType": "DataTypes.STRING",
+            "isPk": false,
+            "readOnly": false,
+            "allowNull": true,
+            "unique": false,
+            "autoIncrement": false,
+            "defaultValue": null,
+            "length": null,
+            "precision": null,
+            "scale": null,
+            "comment": null,
+            "isReserved": false,
+            "label": "Color",
+            "mode": "editable",
+            "required": false,
+            "relation": null
+          },
+          {
+            "fieldName": "id",
+            "columnName": "id",
+            "dataType": "DataTypes.INTEGER",
+            "isPk": true,
+            "readOnly": false,
+            "allowNull": false,
+            "unique": false,
+            "autoIncrement": true,
+            "defaultValue": null,
+            "length": null,
+            "precision": null,
+            "scale": null,
+            "comment": null,
+            "isReserved": false,
+            "label": "id",
+            "mode": "automatic",
+            "required": false,
+            "relation": null
+          },
+          {
+            "fieldName": "kilometrajeActual",
+            "columnName": "kilometraje_actual",
+            "dataType": "DataTypes.INTEGER",
+            "isPk": false,
+            "readOnly": false,
+            "allowNull": true,
+            "unique": false,
+            "autoIncrement": false,
+            "defaultValue": null,
+            "length": null,
+            "precision": null,
+            "scale": null,
+            "comment": null,
+            "isReserved": false,
+            "label": "kilometraje Actual",
+            "mode": "automatic",
+            "required": false,
+            "relation": null
+          },
+          {
+            "fieldName": "fechaRegistro",
+            "columnName": "fecha_registro",
+            "dataType": "DataTypes.DATE",
+            "isPk": false,
+            "readOnly": false,
+            "allowNull": true,
+            "unique": false,
+            "autoIncrement": false,
+            "defaultValue": null,
+            "length": null,
+            "precision": null,
+            "scale": null,
+            "comment": null,
+            "isReserved": false,
+            "label": "fecha Registro",
+            "mode": "automatic",
+            "required": false,
+            "relation": null
+          }
+        ],
+        "dataSources": [
+          {
+            "name": "clientes",
+            "operationId": "op_clientes_list",
+            "route": "/api/clientes"
+          },
+          {
+            "name": "vehiculos",
+            "operationId": "op_vehiculos_list",
+            "route": "/api/vehiculos"
+          }
+        ],
+        "listSource": "vehiculos",
+        "listTitle": "Vehículos registrados",
+        "columns": [
+          {
+            "field": "placa",
+            "label": "Placa"
+          },
+          {
+            "field": "clienteId",
+            "label": "Cliente",
+            "relation": {
+              "entityId": "a181b2af-d54c-4da1-b0dc-ea225b79f529",
+              "endpoint": "/api/clientes",
+              "dataSource": "clientes",
+              "valueField": "id",
+              "labelField": "nombre",
+              "labelFields": [
+                "nombre"
+              ]
+            }
+          },
+          {
+            "field": "marca",
+            "label": "Marca"
+          },
+          {
+            "field": "modelo",
+            "label": "Modelo"
+          }
+        ],
+        "navigation": [
+          {
+            "route": "/clientes",
+            "label": "Ir a clientes"
+          },
+          {
+            "route": "/recepcion",
+            "label": "Ir a recepción de vehículos"
+          }
+        ],
+        "unresolved": []
+      },
+      "html": "<main><header><h1>Vehículos</h1><p>Registrar el vehículo y asociarlo con su cliente responsable.</p></header><div class=\"contract-task-grid\"><section data-contract-slot=\"form\"></section><aside class=\"contract-panel\"><section data-contract-slot=\"summary\"></section></aside></div><section data-contract-slot=\"table\"></section></main>"
+    },
+    {
+      "nodeId": "46e3981e-a9f3-4dc9-894a-7b112fed3af1",
+      "useCaseId": "6604d904-a064-4b09-94fb-d89e1ec450ee",
+      "route": "/recepcion",
+      "title": "Recepción de vehículos",
+      "contract": {
+        "renderer": "task",
+        "order": 3,
+        "entityId": "39d3562e-ad7a-4986-9b23-4e75a09b95e8",
+        "actorIds": [
+          "332b70bc-8d38-4f5e-b880-9553b15782bb"
+        ],
+        "purpose": "Selecciona el vehículo y registra los datos de ingreso y las fotografías.",
+        "summary": "La lectura de kilometraje queda vinculada a este ingreso. Para confirmar, todas las fotografías seleccionadas deben cargarse correctamente.",
+        "primaryActionId": "confirmar",
+        "actions": [
+          {
+            "actionId": "confirmar",
+            "operationId": "UC-16",
+            "name": "Confirmar recepción"
+          }
+        ],
+        "fields": [
+          {
+            "fieldName": "clienteId",
+            "label": "Cliente",
+            "dataType": "INTEGER",
+            "mode": "editable",
+            "submit": false,
+            "required": false,
+            "relation": {
+              "entityId": "a181b2af-d54c-4da1-b0dc-ea225b79f529",
+              "endpoint": "/api/clientes",
+              "dataSource": "clientes",
+              "valueField": "id",
+              "labelField": "nombre",
+              "labelFields": [
+                "nombre"
+              ]
+            },
+            "help": "Filtra los vehículos del cliente."
+          },
+          {
+            "fieldName": "vehiculoId",
+            "columnName": "vehiculo_id",
+            "dataType": "DataTypes.INTEGER",
+            "isPk": false,
+            "readOnly": false,
+            "allowNull": false,
+            "unique": false,
+            "autoIncrement": false,
+            "defaultValue": null,
+            "length": null,
+            "precision": null,
+            "scale": null,
+            "comment": null,
+            "isReserved": false,
+            "label": "Vehículo",
+            "mode": "editable",
+            "required": true,
+            "relation": {
+              "entityId": "604afa06-aeec-496d-bfa0-22ea073f8f56",
+              "endpoint": "/api/vehiculos",
+              "dataSource": "vehiculos",
+              "valueField": "id",
+              "labelField": "placa",
+              "labelFields": [
+                "placa",
+                "marca",
+                "modelo"
+              ],
+              "filter": {
+                "field": "clienteId",
+                "valueFrom": "clienteId"
+              }
+            }
+          },
+          {
+            "fieldName": "citaId",
+            "columnName": "cita_id",
+            "dataType": "DataTypes.INTEGER",
+            "isPk": false,
+            "readOnly": false,
+            "allowNull": true,
+            "unique": false,
+            "autoIncrement": false,
+            "defaultValue": null,
+            "length": null,
+            "precision": null,
+            "scale": null,
+            "comment": null,
+            "isReserved": false,
+            "label": "Cita (opcional)",
+            "mode": "editable",
+            "required": false,
+            "relation": {
+              "entityId": "394ff01d-cad9-480b-8c59-33777fa40651",
+              "endpoint": "/api/citas",
+              "dataSource": "citas",
+              "valueField": "id",
+              "labelField": "fechaHora",
+              "labelFields": [
+                "fechaHora",
+                "motivo"
+              ],
+              "filter": {
+                "field": "vehiculoId",
+                "valueFrom": "vehiculoId"
+              }
+            }
+          },
+          {
+            "fieldName": "kilometraje",
+            "columnName": "kilometraje",
+            "dataType": "DataTypes.INTEGER",
+            "isPk": false,
+            "readOnly": false,
+            "allowNull": false,
+            "unique": false,
+            "autoIncrement": false,
+            "defaultValue": null,
+            "length": null,
+            "precision": null,
+            "scale": null,
+            "comment": null,
+            "isReserved": false,
+            "label": "Kilometraje de ingreso",
+            "mode": "editable",
+            "required": true,
+            "relation": null,
+            "step": 1
+          },
+          {
+            "fieldName": "nivelCombustible",
+            "columnName": "nivel_combustible",
+            "dataType": "DataTypes.FLOAT",
+            "isPk": false,
+            "readOnly": false,
+            "allowNull": false,
+            "unique": false,
+            "autoIncrement": false,
+            "defaultValue": null,
+            "length": null,
+            "precision": null,
+            "scale": null,
+            "comment": null,
+            "isReserved": false,
+            "label": "Combustible",
+            "mode": "editable",
+            "required": true,
+            "relation": null,
+            "options": [
+              {
+                "value": 0,
+                "label": "Vacío"
+              },
+              {
+                "value": 0.25,
+                "label": "1/4"
+              },
+              {
+                "value": 0.5,
+                "label": "1/2"
+              },
+              {
+                "value": 0.75,
+                "label": "3/4"
+              },
+              {
+                "value": 1,
+                "label": "Lleno"
+              }
+            ]
+          },
+          {
+            "fieldName": "motivoIngreso",
+            "columnName": "motivo_ingreso",
+            "dataType": "DataTypes.STRING",
+            "isPk": false,
+            "readOnly": false,
+            "allowNull": false,
+            "unique": false,
+            "autoIncrement": false,
+            "defaultValue": null,
+            "length": null,
+            "precision": null,
+            "scale": null,
+            "comment": null,
+            "isReserved": false,
+            "label": "Motivo de ingreso",
+            "mode": "editable",
+            "required": true,
+            "relation": null
+          },
+          {
+            "fieldName": "observaciones",
+            "columnName": "observaciones",
+            "dataType": "DataTypes.STRING",
+            "isPk": false,
+            "readOnly": false,
+            "allowNull": true,
+            "unique": false,
+            "autoIncrement": false,
+            "defaultValue": null,
+            "length": null,
+            "precision": null,
+            "scale": null,
+            "comment": null,
+            "isReserved": false,
+            "label": "Observaciones",
+            "mode": "editable",
+            "required": false,
+            "relation": null
+          },
+          {
+            "fieldName": "evidencias",
+            "label": "Fotografías (opcionales)",
+            "control": "files",
+            "dataType": "JSON",
+            "mode": "editable",
+            "required": false,
+            "uploadEndpoint": "/api/upload"
+          },
+          {
+            "fieldName": "id",
+            "columnName": "id",
+            "dataType": "DataTypes.INTEGER",
+            "isPk": true,
+            "readOnly": false,
+            "allowNull": false,
+            "unique": false,
+            "autoIncrement": true,
+            "defaultValue": null,
+            "length": null,
+            "precision": null,
+            "scale": null,
+            "comment": null,
+            "isReserved": false,
+            "label": "id",
+            "mode": "automatic",
+            "required": false,
+            "relation": null
+          },
+          {
+            "fieldName": "usuarioId",
+            "columnName": "usuario_id",
+            "dataType": "DataTypes.INTEGER",
+            "isPk": false,
+            "readOnly": false,
+            "allowNull": true,
+            "unique": false,
+            "autoIncrement": false,
+            "defaultValue": null,
+            "length": null,
+            "precision": null,
+            "scale": null,
+            "comment": null,
+            "isReserved": false,
+            "label": "USUARIO",
+            "mode": "automatic",
+            "required": false,
+            "relation": {
+              "entityId": "947e190f-847a-4045-9b63-7432fb551d61",
+              "endpoint": "/api/usuarios",
+              "valueField": "id",
+              "labelField": "nombre"
+            }
+          },
+          {
+            "fieldName": "fechaRecepcion",
+            "columnName": "fecha_recepcion",
+            "dataType": "DataTypes.DATE",
+            "isPk": false,
+            "readOnly": false,
+            "allowNull": true,
+            "unique": false,
+            "autoIncrement": false,
+            "defaultValue": null,
+            "length": null,
+            "precision": null,
+            "scale": null,
+            "comment": null,
+            "isReserved": false,
+            "label": "fecha Recepcion",
+            "mode": "automatic",
+            "required": false,
+            "relation": null
+          }
+        ],
+        "dataSources": [
+          {
+            "name": "clientes",
+            "operationId": "op_clientes_list",
+            "route": "/api/clientes"
+          },
+          {
+            "name": "vehiculos",
+            "operationId": "op_vehiculos_list",
+            "route": "/api/vehiculos"
+          },
+          {
+            "name": "citas",
+            "operationId": "op_citas_list",
+            "route": "/api/citas"
+          },
+          {
+            "name": "recepciones",
+            "operationId": "op_recepciones_list",
+            "route": "/api/recepciones"
+          },
+          {
+            "name": "evidencias",
+            "operationId": "op_evidencia_multimedias_list",
+            "route": "/api/evidencia-multimedias"
+          }
+        ],
+        "listSource": "recepciones",
+        "listTitle": "Recepción de vehículos registrados",
+        "columns": [
+          {
+            "field": "vehiculoId",
+            "label": "Vehículo",
+            "relation": {
+              "entityId": "604afa06-aeec-496d-bfa0-22ea073f8f56",
+              "endpoint": "/api/vehiculos",
+              "dataSource": "vehiculos",
+              "valueField": "id",
+              "labelField": "placa",
+              "labelFields": [
+                "placa",
+                "marca",
+                "modelo"
+              ]
+            }
+          },
+          {
+            "field": "kilometraje",
+            "label": "Kilometraje"
+          },
+          {
+            "field": "nivelCombustible",
+            "label": "Combustible (fracción)",
+            "options": [
+              {
+                "value": 0,
+                "label": "Vacío"
+              },
+              {
+                "value": 0.25,
+                "label": "1/4"
+              },
+              {
+                "value": 0.5,
+                "label": "1/2"
+              },
+              {
+                "value": 0.75,
+                "label": "3/4"
+              },
+              {
+                "value": 1,
+                "label": "Lleno"
+              }
+            ]
+          },
+          {
+            "field": "motivoIngreso",
+            "label": "Motivo"
+          },
+          {
+            "field": "id",
+            "label": "Fotografias",
+            "attachments": {
+              "dataSource": "evidencias",
+              "foreignKey": "recepcionId",
+              "urlField": "urlOriginal"
+            }
+          }
+        ],
+        "navigation": [
+          {
+            "route": "/clientes",
+            "label": "Ir a clientes"
+          },
+          {
+            "route": "/vehiculos",
+            "label": "Ir a vehículos"
+          }
+        ],
+        "uploads": {
+          "private": true,
+          "roles": [
+            "Recepción"
+          ]
+        },
+        "unresolved": []
+      },
+      "html": "<main><header><h1>Recepción de vehículos</h1><p>Selecciona el vehículo y registra los datos de ingreso y las fotografías.</p></header><div class=\"contract-task-grid\"><section data-contract-slot=\"form\"></section><aside class=\"contract-panel\"><section data-contract-slot=\"summary\"></section></aside></div><section data-contract-slot=\"table\"></section></main>"
+    }
+  ],
+  "roles": [
+    "Recepción"
+  ],
+  "scope": "Recepción: Cliente → Vehículo → Recepción; no autorización de otros procesos."
+}

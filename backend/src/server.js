@@ -1,10 +1,12 @@
 const app = require('./app');
 const env = require('./config/env');
 const prisma = require('./config/prisma');
+const codegenJobs = require('./services/codegen/codegenJob.service');
 
 const PORT = env.PORT || 8080;
 
 async function startServer() {
+  codegenJobs.recoverInterruptedJobs();
   try {
     // Test database connection
     console.log('[Database] Checking connection to PostgreSQL...');

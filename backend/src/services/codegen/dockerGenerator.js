@@ -51,6 +51,7 @@ services:
       interval: 5s
       timeout: 5s
       retries: 5
+      start_period: 10s
 
   # 2. Backend REST API (Express + Sequelize)
   backend:
@@ -59,6 +60,7 @@ services:
       dockerfile: Dockerfile
     container_name: ${safeName}_backend
     restart: always
+    command: sh -c "node src/migrate.js && node src/server.js"
     ports:
       - "\${BACKEND_PORT:-8085}:8080"
     environment:
@@ -69,9 +71,22 @@ services:
       DB_NAME: \${DB_NAME:-${safeName}_db}
       DB_USER: \${DB_USER:-postgres}
       DB_PASSWORD: \${DB_PASSWORD:-postgres123}
+      JWT_SECRET: \${JWT_SECRET:-super_secret_jwt_key_change_in_production}
+      JWT_EXPIRATION: \${JWT_EXPIRATION:-8h}
+      INITIAL_ADMIN_USER: \${INITIAL_ADMIN_USER:-admin}
+      INITIAL_ADMIN_EMAIL: \${INITIAL_ADMIN_EMAIL:-admin@${safeName}.com}
+      INITIAL_ADMIN_PASSWORD: \${INITIAL_ADMIN_PASSWORD:-admin123}
+    volumes:
+      - uploads_data:/app/uploads
     depends_on:
       db:
         condition: service_healthy
+    healthcheck:
+      test: ["CMD", "node", "-e", "require('http').get('http://127.0.0.1:8080/api/health',r=>process.exit(r.statusCode===200?0:1)).on('error',()=>process.exit(1))"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 15s
 
   # 3. Frontend Web SPA (React + Vite + Nginx)
   frontend:
@@ -83,10 +98,12 @@ services:
     ports:
       - "\${FRONTEND_PORT:-3005}:80"
     depends_on:
-      - backend
+      backend:
+        condition: service_healthy
 
 volumes:
   postgres_data:
+  uploads_data:
 `;
 }
 

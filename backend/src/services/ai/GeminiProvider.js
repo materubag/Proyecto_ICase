@@ -42,7 +42,7 @@ class GeminiProvider extends AIProvider {
     super();
     this.model = env.GEMINI_MODEL || 'gemini-3.1-flash-lite';
     this.apiKey = env.GEMINI_API_KEY || '';
-    this.maxOutputTokens = env.GEMINI_MAX_OUTPUT_TOKENS || 384;
+    this.maxOutputTokens = env.GEMINI_MAX_OUTPUT_TOKENS || 8192;
     this.temperature = env.GEMINI_TEMPERATURE ?? 0;
     this.thinkingLevel = env.GEMINI_THINKING_LEVEL || 'minimal';
     this.minRequestIntervalMs = env.GEMINI_MIN_REQUEST_INTERVAL_MS || 6000;
