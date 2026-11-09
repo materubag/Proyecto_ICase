@@ -1,0 +1,531 @@
+/**
+ * RuleBasedExtractor
+ * Extractor determinístico avanzado basado en expresiones regulares y análisis de patrones.
+ * Extrae información estructurada SIN IA para que el sistema no dependa del LLM.
+ * Soporta variaciones de formato en títulos, numeraciones, requisitos, reglas y entidades.
+ */
+class RuleBasedExtractor {
+  /**
+   * Ejecuta la extracción determinística completa sobre el texto limpio y las secciones.
+   * @param {string} text - Texto limpio del documento
+   * @param {Array<Object>} sections - Secciones detectadas
+   * @param {Object} [meta={}] - Metadatos adicionales (fileName, pageCount)
+   * @returns {Object} Estructura intermedia canónica (DTO)
+   */
+  extract(text, sections = [], meta = {}) {
+    const functionalRequirements = this.extractFunctionalRequirements(text, sections);
+    const nonFunctionalRequirements = this.extractNonFunctionalRequirements(text, sections);
+    const businessRules = this.extractBusinessRules(text, sections);
+    const actors = this.extractActors(text, sections);
+    const technologies = this.extractTechnologies(text, sections);
+    const entities = this.extractEntities(text, sections);
+    const processes = this.extractProcesses(text, sections);
+    const constraints = this.extractConstraints(text, sections);
+    const dependencies = this.extractDependencies(text, sections);
+    const architecture = this.extractArchitecture(text, sections, technologies);
+    const contextSections = this.extractContext(sections);
+
+    // Compatibilidad retroactiva: requirements contiene functional + nonFunctional
+    const requirements = [...functionalRequirements, ...nonFunctionalRequirements];
+
+    return {
+      document: {
+        name: meta.fileName || 'documento.pdf',
+        pageCount: meta.pageCount || 1
+      },
+      sections,
+      actors,
+      functionalRequirements,
+      nonFunctionalRequirements,
+      requirements, // alias para retrocompatibilidad
+      businessRules,
+      entities,
+      processes,
+      technologies,
+      constraints,
+      dependencies,
+      architecture,
+      contextSections,
+      rawText: text
+    };
+  }
+
+  /**
+   * Extrae requisitos funcionales con patrones flexibles:
+   * RF-01, RF01, RF 01, Requisito funcional RF-01, etc.
+   */
+  extractFunctionalRequirements(text, sections = []) {
+    const classifier=require('../analysis/statementClassifier');
+    const out=this.extractCodedRequirements(text, sections, 'RF', 'FUNCTIONAL').filter(r=>classifier.classify(r.text,r)!=='OBJECTIVE');
+    const add=(statement,start,end,section)=>{if(out.some(r=>start>=r.start&&start<r.end))return;out.push({name:statement,text:statement,description:statement,type:'FUNCTIONAL',source:'explicit',extractionMethod:'LOCAL',sourceText:text.substring(start,end),section,start,end});};
+    for(const m of text.matchAll(/(?:El sistema|La aplicaci[o\u00f3]n|La plataforma)\s+(?:debe(?:r[a\u00e1])?|permitir[a\u00e1]|permite|podr[a\u00e1])\s+[^.\n]+[.]?/gi)) {
+      if(classifier.objectives(text,sections).some(o=>m.index>=o.start&&m.index<o.end))continue;
+      let end=m.index+m[0].length;
+      // Continue wrapped sentences, but stop at paragraphs, headings, lists or page markers.
+      while(!/[.!?]\s*$/.test(text.substring(m.index,end)) && text[end]==='\n') {
+        const next=text.substring(end+1).match(/^[^\n]*/)?.[0]||'';
+        if(!next.trim()||/^\s*(?:\[|[-*\u2022]|(?:RF|RNF)[ -]*\d|[A-Z][A-Z ]{4,}$)/.test(next)||sections.some(s=>s.start===end+1))break;
+        const stop=next.search(/[.!?](?=\s|$)/);
+        end+=1+(stop>=0?stop+1:next.length);
+        if(stop>=0)break;
+      }
+      const statement=text.substring(m.index,end).replace(/\s+/g,' ').trim();
+      add(statement,m.index,end,this.findSectionForOffset(m.index,sections));
+    }
+    for(const section of sections.filter(s=>/requisitos?\s+funcionales|tabla de rf/i.test(s.title||'')))for(const m of text.substring(section.start,section.end).matchAll(/^[ \t|]*(?:registrar|consultar|modificar|eliminar|exportar|importar|generar|almacenar)\s+[^\n|]+/gmi)) {
+      const start=section.start+m.index;add(m[0].trim(),start,start+m[0].length,section.title);
+    }
+    return out;
+  }
+
+  extractNonFunctionalRequirements(text, sections = []) {
+    const out = this.extractCodedRequirements(text, sections, 'RNF', 'NON_FUNCTIONAL');
+    const add = (statement, start, end, section) => {
+      if (out.some(r => start >= r.start && start < r.end)) return;
+      out.push({
+        name: statement,
+        text: statement,
+        description: statement,
+        type: 'NON_FUNCTIONAL',
+        source: 'explicit',
+        extractionMethod: 'LOCAL',
+        sourceText: text.substring(start, end),
+        section,
+        start,
+        end
+      });
+    };
+
+    for (const m of text.matchAll(/(?:El sistema|La aplicaci[o\u00f3]n|La plataforma|El software|La herramienta)\s+(?:debe(?:r[a\u00e1])?|deber[i\u00ed]a|garantizar[a\u00e1]|garantiza|ayuda\s+a)\s+(?:reducir errores|garantizar la (?:seguridad|confidencialidad|integridad|disponibilidad)|asegurar la|responder en|estar disponible|soportar hasta|mantener la confidencialidad|cumplir con las normativas|facilitar el acceso seguro)[^.\n]+[.]?/gi)) {
+      let end = m.index + m[0].length;
+      while (!/[.!?]\s*$/.test(text.substring(m.index, end)) && text[end] === '\n') {
+        const next = text.substring(end + 1).match(/^[^\n]*/)?.[0] || '';
+        if (!next.trim() || /^\s*(?:\[|[-*\u2022]|(?:RF|RNF)[ -]*\d|[A-Z][A-Z ]{4,}$)/.test(next) || sections.some(s => s.start === end + 1)) break;
+        const stop = next.search(/[.!?](?=\s|$)/);
+        end += 1 + (stop >= 0 ? stop + 1 : next.length);
+        if (stop >= 0) break;
+      }
+      const statement = text.substring(m.index, end).replace(/\s+/g, ' ').trim();
+      add(statement, m.index, end, this.findSectionForOffset(m.index, sections));
+    }
+
+    for (const section of sections.filter(s => /requisitos?\s+no\s+funcionales|atributos?\s+de\s+calidad|seguridad|rendimiento|disponibilidad|usabilidad|fiabilidad/i.test(s.title || ''))) {
+      for (const m of text.substring(section.start, section.end).matchAll(/^[ \t|*•-]*(?:responder|garantizar|asegurar|cumplir|soportar|mantener|proteger|cifrar|disponibilidad|tiempo\s+de\s+respuesta)\s+[^\n|]+/gmi)) {
+        const start = section.start + m.index;
+        add(m[0].trim().replace(/^[*•-]\s*/, ''), start, start + m[0].length, section.title);
+      }
+    }
+    return out;
+  }
+
+  extractCodedRequirements(text = '', sections = [], prefix, type) {
+    const rows = [...text.matchAll(/[^\n]*(?:\n|$)/g)].filter(m => m[0]).flatMap(row=>{
+      const starts=[...row[0].matchAll(/(?:^|[.;]\s+)((?:RNF|RF)[ _-]*\d+)\s*:/gi)].map(m=>m.index+m[0].indexOf(m[1]));
+      if(starts.length<2)return [row];
+      return starts.map((start,index)=>Object.assign([row[0].slice(start,starts[index+1]??row[0].length)],{index:row.index+start}));
+    });
+    const pattern = /^[ \t|]*(?:(?:\d+[.)]|[-*•])\s+)?(?:(?:Requisitos?\s+(?:no\s+)?funcionales?|Código)\s+)?((RNF|RF|RN)[ \t_–-]*([0-9]+))\b[ \t:|.–-]*(.*)$/i;
+    const out = [];
+    const repeatedHeadings=new Set();
+    const headingPages=new Map();let currentPage=0;
+    for(const row of rows){
+      const line=row[0].trim(),page=line.match(/^\[PÁGINA\s+(\d+)\]$/i);
+      if(page){currentPage=Number(page[1]);continue;}
+      if(currentPage&&/^[A-ZÁÉÍÓÚÑ][A-ZÁÉÍÓÚÑ \t-]{5,}$/.test(line)&&!pattern.test(line)){
+        const pages=headingPages.get(line)||new Set();pages.add(currentPage);headingPages.set(line,pages);
+      }
+    }
+    for(const [line,pages] of headingPages)if(pages.size>1)repeatedHeadings.add(line);
+    const cells = line => line.replace(/^\s*\||\|\s*$/g, '').split(/\t|\|/).map(c => c.trim());
+    let columns = null;
+    for (let i = 0; i < rows.length; i++) {
+      const first = rows[i][0].replace(/\r?\n$/, '');
+      const header = cells(first);
+      if (header.length > 1 && header.some(c => /^(?:descripci[oó]n|requisito|enunciado)$/i.test(c)) && header.some(c => /^(?:c[oó]digo|id)$/i.test(c))) { columns = header; continue; }
+      const m = first.match(pattern);
+      if (!m || m[2].toUpperCase() !== prefix || /^(?:(?:A|AL|HASTA|TO)\s+)?R(?:N)?F[ -]*\d+\s*$/i.test(m[4])) continue;
+      let description = m[4].replace(/\|\s*$/, '').trim();
+      let boundaryContext=null;
+      const extractionIssues = [];
+      const rowCells = cells(first);
+      const descriptionColumn = columns?.findIndex(c => /^(?:descripci[oó]n|requisito|enunciado)$/i.test(c));
+      const table = rowCells.length > 1;
+      const declared = {};
+      const collect = values => {
+        for(const [index,column] of (columns || []).entries()) {
+          const key=/^actores?|responsables?$/i.test(column)?'actors':/^dependencias?|prerrequisitos?$/i.test(column)?'dependencies':/^prioridad$/i.test(column)?'priority':/^reglas?(?: de negocio)?$/i.test(column)?'businessRules':/^tipo$/i.test(column)?'type':null;
+          if(key && values[index]) declared[key]=[declared[key],values[index]].filter(Boolean).join('\n');
+        }
+      };
+      if (table && descriptionColumn >= 0 && rowCells.length === columns.length) description = rowCells[descriptionColumn];
+      else if (table) { description=rowCells[1]||''; extractionIssues.push('AMBIGUOUS_TABLE_COLUMNS'); }
+      if(table && columns && rowCells.length===columns.length)collect(rowCells);
+      let end = rows[i].index + first.length;
+      let started = Boolean(description);
+      for (let j = i + 1; j < rows.length; j++) {
+        const next = rows[j][0].replace(/\r?\n$/, '');
+        const clean = next.trim();
+        if(repeatedHeadings.has(clean)||/^(?:P[aá]gina\s+\d+(?:\s+de\s+\d+)?|--\s*\d+\s+of\s+\d+\s*--)$/i.test(clean)){end=rows[j].index+next.length;continue;}
+        if (/^(?:\[PÁGINA\s+\d+\]|---\s*\[SALTO_PAGINA\]\s*---)$/.test(clean)) { end = rows[j].index + next.length; continue; }
+        const nextCells = cells(next);
+        if (columns && nextCells.length === columns.length && nextCells.every((c,k) => c === columns[k])) { end = rows[j].index + next.length; continue; }
+        if (/^[•*]|^RN[\s_-]*\d+\b|^\d+(?:\.\d+)*\.?\s+[A-ZÁÉÍÓÚÑ]|^[A-ZÁÉÍÓÚÑ][A-ZÁÉÍÓÚÑ \t·-]{5,}$/.test(clean) || pattern.test(next)) break;
+        if (!clean) { if (started) break; else continue; }
+        // A complete sentence followed by another paragraph is a separate finding.
+        // Explicit conditional continuations stay attached (e.g. "solo si...", "con...").
+        if (!table && started && /[.;]$/.test(description) && !/^(?:si\b|cuando\b|siempre\b|solo\b|únicamente\b|bajo\b|con\b|sin\b|excepto\b|y\b|o\b|también\b|además\b|asimismo\b|el sistema\b|la aplicación\b|debe(?:rá)?\b)/i.test(clean) && !/^[ \t]+\S/.test(next)) {
+          extractionIssues.push('AMBIGUOUS_PARAGRAPH_BOUNDARY');boundaryContext={text:next,start:rows[j].index,end:rows[j].index+next.length};break;
+        }
+        let continuation = clean;
+        if (table && descriptionColumn >= 0 && nextCells.length === columns.length) { continuation = nextCells[descriptionColumn];collect(nextCells); }
+        else if (table && nextCells.length > 1) { continuation=nextCells[1]||'';extractionIssues.push('AMBIGUOUS_TABLE_CONTINUATION'); }
+        description += (description ? '\n' : '') + continuation;
+        started = true; end = rows[j].index + next.length;
+      }
+      if (!description) continue;
+      const start = rows[i].index + first.indexOf(m[1]);
+      const code = `${prefix}-${String(Number(m[3])).padStart(2, '0')}`;
+      const sourceText = text.substring(start, end);
+      const name = description.replace(/\s+/g, ' ').trim();
+      const pages = [...text.substring(0, start).matchAll(/\[PÁGINA\s+(\d+)\]/gi)];
+      out.push({ id: code, code, originalCode: m[1], name, text: name, description: name, type,
+        source: 'explicit', extractionMethod: 'LOCAL', section: this.findSectionForOffset(start, sections),
+        sourceText, originalDescription:description, declared, boundaryContext, start, end, extractionIssues, page: pages.length ? Number(pages.at(-1)[1]) : null });
+    }
+    // Same code with different text is not silently discarded.
+    return out;
+  }
+
+  /**
+   * Extrae reglas de negocio:
+   * RN-01, RN01, RN 01 o viñetas en la sección de reglas de negocio.
+   */
+  extractBusinessRules(text, sections = []) {
+    const rules = [];
+    const seenTexts = new Set();
+    let counter = 1;
+
+    // 1. Buscar patrones explícitos RN-01, RN 01, etc.
+    for(const row of this.extractCodedRequirements(text,sections,'RN','BUSINESS_RULE')){
+      seenTexts.add(row.text.toLowerCase());
+      rules.push({...row,id:row.originalCode,code:row.originalCode,source:'explicit'});
+    }
+
+    // 2. Si hay secciones específicas de reglas de negocio, extraer sus viñetas
+    const rnSections = sections.filter(s =>
+      s.sectionId === 'reglas_negocio' ||
+      /REGLAS\s+DE\s+NEGOCIO/i.test(s.title)
+    );
+
+    for (const sec of rnSections) {
+      if (sec && sec.content) {
+        const bulletMatches = [...sec.content.matchAll(/^[•\-*]\s*([^\n]+)/gm)];
+        for (const bm of bulletMatches) {
+          const raw = bm[1].trim();
+          if (raw.length > 10 && !seenTexts.has(raw.toLowerCase())) {
+            seenTexts.add(raw.toLowerCase());
+            const id = `RN-${String(counter++).padStart(2, '0')}`;
+            rules.push({
+              id,
+              code: id,
+              text: raw,
+              description: raw,
+              source: 'pdf',
+              section: sec.title
+            });
+          }
+        }
+      }
+    }
+
+    return rules;
+  }
+
+  /**
+   * Extrae actores o perfiles contemplados.
+   */
+  extractActors(text, sections = []) {
+    const actors = [];
+    const seenNames = new Set();
+
+    // 1. Buscar en secciones específicas de perfiles o actores
+    const profileSection = sections.find(s =>
+      s.sectionId === 'perfiles_contemplados' ||
+      /PERFILES\s+CONTEMPLADOS|ROLES|ACTORES|USUARIOS|PARTICIPANTES/i.test(s.title)
+    );
+
+    const sourceText = profileSection ? profileSection.content : text;
+
+    // Viñetas: "• Nombre: descripción..."
+    const bulletMatches = [...sourceText.matchAll(/^[•\-*]\s*([A-Za-zÁÉÍÓÚñáéíóú\s]{2,30}):\s*([^\n]+)/gm)];
+    for (const match of bulletMatches) {
+      const name = match[1].trim();
+      const description = match[2].trim();
+      const normalized = name.toLowerCase();
+
+      if (!seenNames.has(normalized)) {
+        seenNames.add(normalized);
+        actors.push({
+          id: `ACT-${String(actors.length + 1).padStart(2, '0')}`,
+          name,
+          description,
+          source: 'pdf',
+          sourceText: match[0]
+        });
+      }
+    }
+
+    // 2. Palabras clave comunes de roles en singular o plural
+    if (actors.length === 0 || actors.length < 3) {
+      const commonRolesRegex = /\b(Administrador(?:es)?|Cliente(?:s)?|Usuario(?:s)?|T[eé]cnico(?:s)?|Gerente(?:s)?|Operador(?:es)?|Auditor(?:es)?|Supervisor(?:es)?|Gestor(?:es)?|Consultor(?:es)?)\b/gi;
+      const roleMatches = [...text.matchAll(commonRolesRegex)];
+
+      for (const m of roleMatches) {
+        let raw = m[1].toLowerCase();
+        if (raw.endsWith('es') && raw !== 'gerentes') {
+          raw = raw.slice(0, -2);
+        } else if (raw.endsWith('s')) {
+          raw = raw.slice(0, -1);
+        }
+        const name = raw.charAt(0).toUpperCase() + raw.slice(1);
+        const norm = name.toLowerCase();
+
+        if (!seenNames.has(norm)) {
+          seenNames.add(norm);
+          actors.push({
+            id: `ACT-${String(actors.length + 1).padStart(2, '0')}`,
+            name,
+            description: `Rol de ${name} identificado en el sistema.`,
+            source: 'pdf',
+            sourceText: m[0]
+          });
+        }
+      }
+    }
+
+    const deduplicationService = require('../analysis/deduplicationService');
+    return deduplicationService.consolidateActors(actors);
+  }
+
+  /**
+   * Extrae nombres de tecnologías mencionadas explícitamente en el texto.
+   * NO inventa tecnologías.
+   */
+  extractTechnologies(text, sections = []) {
+    const knownTech = [
+      'React', 'Vue', 'Vue.js', 'Angular', 'Next.js', 'Vite',
+      'Node.js', 'Express', 'Express.js', 'NestJS',
+      'FastAPI', 'Django', 'Flask', 'Python',
+      'Java', 'Spring Boot', 'Spring',
+      'PostgreSQL', 'Postgres', 'MySQL', 'MongoDB', 'SQLite', 'Oracle', 'Prisma',
+      'Docker', 'Kubernetes',
+      'JWT', 'REST API', 'GraphQL', 'HTTPS', 'TypeScript', 'JavaScript',
+      'Tailwind CSS', 'Bootstrap'
+    ];
+
+    const detected = [];
+    const seen = new Set();
+
+    for (const tech of knownTech) {
+      // Búsqueda con límite de palabra seguro
+      const escaped = tech.replace('.', '\\.').replace(' ', '\\s+');
+      const regex = new RegExp(`\\b${escaped}\\b`, 'i');
+      if (regex.test(text)) {
+        if (!seen.has(tech.toLowerCase())) {
+          seen.add(tech.toLowerCase());
+          detected.push(tech);
+        }
+      }
+    }
+
+    return detected;
+  }
+
+  /**
+   * Extrae posibles entidades identificadas en el texto o secciones de modelo de datos.
+   */
+  extractEntities(text, sections = []) {
+    const entities = [];
+    const seen = new Set();
+
+    // 1. Buscar en secciones como "Modelo de datos", "Entidades", "Base de datos"
+    const dataSection = sections.find(s =>
+      /ENTIDADES|MODELO\s+DE\s+DATOS|BASE\s+DE\s+DATOS|INFORMACI[OÓ]N\s+PRINCIPAL/i.test(s.title)
+    );
+
+    const targetText = dataSection ? dataSection.content : text;
+
+    // Buscar patrones tipo: "entidades Usuario, Libro, Autor..." o "entidades como Cliente, Vehiculo..."
+    const entitiesListMatch = targetText.match(/(?:entidades|tablas|modelos)(?:\s+principales)?(?:\s+como|\s+del\s+sistema|\s*:|\s+incluyen)?\s*([A-Za-zÁÉÍÓÚñáéíóú,\s\ny]+)/i);
+
+    if (entitiesListMatch) {
+      const candidates = entitiesListMatch[1].split(/[,y\n]/).map(c => c.trim()).filter(Boolean);
+      for (const c of candidates) {
+        if (c.length >= 3 && c.length <= 25 && /^[A-ZÁÉÍÓÚ][a-záéíóúñA-Z]+$/.test(c)) {
+          const norm = c.toLowerCase();
+          if (!seen.has(norm)) {
+            seen.add(norm);
+            entities.push({
+              id: `ENT-${String(entities.length + 1).padStart(2, '0')}`,
+              name: c,
+              description: `Entidad ${c} identificada en el documento.`,
+              attributes: [],
+              source: 'pdf'
+            });
+          }
+        }
+      }
+    }
+
+    // 2. Si no hubo lista explícita, buscar solo conceptos universales de software presentes en el texto
+    if (entities.length === 0) {
+      const coreConcepts = ['Usuario', 'Rol', 'Permiso', 'Sesion', 'Notificacion', 'Registro', 'Configuracion', 'Reporte'];
+      for (const kw of coreConcepts) {
+        const regex = new RegExp(`\\b${kw}\\b`, 'i');
+        if (regex.test(text)) {
+          const norm = kw.toLowerCase();
+          if (!seen.has(norm)) {
+            seen.add(norm);
+            entities.push({
+              id: `ENT-${String(entities.length + 1).padStart(2, '0')}`,
+              name: kw,
+              description: `Entidad ${kw} identificada en el texto.`,
+              attributes: [],
+              source: 'pdf'
+            });
+          }
+        }
+      }
+    }
+
+    return entities;
+  }
+
+  /**
+   * Extrae procesos o pasos secuenciales detectados en el documento.
+   */
+  extractProcesses(text, sections = []) {
+    const processes = [];
+    const procSection = sections.find(s =>
+      s.sectionId === 'modelo_operativo' ||
+      /MODELO\s+GENERAL|PROCESOS|FLUJO\s+DE\s+OPERACI[OÓ]N/i.test(s.title)
+    );
+
+    const source = procSection ? procSection.content : '';
+    if (source) {
+      const stepMatches = [...source.matchAll(/^[ \t]*([0-9]{1,2})\.\s*([^\n]+)/gm)];
+      for (const sm of stepMatches) {
+        processes.push({
+          step: parseInt(sm[1], 10),
+          description: sm[2].trim(),
+          source: 'pdf'
+        });
+      }
+    }
+
+    return processes;
+  }
+
+  /**
+   * Extrae restricciones del sistema.
+   */
+  extractConstraints(text, sections = []) {
+    const constraints = [];
+    const supSection = sections.find(s =>
+      /SUPUESTOS|RESTRICCIONES|DEPENDENCIAS/i.test(s.title)
+    );
+
+    if (supSection && supSection.content) {
+      const bullets = [...supSection.content.matchAll(/^[•\-*]\s*([^\n]+)/gm)];
+      for (const b of bullets) {
+        constraints.push(b[1].trim());
+      }
+    }
+
+    return constraints;
+  }
+
+  /**
+   * Extrae dependencias explícitas.
+   */
+  extractDependencies(text, sections = []) {
+    const dependencies = [];
+    const depSection = sections.find(s => /DEPENDENCIAS/i.test(s.title));
+    if (depSection && depSection.content) {
+      const bullets = [...depSection.content.matchAll(/^[•\-*]\s*([^\n]+)/gm)];
+      for (const b of bullets) {
+        dependencies.push(b[1].trim());
+      }
+    }
+    return dependencies;
+  }
+
+  /**
+   * Extrae estructura de arquitectura basada en tecnologías y patrones detectados.
+   */
+  extractArchitecture(text, sections = [], detectedTech = []) {
+    const archSection = sections.find(s => s.sectionId === 'arquitectura');
+    const content = archSection ? archSection.content : text;
+
+    let style = 'UNKNOWN';
+    if (/tres capas/i.test(content)) style = 'Arquitectura Web de Tres Capas';
+    if (/microservicios/i.test(content)) style = 'Arquitectura de Microservicios';
+    if (/hexagonal|clean architecture/i.test(content)) style = 'Arquitectura Limpia / Hexagonal';
+
+    // Determinar capas principales con base en tecnologías detectadas
+    const frontendTech = detectedTech.find(t => ['React', 'Vue', 'Angular', 'Next.js'].includes(t)) || 'UNKNOWN';
+    const backendTech = detectedTech.find(t => ['Node.js', 'Express', 'FastAPI', 'Spring Boot', 'Django'].includes(t)) || 'UNKNOWN';
+    const dbTech = detectedTech.find(t => ['PostgreSQL', 'Postgres', 'MySQL', 'MongoDB', 'SQLite'].includes(t)) || 'UNKNOWN';
+
+    return {
+      style,
+      frontend: frontendTech,
+      backend: backendTech,
+      database: dbTech,
+      technologies: detectedTech,
+      connections: [],
+      components: detectedTech.map(name => ({ name, layer: null, type: null })),
+      source: 'pdf'
+    };
+  }
+
+  /**
+   * Extrae resúmenes contextuales de situación actual, problemas y objetivos.
+   */
+  extractContext(sections = []) {
+    const context = {
+      problemPrincipal: '',
+      situacionActual: '',
+      objetivos: '',
+      alcance: ''
+    };
+
+    for (const sec of sections) {
+      if (/PROBLEMA\s+PRINCIPAL/i.test(sec.title)) {
+        context.problemPrincipal = sec.content;
+      } else if (/SITUACI[OÓ]N\s+ACTUAL/i.test(sec.title)) {
+        context.situacionActual = sec.content;
+      } else if (/OBJETIVOS?/i.test(sec.title)) {
+        context.objetivos = sec.content;
+      } else if (/ALCANCE/i.test(sec.title)) {
+        context.alcance = sec.content;
+      }
+    }
+
+    return context;
+  }
+
+  /**
+   * Helper para encontrar la sección correspondiente a un offset.
+   */
+  findSectionForOffset(offset, sections = []) {
+    for (const s of sections) {
+      if (offset >= s.start && offset <= s.end) {
+        return s.title;
+      }
+    }
+    return 'General';
+  }
+}
+
+module.exports = new RuleBasedExtractor();

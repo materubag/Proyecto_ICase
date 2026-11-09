@@ -18,7 +18,9 @@
     "test:codegen:browser": "node tests/codegen_screen_contract_browser.cjs",
     "test:autron5": "node tests/autron5_export_acceptance.cjs",
     "export:autron5:review": "node scripts/export-autron5-review.cjs",
-    "test:codegen:acceptance": "node tests/codegen_ai_export_acceptance.cjs"
+    "test:codegen:acceptance": "node tests/codegen_ai_export_acceptance.cjs",
+    "docs:check": "node --require ./tests/fixtures/offline.cjs --test tests/openapi.test.js",
+    "docs:sync": "node scripts/sync-docs.cjs"
   },
   "keywords": [
     "icase",
@@ -37,9 +39,11 @@
     "json5": "^2.2.3",
     "multer": "^2.4.0",
     "pdf-parse": "^2.4.5",
-    "playwright-core": "1.63.0"
+    "playwright-core": "1.63.0",
+    "swagger-ui-express": "^5.0.1"
   },
   "devDependencies": {
+    "@apidevtools/swagger-parser": "^13.1.0",
     "bcryptjs": "^3.0.3",
     "jsonwebtoken": "^9.0.3",
     "nodemon": "^3.1.4",
