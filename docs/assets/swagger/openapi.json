@@ -1,0 +1,5570 @@
+{
+  "openapi": "3.0.3",
+  "info": {
+    "title": "ICASE API",
+    "version": "1.0.0",
+    "description": "API de ingenier?a de requisitos, fuentes, revisi?n y diagramas. Autenticaci?n de clientes no implementada; credenciales externas solo en el servidor. Los esquemas abiertos se completan con la referencia t?cnica del portal MkDocs.",
+    "license": {
+      "name": "ISC"
+    }
+  },
+  "servers": [
+    {
+      "url": "/api",
+      "description": "API del mismo origen"
+    }
+  ],
+  "tags": [
+    {
+      "name": "health"
+    },
+    {
+      "name": "project"
+    },
+    {
+      "name": "requirement"
+    },
+    {
+      "name": "actor"
+    },
+    {
+      "name": "document"
+    },
+    {
+      "name": "useCase"
+    },
+    {
+      "name": "classModel"
+    },
+    {
+      "name": "screen"
+    },
+    {
+      "name": "file"
+    },
+    {
+      "name": "versionHistory"
+    },
+    {
+      "name": "source"
+    },
+    {
+      "name": "candidate"
+    },
+    {
+      "name": "engineering"
+    }
+  ],
+  "paths": {
+    "/projects": {
+      "get": {
+        "tags": [
+          "project"
+        ],
+        "summary": "GET /projects",
+        "description": "Operaci?n existente. Los campos abiertos se detallan en el controlador y servicio correspondientes.",
+        "operationId": "get__projects",
+        "parameters": [
+          {
+            "name": "includeArchived",
+            "in": "query",
+            "schema": {
+              "type": "string",
+              "enum": [
+                "true",
+                "false"
+              ]
+            },
+            "description": "Incluir proyectos archivados."
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Operaci?n completada; formato dependiente del recurso."
+          },
+          "default": {
+            "description": "Error de validaci?n, recurso o servicio.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
+      },
+      "post": {
+        "tags": [
+          "project"
+        ],
+        "summary": "Crear un proyecto",
+        "description": "Operaci?n existente. Los campos abiertos se detallan en el controlador y servicio correspondientes.",
+        "operationId": "post__projects",
+        "parameters": [],
+        "responses": {
+          "201": {
+            "description": "Proyecto creado.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean"
+                    },
+                    "data": {
+                      "$ref": "#/components/schemas/Project"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "Error de validaci?n, recurso o servicio.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        },
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ProjectInput"
+              }
+            }
+          }
+        }
+      }
+    },
+    "/projects/{id}": {
+      "get": {
+        "tags": [
+          "project"
+        ],
+        "summary": "GET /projects/{id}",
+        "description": "Operaci?n existente. Los campos abiertos se detallan en el controlador y servicio correspondientes.",
+        "operationId": "get__projects_id_",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Operaci?n completada; formato dependiente del recurso."
+          },
+          "default": {
+            "description": "Error de validaci?n, recurso o servicio.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
+      },
+      "put": {
+        "tags": [
+          "project"
+        ],
+        "summary": "PUT /projects/{id}",
+        "description": "Operaci?n existente. Los campos abiertos se detallan en el controlador y servicio correspondientes.",
+        "operationId": "put__projects_id_",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Operaci?n completada; formato dependiente del recurso."
+          },
+          "default": {
+            "description": "Error de validaci?n, recurso o servicio.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        },
+        "requestBody": {
+          "required": false,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "additionalProperties": true
+              }
+            }
+          }
+        }
+      },
+      "delete": {
+        "tags": [
+          "project"
+        ],
+        "summary": "DELETE /projects/{id}",
+        "description": "Operaci?n existente. Los campos abiertos se detallan en el controlador y servicio correspondientes.",
+        "operationId": "delete__projects_id_",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Operaci?n completada; formato dependiente del recurso."
+          },
+          "default": {
+            "description": "Error de validaci?n, recurso o servicio.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/projects/{id}/restore": {
+      "post": {
+        "tags": [
+          "project"
+        ],
+        "summary": "POST /projects/{id}/restore",
+        "description": "Operaci?n existente. Los campos abiertos se detallan en el controlador y servicio correspondientes.",
+        "operationId": "post__projects_id_restore",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Operaci?n completada; formato dependiente del recurso."
+          },
+          "default": {
+            "description": "Error de validaci?n, recurso o servicio.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        },
+        "requestBody": {
+          "required": false,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "additionalProperties": true
+              }
+            }
+          }
+        }
+      }
+    },
+    "/projects/{projectId}/requirements": {
+      "get": {
+        "tags": [
+          "project"
+        ],
+        "summary": "GET /projects/{projectId}/requirements",
+        "description": "Operaci?n existente. Los campos abiertos se detallan en el controlador y servicio correspondientes.",
+        "operationId": "get__projects_projectId_requirements",
+        "parameters": [
+          {
+            "name": "projectId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Operaci?n completada; formato dependiente del recurso."
+          },
+          "default": {
+            "description": "Error de validaci?n, recurso o servicio.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
+      },
+      "post": {
+        "tags": [
+          "project"
+        ],
+        "summary": "POST /projects/{projectId}/requirements",
+        "description": "Operaci?n existente. Los campos abiertos se detallan en el controlador y servicio correspondientes.",
+        "operationId": "post__projects_projectId_requirements",
+        "parameters": [
+          {
+            "name": "projectId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "201": {
+            "description": "Recurso creado.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean"
+                    },
+                    "data": {}
+                  },
+                  "additionalProperties": true
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "Error de validaci?n, recurso o servicio.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        },
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "code": {
+                    "type": "string"
+                  },
+                  "name": {
+                    "type": "string"
+                  },
+                  "description": {
+                    "type": "string"
+                  },
+                  "type": {
+                    "type": "string",
+                    "enum": [
+                      "FUNCTIONAL",
+                      "NON_FUNCTIONAL"
+                    ]
+                  },
+                  "priority": {
+                    "type": "string"
+                  },
+                  "status": {
+                    "type": "string"
+                  },
+                  "actorIds": {
+                    "type": "array",
+                    "items": {
+                      "type": "string"
+                    }
+                  },
+                  "dependencies": {
+                    "type": "array",
+                    "items": {
+                      "type": "string"
+                    }
+                  },
+                  "preconditions": {
+                    "type": "string"
+                  },
+                  "postconditions": {
+                    "type": "string"
+                  }
+                },
+                "additionalProperties": true
+              }
+            }
+          }
+        }
+      }
+    },
+    "/projects/{projectId}/actors": {
+      "get": {
+        "tags": [
+          "project"
+        ],
+        "summary": "GET /projects/{projectId}/actors",
+        "description": "Operaci?n existente. Los campos abiertos se detallan en el controlador y servicio correspondientes.",
+        "operationId": "get__projects_projectId_actors",
+        "parameters": [
+          {
+            "name": "projectId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Operaci?n completada; formato dependiente del recurso."
+          },
+          "default": {
+            "description": "Error de validaci?n, recurso o servicio.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
+      },
+      "post": {
+        "tags": [
+          "project"
+        ],
+        "summary": "POST /projects/{projectId}/actors",
+        "description": "Operaci?n existente. Los campos abiertos se detallan en el controlador y servicio correspondientes.",
+        "operationId": "post__projects_projectId_actors",
+        "parameters": [
+          {
+            "name": "projectId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "201": {
+            "description": "Recurso creado.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean"
+                    },
+                    "data": {}
+                  },
+                  "additionalProperties": true
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "Error de validaci?n, recurso o servicio.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        },
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "name": {
+                    "type": "string"
+                  },
+                  "description": {
+                    "type": "string"
+                  },
+                  "codeId": {
+                    "type": "string"
+                  },
+                  "reviewStatus": {
+                    "type": "string"
+                  },
+                  "aliases": {
+                    "type": "array",
+                    "items": {
+                      "type": "string"
+                    }
+                  }
+                },
+                "additionalProperties": true
+              }
+            }
+          }
+        }
+      }
+    },
+    "/projects/{projectId}/actor-relations/regenerate": {
+      "post": {
+        "tags": [
+          "project"
+        ],
+        "summary": "POST /projects/{projectId}/actor-relations/regenerate",
+        "description": "Operaci?n existente. Los campos abiertos se detallan en el controlador y servicio correspondientes.",
+        "operationId": "post__projects_projectId_actor_relations_regenerate",
+        "parameters": [
+          {
+            "name": "projectId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Operaci?n completada; formato dependiente del recurso."
+          },
+          "default": {
+            "description": "Error de validaci?n, recurso o servicio.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        },
+        "requestBody": {
+          "required": false,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "additionalProperties": true
+              }
+            }
+          }
+        }
+      }
+    },
+    "/projects/{projectId}/actor-relations/jobs/{jobId}": {
+      "get": {
+        "tags": [
+          "project"
+        ],
+        "summary": "GET /projects/{projectId}/actor-relations/jobs/{jobId}",
+        "description": "Operaci?n existente. Los campos abiertos se detallan en el controlador y servicio correspondientes.",
+        "operationId": "get__projects_projectId_actor_relations_jobs_jobId_",
+        "parameters": [
+          {
+            "name": "projectId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "jobId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Operaci?n completada; formato dependiente del recurso."
+          },
+          "default": {
+            "description": "Error de validaci?n, recurso o servicio.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/projects/{projectId}/actors/approve-all": {
+      "post": {
+        "tags": [
+          "project"
+        ],
+        "summary": "POST /projects/{projectId}/actors/approve-all",
+        "description": "Operaci?n existente. Los campos abiertos se detallan en el controlador y servicio correspondientes.",
+        "operationId": "post__projects_projectId_actors_approve_all",
+        "parameters": [
+          {
+            "name": "projectId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Operaci?n completada; formato dependiente del recurso."
+          },
+          "default": {
+            "description": "Error de validaci?n, recurso o servicio.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        },
+        "requestBody": {
+          "required": false,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "additionalProperties": true
+              }
+            }
+          }
+        }
+      }
+    },
+    "/projects/{projectId}/entities/{entityId}/status": {
+      "patch": {
+        "tags": [
+          "project"
+        ],
+        "summary": "PATCH /projects/{projectId}/entities/{entityId}/status",
+        "description": "Operaci?n existente. Los campos abiertos se detallan en el controlador y servicio correspondientes.",
+        "operationId": "patch__projects_projectId_entities_entityId_status",
+        "parameters": [
+          {
+            "name": "projectId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "entityId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Operaci?n completada; formato dependiente del recurso."
+          },
+          "default": {
+            "description": "Error de validaci?n, recurso o servicio.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        },
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "reviewStatus": {
+                    "type": "string"
+                  }
+                },
+                "additionalProperties": true
+              }
+            }
+          }
+        }
+      }
+    },
+    "/projects/{projectId}/entities/approve-all": {
+      "post": {
+        "tags": [
+          "project"
+        ],
+        "summary": "POST /projects/{projectId}/entities/approve-all",
+        "description": "Operaci?n existente. Los campos abiertos se detallan en el controlador y servicio correspondientes.",
+        "operationId": "post__projects_projectId_entities_approve_all",
+        "parameters": [
+          {
+            "name": "projectId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Operaci?n completada; formato dependiente del recurso."
+          },
+          "default": {
+            "description": "Error de validaci?n, recurso o servicio.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        },
+        "requestBody": {
+          "required": false,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "additionalProperties": true
+              }
+            }
+          }
+        }
+      }
+    },
+    "/projects/{projectId}/files": {
+      "get": {
+        "tags": [
+          "project"
+        ],
+        "summary": "GET /projects/{projectId}/files",
+        "description": "Operaci?n existente. Los campos abiertos se detallan en el controlador y servicio correspondientes.",
+        "operationId": "get__projects_projectId_files",
+        "parameters": [
+          {
+            "name": "projectId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Operaci?n completada; formato dependiente del recurso."
+          },
+          "default": {
+            "description": "Error de validaci?n, recurso o servicio.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
+      },
+      "post": {
+        "tags": [
+          "project"
+        ],
+        "summary": "POST /projects/{projectId}/files",
+        "description": "Carga de PDF. El l?mite por archivo depende de la configuraci?n y de la ruta; ver middleware de carga.",
+        "operationId": "post__projects_projectId_files",
+        "parameters": [
+          {
+            "name": "projectId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "201": {
+            "description": "Recurso creado.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean"
+                    },
+                    "data": {}
+                  },
+                  "additionalProperties": true
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "Error de validaci?n, recurso o servicio.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        },
+        "requestBody": {
+          "required": true,
+          "content": {
+            "multipart/form-data": {
+              "schema": {
+                "type": "object",
+                "required": [
+                  "files"
+                ],
+                "properties": {
+                  "files": {
+                    "type": "array",
+                    "maxItems": 15,
+                    "items": {
+                      "type": "string",
+                      "format": "binary"
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/projects/{projectId}/analyze-consolidated": {
+      "post": {
+        "tags": [
+          "project"
+        ],
+        "summary": "POST /projects/{projectId}/analyze-consolidated",
+        "description": "Operaci?n existente. Los campos abiertos se detallan en el controlador y servicio correspondientes.",
+        "operationId": "post__projects_projectId_analyze_consolidated",
+        "parameters": [
+          {
+            "name": "projectId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Operaci?n completada; formato dependiente del recurso."
+          },
+          "default": {
+            "description": "Error de validaci?n, recurso o servicio.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        },
+        "requestBody": {
+          "required": false,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "additionalProperties": true
+              }
+            }
+          }
+        }
+      }
+    },
+    "/projects/{projectId}/use-cases": {
+      "get": {
+        "tags": [
+          "project"
+        ],
+        "summary": "GET /projects/{projectId}/use-cases",
+        "description": "Operaci?n existente. Los campos abiertos se detallan en el controlador y servicio correspondientes.",
+        "operationId": "get__projects_projectId_use_cases",
+        "parameters": [
+          {
+            "name": "projectId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Operaci?n completada; formato dependiente del recurso."
+          },
+          "default": {
+            "description": "Error de validaci?n, recurso o servicio.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
+      },
+      "post": {
+        "tags": [
+          "project"
+        ],
+        "summary": "POST /projects/{projectId}/use-cases",
+        "description": "Operaci?n existente. Los campos abiertos se detallan en el controlador y servicio correspondientes.",
+        "operationId": "post__projects_projectId_use_cases",
+        "parameters": [
+          {
+            "name": "projectId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "201": {
+            "description": "Recurso creado.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean"
+                    },
+                    "data": {}
+                  },
+                  "additionalProperties": true
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "Error de validaci?n, recurso o servicio.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        },
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "codeId": {
+                    "type": "string"
+                  },
+                  "name": {
+                    "type": "string"
+                  },
+                  "processType": {
+                    "type": "string"
+                  },
+                  "description": {
+                    "type": "string"
+                  },
+                  "primaryActorId": {
+                    "type": "string"
+                  },
+                  "secondaryActorIds": {
+                    "type": "array",
+                    "items": {
+                      "type": "string"
+                    }
+                  },
+                  "preconditions": {
+                    "type": "string"
+                  },
+                  "postconditions": {
+                    "type": "string"
+                  },
+                  "mainFlow": {
+                    "type": "array",
+                    "items": {}
+                  },
+                  "altFlows": {
+                    "type": "array",
+                    "items": {}
+                  },
+                  "requirementIds": {
+                    "type": "array",
+                    "items": {
+                      "type": "string"
+                    }
+                  },
+                  "reviewStatus": {
+                    "type": "string"
+                  }
+                },
+                "additionalProperties": true
+              }
+            }
+          }
+        }
+      }
+    },
+    "/projects/{projectId}/use-cases/generate": {
+      "post": {
+        "tags": [
+          "project"
+        ],
+        "summary": "POST /projects/{projectId}/use-cases/generate",
+        "description": "Operaci?n existente. Los campos abiertos se detallan en el controlador y servicio correspondientes.",
+        "operationId": "post__projects_projectId_use_cases_generate",
+        "parameters": [
+          {
+            "name": "projectId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Operaci?n completada; formato dependiente del recurso."
+          },
+          "default": {
+            "description": "Error de validaci?n, recurso o servicio.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        },
+        "requestBody": {
+          "required": false,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "additionalProperties": true
+              }
+            }
+          }
+        }
+      }
+    },
+    "/projects/{projectId}/use-cases/diagram": {
+      "get": {
+        "tags": [
+          "project"
+        ],
+        "summary": "GET /projects/{projectId}/use-cases/diagram",
+        "description": "Operaci?n existente. Los campos abiertos se detallan en el controlador y servicio correspondientes.",
+        "operationId": "get__projects_projectId_use_cases_diagram",
+        "parameters": [
+          {
+            "name": "projectId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Operaci?n completada; formato dependiente del recurso."
+          },
+          "default": {
+            "description": "Error de validaci?n, recurso o servicio.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/projects/{projectId}/classes": {
+      "get": {
+        "tags": [
+          "project"
+        ],
+        "summary": "GET /projects/{projectId}/classes",
+        "description": "Operaci?n existente. Los campos abiertos se detallan en el controlador y servicio correspondientes.",
+        "operationId": "get__projects_projectId_classes",
+        "parameters": [
+          {
+            "name": "projectId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Operaci?n completada; formato dependiente del recurso."
+          },
+          "default": {
+            "description": "Error de validaci?n, recurso o servicio.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
+      },
+      "post": {
+        "tags": [
+          "project"
+        ],
+        "summary": "POST /projects/{projectId}/classes",
+        "description": "Operaci?n existente. Los campos abiertos se detallan en el controlador y servicio correspondientes.",
+        "operationId": "post__projects_projectId_classes",
+        "parameters": [
+          {
+            "name": "projectId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "201": {
+            "description": "Recurso creado.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean"
+                    },
+                    "data": {}
+                  },
+                  "additionalProperties": true
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "Error de validaci?n, recurso o servicio.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        },
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "codeId": {
+                    "type": "string"
+                  },
+                  "name": {
+                    "type": "string"
+                  },
+                  "description": {
+                    "type": "string"
+                  },
+                  "attributes": {
+                    "type": "array",
+                    "items": {}
+                  },
+                  "methods": {
+                    "type": "array",
+                    "items": {}
+                  },
+                  "relationships": {
+                    "type": "array",
+                    "items": {}
+                  },
+                  "reviewStatus": {
+                    "type": "string"
+                  }
+                },
+                "additionalProperties": true
+              }
+            }
+          }
+        }
+      }
+    },
+    "/projects/{projectId}/classes/generate": {
+      "post": {
+        "tags": [
+          "project"
+        ],
+        "summary": "POST /projects/{projectId}/classes/generate",
+        "description": "Operaci?n existente. Los campos abiertos se detallan en el controlador y servicio correspondientes.",
+        "operationId": "post__projects_projectId_classes_generate",
+        "parameters": [
+          {
+            "name": "projectId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Operaci?n completada; formato dependiente del recurso."
+          },
+          "default": {
+            "description": "Error de validaci?n, recurso o servicio.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        },
+        "requestBody": {
+          "required": false,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "additionalProperties": true
+              }
+            }
+          }
+        }
+      }
+    },
+    "/projects/{projectId}/classes/diagram": {
+      "get": {
+        "tags": [
+          "project"
+        ],
+        "summary": "GET /projects/{projectId}/classes/diagram",
+        "description": "Operaci?n existente. Los campos abiertos se detallan en el controlador y servicio correspondientes.",
+        "operationId": "get__projects_projectId_classes_diagram",
+        "parameters": [
+          {
+            "name": "projectId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Operaci?n completada; formato dependiente del recurso."
+          },
+          "default": {
+            "description": "Error de validaci?n, recurso o servicio.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/projects/{projectId}/screens": {
+      "get": {
+        "tags": [
+          "project"
+        ],
+        "summary": "GET /projects/{projectId}/screens",
+        "description": "Operaci?n existente. Los campos abiertos se detallan en el controlador y servicio correspondientes.",
+        "operationId": "get__projects_projectId_screens",
+        "parameters": [
+          {
+            "name": "projectId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Operaci?n completada; formato dependiente del recurso."
+          },
+          "default": {
+            "description": "Error de validaci?n, recurso o servicio.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/projects/{projectId}/screens/select-multiple": {
+      "post": {
+        "tags": [
+          "project"
+        ],
+        "summary": "POST /projects/{projectId}/screens/select-multiple",
+        "description": "Operaci?n existente. Los campos abiertos se detallan en el controlador y servicio correspondientes.",
+        "operationId": "post__projects_projectId_screens_select_multiple",
+        "parameters": [
+          {
+            "name": "projectId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Operaci?n completada; formato dependiente del recurso."
+          },
+          "default": {
+            "description": "Error de validaci?n, recurso o servicio.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        },
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "screenIds": {
+                    "type": "array",
+                    "items": {
+                      "type": "string"
+                    }
+                  },
+                  "selected": {
+                    "type": "boolean"
+                  }
+                },
+                "additionalProperties": true,
+                "required": [
+                  "screenIds"
+                ]
+              }
+            }
+          }
+        }
+      }
+    },
+    "/projects/{projectId}/screens/generate-selected": {
+      "post": {
+        "tags": [
+          "project"
+        ],
+        "summary": "POST /projects/{projectId}/screens/generate-selected",
+        "description": "Operaci?n existente. Los campos abiertos se detallan en el controlador y servicio correspondientes.",
+        "operationId": "post__projects_projectId_screens_generate_selected",
+        "parameters": [
+          {
+            "name": "projectId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Operaci?n completada; formato dependiente del recurso."
+          },
+          "default": {
+            "description": "Error de validaci?n, recurso o servicio.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        },
+        "requestBody": {
+          "required": false,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "additionalProperties": true
+              }
+            }
+          }
+        }
+      }
+    },
+    "/projects/{projectId}/history": {
+      "get": {
+        "tags": [
+          "project"
+        ],
+        "summary": "GET /projects/{projectId}/history",
+        "description": "Operaci?n existente. Los campos abiertos se detallan en el controlador y servicio correspondientes.",
+        "operationId": "get__projects_projectId_history",
+        "parameters": [
+          {
+            "name": "projectId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Operaci?n completada; formato dependiente del recurso."
+          },
+          "default": {
+            "description": "Error de validaci?n, recurso o servicio.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/projects/{projectId}/sources": {
+      "get": {
+        "tags": [
+          "project"
+        ],
+        "summary": "GET /projects/{projectId}/sources",
+        "description": "Operaci?n existente. Los campos abiertos se detallan en el controlador y servicio correspondientes.",
+        "operationId": "get__projects_projectId_sources",
+        "parameters": [
+          {
+            "name": "projectId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Operaci?n completada; formato dependiente del recurso."
+          },
+          "default": {
+            "description": "Error de validaci?n, recurso o servicio.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
+      },
+      "post": {
+        "tags": [
+          "project"
+        ],
+        "summary": "POST /projects/{projectId}/sources",
+        "description": "Carga de PDF. El l?mite por archivo depende de la configuraci?n y de la ruta; ver middleware de carga.",
+        "operationId": "post__projects_projectId_sources",
+        "parameters": [
+          {
+            "name": "projectId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "201": {
+            "description": "Recurso creado.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean"
+                    },
+                    "data": {}
+                  },
+                  "additionalProperties": true
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "Error de validaci?n, recurso o servicio.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        },
+        "requestBody": {
+          "required": true,
+          "content": {
+            "multipart/form-data": {
+              "schema": {
+                "type": "object",
+                "required": [
+                  "files"
+                ],
+                "properties": {
+                  "files": {
+                    "type": "array",
+                    "maxItems": 20,
+                    "items": {
+                      "type": "string",
+                      "format": "binary"
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/projects/{projectId}/sources/audio": {
+      "post": {
+        "tags": [
+          "project"
+        ],
+        "summary": "POST /projects/{projectId}/sources/audio",
+        "description": "Ruta deshabilitada por la pol?tica PDF; no procesa audio.",
+        "operationId": "post__projects_projectId_sources_audio",
+        "parameters": [
+          {
+            "name": "projectId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "415": {
+            "description": "Tipo no admitido por la pol?tica PDF."
+          }
+        }
+      }
+    },
+    "/projects/{projectId}/candidates": {
+      "get": {
+        "tags": [
+          "project"
+        ],
+        "summary": "GET /projects/{projectId}/candidates",
+        "description": "Operaci?n existente. Los campos abiertos se detallan en el controlador y servicio correspondientes.",
+        "operationId": "get__projects_projectId_candidates",
+        "parameters": [
+          {
+            "name": "projectId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "status",
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "kind",
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "category",
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "type",
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "origin",
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "sourceId",
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Operaci?n completada; formato dependiente del recurso."
+          },
+          "default": {
+            "description": "Error de validaci?n, recurso o servicio.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/projects/{projectId}/candidates/stats": {
+      "get": {
+        "tags": [
+          "project"
+        ],
+        "summary": "GET /projects/{projectId}/candidates/stats",
+        "description": "Operaci?n existente. Los campos abiertos se detallan en el controlador y servicio correspondientes.",
+        "operationId": "get__projects_projectId_candidates_stats",
+        "parameters": [
+          {
+            "name": "projectId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Operaci?n completada; formato dependiente del recurso."
+          },
+          "default": {
+            "description": "Error de validaci?n, recurso o servicio.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/projects/{projectId}/candidates/batch-approve": {
+      "post": {
+        "tags": [
+          "project"
+        ],
+        "summary": "POST /projects/{projectId}/candidates/batch-approve",
+        "description": "Operaci?n existente. Los campos abiertos se detallan en el controlador y servicio correspondientes.",
+        "operationId": "post__projects_projectId_candidates_batch_approve",
+        "parameters": [
+          {
+            "name": "projectId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Operaci?n completada; formato dependiente del recurso."
+          },
+          "default": {
+            "description": "Error de validaci?n, recurso o servicio.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        },
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "ids": {
+                    "type": "array",
+                    "items": {
+                      "type": "string"
+                    },
+                    "minItems": 1
+                  },
+                  "reason": {
+                    "type": "string"
+                  }
+                },
+                "additionalProperties": true,
+                "required": [
+                  "ids"
+                ]
+              }
+            }
+          }
+        }
+      }
+    },
+    "/projects/{projectId}/candidates/batch-reject": {
+      "post": {
+        "tags": [
+          "project"
+        ],
+        "summary": "POST /projects/{projectId}/candidates/batch-reject",
+        "description": "Operaci?n existente. Los campos abiertos se detallan en el controlador y servicio correspondientes.",
+        "operationId": "post__projects_projectId_candidates_batch_reject",
+        "parameters": [
+          {
+            "name": "projectId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Operaci?n completada; formato dependiente del recurso."
+          },
+          "default": {
+            "description": "Error de validaci?n, recurso o servicio.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        },
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "ids": {
+                    "type": "array",
+                    "items": {
+                      "type": "string"
+                    },
+                    "minItems": 1
+                  },
+                  "reason": {
+                    "type": "string"
+                  }
+                },
+                "additionalProperties": true,
+                "required": [
+                  "ids"
+                ]
+              }
+            }
+          }
+        }
+      }
+    },
+    "/projects/{projectId}/candidates/approve-category": {
+      "post": {
+        "tags": [
+          "project"
+        ],
+        "summary": "POST /projects/{projectId}/candidates/approve-category",
+        "description": "Operaci?n existente. Los campos abiertos se detallan en el controlador y servicio correspondientes.",
+        "operationId": "post__projects_projectId_candidates_approve_category",
+        "parameters": [
+          {
+            "name": "projectId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Operaci?n completada; formato dependiente del recurso."
+          },
+          "default": {
+            "description": "Error de validaci?n, recurso o servicio.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        },
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "categoryGroup": {
+                    "type": "string"
+                  }
+                },
+                "additionalProperties": true
+              }
+            }
+          }
+        }
+      }
+    },
+    "/projects/{projectId}/analyze": {
+      "post": {
+        "tags": [
+          "project"
+        ],
+        "summary": "POST /projects/{projectId}/analyze",
+        "description": "Operaci?n existente. Los campos abiertos se detallan en el controlador y servicio correspondientes.",
+        "operationId": "post__projects_projectId_analyze",
+        "parameters": [
+          {
+            "name": "projectId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Operaci?n completada; formato dependiente del recurso."
+          },
+          "default": {
+            "description": "Error de validaci?n, recurso o servicio.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        },
+        "requestBody": {
+          "required": false,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "additionalProperties": true
+              }
+            }
+          }
+        }
+      }
+    },
+    "/projects/{projectId}/import-analysis": {
+      "post": {
+        "tags": [
+          "project"
+        ],
+        "summary": "POST /projects/{projectId}/import-analysis",
+        "description": "Operaci?n existente. Los campos abiertos se detallan en el controlador y servicio correspondientes.",
+        "operationId": "post__projects_projectId_import_analysis",
+        "parameters": [
+          {
+            "name": "projectId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Operaci?n completada; formato dependiente del recurso."
+          },
+          "default": {
+            "description": "Error de validaci?n, recurso o servicio.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        },
+        "requestBody": {
+          "required": false,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "additionalProperties": true
+              }
+            }
+          }
+        }
+      }
+    },
+    "/projects/{projectId}/mockup": {
+      "get": {
+        "tags": [
+          "project"
+        ],
+        "summary": "GET /projects/{projectId}/mockup",
+        "description": "Operaci?n existente. Los campos abiertos se detallan en el controlador y servicio correspondientes.",
+        "operationId": "get__projects_projectId_mockup",
+        "parameters": [
+          {
+            "name": "projectId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Operaci?n completada; formato dependiente del recurso."
+          },
+          "default": {
+            "description": "Error de validaci?n, recurso o servicio.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
+      },
+      "post": {
+        "tags": [
+          "project"
+        ],
+        "summary": "POST /projects/{projectId}/mockup",
+        "description": "Operaci?n existente. Los campos abiertos se detallan en el controlador y servicio correspondientes.",
+        "operationId": "post__projects_projectId_mockup",
+        "parameters": [
+          {
+            "name": "projectId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Operaci?n completada; formato dependiente del recurso."
+          },
+          "default": {
+            "description": "Error de validaci?n, recurso o servicio.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        },
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "prompt": {
+                    "type": "string"
+                  },
+                  "artifactId": {
+                    "type": "string"
+                  },
+                  "navigationNodeIds": {
+                    "type": "array",
+                    "items": {
+                      "type": "string"
+                    }
+                  }
+                },
+                "additionalProperties": true
+              }
+            }
+          }
+        }
+      }
+    },
+    "/projects/{projectId}/diagrams/availability": {
+      "get": {
+        "tags": [
+          "project"
+        ],
+        "summary": "GET /projects/{projectId}/diagrams/availability",
+        "description": "Operaci?n existente. Los campos abiertos se detallan en el controlador y servicio correspondientes.",
+        "operationId": "get__projects_projectId_diagrams_availability",
+        "parameters": [
+          {
+            "name": "projectId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Operaci?n completada; formato dependiente del recurso."
+          },
+          "default": {
+            "description": "Error de validaci?n, recurso o servicio.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/projects/{projectId}/diagrams/{type}": {
+      "get": {
+        "tags": [
+          "project"
+        ],
+        "summary": "GET /projects/{projectId}/diagrams/{type}",
+        "description": "Operaci?n existente. Los campos abiertos se detallan en el controlador y servicio correspondientes.",
+        "operationId": "get__projects_projectId_diagrams_type_",
+        "parameters": [
+          {
+            "name": "projectId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "type",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "enum": [
+                "ER",
+                "CLASS",
+                "USE_CASE",
+                "FLOWCHART",
+                "NAVIGATION",
+                "ARCHITECTURE"
+              ]
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Operaci?n completada; formato dependiente del recurso."
+          },
+          "default": {
+            "description": "Error de validaci?n, recurso o servicio.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
+      },
+      "put": {
+        "tags": [
+          "project"
+        ],
+        "summary": "PUT /projects/{projectId}/diagrams/{type}",
+        "description": "Operaci?n existente. Los campos abiertos se detallan en el controlador y servicio correspondientes.",
+        "operationId": "put__projects_projectId_diagrams_type_",
+        "parameters": [
+          {
+            "name": "projectId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "type",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "enum": [
+                "ER",
+                "CLASS",
+                "USE_CASE",
+                "FLOWCHART",
+                "NAVIGATION",
+                "ARCHITECTURE"
+              ]
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Operaci?n completada; formato dependiente del recurso."
+          },
+          "default": {
+            "description": "Error de validaci?n, recurso o servicio.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        },
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": [
+                  "code"
+                ],
+                "properties": {
+                  "code": {
+                    "type": "string"
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/projects/{projectId}/diagrams/generate": {
+      "post": {
+        "tags": [
+          "project"
+        ],
+        "summary": "Generar diagramas Mermaid con validaci?n y fallback",
+        "description": "Operaci?n existente. Los campos abiertos se detallan en el controlador y servicio correspondientes.",
+        "operationId": "post__projects_projectId_diagrams_generate",
+        "parameters": [
+          {
+            "name": "projectId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Diagrama o mapa por tipo; en lote pueden existir resultados fallidos.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "success",
+                    "data"
+                  ],
+                  "properties": {
+                    "success": {
+                      "type": "boolean"
+                    },
+                    "data": {
+                      "oneOf": [
+                        {
+                          "$ref": "#/components/schemas/DiagramResult"
+                        },
+                        {
+                          "type": "object",
+                          "additionalProperties": {
+                            "$ref": "#/components/schemas/DiagramResult"
+                          }
+                        }
+                      ]
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Falta type/types o tipo inv?lido; error puede ser cadena."
+          },
+          "422": {
+            "description": "Datos insuficientes o diagrama inv?lido; INSUFFICIENT_DATA puede incluir details."
+          },
+          "default": {
+            "description": "Error de dominio o proveedor.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        },
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/DiagramInput"
+              }
+            }
+          }
+        }
+      }
+    },
+    "/projects/{projectId}/diagrams/{type}/validate": {
+      "post": {
+        "tags": [
+          "project"
+        ],
+        "summary": "POST /projects/{projectId}/diagrams/{type}/validate",
+        "description": "Operaci?n existente. Los campos abiertos se detallan en el controlador y servicio correspondientes.",
+        "operationId": "post__projects_projectId_diagrams_type_validate",
+        "parameters": [
+          {
+            "name": "projectId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "type",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "enum": [
+                "ER",
+                "CLASS",
+                "USE_CASE",
+                "FLOWCHART",
+                "NAVIGATION",
+                "ARCHITECTURE"
+              ]
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Operaci?n completada; formato dependiente del recurso."
+          },
+          "default": {
+            "description": "Error de validaci?n, recurso o servicio.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        },
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": [
+                  "code"
+                ],
+                "properties": {
+                  "code": {
+                    "type": "string"
+                  },
+                  "crossCompareCode": {
+                    "type": "string"
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/projects/{projectId}/diagrams/cross-validate": {
+      "post": {
+        "tags": [
+          "project"
+        ],
+        "summary": "POST /projects/{projectId}/diagrams/cross-validate",
+        "description": "Operaci?n existente. Los campos abiertos se detallan en el controlador y servicio correspondientes.",
+        "operationId": "post__projects_projectId_diagrams_cross_validate",
+        "parameters": [
+          {
+            "name": "projectId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Operaci?n completada; formato dependiente del recurso."
+          },
+          "default": {
+            "description": "Error de validaci?n, recurso o servicio.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        },
+        "requestBody": {
+          "required": false,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "additionalProperties": true
+              }
+            }
+          }
+        }
+      }
+    },
+    "/projects/{projectId}/architecture": {
+      "get": {
+        "tags": [
+          "project"
+        ],
+        "summary": "GET /projects/{projectId}/architecture",
+        "description": "Operaci?n existente. Los campos abiertos se detallan en el controlador y servicio correspondientes.",
+        "operationId": "get__projects_projectId_architecture",
+        "parameters": [
+          {
+            "name": "projectId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Operaci?n completada; formato dependiente del recurso."
+          },
+          "default": {
+            "description": "Error de validaci?n, recurso o servicio.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
+      },
+      "put": {
+        "tags": [
+          "project"
+        ],
+        "summary": "PUT /projects/{projectId}/architecture",
+        "description": "Operaci?n existente. Los campos abiertos se detallan en el controlador y servicio correspondientes.",
+        "operationId": "put__projects_projectId_architecture",
+        "parameters": [
+          {
+            "name": "projectId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Operaci?n completada; formato dependiente del recurso."
+          },
+          "default": {
+            "description": "Error de validaci?n, recurso o servicio.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        },
+        "requestBody": {
+          "required": false,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "additionalProperties": true
+              }
+            }
+          }
+        }
+      }
+    },
+    "/requirements/{id}": {
+      "put": {
+        "tags": [
+          "requirement"
+        ],
+        "summary": "PUT /requirements/{id}",
+        "description": "Operaci?n existente. Los campos abiertos se detallan en el controlador y servicio correspondientes.",
+        "operationId": "put__requirements_id_",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Operaci?n completada; formato dependiente del recurso."
+          },
+          "default": {
+            "description": "Error de validaci?n, recurso o servicio.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        },
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "code": {
+                    "type": "string"
+                  },
+                  "name": {
+                    "type": "string"
+                  },
+                  "description": {
+                    "type": "string"
+                  },
+                  "type": {
+                    "type": "string",
+                    "enum": [
+                      "FUNCTIONAL",
+                      "NON_FUNCTIONAL"
+                    ]
+                  },
+                  "priority": {
+                    "type": "string"
+                  },
+                  "status": {
+                    "type": "string"
+                  },
+                  "actorIds": {
+                    "type": "array",
+                    "items": {
+                      "type": "string"
+                    }
+                  },
+                  "dependencies": {
+                    "type": "array",
+                    "items": {
+                      "type": "string"
+                    }
+                  },
+                  "preconditions": {
+                    "type": "string"
+                  },
+                  "postconditions": {
+                    "type": "string"
+                  }
+                },
+                "additionalProperties": true
+              }
+            }
+          }
+        }
+      },
+      "delete": {
+        "tags": [
+          "requirement"
+        ],
+        "summary": "DELETE /requirements/{id}",
+        "description": "Operaci?n existente. Los campos abiertos se detallan en el controlador y servicio correspondientes.",
+        "operationId": "delete__requirements_id_",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Operaci?n completada; formato dependiente del recurso."
+          },
+          "default": {
+            "description": "Error de validaci?n, recurso o servicio.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/requirements/{id}/status": {
+      "patch": {
+        "tags": [
+          "requirement"
+        ],
+        "summary": "PATCH /requirements/{id}/status",
+        "description": "Operaci?n existente. Los campos abiertos se detallan en el controlador y servicio correspondientes.",
+        "operationId": "patch__requirements_id_status",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Operaci?n completada; formato dependiente del recurso."
+          },
+          "default": {
+            "description": "Error de validaci?n, recurso o servicio.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        },
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "status": {
+                    "type": "string"
+                  }
+                },
+                "additionalProperties": true
+              }
+            }
+          }
+        }
+      }
+    },
+    "/actors/{id}": {
+      "put": {
+        "tags": [
+          "actor"
+        ],
+        "summary": "PUT /actors/{id}",
+        "description": "Operaci?n existente. Los campos abiertos se detallan en el controlador y servicio correspondientes.",
+        "operationId": "put__actors_id_",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Operaci?n completada; formato dependiente del recurso."
+          },
+          "default": {
+            "description": "Error de validaci?n, recurso o servicio.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        },
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "name": {
+                    "type": "string"
+                  },
+                  "description": {
+                    "type": "string"
+                  },
+                  "codeId": {
+                    "type": "string"
+                  },
+                  "reviewStatus": {
+                    "type": "string"
+                  },
+                  "aliases": {
+                    "type": "array",
+                    "items": {
+                      "type": "string"
+                    }
+                  }
+                },
+                "additionalProperties": true
+              }
+            }
+          }
+        }
+      },
+      "delete": {
+        "tags": [
+          "actor"
+        ],
+        "summary": "DELETE /actors/{id}",
+        "description": "Operaci?n existente. Los campos abiertos se detallan en el controlador y servicio correspondientes.",
+        "operationId": "delete__actors_id_",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Operaci?n completada; formato dependiente del recurso."
+          },
+          "default": {
+            "description": "Error de validaci?n, recurso o servicio.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/actors/{id}/status": {
+      "patch": {
+        "tags": [
+          "actor"
+        ],
+        "summary": "PATCH /actors/{id}/status",
+        "description": "Operaci?n existente. Los campos abiertos se detallan en el controlador y servicio correspondientes.",
+        "operationId": "patch__actors_id_status",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Operaci?n completada; formato dependiente del recurso."
+          },
+          "default": {
+            "description": "Error de validaci?n, recurso o servicio.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        },
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "reviewStatus": {
+                    "type": "string"
+                  }
+                },
+                "additionalProperties": true
+              }
+            }
+          }
+        }
+      }
+    },
+    "/documents/extract": {
+      "post": {
+        "tags": [
+          "document"
+        ],
+        "summary": "Extraer texto y estructura de PDF sin IA",
+        "description": "Carga de PDF. El l?mite por archivo depende de la configuraci?n y de la ruta; ver middleware de carga.",
+        "operationId": "post__documents_extract",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": "Operaci?n completada; formato dependiente del recurso."
+          },
+          "default": {
+            "description": "Error de validaci?n, recurso o servicio.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        },
+        "requestBody": {
+          "required": true,
+          "content": {
+            "multipart/form-data": {
+              "schema": {
+                "type": "object",
+                "required": [
+                  "file"
+                ],
+                "properties": {
+                  "file": {
+                    "type": "string",
+                    "format": "binary"
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/documents/analyze": {
+      "post": {
+        "tags": [
+          "document"
+        ],
+        "summary": "Analizar PDF o extracci?n previa con IA",
+        "description": "Carga de PDF. El l?mite por archivo depende de la configuraci?n y de la ruta; ver middleware de carga.",
+        "operationId": "post__documents_analyze",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": "Operaci?n completada; formato dependiente del recurso."
+          },
+          "default": {
+            "description": "Error de validaci?n, recurso o servicio.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        },
+        "requestBody": {
+          "required": true,
+          "content": {
+            "multipart/form-data": {
+              "schema": {
+                "type": "object",
+                "required": [
+                  "file"
+                ],
+                "properties": {
+                  "file": {
+                    "type": "string",
+                    "format": "binary"
+                  }
+                }
+              }
+            },
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "extractedText": {
+                    "type": "string"
+                  },
+                  "fileName": {
+                    "type": "string",
+                    "example": "especificacion.pdf"
+                  },
+                  "extractionData": {
+                    "type": "object",
+                    "additionalProperties": true
+                  },
+                  "providerOverride": {
+                    "type": "string"
+                  },
+                  "modelOverride": {
+                    "type": "string"
+                  }
+                },
+                "additionalProperties": true
+              }
+            }
+          }
+        }
+      }
+    },
+    "/use-cases/{id}": {
+      "put": {
+        "tags": [
+          "useCase"
+        ],
+        "summary": "PUT /use-cases/{id}",
+        "description": "Operaci?n existente. Los campos abiertos se detallan en el controlador y servicio correspondientes.",
+        "operationId": "put__use_cases_id_",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Operaci?n completada; formato dependiente del recurso."
+          },
+          "default": {
+            "description": "Error de validaci?n, recurso o servicio.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        },
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "codeId": {
+                    "type": "string"
+                  },
+                  "name": {
+                    "type": "string"
+                  },
+                  "processType": {
+                    "type": "string"
+                  },
+                  "description": {
+                    "type": "string"
+                  },
+                  "primaryActorId": {
+                    "type": "string"
+                  },
+                  "secondaryActorIds": {
+                    "type": "array",
+                    "items": {
+                      "type": "string"
+                    }
+                  },
+                  "preconditions": {
+                    "type": "string"
+                  },
+                  "postconditions": {
+                    "type": "string"
+                  },
+                  "mainFlow": {
+                    "type": "array",
+                    "items": {}
+                  },
+                  "altFlows": {
+                    "type": "array",
+                    "items": {}
+                  },
+                  "requirementIds": {
+                    "type": "array",
+                    "items": {
+                      "type": "string"
+                    }
+                  },
+                  "reviewStatus": {
+                    "type": "string"
+                  }
+                },
+                "additionalProperties": true
+              }
+            }
+          }
+        }
+      },
+      "delete": {
+        "tags": [
+          "useCase"
+        ],
+        "summary": "DELETE /use-cases/{id}",
+        "description": "Operaci?n existente. Los campos abiertos se detallan en el controlador y servicio correspondientes.",
+        "operationId": "delete__use_cases_id_",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Operaci?n completada; formato dependiente del recurso."
+          },
+          "default": {
+            "description": "Error de validaci?n, recurso o servicio.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/use-cases/{id}/status": {
+      "patch": {
+        "tags": [
+          "useCase"
+        ],
+        "summary": "PATCH /use-cases/{id}/status",
+        "description": "Operaci?n existente. Los campos abiertos se detallan en el controlador y servicio correspondientes.",
+        "operationId": "patch__use_cases_id_status",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Operaci?n completada; formato dependiente del recurso."
+          },
+          "default": {
+            "description": "Error de validaci?n, recurso o servicio.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        },
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "reviewStatus": {
+                    "type": "string"
+                  }
+                },
+                "additionalProperties": true
+              }
+            }
+          }
+        }
+      }
+    },
+    "/classes/{id}": {
+      "put": {
+        "tags": [
+          "classModel"
+        ],
+        "summary": "PUT /classes/{id}",
+        "description": "Operaci?n existente. Los campos abiertos se detallan en el controlador y servicio correspondientes.",
+        "operationId": "put__classes_id_",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Operaci?n completada; formato dependiente del recurso."
+          },
+          "default": {
+            "description": "Error de validaci?n, recurso o servicio.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        },
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "codeId": {
+                    "type": "string"
+                  },
+                  "name": {
+                    "type": "string"
+                  },
+                  "description": {
+                    "type": "string"
+                  },
+                  "attributes": {
+                    "type": "array",
+                    "items": {}
+                  },
+                  "methods": {
+                    "type": "array",
+                    "items": {}
+                  },
+                  "relationships": {
+                    "type": "array",
+                    "items": {}
+                  },
+                  "reviewStatus": {
+                    "type": "string"
+                  }
+                },
+                "additionalProperties": true
+              }
+            }
+          }
+        }
+      },
+      "delete": {
+        "tags": [
+          "classModel"
+        ],
+        "summary": "DELETE /classes/{id}",
+        "description": "Operaci?n existente. Los campos abiertos se detallan en el controlador y servicio correspondientes.",
+        "operationId": "delete__classes_id_",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Operaci?n completada; formato dependiente del recurso."
+          },
+          "default": {
+            "description": "Error de validaci?n, recurso o servicio.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/classes/{id}/status": {
+      "patch": {
+        "tags": [
+          "classModel"
+        ],
+        "summary": "PATCH /classes/{id}/status",
+        "description": "Operaci?n existente. Los campos abiertos se detallan en el controlador y servicio correspondientes.",
+        "operationId": "patch__classes_id_status",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Operaci?n completada; formato dependiente del recurso."
+          },
+          "default": {
+            "description": "Error de validaci?n, recurso o servicio.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        },
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "reviewStatus": {
+                    "type": "string"
+                  }
+                },
+                "additionalProperties": true
+              }
+            }
+          }
+        }
+      }
+    },
+    "/screens/{id}/select": {
+      "patch": {
+        "tags": [
+          "screen"
+        ],
+        "summary": "PATCH /screens/{id}/select",
+        "description": "Operaci?n existente. Los campos abiertos se detallan en el controlador y servicio correspondientes.",
+        "operationId": "patch__screens_id_select",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Operaci?n completada; formato dependiente del recurso."
+          },
+          "default": {
+            "description": "Error de validaci?n, recurso o servicio.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        },
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "selected": {
+                    "type": "boolean"
+                  }
+                },
+                "additionalProperties": true
+              }
+            }
+          }
+        }
+      }
+    },
+    "/screens/{id}/status": {
+      "patch": {
+        "tags": [
+          "screen"
+        ],
+        "summary": "PATCH /screens/{id}/status",
+        "description": "Operaci?n existente. Los campos abiertos se detallan en el controlador y servicio correspondientes.",
+        "operationId": "patch__screens_id_status",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Operaci?n completada; formato dependiente del recurso."
+          },
+          "default": {
+            "description": "Error de validaci?n, recurso o servicio.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        },
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "reviewStatus": {
+                    "type": "string"
+                  }
+                },
+                "additionalProperties": true
+              }
+            }
+          }
+        }
+      }
+    },
+    "/screens/{id}": {
+      "put": {
+        "tags": [
+          "screen"
+        ],
+        "summary": "PUT /screens/{id}",
+        "description": "Operaci?n existente. Los campos abiertos se detallan en el controlador y servicio correspondientes.",
+        "operationId": "put__screens_id_",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Operaci?n completada; formato dependiente del recurso."
+          },
+          "default": {
+            "description": "Error de validaci?n, recurso o servicio.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        },
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "name": {
+                    "type": "string"
+                  },
+                  "description": {
+                    "type": "string"
+                  },
+                  "route": {
+                    "type": "string"
+                  },
+                  "purpose": {
+                    "type": "string"
+                  },
+                  "html": {
+                    "type": "string"
+                  },
+                  "requirementIds": {
+                    "type": "array",
+                    "items": {
+                      "type": "string"
+                    }
+                  },
+                  "actorIds": {
+                    "type": "array",
+                    "items": {
+                      "type": "string"
+                    }
+                  }
+                },
+                "additionalProperties": true
+              }
+            }
+          }
+        }
+      },
+      "delete": {
+        "tags": [
+          "screen"
+        ],
+        "summary": "DELETE /screens/{id}",
+        "description": "Operaci?n existente. Los campos abiertos se detallan en el controlador y servicio correspondientes.",
+        "operationId": "delete__screens_id_",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Operaci?n completada; formato dependiente del recurso."
+          },
+          "default": {
+            "description": "Error de validaci?n, recurso o servicio.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/files/{id}": {
+      "delete": {
+        "tags": [
+          "file"
+        ],
+        "summary": "DELETE /files/{id}",
+        "description": "Operaci?n existente. Los campos abiertos se detallan en el controlador y servicio correspondientes.",
+        "operationId": "delete__files_id_",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Operaci?n completada; formato dependiente del recurso."
+          },
+          "default": {
+            "description": "Error de validaci?n, recurso o servicio.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/history/{historyId}/restore": {
+      "post": {
+        "tags": [
+          "versionHistory"
+        ],
+        "summary": "POST /history/{historyId}/restore",
+        "description": "Operaci?n existente. Los campos abiertos se detallan en el controlador y servicio correspondientes.",
+        "operationId": "post__history_historyId_restore",
+        "parameters": [
+          {
+            "name": "historyId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Operaci?n completada; formato dependiente del recurso."
+          },
+          "default": {
+            "description": "Error de validaci?n, recurso o servicio.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        },
+        "requestBody": {
+          "required": false,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "additionalProperties": true
+              }
+            }
+          }
+        }
+      }
+    },
+    "/sources/{sourceId}": {
+      "get": {
+        "tags": [
+          "source"
+        ],
+        "summary": "GET /sources/{sourceId}",
+        "description": "Operaci?n existente. Los campos abiertos se detallan en el controlador y servicio correspondientes.",
+        "operationId": "get__sources_sourceId_",
+        "parameters": [
+          {
+            "name": "sourceId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Operaci?n completada; formato dependiente del recurso."
+          },
+          "default": {
+            "description": "Error de validaci?n, recurso o servicio.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/sources/{sourceId}/versions/{version}": {
+      "get": {
+        "tags": [
+          "source"
+        ],
+        "summary": "GET /sources/{sourceId}/versions/{version}",
+        "description": "Operaci?n existente. Los campos abiertos se detallan en el controlador y servicio correspondientes.",
+        "operationId": "get__sources_sourceId_versions_version_",
+        "parameters": [
+          {
+            "name": "sourceId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "version",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Operaci?n completada; formato dependiente del recurso."
+          },
+          "default": {
+            "description": "Error de validaci?n, recurso o servicio.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/sources/{sourceId}/retry": {
+      "post": {
+        "tags": [
+          "source"
+        ],
+        "summary": "POST /sources/{sourceId}/retry",
+        "description": "Ruta deshabilitada por la pol?tica PDF; no procesa audio.",
+        "operationId": "post__sources_sourceId_retry",
+        "parameters": [
+          {
+            "name": "sourceId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "415": {
+            "description": "Tipo no admitido por la pol?tica PDF."
+          }
+        }
+      }
+    },
+    "/sources/{sourceId}/analyze": {
+      "post": {
+        "tags": [
+          "source"
+        ],
+        "summary": "Analizar una fuente PDF y crear candidatos",
+        "description": "S?ncrono por defecto; async=true devuelve 202 con trabajo en memoria. El resultado puede ser parcial con HTTP 200. No aprueba requisitos.",
+        "operationId": "post__sources_sourceId_analyze",
+        "parameters": [
+          {
+            "name": "sourceId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "An?lisis completado; comprobar partial y failures.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "success",
+                    "data"
+                  ],
+                  "properties": {
+                    "success": {
+                      "type": "boolean"
+                    },
+                    "data": {
+                      "$ref": "#/components/schemas/AnalysisResult"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "202": {
+            "description": "Trabajo iniciado o activo para la fuente.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "success",
+                    "data"
+                  ],
+                  "properties": {
+                    "success": {
+                      "type": "boolean"
+                    },
+                    "data": {
+                      "$ref": "#/components/schemas/AnalysisJob"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Fuente sin texto o entrada inv?lida.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Fuente no encontrada.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Versi?n ajena o conflicto de pertenencia.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "415": {
+            "description": "Solo se analizan fuentes PDF.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "Error de procesamiento o proveedor.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        },
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/AnalysisInput"
+              }
+            }
+          }
+        }
+      }
+    },
+    "/sources/{sourceId}/analysis/{jobId}": {
+      "get": {
+        "tags": [
+          "source"
+        ],
+        "summary": "Consultar estado de trabajo de an?lisis",
+        "description": "Operaci?n existente. Los campos abiertos se detallan en el controlador y servicio correspondientes.",
+        "operationId": "get__sources_sourceId_analysis_jobId_",
+        "parameters": [
+          {
+            "name": "sourceId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "jobId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "RUNNING, COMPLETED o FAILED; comprobar status.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "success",
+                    "data"
+                  ],
+                  "properties": {
+                    "success": {
+                      "type": "boolean"
+                    },
+                    "data": {
+                      "$ref": "#/components/schemas/AnalysisJob"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Fuente o trabajo no disponible.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/candidates/{candidateId}": {
+      "get": {
+        "tags": [
+          "candidate"
+        ],
+        "summary": "GET /candidates/{candidateId}",
+        "description": "Operaci?n existente. Los campos abiertos se detallan en el controlador y servicio correspondientes.",
+        "operationId": "get__candidates_candidateId_",
+        "parameters": [
+          {
+            "name": "candidateId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Operaci?n completada; formato dependiente del recurso."
+          },
+          "default": {
+            "description": "Error de validaci?n, recurso o servicio.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
+      },
+      "put": {
+        "tags": [
+          "candidate"
+        ],
+        "summary": "PUT /candidates/{candidateId}",
+        "description": "Operaci?n existente. Los campos abiertos se detallan en el controlador y servicio correspondientes.",
+        "operationId": "put__candidates_candidateId_",
+        "parameters": [
+          {
+            "name": "candidateId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Operaci?n completada; formato dependiente del recurso."
+          },
+          "default": {
+            "description": "Error de validaci?n, recurso o servicio.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        },
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "title": {
+                    "type": "string"
+                  },
+                  "statement": {
+                    "type": "string"
+                  },
+                  "name": {
+                    "type": "string"
+                  },
+                  "type": {
+                    "type": "string"
+                  },
+                  "priority": {
+                    "type": "string"
+                  },
+                  "category": {
+                    "type": "string"
+                  },
+                  "content": {
+                    "type": "object",
+                    "additionalProperties": true
+                  }
+                },
+                "additionalProperties": true
+              }
+            }
+          }
+        }
+      }
+    },
+    "/candidates/{candidateId}/approve": {
+      "post": {
+        "tags": [
+          "candidate"
+        ],
+        "summary": "POST /candidates/{candidateId}/approve",
+        "description": "Operaci?n existente. Los campos abiertos se detallan en el controlador y servicio correspondientes.",
+        "operationId": "post__candidates_candidateId_approve",
+        "parameters": [
+          {
+            "name": "candidateId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Operaci?n completada; formato dependiente del recurso."
+          },
+          "default": {
+            "description": "Error de validaci?n, recurso o servicio.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        },
+        "requestBody": {
+          "required": false,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "additionalProperties": true
+              }
+            }
+          }
+        }
+      }
+    },
+    "/candidates/{candidateId}/reject": {
+      "post": {
+        "tags": [
+          "candidate"
+        ],
+        "summary": "POST /candidates/{candidateId}/reject",
+        "description": "Operaci?n existente. Los campos abiertos se detallan en el controlador y servicio correspondientes.",
+        "operationId": "post__candidates_candidateId_reject",
+        "parameters": [
+          {
+            "name": "candidateId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Operaci?n completada; formato dependiente del recurso."
+          },
+          "default": {
+            "description": "Error de validaci?n, recurso o servicio.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        },
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "reason": {
+                    "type": "string"
+                  }
+                },
+                "additionalProperties": true
+              }
+            }
+          }
+        }
+      }
+    },
+    "/projects/{projectId}/engineering": {
+      "get": {
+        "tags": [
+          "engineering"
+        ],
+        "summary": "GET /projects/{projectId}/engineering",
+        "description": "Operaci?n existente. Los campos abiertos se detallan en el controlador y servicio correspondientes.",
+        "operationId": "get__projects_projectId_engineering",
+        "parameters": [
+          {
+            "name": "projectId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Operaci?n completada; formato dependiente del recurso."
+          },
+          "default": {
+            "description": "Error de validaci?n, recurso o servicio.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/projects/{projectId}/engineering/models/generate": {
+      "post": {
+        "tags": [
+          "engineering"
+        ],
+        "summary": "POST /projects/{projectId}/engineering/models/generate",
+        "description": "Operaci?n existente. Los campos abiertos se detallan en el controlador y servicio correspondientes.",
+        "operationId": "post__projects_projectId_engineering_models_generate",
+        "parameters": [
+          {
+            "name": "projectId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Operaci?n completada; formato dependiente del recurso."
+          },
+          "default": {
+            "description": "Error de validaci?n, recurso o servicio.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        },
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "requirementIds": {
+                    "type": "array",
+                    "items": {
+                      "type": "string"
+                    }
+                  }
+                },
+                "additionalProperties": true
+              }
+            }
+          }
+        }
+      }
+    },
+    "/projects/{projectId}/engineering/models": {
+      "post": {
+        "tags": [
+          "engineering"
+        ],
+        "summary": "POST /projects/{projectId}/engineering/models",
+        "description": "Operaci?n existente. Los campos abiertos se detallan en el controlador y servicio correspondientes.",
+        "operationId": "post__projects_projectId_engineering_models",
+        "parameters": [
+          {
+            "name": "projectId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Operaci?n completada; formato dependiente del recurso."
+          },
+          "default": {
+            "description": "Error de validaci?n, recurso o servicio.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        },
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "kind": {
+                    "type": "string"
+                  },
+                  "content": {
+                    "type": "object",
+                    "additionalProperties": true
+                  },
+                  "requirementIds": {
+                    "type": "array",
+                    "items": {
+                      "type": "string"
+                    }
+                  },
+                  "targetId": {
+                    "type": "string"
+                  }
+                },
+                "additionalProperties": true
+              }
+            }
+          }
+        }
+      }
+    },
+    "/projects/{projectId}/engineering/models/{id}": {
+      "patch": {
+        "tags": [
+          "engineering"
+        ],
+        "summary": "PATCH /projects/{projectId}/engineering/models/{id}",
+        "description": "Operaci?n existente. Los campos abiertos se detallan en el controlador y servicio correspondientes.",
+        "operationId": "patch__projects_projectId_engineering_models_id_",
+        "parameters": [
+          {
+            "name": "projectId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Operaci?n completada; formato dependiente del recurso."
+          },
+          "default": {
+            "description": "Error de validaci?n, recurso o servicio.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        },
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "status": {
+                    "type": "string"
+                  },
+                  "content": {
+                    "type": "object",
+                    "additionalProperties": true
+                  }
+                },
+                "additionalProperties": true
+              }
+            }
+          }
+        }
+      }
+    },
+    "/projects/{projectId}/engineering/diagrams": {
+      "post": {
+        "tags": [
+          "engineering"
+        ],
+        "summary": "POST /projects/{projectId}/engineering/diagrams",
+        "description": "Operaci?n existente. Los campos abiertos se detallan en el controlador y servicio correspondientes.",
+        "operationId": "post__projects_projectId_engineering_diagrams",
+        "parameters": [
+          {
+            "name": "projectId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Operaci?n completada; formato dependiente del recurso."
+          },
+          "default": {
+            "description": "Error de validaci?n, recurso o servicio.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        },
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "type": {
+                    "type": "string",
+                    "enum": [
+                      "ER_DIAGRAM",
+                      "USE_CASE_DIAGRAM",
+                      "NAVIGATION_DIAGRAM",
+                      "FLOWCHART_DIAGRAM",
+                      "SOFTWARE_ARCHITECTURE",
+                      "SYSTEM_ARCHITECTURE"
+                    ]
+                  },
+                  "artifactId": {
+                    "type": "string"
+                  }
+                },
+                "additionalProperties": true,
+                "required": [
+                  "type"
+                ]
+              }
+            }
+          }
+        }
+      }
+    },
+    "/projects/{projectId}/engineering/versions/{id}": {
+      "patch": {
+        "tags": [
+          "engineering"
+        ],
+        "summary": "PATCH /projects/{projectId}/engineering/versions/{id}",
+        "description": "Operaci?n existente. Los campos abiertos se detallan en el controlador y servicio correspondientes.",
+        "operationId": "patch__projects_projectId_engineering_versions_id_",
+        "parameters": [
+          {
+            "name": "projectId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Operaci?n completada; formato dependiente del recurso."
+          },
+          "default": {
+            "description": "Error de validaci?n, recurso o servicio.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        },
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "status": {
+                    "type": "string",
+                    "enum": [
+                      "APPROVED",
+                      "REJECTED",
+                      "ERROR"
+                    ]
+                  },
+                  "renderedSuccessfully": {
+                    "type": "boolean"
+                  },
+                  "error": {
+                    "type": "string"
+                  }
+                },
+                "additionalProperties": true
+              }
+            }
+          }
+        }
+      }
+    },
+    "/projects/{projectId}/engineering/versions/{id}/restore": {
+      "post": {
+        "tags": [
+          "engineering"
+        ],
+        "summary": "POST /projects/{projectId}/engineering/versions/{id}/restore",
+        "description": "Operaci?n existente. Los campos abiertos se detallan en el controlador y servicio correspondientes.",
+        "operationId": "post__projects_projectId_engineering_versions_id_restore",
+        "parameters": [
+          {
+            "name": "projectId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Operaci?n completada; formato dependiente del recurso."
+          },
+          "default": {
+            "description": "Error de validaci?n, recurso o servicio.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        },
+        "requestBody": {
+          "required": false,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "additionalProperties": true
+              }
+            }
+          }
+        }
+      }
+    },
+    "/projects/{projectId}/engineering/impact/{type}/{id}": {
+      "get": {
+        "tags": [
+          "engineering"
+        ],
+        "summary": "GET /projects/{projectId}/engineering/impact/{type}/{id}",
+        "description": "Operaci?n existente. Los campos abiertos se detallan en el controlador y servicio correspondientes.",
+        "operationId": "get__projects_projectId_engineering_impact_type_id_",
+        "parameters": [
+          {
+            "name": "projectId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "type",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Operaci?n completada; formato dependiente del recurso."
+          },
+          "default": {
+            "description": "Error de validaci?n, recurso o servicio.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/projects/{projectId}/engineering/changes": {
+      "post": {
+        "tags": [
+          "engineering"
+        ],
+        "summary": "POST /projects/{projectId}/engineering/changes",
+        "description": "Operaci?n existente. Los campos abiertos se detallan en el controlador y servicio correspondientes.",
+        "operationId": "post__projects_projectId_engineering_changes",
+        "parameters": [
+          {
+            "name": "projectId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Operaci?n completada; formato dependiente del recurso."
+          },
+          "default": {
+            "description": "Error de validaci?n, recurso o servicio.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        },
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "elementType": {
+                    "type": "string"
+                  },
+                  "elementId": {
+                    "type": "string"
+                  },
+                  "type": {
+                    "type": "string",
+                    "enum": [
+                      "UPDATE",
+                      "DELETE",
+                      "RESTORE"
+                    ]
+                  },
+                  "proposedState": {
+                    "type": "object",
+                    "additionalProperties": true
+                  },
+                  "reason": {
+                    "type": "string"
+                  },
+                  "basedOnVersionId": {
+                    "type": "string"
+                  },
+                  "sourceCandidateId": {
+                    "type": "string"
+                  }
+                },
+                "additionalProperties": true,
+                "required": [
+                  "elementId",
+                  "type",
+                  "reason"
+                ]
+              }
+            }
+          }
+        }
+      }
+    },
+    "/projects/{projectId}/engineering/changes/{id}": {
+      "patch": {
+        "tags": [
+          "engineering"
+        ],
+        "summary": "PATCH /projects/{projectId}/engineering/changes/{id}",
+        "description": "Operaci?n existente. Los campos abiertos se detallan en el controlador y servicio correspondientes.",
+        "operationId": "patch__projects_projectId_engineering_changes_id_",
+        "parameters": [
+          {
+            "name": "projectId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Operaci?n completada; formato dependiente del recurso."
+          },
+          "default": {
+            "description": "Error de validaci?n, recurso o servicio.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        },
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "status": {
+                    "type": "string",
+                    "enum": [
+                      "APPROVED",
+                      "REJECTED"
+                    ]
+                  },
+                  "confirmImpact": {
+                    "type": "boolean"
+                  }
+                },
+                "additionalProperties": true
+              }
+            }
+          }
+        }
+      }
+    },
+    "/projects/{projectId}/engineering/baselines": {
+      "post": {
+        "tags": [
+          "engineering"
+        ],
+        "summary": "POST /projects/{projectId}/engineering/baselines",
+        "description": "Operaci?n existente. Los campos abiertos se detallan en el controlador y servicio correspondientes.",
+        "operationId": "post__projects_projectId_engineering_baselines",
+        "parameters": [
+          {
+            "name": "projectId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Operaci?n completada; formato dependiente del recurso."
+          },
+          "default": {
+            "description": "Error de validaci?n, recurso o servicio.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        },
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "name": {
+                    "type": "string"
+                  },
+                  "description": {
+                    "type": "string"
+                  }
+                },
+                "additionalProperties": true,
+                "required": [
+                  "name"
+                ]
+              }
+            }
+          }
+        }
+      }
+    },
+    "/projects/{projectId}/engineering/baselines/{id}": {
+      "get": {
+        "tags": [
+          "engineering"
+        ],
+        "summary": "GET /projects/{projectId}/engineering/baselines/{id}",
+        "description": "Operaci?n existente. Los campos abiertos se detallan en el controlador y servicio correspondientes.",
+        "operationId": "get__projects_projectId_engineering_baselines_id_",
+        "parameters": [
+          {
+            "name": "projectId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Operaci?n completada; formato dependiente del recurso."
+          },
+          "default": {
+            "description": "Error de validaci?n, recurso o servicio.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/projects/{projectId}/engineering/compare": {
+      "post": {
+        "tags": [
+          "engineering"
+        ],
+        "summary": "POST /projects/{projectId}/engineering/compare",
+        "description": "Operaci?n existente. Los campos abiertos se detallan en el controlador y servicio correspondientes.",
+        "operationId": "post__projects_projectId_engineering_compare",
+        "parameters": [
+          {
+            "name": "projectId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Operaci?n completada; formato dependiente del recurso."
+          },
+          "default": {
+            "description": "Error de validaci?n, recurso o servicio.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        },
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "before": {
+                    "type": "string"
+                  },
+                  "after": {
+                    "type": "string"
+                  },
+                  "type": {
+                    "type": "string",
+                    "enum": [
+                      "Requirement",
+                      "Artifact",
+                      "Baseline"
+                    ]
+                  }
+                },
+                "additionalProperties": true,
+                "required": [
+                  "before",
+                  "after",
+                  "type"
+                ]
+              }
+            }
+          }
+        }
+      }
+    },
+    "/projects/{projectId}/engineering/platform": {
+      "patch": {
+        "tags": [
+          "engineering"
+        ],
+        "summary": "PATCH /projects/{projectId}/engineering/platform",
+        "description": "Operaci?n existente. Los campos abiertos se detallan en el controlador y servicio correspondientes.",
+        "operationId": "patch__projects_projectId_engineering_platform",
+        "parameters": [
+          {
+            "name": "projectId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Operaci?n completada; formato dependiente del recurso."
+          },
+          "default": {
+            "description": "Error de validaci?n, recurso o servicio.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        },
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "platform": {
+                    "type": "string",
+                    "enum": [
+                      "WEB",
+                      "MOBILE",
+                      "BOTH",
+                      "UNKNOWN"
+                    ]
+                  }
+                },
+                "additionalProperties": true,
+                "required": [
+                  "platform"
+                ]
+              }
+            }
+          }
+        }
+      }
+    },
+    "/projects/{projectId}/engineering/sources/text": {
+      "post": {
+        "tags": [
+          "engineering"
+        ],
+        "summary": "POST /projects/{projectId}/engineering/sources/text",
+        "description": "Operaci?n existente. Los campos abiertos se detallan en el controlador y servicio correspondientes.",
+        "operationId": "post__projects_projectId_engineering_sources_text",
+        "parameters": [
+          {
+            "name": "projectId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Operaci?n completada; formato dependiente del recurso."
+          },
+          "default": {
+            "description": "Error de validaci?n, recurso o servicio.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        },
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "text": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 100000
+                  },
+                  "name": {
+                    "type": "string"
+                  },
+                  "type": {
+                    "type": "string",
+                    "enum": [
+                      "MANUAL",
+                      "CHAT"
+                    ]
+                  }
+                },
+                "additionalProperties": true,
+                "required": [
+                  "text"
+                ]
+              }
+            }
+          }
+        }
+      }
+    },
+    "/projects/{projectId}/engineering/chat": {
+      "post": {
+        "tags": [
+          "engineering"
+        ],
+        "summary": "Consultar contexto o proponer cambio para revisi?n",
+        "description": "Operaci?n existente. Los campos abiertos se detallan en el controlador y servicio correspondientes.",
+        "operationId": "post__projects_projectId_engineering_chat",
+        "parameters": [
+          {
+            "name": "projectId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Respuesta o candidatos; no modifica requisitos oficiales.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "success",
+                    "data"
+                  ],
+                  "properties": {
+                    "success": {
+                      "type": "boolean"
+                    },
+                    "data": {
+                      "$ref": "#/components/schemas/ChatResult"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Mensaje inv?lido.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "Error de consulta o proveedor.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        },
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ChatInput"
+              }
+            }
+          }
+        }
+      }
+    },
+    "/projects/{projectId}/engineering/export": {
+      "get": {
+        "tags": [
+          "engineering"
+        ],
+        "summary": "GET /projects/{projectId}/engineering/export",
+        "description": "Operaci?n existente. Los campos abiertos se detallan en el controlador y servicio correspondientes.",
+        "operationId": "get__projects_projectId_engineering_export",
+        "parameters": [
+          {
+            "name": "projectId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Operaci?n completada; formato dependiente del recurso."
+          },
+          "default": {
+            "description": "Error de validaci?n, recurso o servicio.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/health": {
+      "get": {
+        "tags": [
+          "health"
+        ],
+        "summary": "Estado HTTP del backend",
+        "operationId": "getHealth",
+        "responses": {
+          "200": {
+            "description": "Servidor disponible; no comprueba PostgreSQL ni proveedores.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "success",
+                    "data"
+                  ],
+                  "properties": {
+                    "success": {
+                      "type": "boolean",
+                      "enum": [
+                        true
+                      ]
+                    },
+                    "data": {
+                      "type": "object",
+                      "required": [
+                        "status",
+                        "timestamp",
+                        "service"
+                      ],
+                      "properties": {
+                        "status": {
+                          "type": "string",
+                          "enum": [
+                            "UP"
+                          ]
+                        },
+                        "timestamp": {
+                          "type": "string",
+                          "format": "date-time"
+                        },
+                        "service": {
+                          "type": "string",
+                          "enum": [
+                            "ICASE-Backend-API"
+                          ]
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+  },
+  "components": {
+    "schemas": {
+      "Error": {
+        "type": "object",
+        "required": [
+          "success",
+          "error"
+        ],
+        "properties": {
+          "success": {
+            "type": "boolean",
+            "enum": [
+              false
+            ]
+          },
+          "error": {
+            "type": "object",
+            "required": [
+              "message"
+            ],
+            "properties": {
+              "message": {
+                "type": "string"
+              },
+              "code": {
+                "type": "string"
+              }
+            }
+          }
+        }
+      },
+      "ProjectInput": {
+        "type": "object",
+        "required": [
+          "name"
+        ],
+        "properties": {
+          "name": {
+            "type": "string",
+            "minLength": 1,
+            "example": "Proyecto de ejemplo"
+          },
+          "description": {
+            "type": "string"
+          },
+          "systemDescription": {
+            "type": "string"
+          },
+          "status": {
+            "type": "string",
+            "enum": [
+              "PLANNING",
+              "IN_PROGRESS",
+              "COMPLETED",
+              "ARCHIVED"
+            ]
+          }
+        }
+      },
+      "Project": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "name": {
+            "type": "string"
+          },
+          "description": {
+            "type": "string",
+            "nullable": true
+          },
+          "status": {
+            "type": "string"
+          }
+        },
+        "additionalProperties": true
+      },
+      "AnalysisInput": {
+        "type": "object",
+        "properties": {
+          "sourceVersionId": {
+            "type": "string"
+          },
+          "async": {
+            "type": "boolean",
+            "default": false
+          },
+          "force": {
+            "type": "boolean",
+            "default": false
+          },
+          "providerOverride": {
+            "type": "string",
+            "enum": [
+              "gemini",
+              "openai",
+              "local"
+            ]
+          },
+          "modelOverride": {
+            "type": "string"
+          },
+          "provider": {
+            "type": "string",
+            "description": "Alias de providerOverride"
+          },
+          "model": {
+            "type": "string",
+            "description": "Alias de modelOverride"
+          }
+        }
+      },
+      "AnalysisResult": {
+        "type": "object",
+        "properties": {
+          "success": {
+            "type": "boolean"
+          },
+          "cached": {
+            "type": "boolean"
+          },
+          "partial": {
+            "type": "boolean"
+          },
+          "sourceId": {
+            "type": "string"
+          },
+          "sourceVersionId": {
+            "type": "string"
+          },
+          "extraction": {
+            "type": "object",
+            "additionalProperties": true
+          },
+          "coverage": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "additionalProperties": true
+            }
+          },
+          "failures": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "additionalProperties": true
+            }
+          },
+          "metrics": {
+            "type": "object",
+            "properties": {
+              "provider": {
+                "type": "string"
+              },
+              "model": {
+                "type": "string"
+              },
+              "promptVersion": {
+                "type": "string"
+              },
+              "requestsUsed": {
+                "type": "integer"
+              }
+            },
+            "additionalProperties": true
+          },
+          "summary": {
+            "type": "object",
+            "additionalProperties": true
+          },
+          "requirementCandidates": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "additionalProperties": true
+            }
+          },
+          "modelCandidates": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "additionalProperties": true
+            }
+          }
+        },
+        "additionalProperties": true
+      },
+      "AnalysisJob": {
+        "type": "object",
+        "required": [
+          "jobId",
+          "sourceId",
+          "status"
+        ],
+        "properties": {
+          "jobId": {
+            "type": "string"
+          },
+          "sourceId": {
+            "type": "string"
+          },
+          "status": {
+            "type": "string",
+            "enum": [
+              "RUNNING",
+              "COMPLETED",
+              "FAILED"
+            ]
+          },
+          "result": {
+            "$ref": "#/components/schemas/AnalysisResult"
+          },
+          "error": {
+            "type": "object",
+            "properties": {
+              "message": {
+                "type": "string"
+              },
+              "code": {
+                "type": "string"
+              }
+            }
+          }
+        }
+      },
+      "DiagramInput": {
+        "type": "object",
+        "properties": {
+          "type": {
+            "type": "string",
+            "enum": [
+              "ER",
+              "CLASS",
+              "USE_CASE",
+              "FLOWCHART",
+              "NAVIGATION",
+              "ARCHITECTURE"
+            ]
+          },
+          "types": {
+            "type": "array",
+            "minItems": 1,
+            "items": {
+              "type": "string",
+              "enum": [
+                "ER",
+                "CLASS",
+                "USE_CASE",
+                "FLOWCHART",
+                "NAVIGATION",
+                "ARCHITECTURE"
+              ]
+            }
+          },
+          "force": {
+            "type": "boolean",
+            "default": false
+          }
+        },
+        "anyOf": [
+          {
+            "required": [
+              "type"
+            ]
+          },
+          {
+            "required": [
+              "types"
+            ]
+          }
+        ]
+      },
+      "DiagramResult": {
+        "type": "object",
+        "properties": {
+          "diagramType": {
+            "type": "string"
+          },
+          "mermaidCode": {
+            "type": "string",
+            "example": "flowchart TD\n  A[Consultar productos]"
+          },
+          "code": {
+            "type": "string"
+          },
+          "provider": {
+            "type": "string"
+          },
+          "repairMethod": {
+            "type": "string"
+          },
+          "technicalError": {
+            "type": "string",
+            "nullable": true
+          },
+          "warning": {
+            "type": "string",
+            "nullable": true
+          },
+          "validation": {
+            "type": "object",
+            "properties": {
+              "isValid": {
+                "type": "boolean"
+              },
+              "errors": {
+                "type": "array",
+                "items": {
+                  "type": "string"
+                }
+              },
+              "warnings": {
+                "type": "array",
+                "items": {
+                  "type": "string"
+                }
+              }
+            },
+            "additionalProperties": true
+          },
+          "artifactVersionId": {
+            "type": "string"
+          },
+          "status": {
+            "type": "string"
+          }
+        },
+        "additionalProperties": true
+      },
+      "ChatInput": {
+        "type": "object",
+        "required": [
+          "message"
+        ],
+        "properties": {
+          "message": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 4000
+          },
+          "provider": {
+            "type": "string",
+            "enum": [
+              "local",
+              "openai",
+              "ollama"
+            ]
+          },
+          "proposeChange": {
+            "type": "boolean",
+            "default": false
+          }
+        }
+      },
+      "ChatResult": {
+        "type": "object",
+        "properties": {
+          "answer": {
+            "type": "string"
+          },
+          "context": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "additionalProperties": true
+            }
+          },
+          "sourceId": {
+            "type": "string"
+          },
+          "candidates": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "additionalProperties": true
+            }
+          }
+        }
+      }
+    }
+  },
+  "externalDocs": {
+    "description": "Referencia t?cnica publicada mediante MkDocs; ver README para la direcci?n del despliegue.",
+    "url": "http://localhost:8000/api-reference/"
+  }
+}
