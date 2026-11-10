@@ -17,6 +17,8 @@ function canonical(refs,actors,models=[]){const ids=[],pending=[];for(const ref 
 const useCaseActors=c=>[...new Set([...(c.actorIds||[]),c.primaryActorId,...(c.secondaryActorIds||[])].filter(Boolean))];
 const executorAssociations=ev=>(ev?.associations||[]).filter(a=>['EXECUTOR','PARTICIPANT'].includes(a.role)&&a.evidence?.length);
 async function refresh(tx,projectId,extra=[]){
+  // Workflow versions own confirmed relationships. Extraction may only propose changes.
+  if (tx.documentWorkflow && await tx.documentWorkflow.findUnique({where:{projectId}})) return;
   const actors=await tx.actor.findMany({where:{projectId,isDeleted:false}});
   const models=[...await tx.modelCandidate.findMany({where:{projectId,kind:'ACTOR'}}),...extra];
   const requirements=await tx.requirement.findMany({where:{projectId,isDeleted:false,status:{not:'REMOVED'}}});

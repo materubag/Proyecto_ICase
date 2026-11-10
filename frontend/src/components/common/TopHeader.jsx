@@ -13,8 +13,13 @@ export default function TopHeader({
   activeActivity = null,
   onActivityClick = null
 }) {
+  // If inside a project and no global activity is running, keep layout clean matching the mockup
+  if (projectName && !activeActivity) {
+    return null;
+  }
+
   return (
-    <header className="top-header">
+    <header className="top-header" style={{ background: '#FFFFFF', borderBottom: '1px solid #F1F5F9', padding: '8px 24px' }}>
       {/* Left: Breadcrumb / Current Context */}
       <div className="header-breadcrumb">
         <span
@@ -23,15 +28,15 @@ export default function TopHeader({
           onClick={onBack || undefined}
           title="ICASE Studio"
         >
-          ICASE Studio
+          iCASE Studio
         </span>
 
         {projectName && (
           <>
-            <span className="breadcrumb-sep">/</span>
+            <span className="breadcrumb-sep" style={{ color: '#CBD5E1' }}>/</span>
             <span
               className="breadcrumb-text"
-              style={{ cursor: onBack ? 'pointer' : 'default', fontWeight: 500 }}
+              style={{ cursor: onBack ? 'pointer' : 'default', fontWeight: 500, color: '#475569' }}
               onClick={onBack || undefined}
               title={`Volver a ${projectName}`}
             >
@@ -40,11 +45,11 @@ export default function TopHeader({
           </>
         )}
 
-        <span className="breadcrumb-sep">/</span>
-        <span className="breadcrumb-current">{currentView}</span>
+        <span className="breadcrumb-sep" style={{ color: '#CBD5E1' }}>/</span>
+        <span className="breadcrumb-current" style={{ fontWeight: 600, color: '#0F172A' }}>{currentView}</span>
       </div>
 
-      {/* Right: Real Functional Actions & Global Activity Pill */}
+      {/* Right: Global Activity Pill */}
       <div className="header-actions">
         {activeActivity && (
           <button
@@ -55,11 +60,11 @@ export default function TopHeader({
               display: 'inline-flex',
               alignItems: 'center',
               gap: '6px',
-              padding: '4px 10px',
-              borderRadius: 'var(--radius-full)',
-              background: 'rgba(41, 82, 217, 0.1)',
-              border: '1px solid rgba(41, 82, 217, 0.25)',
-              color: 'var(--primary)',
+              padding: '4px 12px',
+              borderRadius: '9999px',
+              background: '#EEF2FF',
+              border: '1px solid #E0E7FF',
+              color: '#4F46E5',
               fontSize: '0.75rem',
               fontWeight: 600,
               cursor: onActivityClick ? 'pointer' : 'default'

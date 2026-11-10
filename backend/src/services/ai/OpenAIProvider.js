@@ -2,6 +2,25 @@ const AIProvider = require('./AIProvider');
 const env = require('../../config/env');
 
 class OpenAIProvider extends AIProvider {
+  // Responses API avoids temperature and legacy max_tokens for reasoning models.
+  async executePrompt({ system, prompt, model, maxTokens = 8192 }) {
+    if (!env.OPENAI_API_KEY) throw new Error('OpenAI no configurado');
+    if (!model) throw new Error('Modelo Luna no configurado');
+    const response = await fetch('https://api.openai.com/v1/responses', {
+      method: 'POST', signal: AbortSignal.timeout(120000),
+      headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${env.OPENAI_API_KEY}` },
+      body: JSON.stringify({ model, instructions: system, input: JSON.stringify(prompt),
+        max_output_tokens: maxTokens, store: false, text: { format: { type: 'json_object' } },
+        ...(env.DOCUMENT_REASONING_EFFORT ? { reasoning: { effort: env.DOCUMENT_REASONING_EFFORT } } : {}) })
+    });
+    if (!response.ok) throw new Error(`OpenAI HTTP ${response.status}: ${(await response.text()).slice(0, 250)}`);
+    const result = await response.json();
+    try {
+      if (result.status !== 'completed') throw new Error('Respuesta OpenAI incompleta');
+      const content = result.output?.flatMap(o => o.content || []).filter(o => o.type === 'output_text').map(o => o.text).join('');
+      return { data: JSON.parse(content), usage: result.usage, model: result.model || model };
+    } catch (e) { e.usage = result.usage; throw e; }
+  }
   async extractDocumentBatch(input, options = {}) {
     if (!env.OPENAI_API_KEY) throw new Error('OpenAI no configurado');
     const model = options.model || env.OPENAI_MODEL || 'gpt-5.6-luna';

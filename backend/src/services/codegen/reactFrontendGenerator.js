@@ -189,7 +189,7 @@ function generateFrontendCss() {
 .icase-nav-overlay { display: none; }
 .icase-content { min-width: 0; flex: 1; }
 @media(max-width: 900px) {
-  .icase-topbar { gap: .5rem; padding: .5rem .75rem; }
+  .icase-topbar { gap: .5rem; padding: .5rem .75rem; flex-wrap: wrap; }
   .icase-brand { min-width: 0; gap: .45rem; }
   .icase-session strong { display: none; }
   .icase-menu-toggle { display: inline-flex; margin-left: auto; padding: .45rem .7rem; border: 1px solid var(--color-border); background: #fff; border-radius: 8px; }
@@ -375,11 +375,11 @@ function generateApiClientJs() {
  * retorna directamente el payload data y propaga errores estructurados del servidor.
  */
 
-const API_BASE = '/api';
+  const API_BASE = (typeof window !== 'undefined' && window.__ICASE_PREVIEW_API_BASE__) || '/api';
 
 export async function apiRequest(endpoint, options = {}) {
   const cleanEndpoint = endpoint.startsWith('/') ? endpoint : \`/\${endpoint}\`;
-  const url = cleanEndpoint.startsWith('/api') ? cleanEndpoint : \`\${API_BASE}\${cleanEndpoint}\`;
+    const url = cleanEndpoint.startsWith('/api') ? \`\${API_BASE}\${cleanEndpoint.slice(4)}\` : \`\${API_BASE}\${cleanEndpoint}\`;
   const { headers: extraHeaders = {}, body, ...rest } = options;
   const isFormData = typeof FormData !== 'undefined' && body instanceof FormData;
   const token = typeof window !== 'undefined' && window.localStorage ? window.localStorage.getItem('token') : null;

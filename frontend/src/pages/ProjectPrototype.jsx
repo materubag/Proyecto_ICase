@@ -1,3 +1,4 @@
+import DeliveryWorkflowPanel from '../components/DeliveryWorkflowPanel';
 import React, { useState, useEffect, useMemo } from 'react';
 import MockupRenderer from '../components/mockup-renderer/MockupRenderer';
 import DiagramViewport from '../components/common/DiagramViewport';
@@ -300,65 +301,114 @@ export default function ProjectPrototype({ project, onProjectUpdated }) {
   }, [screens]);
 
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', height: '100%', overflow: 'hidden' }}>
-      {/* Command bar */}
-      <div className="full-page-header">
-        <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
-          <div>
-            <h2 className="page-title" style={{ fontSize: '1.125rem' }}>
-              Prototipos de la Aplicación (Sketch & Mockup)
-            </h2>
-            <span style={{ fontSize: '0.75rem', color: 'var(--secondary)' }}>
-              {screens.length} pantalla{screens.length !== 1 ? 's' : ''} · Visualización, relaciones entre pantallas y estructura de organización
+    <div style={{ display: 'flex', flexDirection: 'column', height: '100%', overflowY: 'auto', background: '#FFFFFF', padding: '32px 40px' }}>
+      <DeliveryWorkflowPanel project={project} mode="mockups" onProjectUpdated={onProjectUpdated} />
+
+      {/* Mockup Header */}
+      <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', marginBottom: '24px' }}>
+        <div>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+            <h1 style={{ fontSize: '1.625rem', fontWeight: 700, color: '#0F172A', margin: 0, letterSpacing: '-0.02em' }}>
+              Mockups
+            </h1>
+            <span style={{
+              background: '#EEF2FF',
+              color: '#4F46E5',
+              border: '1px solid #E0E7FF',
+              fontSize: '0.75rem',
+              fontWeight: 500,
+              padding: '2px 10px',
+              borderRadius: '9999px'
+            }}>
+              {screens.length > 0 ? `${screens.length} pantallas UI` : 'Prototipo'}
             </span>
           </div>
+          <p style={{ fontSize: '0.875rem', color: '#64748B', margin: '6px 0 0 0' }}>
+            Diseño interactivo de pantallas generado con Google Stitch para el sistema.
+          </p>
         </div>
 
-        <div className="page-actions">
+        {/* Header Right Actions */}
+        <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
           {screens.length > 0 && (
-            <div className="view-toggle">
-              <button
-                className={`view-toggle-btn ${viewMode === 'render' ? 'active' : ''}`}
-                onClick={() => setViewMode('render')}
-                title="Mockup interactivo en alta fidelidad"
-              >
-                <span className="ms ms-xs">palette</span><span>Mockup</span>
-              </button>
-              <button
-                className={`view-toggle-btn ${viewMode === 'sketch' ? 'active' : ''}`}
-                onClick={() => setViewMode('sketch')}
-                title="Sketch / Wireframe en baja fidelidad"
-              >
-                <span className="ms ms-xs">draw</span><span>Sketch</span>
-              </button>
-              <button
-                className={`view-toggle-btn ${viewMode === 'structure' ? 'active' : ''}`}
-                onClick={() => setViewMode('structure')}
-                title="Estructura de organización de la información de la vista"
-              >
-                <span className="ms ms-xs">view_quilt</span><span>Estructura de Información</span>
-              </button>
-              <button
-                className={`view-toggle-btn ${viewMode === 'relations' ? 'active' : ''}`}
-                onClick={() => setViewMode('relations')}
-                title="Relaciones entre pantallas y árbol de navegación"
-              >
-                <span className="ms ms-xs">account_tree</span><span>Relaciones</span>
-              </button>
-              <button
-                className={`view-toggle-btn ${viewMode === 'html' ? 'active' : ''}`}
-                onClick={() => setViewMode('html')}
-              >
-                <span className="ms ms-xs">code</span><span>HTML</span>
-              </button>
+            <div style={{
+              display: 'inline-flex',
+              background: '#FFFFFF',
+              border: '1px solid #E2E8F0',
+              borderRadius: '8px',
+              padding: '3px',
+              boxShadow: '0 1px 2px rgba(15, 23, 42, 0.04)'
+            }}>
+              {[
+                ['render', 'Mockup'],
+                ['sketch', 'Sketch'],
+                ['structure', 'Estructura'],
+                ['relations', 'Relaciones'],
+                ['html', 'HTML']
+              ].map(([vKey, label]) => (
+                <button
+                  key={vKey}
+                  type="button"
+                  onClick={() => setViewMode(vKey)}
+                  style={{
+                    background: viewMode === vKey ? '#0F172A' : 'transparent',
+                    color: viewMode === vKey ? '#FFFFFF' : '#64748B',
+                    border: 'none',
+                    borderRadius: '6px',
+                    padding: '6px 14px',
+                    fontSize: '0.8125rem',
+                    fontWeight: viewMode === vKey ? 600 : 500,
+                    cursor: 'pointer',
+                    transition: 'all 0.15s ease'
+                  }}
+                >
+                  {label}
+                </button>
+              ))}
             </div>
           )}
 
-          <button className="btn btn-primary btn-sm" onClick={handleGenerateMockup} disabled={isGenerating}>
+          <button
+            type="button"
+            onClick={() => setSelectorOpen(v => !v)}
+            style={{
+              background: '#FFFFFF',
+              border: '1px solid #E2E8F0',
+              color: '#334155',
+              borderRadius: '8px',
+              padding: '8px 16px',
+              fontSize: '0.8125rem',
+              fontWeight: 500,
+              cursor: 'pointer',
+              boxShadow: '0 1px 2px rgba(15, 23, 42, 0.04)'
+            }}
+          >
+            {selectorOpen ? 'Ocultar catálogo' : `Catálogo (${availableScreens.length})`}
+          </button>
+
+          <button
+            type="button"
+            onClick={handleGenerateMockup}
+            disabled={isGenerating}
+            style={{
+              background: '#4F46E5',
+              color: '#FFFFFF',
+              border: 'none',
+              borderRadius: '8px',
+              padding: '8px 18px',
+              fontSize: '0.8125rem',
+              fontWeight: 600,
+              cursor: 'pointer',
+              boxShadow: '0 1px 3px rgba(79, 70, 229, 0.25)',
+              display: 'flex',
+              alignItems: 'center',
+              gap: '6px'
+            }}
+          >
             {isGenerating ? (
-              <><span className="ms ms-sm spin">progress_activity</span><span>Generando con Stitch ({Math.floor(elapsedSeconds / 60)}m {elapsedSeconds % 60 < 10 ? '0' : ''}{elapsedSeconds % 60}s)...</span></>
+              <span>Generando ({Math.floor(elapsedSeconds / 60)}m {elapsedSeconds % 60 < 10 ? '0' : ''}{elapsedSeconds % 60}s)...</span>
             ) : (
-              <><span className="ms ms-sm">auto_awesome</span><span>Generar con Stitch</span></>
+              <span>Generar con Stitch</span>
             )}
           </button>
         </div>
@@ -657,11 +707,11 @@ export default function ProjectPrototype({ project, onProjectUpdated }) {
 
           {/* Screen selector tabs */}
           {viewMode !== 'relations' && (
-            <div className="screen-selector" style={{flexShrink:0}}>
+            <div style={{display: "flex", gap: "8px", overflowX: "auto", paddingBottom: "12px", marginBottom: "16px", flexShrink: 0}}>
               {screens.map(screen => (
                 <button
                   key={screen.id}
-                  className={`screen-tab ${selectedScreenId === screen.id ? 'active' : ''}`}
+                  style={{display: "flex", alignItems: "center", gap: "6px", padding: "6px 14px", borderRadius: "8px",background: selectedScreenId === screen.id ? "#0F172A" : "#FFFFFF",color: selectedScreenId === screen.id ? "#FFFFFF" : "#334155",border: "1px solid #E2E8F0", fontSize: "0.8125rem", fontWeight: selectedScreenId === screen.id ? 600 : 400,cursor: "pointer", whiteSpace: "nowrap", transition: "all 0.15s ease"}}
                   onClick={() => setSelectedScreenId(screen.id)}
                 >
                   <span className="ms ms-xs">monitor</span>
@@ -675,7 +725,7 @@ export default function ProjectPrototype({ project, onProjectUpdated }) {
           )}
 
           {/* Content */}
-          <div className="page-scrollable" style={{ padding: '20px 24px', flex:1, minHeight:0 }}>
+          <div style={{background: "#FFFFFF", border: "1px solid #E2E8F0", borderRadius: "20px", padding: "24px", boxShadow: "0 1px 3px rgba(15, 23, 42, 0.03)", flex: 1, minHeight: "560px"}}>
             {viewMode === 'structure' ? (
               <div>
                 <div style={{ marginBottom: '16px' }}>

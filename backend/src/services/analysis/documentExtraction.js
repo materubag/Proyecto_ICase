@@ -39,10 +39,12 @@ function segmentText(text, supplied = [], maxChars = 3000, cuts = []) {
 function configuration(options={}) {
   const env=require('../../config/env');
   const provider=(options.providerOverride||options.provider||env.AI_PROVIDER||'gemini').toLowerCase();
-  const model=options.modelOverride||options.model||(provider==='openai'?(env.OPENAI_MODEL||'gpt-5.4-nano'):(env.GEMINI_MODEL||'gemini-3.1-flash-lite'));
+  const model=options.modelOverride||options.model||(provider==='hybrid'?env.DOCUMENT_PREPARATION_MODEL:provider==='anthropic'?env.DOCUMENT_REVIEW_MODEL:provider==='openai'?(env.OPENAI_MODEL||'gpt-5.4-nano'):(env.GEMINI_MODEL||'gemini-3.1-flash-lite'));
   return {provider,model,promptVersion:contract.PROMPT_VERSION};
 }
 function createProvider(name) {
+  if(name==='hybrid') return new(require('../ai/HybridPipelineRouter'))();
+  if(name==='anthropic') return new(require('../ai/AnthropicProvider'))();
   if(name==='openai') return new(require('../ai/OpenAIProvider'))();
   if(name==='gemini') return new(require('../ai/GeminiProvider'))();
   throw new Error(`El proveedor ${name} no implementa extracción documental.`);

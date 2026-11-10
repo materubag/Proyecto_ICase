@@ -6,7 +6,16 @@ const codegenJobs = require('./services/codegen/codegenJob.service');
 const PORT = env.PORT || 8080;
 
 async function startServer() {
-  codegenJobs.recoverInterruptedJobs();
+  try {
+    await require('./services/codegen/deliveryWorkflow').service().recover();
+  } catch (err) {
+    console.warn('[Server] Advertencia al recuperar deliveryWorkflow:', err.message);
+  }
+  try {
+    codegenJobs.recoverInterruptedJobs();
+  } catch (err) {
+    console.warn('[Server] Advertencia al recuperar codegenJobs:', err.message);
+  }
   try {
     // Test database connection
     console.log('[Database] Checking connection to PostgreSQL...');

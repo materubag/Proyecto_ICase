@@ -152,57 +152,41 @@ export default function ProjectArchitecture({ project, onProjectUpdated }) {
     const db = effectiveDatabase || 'PostgreSQL';
 
     let code = `flowchart LR\n`;
-    code += `  subgraph COL1 ["COLS. 1: USUARIOS (Hardware / Dispositivos)"]\n`;
+    code += `  subgraph COL1 ["USUARIOS"]\n`;
     code += `    direction TB\n`;
     code += `    U_REC["Recepción (PC / Laptop)"]\n`;
-    code += `    U_MEC["Mecánico (Tablet / Móvil)"]\n`;
-    code += `    U_CLI["Cliente (Smartphone)"]\n`;
-    code += `    U_ADM["Admin (PC Escritorio)"]\n`;
     code += `  end\n\n`;
 
-    code += `  subgraph COL2 ["COLS. 2: INTERFAZ (Presentación)"]\n`;
+    code += `  subgraph COL2 ["INTERFAZ"]\n`;
     code += `    direction TB\n`;
-    code += `    UI_APP["APP WEB (${fe})"]\n`;
-    code += `    UI_ROUTER["Router & Vistas SPA"]\n`;
-    code += `    UI_APP --> UI_ROUTER\n`;
+    code += `    UI_APP["Interfaz web (${fe})"]\n`;
     code += `  end\n\n`;
 
-    code += `  subgraph COL3 ["COLS. 3: MÓDULOS API (Lógica / ${be})"]\n`;
+    code += `  subgraph COL3 ["API · MÓDULOS"]\n`;
     code += `    direction TB\n`;
-    code += `    API_AUTH["Autenticación & Roles"]\n`;
-    code += `    API_VEH["Gestión de Vehículos & Clientes"]\n`;
-    code += `    API_CITAS["Atención & Citas"]\n`;
+    code += `    API_AUTH["Autenticación y Acceso"]\n`;
+    code += `    API_VEH["Clientes y Vehículos"]\n`;
+    code += `    API_CITAS["Atención y Citas"]\n`;
     code += `    API_DIAG["Diagnóstico OBD"]\n`;
-    code += `    API_COT["Cotizaciones & Presupuestos"]\n`;
-    code += `    API_ORD["Órdenes de Trabajo & Taller"]\n`;
-    code += `    API_INV["Inventario & Repuestos"]\n`;
-    code += `    API_MANT["Mantenimiento Preventivo"]\n`;
-    code += `    API_REP["Reportes & Control"]\n`;
+    code += `    API_COT["Cotizaciones y Presupuestos"]\n`;
     code += `  end\n\n`;
 
-    code += `  subgraph COL4 ["COLS. 4: PERSISTENCIA Y RESPALDOS (Datos & RNF-08)"]\n`;
+    code += `  subgraph COL4 ["DATOS"]\n`;
     code += `    direction TB\n`;
-    code += `    DB_STORE[("${db} (Base de Datos Relacional)")]\n`;
-    code += `    OBJ_STORE[("Almacén de Evidencias (Fotos & Diagnósticos)")]\n`;
-    code += `    SVC_BACKUP["Servicio de Respaldos (RNF-08: Backup & Recovery Daemon)"]\n`;
-    code += `    DB_STORE -.->|Respaldos programados| SVC_BACKUP\n`;
-    code += `    OBJ_STORE -.->|Copias de seguridad| SVC_BACKUP\n`;
+    code += `    DB_STORE["${db}"]\n`;
+    code += `    OBJ_STORE["Almacén de evidencias"]\n`;
+    code += `    SVC_BACKUP["Servicio de respaldos"]\n`;
+    code += `    DB_STORE -.->|copias de seguridad| SVC_BACKUP\n`;
+    code += `    OBJ_STORE -.->|copias de seguridad| SVC_BACKUP\n`;
     code += `  end\n\n`;
 
-    code += `  U_REC --> UI_APP\n`;
-    code += `  U_MEC --> UI_APP\n`;
-    code += `  U_CLI --> UI_APP\n`;
-    code += `  U_ADM --> UI_APP\n\n`;
+    code += `  U_REC --> UI_APP\n\n`;
 
-    code += `  UI_ROUTER --> API_AUTH\n`;
-    code += `  UI_ROUTER --> API_VEH\n`;
-    code += `  UI_ROUTER --> API_CITAS\n`;
-    code += `  UI_ROUTER --> API_DIAG\n`;
-    code += `  UI_ROUTER --> API_COT\n`;
-    code += `  UI_ROUTER --> API_ORD\n`;
-    code += `  UI_ROUTER --> API_INV\n`;
-    code += `  UI_ROUTER --> API_MANT\n`;
-    code += `  UI_ROUTER --> API_REP\n\n`;
+    code += `  UI_APP --> API_AUTH\n`;
+    code += `  UI_APP --> API_VEH\n`;
+    code += `  UI_APP --> API_CITAS\n`;
+    code += `  UI_APP --> API_DIAG\n`;
+    code += `  UI_APP --> API_COT\n\n`;
 
     code += `  API_AUTH --> DB_STORE\n`;
     code += `  API_VEH --> DB_STORE\n`;
@@ -210,10 +194,6 @@ export default function ProjectArchitecture({ project, onProjectUpdated }) {
     code += `  API_DIAG --> DB_STORE\n`;
     code += `  API_DIAG --> OBJ_STORE\n`;
     code += `  API_COT --> DB_STORE\n`;
-    code += `  API_ORD --> DB_STORE\n`;
-    code += `  API_INV --> DB_STORE\n`;
-    code += `  API_MANT --> DB_STORE\n`;
-    code += `  API_REP --> DB_STORE\n`;
 
     return code;
   }, [currentArch, effectiveFrontend, effectiveBackend, effectiveDatabase]);
@@ -258,138 +238,224 @@ export default function ProjectArchitecture({ project, onProjectUpdated }) {
   ];
 
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', height: '100%', overflow: 'hidden' }}>
-      {archError && <div role="alert" className="alert alert-danger">{archError}</div>}
+    <div style={{ display: 'flex', flexDirection: 'column', height: '100%', overflowY: 'auto', background: '#FFFFFF', padding: '32px 40px' }}>
+      {archError && <div role="alert" className="alert alert-danger" style={{ marginBottom: '16px' }}>{archError}</div>}
       
-      {/* Header */}
-      <div className="full-page-header" style={{ borderBottom: '1px solid var(--outline-variant)', background: 'var(--surface)' }}>
-        <div style={{ display: 'flex', alignItems: 'center', gap: '14px' }}>
-          <div>
-            <h2 className="page-title" style={{ fontSize: '1.125rem', display: 'flex', alignItems: 'center', gap: '8px' }}>
-              <span className="ms ms-sm" style={{ color: 'var(--primary)' }}>layers</span>
-              Diseño de la Arquitectura de la Aplicación
-            </h2>
-            <span style={{ fontSize: '0.75rem', color: 'var(--secondary)' }}>
-              Arquitectura de Software (patrón en capas) y Arquitectura del Sistema (infraestructura física y contenedores)
+      {/* Mockup Header */}
+      <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', marginBottom: '24px' }}>
+        <div>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+            <h1 style={{ fontSize: '1.625rem', fontWeight: 700, color: '#0F172A', margin: 0, letterSpacing: '-0.02em' }}>
+              Arquitectura
+            </h1>
+            <span style={{
+              background: '#EEF2FF',
+              color: '#4F46E5',
+              border: '1px solid #E0E7FF',
+              fontSize: '0.75rem',
+              fontWeight: 500,
+              padding: '2px 10px',
+              borderRadius: '9999px'
+            }}>
+              Planificación
+            </span>
+          </div>
+          <p style={{ fontSize: '0.875rem', color: '#64748B', margin: '6px 0 0 0' }}>
+            Cómo se organiza el sistema en capas.
+          </p>
+
+          {/* Technology Chips */}
+          <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginTop: '16px', flexWrap: 'wrap' }}>
+            <span style={{
+              background: '#FFFFFF',
+              border: '1px solid #E2E8F0',
+              color: '#334155',
+              fontSize: '0.75rem',
+              padding: '4px 12px',
+              borderRadius: '9999px',
+              fontWeight: 500
+            }}>
+              {effectiveStyle || 'Clean architecture'}
+            </span>
+            <span style={{
+              background: '#FFFFFF',
+              border: '1px solid #E2E8F0',
+              color: '#334155',
+              fontSize: '0.75rem',
+              padding: '4px 12px',
+              borderRadius: '9999px',
+              fontWeight: 500
+            }}>
+              {effectiveFrontend || 'React'}
+            </span>
+            <span style={{
+              background: '#FFFFFF',
+              border: '1px solid #E2E8F0',
+              color: '#334155',
+              fontSize: '0.75rem',
+              padding: '4px 12px',
+              borderRadius: '9999px',
+              fontWeight: 500
+            }}>
+              {effectiveBackend || 'Node.js + Express'}
+            </span>
+            <span style={{
+              background: '#FFFFFF',
+              border: '1px solid #E2E8F0',
+              color: '#334155',
+              fontSize: '0.75rem',
+              padding: '4px 12px',
+              borderRadius: '9999px',
+              fontWeight: 500
+            }}>
+              {effectiveDatabase || 'PostgreSQL'}
             </span>
           </div>
         </div>
 
-        <div className="page-actions" style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-          <button
-            className="btn btn-primary btn-sm"
-            onClick={handleOpenEdit}
-            title="Modificar las capas, tecnologías o motor de base de datos de la arquitectura"
-          >
-            <span className="ms ms-xs">edit</span>
-            <span>Modificar Arquitectura</span>
-          </button>
+        {/* Action Controls */}
+        <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+          {/* Capsule Switcher: Software | Sistema */}
+          <div style={{
+            display: 'inline-flex',
+            background: '#F1F5F9',
+            padding: '3px',
+            borderRadius: '8px'
+          }}>
+            <button
+              type="button"
+              onClick={() => setArchType('software')}
+              style={{
+                background: archType === 'software' ? '#0F172A' : 'transparent',
+                color: archType === 'software' ? '#FFFFFF' : '#64748B',
+                border: 'none',
+                borderRadius: '6px',
+                padding: '6px 16px',
+                fontSize: '0.8125rem',
+                fontWeight: 600,
+                cursor: 'pointer',
+                transition: 'all 0.15s ease'
+              }}
+            >
+              Software
+            </button>
+            <button
+              type="button"
+              onClick={() => setArchType('system')}
+              style={{
+                background: archType === 'system' ? '#0F172A' : 'transparent',
+                color: archType === 'system' ? '#FFFFFF' : '#64748B',
+                border: 'none',
+                borderRadius: '6px',
+                padding: '6px 16px',
+                fontSize: '0.8125rem',
+                fontWeight: 600,
+                cursor: 'pointer',
+                transition: 'all 0.15s ease'
+              }}
+            >
+              Sistema
+            </button>
+          </div>
 
+          {/* Regenerar Button */}
           <button
-            className="btn btn-outline btn-sm"
+            type="button"
             onClick={() => handleGenerateArch(true)}
             disabled={generatingArch}
-            title="Generar o regenerar arquitectura de software con IA"
+            style={{
+              background: '#FFFFFF',
+              border: '1px solid #E2E8F0',
+              color: '#334155',
+              borderRadius: '8px',
+              padding: '8px 18px',
+              fontSize: '0.8125rem',
+              fontWeight: 500,
+              cursor: 'pointer',
+              boxShadow: '0 1px 2px rgba(15, 23, 42, 0.04)',
+              transition: 'all 0.15s ease'
+            }}
           >
-            <span className={`ms ms-xs ${generatingArch ? 'spin' : ''}`}>
-              {generatingArch ? 'autorenew' : 'auto_awesome'}
-            </span>
-            <span>{generatingArch ? 'Generando...' : storedArchDiagram ? 'Regenerar Arquitectura' : 'Generar arquitectura'}</span>
+            {generatingArch ? 'Regenerando...' : 'Regenerar'}
           </button>
 
-          <div className="view-toggle">
-            <button
-              className={`view-toggle-btn ${archType === 'software' ? 'active' : ''}`}
-              onClick={() => setArchType('software')}
-            >
-              <span className="ms ms-xs">account_tree</span>
-              <span>Arquitectura de Software</span>
-            </button>
-            <button
-              className={`view-toggle-btn ${archType === 'system' ? 'active' : ''}`}
-              onClick={() => setArchType('system')}
-            >
-              <span className="ms ms-xs">dns</span>
-              <span>Arquitectura del Sistema</span>
-            </button>
-          </div>
-
-          <div className="view-toggle">
-            <button className={`view-toggle-btn ${!showCode ? 'active' : ''}`} onClick={() => setShowCode(false)}>
-              <span className="ms ms-xs">visibility</span><span>Diagrama</span>
-            </button>
-            <button className={`view-toggle-btn ${showCode ? 'active' : ''}`} onClick={() => setShowCode(true)}>
-              <span className="ms ms-xs">code</span><span>Código</span>
-            </button>
-          </div>
+          {/* Modificar Button */}
+          <button
+            type="button"
+            onClick={handleOpenEdit}
+            style={{
+              background: '#4F46E5',
+              color: '#FFFFFF',
+              border: 'none',
+              borderRadius: '8px',
+              padding: '8px 20px',
+              fontSize: '0.8125rem',
+              fontWeight: 600,
+              cursor: 'pointer',
+              boxShadow: '0 1px 3px rgba(79, 70, 229, 0.25)',
+              transition: 'all 0.15s ease'
+            }}
+          >
+            Modificar
+          </button>
         </div>
       </div>
 
-      {/* Main Content */}
-      <div className="page-scrollable" style={{ padding: '24px', flex: 1, overflowY: 'auto' }}>
-        {/* Spec Grid */}
-        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))', gap: '14px', marginBottom: '20px' }}>
-          {specItems.map(item => (
-            <div
-              key={item.label}
-              className="info-card"
-              onClick={handleOpenEdit}
-              style={{
-                background: 'var(--surface-container-lowest)',
-                border: '1px solid var(--outline-variant)',
-                boxShadow: 'var(--shadow-xs)',
-                cursor: 'pointer',
-                transition: 'all 0.15s ease',
-                position: 'relative',
-                padding: '14px 16px'
-              }}
-              title="Haz clic para modificar esta propiedad de la arquitectura"
-            >
-              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '6px' }}>
-                <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                  <span className="ms ms-xs" style={{ color: 'var(--primary)' }}>{item.icon}</span>
-                  <span style={{ fontSize: '0.6875rem', color: 'var(--secondary)', textTransform: 'uppercase', fontWeight: 600 }}>{item.label}</span>
-                </div>
-                <span className="ms ms-xs" style={{ color: 'var(--primary)', opacity: 0.6 }} title="Modificar">edit</span>
-              </div>
-              <span style={{ fontSize: '0.9375rem', fontWeight: 600, color: 'var(--on-surface)' }}>{item.value}</span>
-            </div>
-          ))}
-        </div>
-
-        {/* Overview banner */}
-        <div style={{ display: 'flex', alignItems: 'center', gap: '8px', padding: '8px 14px', background: 'var(--surface-container-low)', borderRadius: 'var(--radius-sm)', border: '1px solid var(--border-default)', marginBottom: '16px', fontSize: '0.8125rem' }}>
-          <span className="ms ms-sm" style={{ color: 'var(--primary)' }}>layers</span>
-          <span style={{ color: 'var(--on-surface)' }}>
-            <strong>{archType === 'software' ? 'Arquitectura de Software:' : 'Arquitectura del Sistema:'}</strong>{' '}
-            {archType === 'software'
-              ? 'Organización lógica de los componentes del sistema.'
-              : 'Infraestructura, nodos y comunicación donde se ejecuta el sistema.'}
-          </span>
-        </div>
-
-        {/* Diagram View or Code View */}
+      {/* Main Diagram Card (Clean Mockup Container) */}
+      <div style={{
+        background: '#FFFFFF',
+        border: '1px solid #E2E8F0',
+        borderRadius: '24px',
+        padding: '28px',
+        boxShadow: '0 1px 3px rgba(15, 23, 42, 0.03)',
+        minHeight: '560px',
+        display: 'flex',
+        flexDirection: 'column',
+        position: 'relative'
+      }}>
         {showCode ? (
           <div>
             <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '8px' }}>
               <span className="detail-section-label">Código Mermaid ({archType === 'software' ? 'Software' : 'Sistema'})</span>
-              <button className="btn btn-ghost btn-sm" onClick={() => navigator.clipboard?.writeText(activeDiagramCode)}>
-                <span className="ms ms-sm">content_copy</span><span>Copiar</span>
-              </button>
+              <div style={{ display: 'flex', gap: '8px' }}>
+                <button className="btn btn-ghost btn-sm" onClick={() => navigator.clipboard?.writeText(activeDiagramCode)}>
+                  <span className="ms ms-sm">content_copy</span><span>Copiar</span>
+                </button>
+                <button className="btn btn-outline btn-sm" onClick={() => setShowCode(false)}>
+                  Volver al Diagrama
+                </button>
+              </div>
             </div>
-            <textarea className="diagram-raw-editor" rows={16} readOnly value={activeDiagramCode} />
+            <textarea className="diagram-raw-editor" rows={18} readOnly value={activeDiagramCode} />
           </div>
         ) : (
-          <DiagramViewport
-            code={activeDiagramCode}
-            type="flowchart"
-            title={archType === 'software' ? 'Arquitectura de Software (Clean Architecture)' : 'Arquitectura del Sistema (Despliegue Docker)'}
-            minHeight="520px"
-            isOutdated={archType === 'software' ? isOutdated : false}
-            onRegenerate={() => handleGenerateArch(true)}
-            canGenerate={true}
-            isGenerating={generatingArch}
-          />
+          <>
+            <DiagramViewport
+              code={activeDiagramCode}
+              type="flowchart"
+              title=""
+              minHeight="500px"
+              isOutdated={archType === 'software' ? isOutdated : false}
+              onRegenerate={() => handleGenerateArch(true)}
+              canGenerate={true}
+              isGenerating={generatingArch}
+            />
+            <div style={{ position: 'absolute', bottom: '16px', right: '20px' }}>
+              <button
+                type="button"
+                onClick={() => setShowCode(true)}
+                style={{
+                  background: 'transparent',
+                  border: 'none',
+                  color: '#94A3B8',
+                  fontSize: '0.75rem',
+                  cursor: 'pointer'
+                }}
+              >
+                Ver código Mermaid
+              </button>
+            </div>
+          </>
         )}
       </div>
 

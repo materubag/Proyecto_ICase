@@ -82,6 +82,10 @@ services:
       MAX_AUDIO_SIZE_MB: ${MAX_AUDIO_SIZE_MB:-100}
       SIMILARITY_THRESHOLD: ${SIMILARITY_THRESHOLD:-0.85}
       OPENAI_API_KEY: ${OPENAI_API_KEY:-}
+      ANTHROPIC_API_KEY: ${ANTHROPIC_API_KEY:-}
+      DOCUMENT_PREPARATION_MODEL: ${DOCUMENT_PREPARATION_MODEL:-}
+      DOCUMENT_REVIEW_MODEL: ${DOCUMENT_REVIEW_MODEL:-}
+      DOCUMENT_REASONING_EFFORT: ${DOCUMENT_REASONING_EFFORT:-}
       OPENAI_MODEL: ${OPENAI_MODEL:-gpt-4o}
       OPENAI_REASONING_EFFORT: ${OPENAI_REASONING_EFFORT:-high}
       N8N_BASE_URL: ${N8N_BASE_URL:-}
@@ -99,10 +103,13 @@ services:
       TEST_DB_USER: icase_user
       TEST_DB_PASSWORD: icase_password
       TEST_DB_ADMIN_NAME: autron5_acceptance
+      CODEGEN_DOCKER_HOST: host.docker.internal
+      DELIVERY_BIND_ADDRESS: 0.0.0.0
     volumes:
       - ./backend/src:/usr/src/app/src
       - ./backend/.verification:/usr/src/app/backend/.verification
       - ./backend/.cache:/usr/src/app/backend/.cache
+      - /var/run/docker.sock:/var/run/docker.sock
     ports:
       - "8080:8080"
     extra_hosts:

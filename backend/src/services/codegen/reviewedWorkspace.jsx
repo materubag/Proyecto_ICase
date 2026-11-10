@@ -1,7 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import { apiRequest } from '../api/client';
 
-const caption = name => ({ clienteId: 'Cliente', vehiculoId: 'Vehículo', nuevoKilometraje: 'Nuevo kilometraje', ordenTrabajoId: 'Orden de trabajo', itemAutorizadoId: 'Ítem autorizado', archivoId: 'Fotografía', claveOperacion: 'Referencia de operación', password: 'Contraseña', rolId: 'Rol', permisoId: 'Permiso', espacioId: 'Espacio de agenda', nuevoEspacioId: 'Nuevo espacio de agenda', itemsAprobadosIds: 'Ítems aprobados', datosPropuestos: 'Datos de la propuesta' }[name] || name.replace(/([a-z])([A-Z])/g, '$1 $2').replace(/^./, char => char.toUpperCase()));
+const caption = name => String(name).replace(/([a-z])([A-Z])/g, '$1 $2').replace(/Id$/, ' ID').replace(/^./, char => char.toUpperCase());
 const dataOf = result => result?.operationId ? result.data : result;
 const roleOf = () => { try { const user = JSON.parse(localStorage.getItem('user') || '{}'); return user.role || user.rol || ''; } catch { return ''; } };
 const permitted = (definition, role) => definition.permissions?.includes(role);

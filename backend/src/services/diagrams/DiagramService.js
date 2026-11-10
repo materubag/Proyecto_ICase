@@ -54,6 +54,7 @@ async function review(projectId, id, input) {
     if (input.status === 'REJECTED') return tx.artifactVersion.update({ where: { id }, data: { status: 'REJECTED' } });
     if (input.status === 'ERROR') return tx.artifactVersion.update({ where: { id }, data: { status: 'ERROR', validationStatus: 'ERROR', technicalError: String(input.error || 'INVALID_MERMAID').slice(0, 2000) } });
     if (input.status !== 'APPROVED') d.fail('INVALID_STATUS', undefined, 400);
+    if (v.artifact.type === 'MOCKUP') d.fail('DESIGN_REVIEW_REQUIRED','Apruebe el diseño validado y revisado por Sonnet en Mockups.');
     if (v.artifact.revision !== v.version) d.fail('VERSION_CONFLICT', 'Solo puede aprobarse la última versión candidata.');
     if (v.renderedContent && input.renderedSuccessfully !== true) d.fail('INVALID_MERMAID', 'Valida y renderiza el diagrama antes de aprobarlo.', 400);
     for (const dep of v.structuredContent.dependencies || []) {

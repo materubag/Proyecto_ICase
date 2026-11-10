@@ -2,6 +2,7 @@ const d = require('./domain');
 const diagrams = require('../diagrams/DiagramService');
 const mockupService = require('../mockup/mockup.service');
 async function generate(projectId, prompt, artifactId, navigationNodeIds) {
+  throw Object.assign(new Error('Use el catálogo funcional revisado y aprobado en Navegación y la generación individual de Stitch en Mockups.'), {statusCode:409});
   const project = await d.project(d.prisma, projectId);
   project.requirements = await d.prisma.requirement.findMany({ where: { projectId, status: 'APPROVED' } });
   project.actors = await d.prisma.actor.findMany({ where: { projectId, status: 'APPROVED' } });

@@ -494,7 +494,7 @@ function wireTaskLayout(content, contract = {}) {
     if (label) inner = (inner.match(/<span\b[^>]*class(?:Name)?=["'][^"']*material-symbols[^"']*["'][^>]*>[\s\S]*?<\/span>/i)?.[0] || '') + '<span>' + label + '</span>';
     const action = (contract.actions || []).find(a => !a.supplemental && (explicit ? a.actionId === explicit : fieldToken(a.name) === fieldToken(text)));
     if (!action) return `<button${attrs.replace(/\btype=["'][^"']+["']/gi, '')} type="button" disabled data-unresolved-control="true" title="Control pendiente de vinculación">${inner}</button>`;
-    const clean = attrs.replace(/\btype=["'][^"']+["']/gi, '');
+    const clean = attrs.replace(/\btype=["'][^"']+["']/gi, '').replace(/\sdata-action-id=["'][^"']+["']/gi, '');
     const added = (contract.additionalControls || []).filter(item => item.beforeActionId === action.actionId).flatMap(item => item.fields).map(name => {
       const field = fields.find(f => f.fieldName === name);
       if (!field) throw new Error('ADDITIONAL_CONTROL_FIELD_NOT_FOUND: ' + name);

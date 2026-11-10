@@ -1,3 +1,4 @@
+import DeliveryWorkflowPanel from '../components/DeliveryWorkflowPanel';
 import React, { useState, useEffect, useMemo } from 'react';
 import DiagramViewport from '../components/common/DiagramViewport';
 import { generateNavigationDiagram, generateFlowchartDiagram } from '../utils/mermaidGenerators';
@@ -139,90 +140,116 @@ export default function ProjectNavigation({ project, onProjectUpdated }) {
   
 
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', height: '100%', overflow: 'hidden' }}>
-      {/* Header bar */}
-      <div className="full-page-header" style={{ borderBottom: '1px solid var(--outline-variant)', background: 'var(--surface)' }}>
-        <div style={{ display: 'flex', alignItems: 'center', gap: '14px' }}>
-          <div>
-            <h2 className="page-title" style={{ fontSize: '1.125rem', display: 'flex', alignItems: 'center', gap: '8px' }}>
-              <span className="ms ms-sm" style={{ color: 'var(--primary)' }}>account_tree</span>
-              Navegación & Procesos
-            </h2>
-            <span style={{ fontSize: '0.75rem', color: 'var(--secondary)' }}>
-              Árbol jerárquico de pantallas de la aplicación y Diagrama de Flujo de procesos operativos
+    <div style={{ display: 'flex', flexDirection: 'column', height: '100%', overflowY: 'auto', background: '#FFFFFF', padding: '32px 40px' }}>
+      <DeliveryWorkflowPanel project={project} mode="screens" onProjectUpdated={onProjectUpdated} />
+
+      {/* Mockup Header */}
+      <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', marginBottom: '24px' }}>
+        <div>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+            <h1 style={{ fontSize: '1.625rem', fontWeight: 700, color: '#0F172A', margin: 0, letterSpacing: '-0.02em' }}>
+              Navegación
+            </h1>
+            <span style={{
+              background: '#EEF2FF',
+              color: '#4F46E5',
+              border: '1px solid #E0E7FF',
+              fontSize: '0.75rem',
+              fontWeight: 500,
+              padding: '2px 10px',
+              borderRadius: '9999px'
+            }}>
+              Flujo & Pantallas
             </span>
           </div>
-          <div className="vdivider" />
-          <div style={{ display: 'flex', gap: '12px' }}>
-            <span style={{ fontSize: '0.8125rem', color: 'var(--secondary)' }}>
-              <strong style={{ color: 'var(--on-surface)', fontWeight: 600 }}>{screens.length}</strong> pantallas
-            </span>
-            <span style={{ fontSize: '0.8125rem', color: 'var(--secondary)' }}>
-              <strong style={{ color: 'var(--on-surface)', fontWeight: 600 }}>{requirements.length}</strong> requisitos
-            </span>
-          </div>
+          <p style={{ fontSize: '0.875rem', color: '#64748B', margin: '6px 0 0 0' }}>
+            Jerarquía de pantallas y flujo de procesos operativos del sistema.
+          </p>
         </div>
 
-        {/* View Toggle & Actions */}
-        <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+        {/* Actions & Capsule Switch */}
+        <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
           {activeTab === 'tree' && (
             <button
-              className="btn btn-outline btn-sm"
+              type="button"
               onClick={() => handleGenerateNav(true)}
               disabled={generatingNav}
-              title="Generar o regenerar árbol de navegación con IA"
+              style={{
+                background: '#FFFFFF',
+                border: '1px solid #E2E8F0',
+                color: '#334155',
+                borderRadius: '8px',
+                padding: '8px 18px',
+                fontSize: '0.8125rem',
+                fontWeight: 500,
+                cursor: 'pointer',
+                boxShadow: '0 1px 2px rgba(15, 23, 42, 0.04)'
+              }}
             >
-              <span className={`ms ms-xs ${generatingNav ? 'spin' : ''}`}>
-                {generatingNav ? 'autorenew' : 'auto_awesome'}
-              </span>
-              <span>{generatingNav ? 'Generando...' : storedNavDiagram ? 'Regenerar Árbol' : 'Generar Árbol'}</span>
+              {generatingNav ? 'Generando...' : 'Regenerar Árbol'}
             </button>
           )}
 
           {activeTab === 'flow' && (
             <button
-              className="btn btn-outline btn-sm"
+              type="button"
               onClick={() => handleGenerateFlow(true)}
               disabled={generatingFlow}
-              title="Generar o regenerar diagrama de flujo operativo con IA"
+              style={{
+                background: '#FFFFFF',
+                border: '1px solid #E2E8F0',
+                color: '#334155',
+                borderRadius: '8px',
+                padding: '8px 18px',
+                fontSize: '0.8125rem',
+                fontWeight: 500,
+                cursor: 'pointer',
+                boxShadow: '0 1px 2px rgba(15, 23, 42, 0.04)'
+              }}
             >
-              <span className={`ms ms-xs ${generatingFlow ? 'spin' : ''}`}>
-                {generatingFlow ? 'autorenew' : 'auto_awesome'}
-              </span>
-              <span>{generatingFlow ? 'Generando...' : storedFlowDiagram ? 'Regenerar Flujo' : 'Generar Flujo'}</span>
+              {generatingFlow ? 'Generando...' : 'Regenerar Flujo'}
             </button>
           )}
 
-          <div className="view-toggle" style={{ background: 'var(--surface-container-high)' }}>
-            <button
-              className={`view-toggle-btn ${activeTab === 'tree' ? 'active' : ''}`}
-              onClick={() => setActiveTab('tree')}
-              title="Estructura jerárquica de la aplicación (Padre → Hijo)"
-            >
-              <span className="ms ms-xs">account_tree</span>
-              <span>1. Árbol de Navegación</span>
-            </button>
-            <button
-              className={`view-toggle-btn ${activeTab === 'flow' ? 'active' : ''}`}
-              onClick={() => setActiveTab('flow')}
-              title="Flujo operativo de procesos de negocio"
-            >
-              <span className="ms ms-xs">alt_route</span>
-              <span>2. Diagrama de Flujo</span>
-            </button>
-            <button
-              className={`view-toggle-btn ${activeTab === 'code' ? 'active' : ''}`}
-              onClick={() => setActiveTab('code')}
-            >
-              <span className="ms ms-xs">code</span>
-              <span>Mermaid</span>
-            </button>
+          <div style={{
+            display: 'inline-flex',
+            background: '#FFFFFF',
+            border: '1px solid #E2E8F0',
+            borderRadius: '8px',
+            padding: '3px',
+            boxShadow: '0 1px 2px rgba(15, 23, 42, 0.04)'
+          }}>
+            {[
+              ['tree', 'Árbol de Navegación'],
+              ['flow', 'Diagrama de Flujo'],
+              ['code', 'Mermaid']
+            ].map(([tabKey, label]) => (
+              <button
+                key={tabKey}
+                type="button"
+                onClick={() => setActiveTab(tabKey)}
+                style={{
+                  background: activeTab === tabKey ? '#0F172A' : 'transparent',
+                  color: activeTab === tabKey ? '#FFFFFF' : '#64748B',
+                  border: 'none',
+                  borderRadius: '6px',
+                  padding: '6px 14px',
+                  fontSize: '0.8125rem',
+                  fontWeight: activeTab === tabKey ? 600 : 500,
+                  cursor: 'pointer',
+                  transition: 'all 0.15s ease'
+                }}
+              >
+                {label}
+              </button>
+            ))}
           </div>
         </div>
       </div>
 
+      <div style={{ flex: 1, minHeight: 0, display: 'flex', flexDirection: 'column' }}>
       {/* Main Content */}
-      <div className="page-scrollable" style={{ padding: '20px 24px', flex: 1, overflowY: 'auto' }}>
+      <div style={{ flex: 1, minHeight: 0 }}>
         {/* SUBTAB 1: ÁRBOL DE NAVEGACIÓN */}
         {activeTab === 'tree' && (
           <div>
@@ -304,6 +331,7 @@ export default function ProjectNavigation({ project, onProjectUpdated }) {
           </div>
         )}
       </div>
+    </div>
     </div>
   );
 }

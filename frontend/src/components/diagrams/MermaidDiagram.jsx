@@ -1,12 +1,25 @@
 import React, { useEffect, useRef, useState } from 'react';
 import mermaid from 'mermaid';
 
-// Initialize mermaid once with clean modern theme
+// Initialize mermaid once with clean modern theme matching mockup
 mermaid.initialize({
   startOnLoad: false,
-  theme: 'neutral',
-  securityLevel: 'strict',
-  fontFamily: 'Inter, system-ui, sans-serif'
+  theme: 'base',
+  themeVariables: {
+    primaryColor: '#EEF4FF',
+    primaryTextColor: '#1E293B',
+    primaryBorderColor: '#BFDBFE',
+    lineColor: '#94A3B8',
+    secondaryColor: '#FFFFFF',
+    tertiaryColor: '#F8FAFC',
+    background: '#FFFFFF',
+    clusterBkg: '#FFFFFF',
+    clusterBorder: '#E2E8F0',
+    titleColor: '#64748B',
+    fontFamily: 'Inter, system-ui, sans-serif',
+    fontSize: '13px'
+  },
+  securityLevel: 'strict'
 });
 
 /**

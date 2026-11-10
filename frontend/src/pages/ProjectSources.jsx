@@ -1,3 +1,4 @@
+import DocumentWorkflowPanel from '../components/DocumentWorkflowPanel';
 import React, { useEffect, useState } from 'react';
 import {
   FileText,
@@ -36,7 +37,7 @@ const statusConfig = {
   FAILED: { label: 'Error', badgeClass: 'badge-archived', icon: AlertTriangle, error: true }
 };
 
-export default function ProjectSources({ project, embedded = false, onNavigateToReview, onNavigateToSummary }) {
+export default function ProjectSources({ project, embedded = false, onNavigateToReview, onNavigateToSummary, onProjectUpdated }) {
   const [sources, setSources] = useState([]);
   const [queueFiles, setQueueFiles] = useState([]);
   const [isBatchProcessing, setIsBatchProcessing] = useState(false);
@@ -70,28 +71,7 @@ export default function ProjectSources({ project, embedded = false, onNavigateTo
     }
   }
 
-  async function handleAnalyzeSource(sourceId, force = false) {
-    setAnalyzingSourceId(sourceId);
-    setMessage(null);
-    try {
-      const res = await sourcesApi.analyze(sourceId, { force });
-      const summary = res.data?.summary || {};
-      setCompletionSummary({
-        sourcesCount: 1,
-        pdfCount: 1,
-        audioCount: 0,
-        ...summary,
-        totalCandidates: summary.totalCandidates || 0,
-        pendingReviewCount: summary.totalPendingReview || summary.totalCandidates || 0
-      });
-      setCompletionModalOpen(true);
-      await loadSources();
-    } catch (err) {
-      setMessage({ type: 'error', text: `Error en análisis: ${err.message}` });
-    } finally {
-      setAnalyzingSourceId(null);
-    }
-  }
+  async function handleAnalyzeSource() { setMessage({type:'info',text:'Continúe en el panel Contexto: prepare con Luna y solicite revisión Sonnet.'}); }
 
   async function handleStartBatchProcessing() {
     if (!queueFiles.length || isBatchProcessing) return;
@@ -159,69 +139,10 @@ export default function ProjectSources({ project, embedded = false, onNavigateTo
       }
     }
 
-    // 3. Analyze newly uploaded sources
-    let catTotals = {
-      requirementsCount: 0,
-      actorsCount: 0,
-      processesCount: 0,
-      businessRulesCount: 0,
-      technologiesCount: 0,
-      entitiesCount: 0,
-      screensCount: 0,
-      datesCount: 0,
-      architectureCount: 0,
-      constraintsCount: 0,
-      objectivesCount: 0,
-      scopeCount: 0,
-      totalPendingReview: 0
-    };
-
-    if (uploadedSourceIds.length > 0) {
-      setCurrentProcessingFile('Analizando fuentes para extracción integral...');
-      for (const sourceId of uploadedSourceIds) {
-        try {
-          const res = await sourcesApi.analyze(sourceId, { force: true });
-          const s = res.data?.summary || {};
-          totalCands += s.totalCandidates || 0;
-          explicitCands += s.explicitCount || 0;
-          inferredCands += s.inferredCount || 0;
-          catTotals.requirementsCount += s.requirementsCount || 0;
-          catTotals.actorsCount += s.actorsCount || 0;
-          catTotals.processesCount += s.processesCount || 0;
-          catTotals.businessRulesCount += s.businessRulesCount || 0;
-          catTotals.technologiesCount += s.technologiesCount || 0;
-          catTotals.entitiesCount += s.entitiesCount || 0;
-          catTotals.screensCount += s.screensCount || 0;
-          catTotals.datesCount += s.datesCount || 0;
-          catTotals.architectureCount += s.architectureCount || 0;
-          catTotals.constraintsCount += s.constraintsCount || 0;
-          catTotals.objectivesCount += s.objectivesCount || 0;
-          catTotals.scopeCount += s.scopeCount || 0;
-          catTotals.totalPendingReview += s.totalPendingReview || s.totalCandidates || 0;
-        } catch (err) {
-          console.error('Error analizando fuente:', sourceId, err);
-        }
-      }
-    }
-
     await loadSources();
     setIsBatchProcessing(false);
     setCurrentProcessingFile(null);
-
-    // Open completion modal with accurate metrics
-    setCompletionSummary({
-      sourcesCount: queueFiles.length,
-      pdfCount: pdfQueue.length,
-      audioCount: audioQueue.length,
-      totalCandidates: totalCands,
-      explicitCount: explicitCands,
-      inferredCount: inferredCands,
-      ...catTotals,
-      pendingReviewCount: catTotals.totalPendingReview || totalCands,
-      approvedCount: project.requirements?.filter((r) => r.status === 'APPROVED')?.length || 0,
-      errorCount: errors
-    });
-    setCompletionModalOpen(true);
+    setMessage({type: errors ? 'error' : 'success', text: errors ? 'Algunas fuentes no se pudieron extraer. Revise los errores de la cola.' : 'Fuentes extraídas. Continúe en Contexto para preparar y revisar el proyecto.'});
   }
 
   useEffect(() => {
@@ -263,6 +184,7 @@ export default function ProjectSources({ project, embedded = false, onNavigateTo
 
   return (
     <div className={embedded ? '' : 'page-scrollable'} style={{ padding: embedded ? '0' : '24px', marginBottom: '24px' }}>
+      <DocumentWorkflowPanel project={project} stage="context" onProjectUpdated={onProjectUpdated} />
       <section className="panel" style={{ padding: embedded ? '18px' : '20px' }}>
         {/* Cabecera */}
         <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: '16px', marginBottom: '18px' }}>

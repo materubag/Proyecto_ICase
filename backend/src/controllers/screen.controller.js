@@ -49,6 +49,7 @@ class ScreenController {
 
   async updateStatus(req, res, next) {
     try {
+      if(req.body.reviewStatus === 'APPROVED') throw Object.assign(new Error('Apruebe la versión funcional o de diseño desde su revisión Sonnet.'),{statusCode:409});
       const { id } = req.params;
       const { reviewStatus } = req.body;
       const updated = await prisma.screen.update({
@@ -109,6 +110,7 @@ class ScreenController {
    */
   async generateSelectedMockups(req, res, next) {
     try {
+      throw Object.assign(new Error('Genere desde Mockups después de aprobar el catálogo funcional. La generación no concede aprobación humana.'),{statusCode:409});
       const { projectId } = req.params;
       const screens = await prisma.screen.findMany({
         where: { projectId, selectedForGeneration: true },

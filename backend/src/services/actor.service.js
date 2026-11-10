@@ -9,6 +9,7 @@ class ActorService {
   }
 
   async consolidateProjectActors(projectId, db = prisma) {
+    if (db.documentWorkflow && await db.documentWorkflow.findUnique({where:{projectId}})) return db.actor.findMany({where:{projectId,isDeleted:false}});
     if (db === prisma) return prisma.$transaction(tx => this.consolidateProjectActors(projectId, tx));
     const deduplicationService = require('./analysis/deduplicationService');
     const actors = await db.actor.findMany({
@@ -120,6 +121,7 @@ class ActorService {
   }
 
   async createActor(projectId, data) {
+    if (data.reviewStatus === 'APPROVED') throw Object.assign(new Error('Apruebe la versión del catálogo en el flujo documental'), {statusCode:409});
     const project = await prisma.project.findUnique({ where: { id: projectId } });
     if (!project) {
       const error = new Error(`Project with ID ${projectId} not found`);
@@ -128,6 +130,7 @@ class ActorService {
     }
 
     const { name, description, codeId, reviewStatus } = data;
+    await require('./analysis/documentWorkflow').service().get(projectId);
     if (!name || name.trim() === '') {
       const error = new Error('Actor name is required');
       error.statusCode = 400;
@@ -149,13 +152,14 @@ class ActorService {
         where: { id: match.id },
         data: {
           aliases: updatedAliases,
-          reviewStatus: reviewStatus || match.reviewStatus || 'APPROVED',
-          status: reviewStatus || match.status || 'APPROVED',
+          reviewStatus: reviewStatus || 'PENDING',
+          status: reviewStatus || 'PENDING_REVIEW',
           description: match.description && description && !match.description.includes(description)
             ? `${match.description} · ${description}`.slice(0, 500)
             : (match.description || description)
         }
       });
+      await require('./analysis/documentWorkflow').service().get(projectId);
       return updated;
     }
 
@@ -185,10 +189,12 @@ class ActorService {
       `Creación de actor ${created.name}`
     );
 
+    await require('./analysis/documentWorkflow').service().get(projectId);
     return created;
   }
 
   async updateActor(id, data) {
+    if (data.reviewStatus === 'APPROVED') throw Object.assign(new Error('Apruebe la versión del catálogo en el flujo documental'), {statusCode:409});
     const existing = await prisma.actor.findUnique({ where: { id } });
     if (!existing) {
       const error = new Error(`Actor with ID ${id} not found`);
@@ -197,6 +203,7 @@ class ActorService {
     }
 
     const { name, description, codeId, reviewStatus, aliases } = data;
+    await require('./analysis/documentWorkflow').service().get(existing.projectId);
 
     // Regla: Si se edita un actor aprobado, pasa a NEEDS_REVIEW si no se especifica estado
     let nextReviewStatus = reviewStatus !== undefined ? reviewStatus : existing.reviewStatus;
@@ -229,12 +236,18 @@ class ActorService {
       `Modificación de actor ${updated.name} (Estado: ${nextReviewStatus})`
     );
 
+    await require('./analysis/documentWorkflow').service().get(existing.projectId);
     return updated;
   }
 
   async updateStatus(id, reviewStatus) {
+    if (reviewStatus === 'APPROVED') throw Object.assign(new Error('Apruebe la versión del catálogo en el flujo documental'), {statusCode:409});
     return prisma.$transaction(async tx => {
+      const workflow = new (require('./analysis/documentWorkflow').DocumentWorkflow)(tx);
+      const previous = await tx.actor.findUnique({where:{id}});
+      if (previous) await workflow.lock(tx, previous.projectId);
       const actor = await tx.actor.update({where:{id},data:{reviewStatus,status:reviewStatus}});
+      await workflow.load(tx, actor.projectId);
       if(reviewStatus==='APPROVED')await require('./analysis/actorIdentity').refresh(tx,actor.projectId);
       return actor;
     });
@@ -317,10 +330,12 @@ class ActorService {
     }
 
     // 5. Eliminar actor
-    await prisma.actor.delete({
+    await prisma.actor.update({
       where: { id }
+      , data: {isDeleted:true,reviewStatus:'REJECTED',status:'REJECTED'}
     });
 
+    await require('./analysis/documentWorkflow').service().get(projectId);
     return {
       deletedActor: existing,
       cascadedEffects

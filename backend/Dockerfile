@@ -1,7 +1,7 @@
 FROM node:20-alpine
 
 # Install OpenSSL for Prisma
-RUN apk add --no-cache openssl libc6-compat chromium nss freetype harfbuzz ca-certificates ttf-freefont
+RUN apk add --no-cache openssl libc6-compat chromium nss freetype harfbuzz ca-certificates ttf-freefont docker-cli docker-cli-compose
 
 ENV CODEGEN_CHROMIUM_EXECUTABLE_PATH=/usr/bin/chromium-browser
 
