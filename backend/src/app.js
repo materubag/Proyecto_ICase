@@ -5,6 +5,8 @@ const apiRoutes = require('./routes/index');
 const { errorHandler, notFoundHandler } = require('./middleware/error.middleware');
 
 const app = express();
+const swaggerUi = require('swagger-ui-express');
+const openapi = require('./docs/openapi.json');
 
 // CORS configuration
 const corsOptions = {
@@ -20,6 +22,13 @@ const corsOptions = {
 app.use(cors(corsOptions));
 app.use(express.json({ limit: '10mb' }));
 app.use(express.urlencoded({ extended: true, limit: '10mb' }));
+
+// Serve HTML, CSS and JavaScript before the API-only JSON content-type middleware.
+app.get('/api/openapi.json', (req, res) => res.json(openapi));
+app.use('/api/docs', swaggerUi.serve, swaggerUi.setup(openapi, {
+  customSiteTitle: 'ICASE API',
+  swaggerOptions: { validatorUrl: null, supportedSubmitMethods: [] }
+}));
 
 // Explicit UTF-8 response headers
 app.use((req, res, next) => {
@@ -43,7 +52,8 @@ app.get('/', (req, res) => {
     name: 'ICASE Core Backend API',
     version: '1.0.0',
     description: 'Integrated Computer-Aided Software Engineering REST API',
-    documentation: '/api/health'
+    documentation: '/api/docs',
+    openapi: '/api/openapi.json'
   });
 });
 

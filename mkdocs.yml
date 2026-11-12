@@ -1,0 +1,68 @@
+site_name: ICASE · Documentación técnica
+site_description: Arquitectura, API, datos y operación de ICASE
+docs_dir: docs
+site_dir: site
+dev_addr: 0.0.0.0:8000
+hooks:
+  - scripts/mkdocs_hooks.py
+watch:
+  - README.md
+  - CONTRIBUTING.md
+  - CODE_OF_CONDUCTS.md
+  - LICENSE.md
+  - CHANGELOG.md
+  - SECURITY.md
+theme:
+  name: material
+  language: es
+  features:
+    - navigation.sections
+    - navigation.top
+    - content.code.copy
+  palette:
+    - scheme: default
+      primary: indigo
+      toggle:
+        icon: material/brightness-4
+        name: Cambiar a modo oscuro
+    - scheme: slate
+      primary: indigo
+      toggle:
+        icon: material/brightness-7
+        name: Cambiar a modo claro
+plugins:
+  - search:
+      lang: es
+markdown_extensions:
+  - admonition
+  - tables
+  - fenced_code
+  - toc:
+      permalink: true
+nav:
+  - Inicio: index.md
+  - Instalación: getting-started.md
+  - Arquitectura: architecture.md
+  - API y OpenAPI:
+      - Introducción: api.md
+      - Explorador Swagger: api-explorer.md
+      - Referencia y ejemplos: api-reference.md
+      - Catálogo de endpoints: api-catalog.md
+      - Integraciones externas: integrations.md
+  - Inteligencia artificial:
+      - Fases y prompts: prompts.md
+      - Plantillas literales: prompt-templates.md
+  - Desarrollo:
+      - Guía del repositorio: developers.md
+      - Capturas: screenshots.md
+  - Datos y trazabilidad: data-model.md
+  - Configuración y operación: operations.md
+  - Pruebas: testing.md
+  - Mantenimiento de documentación: documentation.md
+  - Proyecto y colaboración:
+      - README del proyecto: project-readme.md
+      - Cómo contribuir: contributing.md
+      - Código de conducta: code-of-conduct.md
+      - Licencia: license.md
+      - Registro de cambios: changelog.md
+      - Seguridad: security.md

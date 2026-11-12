@@ -38,6 +38,9 @@ playwright-report/
 backend/.cache/
 
 # Project documentation
+/site/
+/.venv-docs/
+__pycache__/
 
 
 # Tests

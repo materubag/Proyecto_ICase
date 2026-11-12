@@ -1,0 +1,146 @@
+description: "Evaluación de Calidad y Robustez de IA - ICASE Studio"
+
+prompts:
+  - "Evaluar generación de artefacto {{task}} para el proyecto {{projectName}}"
+
+providers:
+  - id: "file://providers/icase_provider.js"
+    label: "ICASE-Engine-Provider"
+
+tests:
+  # 1. EVALUACIÓN DE REQUERIMIENTOS
+  - description: "Requerimientos: estructura válida, campos obligatorios y ausencia de duplicados"
+    vars:
+      task: "PROJECT_ANALYSIS"
+      projectName: "Sistema de Biblioteca Municipal"
+      systemDescription: "El sistema debe permitir al bibliotecario registrar préstamos de libros, controlar el catálogo y registrar nuevos socios."
+    assert:
+      - type: is-json
+      - type: javascript
+        value: |
+          const data = JSON.parse(output);
+          const reqs = data.requirements;
+          if (!Array.isArray(reqs) || reqs.length === 0) return false;
+          const allHaveFields = reqs.every(r => r.code && r.name && r.type);
+          if (!allHaveFields) return false;
+          const codes = reqs.map(r => r.code);
+          return codes.length === new Set(codes).size;
+
+  # 2. EVALUACIÓN DE ACTORES
+  - description: "Actores: extracción coherente con la entrada y sin información inventada"
+    vars:
+      task: "PROJECT_ANALYSIS"
+      projectName: "Gestión Hospitalaria"
+      systemDescription: "Los médicos registran diagnósticos clínicos y los pacientes consultan sus citas programadas."
+    assert:
+      - type: is-json
+      - type: javascript
+        value: |
+          const data = JSON.parse(output);
+          const actors = data.actors;
+          if (!Array.isArray(actors) || actors.length === 0) return false;
+          const names = actors.map(a => a.name.toLowerCase());
+          return names.some(n => n.includes('médic') || n.includes('medic') || n.includes('paciente') || n.includes('doctor') || n.includes('usuario'));
+
+  # 3. EVALUACIÓN DE DIAGRAMAS E/R
+  - description: "Diagrama E/R: sintaxis Mermaid válida y cardinalidades declaradas"
+    vars:
+      task: "ER_DIAGRAM"
+      projectName: "Sistema Biblioteca"
+      entities:
+        - id: "e1"
+          name: "Libro"
+          attributes:
+            - name: "isbn"
+              type: "string"
+              isPk: true
+        - id: "e2"
+          name: "Prestamo"
+          attributes:
+            - name: "id"
+              type: "string"
+              isPk: true
+      relationships:
+        - source: "e1"
+          target: "e2"
+          cardinality: "ONE_TO_MANY"
+          description: "genera"
+    assert:
+      - type: contains
+        value: "erDiagram"
+      - type: javascript
+        value: "/LIBRO/i.test(output) && /PRESTAMO/i.test(output)"
+
+  # 4. EVALUACIÓN DE DIAGRAMAS DE CLASES POO (UML)
+  - description: "Diagrama de Clases POO: sin clases vacías y métodos del dominio de negocio"
+    vars:
+      task: "CLASS_DIAGRAM"
+      projectName: "Plataforma de Ventas"
+      systemDescription: "Tienda online donde los clientes compran productos y consultan pedidos."
+    assert:
+      - type: contains
+        value: "classDiagram"
+      - type: javascript
+        value: "!/class\\s+[A-Za-z0-9_]+\\s*\\{\\s*\\}/.test(output)"
+
+  # 5. EVALUACIÓN DE CASOS DE USO
+  - description: "Casos de Uso: relaciones justificadas y enlace a actores declarados"
+    vars:
+      task: "USE_CASE_DIAGRAM"
+      projectName: "Control de Acceso"
+      actors:
+        - id: "act-1"
+          name: "Administrador"
+      useCases:
+        - id: "uc-1"
+          code: "CU-01"
+          name: "Gestionar Usuarios"
+          actorIds: ["act-1"]
+          relations: []
+    assert:
+      - type: contains
+        value: "Administrador"
+      - type: contains
+        value: "Gestionar Usuarios"
+
+  # 6. EVALUACIÓN DEL ÁRBOL DE NAVEGACIÓN
+  - description: "Árbol de Navegación: jerarquía de pantallas y rutas consistentes"
+    vars:
+      task: "NAVIGATION_DIAGRAM"
+      projectName: "App Movil"
+      screens:
+        - id: "s1"
+          name: "Login"
+          route: "/login"
+        - id: "s2"
+          name: "Home"
+          route: "/home"
+          parentId: "s1"
+    assert:
+      - type: contains
+        value: "Login"
+      - type: contains
+        value: "Home"
+
+  # 7. EVALUACIÓN DE ARQUITECTURA DE SOFTWARE
+  - description: "Arquitectura: capas de software definidas y conexiones justificadas"
+    vars:
+      task: "ARCHITECTURE"
+      projectName: "Sistema Bancario"
+      architecture:
+        components:
+          - name: "Capa Presentación Web"
+          - name: "Servicio de Negocio Core"
+          - name: "Motor de Base de Datos"
+        connections:
+          - from: "Capa Presentación Web"
+            to: "Servicio de Negocio Core"
+            type: "HTTPS"
+          - from: "Servicio de Negocio Core"
+            to: "Motor de Base de Datos"
+            type: "TCP"
+    assert:
+      - type: contains
+        value: "Capa Presentación Web"
+      - type: contains
+        value: "Motor de Base de Datos"
