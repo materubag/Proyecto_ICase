@@ -15,7 +15,7 @@ test('OpenAPI is valid and covers every mounted Express operation', async () => 
   const mounts = { project: '/projects', requirement: '/requirements', actor: '/actors',
     document: '/documents', useCase: '/use-cases', classModel: '/classes', screen: '/screens',
     file: '/files', versionHistory: '/history', source: '/sources', candidate: '/candidates',
-    engineering: '/projects/:projectId/engineering' };
+    engineering: '/projects/:projectId/engineering', codegen: '/projects/:projectId/codegen' };
   const operations = new Set(['get /health']);
   for (const [file, prefix] of Object.entries(mounts)) {
     const source = fs.readFileSync(path.join(__dirname, '../src/routes', `${file}.routes.js`), 'utf8');

@@ -1,0 +1,522 @@
+{
+  "evalId": "eval-taG-2026-11-09T15:15:40",
+  "results": {
+    "version": 3,
+    "timestamp": "2026-11-09T15:15:40.151Z",
+    "prompts": [
+      {
+        "id": "fd0d28773f57385c06235a35dcf45fefcb18396a769354f4b789ce036012f0e2",
+        "raw": "Evaluar generación de artefacto {{task}} para el proyecto {{projectName}}",
+        "label": "Evaluar generación de artefacto {{task}} para el proyecto {{projectName}}",
+        "provider": "ICASE-Engine-Provider",
+        "metrics": {
+          "score": 0.5,
+          "testPassCount": 0,
+          "testFailCount": 1,
+          "testErrorCount": 0,
+          "testCacheHitCount": 0,
+          "assertPassCount": 1,
+          "assertFailCount": 1,
+          "totalLatencyMs": 6,
+          "tokenUsage": {
+            "prompt": 0,
+            "completion": 0,
+            "cached": 0,
+            "total": 0,
+            "numRequests": 1,
+            "completionDetails": {
+              "reasoning": 0,
+              "acceptedPrediction": 0,
+              "rejectedPrediction": 0,
+              "cacheReadInputTokens": 0,
+              "cacheCreationInputTokens": 0
+            },
+            "assertions": {
+              "total": 0,
+              "prompt": 0,
+              "completion": 0,
+              "cached": 0,
+              "numRequests": 0,
+              "completionDetails": {
+                "reasoning": 0,
+                "acceptedPrediction": 0,
+                "rejectedPrediction": 0,
+                "cacheReadInputTokens": 0,
+                "cacheCreationInputTokens": 0
+              }
+            }
+          },
+          "namedScores": {},
+          "namedScoresCount": {},
+          "namedScoreWeights": {},
+          "cost": 0
+        }
+      }
+    ],
+    "results": [
+      {
+        "cost": 0,
+        "error": "Custom function threw error: Unexpected token 'return'\nStack Trace: SyntaxError: Unexpected token 'return'\n    at new Function (<anonymous>)\n    at handleJavascript (file:///C:/Users/mateo/AppData/Local/npm-cache/_npx/cd33a14de7de0b1b/node_modules/promptfoo/dist/src/evaluator-BxCmvGtv.js:2672:27)\n    at runAssertionInternal (file:///C:/Users/mateo/AppData/Local/npm-cache/_npx/cd33a14de7de0b1b/node_modules/promptfoo/dist/src/evaluator-BxCmvGtv.js:5778:24)\n    at runAssertion (file:///C:/Users/mateo/AppData/Local/npm-cache/_npx/cd33a14de7de0b1b/node_modules/promptfoo/dist/src/evaluator-BxCmvGtv.js:5792:31)\n    at runAndRecordAssertion (file:///C:/Users/mateo/AppData/Local/npm-cache/_npx/cd33a14de7de0b1b/node_modules/promptfoo/dist/src/evaluator-BxCmvGtv.js:5893:24)\n    at file:///C:/Users/mateo/AppData/Local/npm-cache/_npx/cd33a14de7de0b1b/node_modules/promptfoo/dist/src/evaluator-BxCmvGtv.js:5916:20\n    at C:\\Users\\mateo\\AppData\\Local\\npm-cache\\_npx\\cd33a14de7de0b1b\\node_modules\\async\\dist\\async.js:151:38\n    at replenish (C:\\Users\\mateo\\AppData\\Local\\npm-cache\\_npx\\cd33a14de7de0b1b\\node_modules\\async\\dist\\async.js:447:21)\n    at C:\\Users\\mateo\\AppData\\Local\\npm-cache\\_npx\\cd33a14de7de0b1b\\node_modules\\async\\dist\\async.js:452:13\n    at Object.eachOfLimit (C:\\Users\\mateo\\AppData\\Local\\npm-cache\\_npx\\cd33a14de7de0b1b\\node_modules\\async\\dist\\async.js:478:36)\nreturn /LIBRO/i.test(output) && /PRESTAMO/i.test(output);",
+        "gradingResult": {
+          "pass": false,
+          "score": 0.5,
+          "reason": "Custom function threw error: Unexpected token 'return'\nStack Trace: SyntaxError: Unexpected token 'return'\n    at new Function (<anonymous>)\n    at handleJavascript (file:///C:/Users/mateo/AppData/Local/npm-cache/_npx/cd33a14de7de0b1b/node_modules/promptfoo/dist/src/evaluator-BxCmvGtv.js:2672:27)\n    at runAssertionInternal (file:///C:/Users/mateo/AppData/Local/npm-cache/_npx/cd33a14de7de0b1b/node_modules/promptfoo/dist/src/evaluator-BxCmvGtv.js:5778:24)\n    at runAssertion (file:///C:/Users/mateo/AppData/Local/npm-cache/_npx/cd33a14de7de0b1b/node_modules/promptfoo/dist/src/evaluator-BxCmvGtv.js:5792:31)\n    at runAndRecordAssertion (file:///C:/Users/mateo/AppData/Local/npm-cache/_npx/cd33a14de7de0b1b/node_modules/promptfoo/dist/src/evaluator-BxCmvGtv.js:5893:24)\n    at file:///C:/Users/mateo/AppData/Local/npm-cache/_npx/cd33a14de7de0b1b/node_modules/promptfoo/dist/src/evaluator-BxCmvGtv.js:5916:20\n    at C:\\Users\\mateo\\AppData\\Local\\npm-cache\\_npx\\cd33a14de7de0b1b\\node_modules\\async\\dist\\async.js:151:38\n    at replenish (C:\\Users\\mateo\\AppData\\Local\\npm-cache\\_npx\\cd33a14de7de0b1b\\node_modules\\async\\dist\\async.js:447:21)\n    at C:\\Users\\mateo\\AppData\\Local\\npm-cache\\_npx\\cd33a14de7de0b1b\\node_modules\\async\\dist\\async.js:452:13\n    at Object.eachOfLimit (C:\\Users\\mateo\\AppData\\Local\\npm-cache\\_npx\\cd33a14de7de0b1b\\node_modules\\async\\dist\\async.js:478:36)\nreturn /LIBRO/i.test(output) && /PRESTAMO/i.test(output);",
+          "namedScores": {},
+          "tokensUsed": {
+            "total": 0,
+            "prompt": 0,
+            "completion": 0,
+            "cached": 0,
+            "numRequests": 0
+          },
+          "componentResults": [
+            {
+              "pass": true,
+              "score": 1,
+              "reason": "Assertion passed",
+              "assertion": {
+                "type": "contains",
+                "value": "erDiagram"
+              }
+            },
+            {
+              "pass": false,
+              "score": 0,
+              "reason": "Custom function threw error: Unexpected token 'return'\nStack Trace: SyntaxError: Unexpected token 'return'\n    at new Function (<anonymous>)\n    at handleJavascript (file:///C:/Users/mateo/AppData/Local/npm-cache/_npx/cd33a14de7de0b1b/node_modules/promptfoo/dist/src/evaluator-BxCmvGtv.js:2672:27)\n    at runAssertionInternal (file:///C:/Users/mateo/AppData/Local/npm-cache/_npx/cd33a14de7de0b1b/node_modules/promptfoo/dist/src/evaluator-BxCmvGtv.js:5778:24)\n    at runAssertion (file:///C:/Users/mateo/AppData/Local/npm-cache/_npx/cd33a14de7de0b1b/node_modules/promptfoo/dist/src/evaluator-BxCmvGtv.js:5792:31)\n    at runAndRecordAssertion (file:///C:/Users/mateo/AppData/Local/npm-cache/_npx/cd33a14de7de0b1b/node_modules/promptfoo/dist/src/evaluator-BxCmvGtv.js:5893:24)\n    at file:///C:/Users/mateo/AppData/Local/npm-cache/_npx/cd33a14de7de0b1b/node_modules/promptfoo/dist/src/evaluator-BxCmvGtv.js:5916:20\n    at C:\\Users\\mateo\\AppData\\Local\\npm-cache\\_npx\\cd33a14de7de0b1b\\node_modules\\async\\dist\\async.js:151:38\n    at replenish (C:\\Users\\mateo\\AppData\\Local\\npm-cache\\_npx\\cd33a14de7de0b1b\\node_modules\\async\\dist\\async.js:447:21)\n    at C:\\Users\\mateo\\AppData\\Local\\npm-cache\\_npx\\cd33a14de7de0b1b\\node_modules\\async\\dist\\async.js:452:13\n    at Object.eachOfLimit (C:\\Users\\mateo\\AppData\\Local\\npm-cache\\_npx\\cd33a14de7de0b1b\\node_modules\\async\\dist\\async.js:478:36)\nreturn /LIBRO/i.test(output) && /PRESTAMO/i.test(output);",
+              "assertion": {
+                "type": "javascript",
+                "value": "return /LIBRO/i.test(output) && /PRESTAMO/i.test(output);\n"
+              }
+            }
+          ]
+        },
+        "id": "03a75fd3-cbe9-4405-a2c3-5c1eb5e1657e",
+        "latencyMs": 6,
+        "namedScores": {},
+        "prompt": {
+          "raw": "Evaluar generación de artefacto ER_DIAGRAM para el proyecto Sistema Biblioteca",
+          "label": "Evaluar generación de artefacto {{task}} para el proyecto {{projectName}}",
+          "config": {}
+        },
+        "promptId": "fd0d28773f57385c06235a35dcf45fefcb18396a769354f4b789ce036012f0e2",
+        "promptIdx": 0,
+        "provider": {
+          "id": "file://providers/icase_provider.js",
+          "label": "ICASE-Engine-Provider"
+        },
+        "response": {
+          "output": "erDiagram\n    T_LIBRO {\n        string isbn PK\n    }\n    T_PRESTAMO {\n        string id PK\n    }\n    T_LIBRO ||--o{ T_PRESTAMO : \"genera\""
+        },
+        "score": 0.5,
+        "success": false,
+        "testCase": {
+          "description": "Diagrama E/R: sintaxis Mermaid válida y cardinalidades declaradas",
+          "vars": {
+            "task": "ER_DIAGRAM",
+            "projectName": "Sistema Biblioteca",
+            "entities": [
+              {
+                "id": "e1",
+                "name": "Libro",
+                "attributes": [
+                  {
+                    "name": "isbn",
+                    "type": "string",
+                    "isPk": true
+                  }
+                ]
+              },
+              {
+                "id": "e2",
+                "name": "Prestamo",
+                "attributes": [
+                  {
+                    "name": "id",
+                    "type": "string",
+                    "isPk": true
+                  }
+                ]
+              }
+            ],
+            "relationships": [
+              {
+                "source": "e1",
+                "target": "e2",
+                "cardinality": "ONE_TO_MANY",
+                "description": "genera"
+              }
+            ]
+          },
+          "assert": [
+            {
+              "type": "contains",
+              "value": "erDiagram"
+            },
+            {
+              "type": "javascript",
+              "value": "return /LIBRO/i.test(output) && /PRESTAMO/i.test(output);\n"
+            }
+          ],
+          "options": {},
+          "metadata": {}
+        },
+        "testIdx": 0,
+        "tokenUsage": {
+          "prompt": 0,
+          "completion": 0,
+          "cached": 0,
+          "total": 0,
+          "numRequests": 1,
+          "completionDetails": {
+            "reasoning": 0,
+            "acceptedPrediction": 0,
+            "rejectedPrediction": 0,
+            "cacheReadInputTokens": 0,
+            "cacheCreationInputTokens": 0
+          },
+          "assertions": {
+            "total": 0,
+            "prompt": 0,
+            "completion": 0,
+            "cached": 0,
+            "numRequests": 0,
+            "completionDetails": {
+              "reasoning": 0,
+              "acceptedPrediction": 0,
+              "rejectedPrediction": 0,
+              "cacheReadInputTokens": 0,
+              "cacheCreationInputTokens": 0
+            }
+          }
+        },
+        "vars": {
+          "task": "ER_DIAGRAM",
+          "projectName": "Sistema Biblioteca",
+          "entities": [
+            {
+              "id": "e1",
+              "name": "Libro",
+              "attributes": [
+                {
+                  "name": "isbn",
+                  "type": "string",
+                  "isPk": true
+                }
+              ]
+            },
+            {
+              "id": "e2",
+              "name": "Prestamo",
+              "attributes": [
+                {
+                  "name": "id",
+                  "type": "string",
+                  "isPk": true
+                }
+              ]
+            }
+          ],
+          "relationships": [
+            {
+              "source": "e1",
+              "target": "e2",
+              "cardinality": "ONE_TO_MANY",
+              "description": "genera"
+            }
+          ]
+        },
+        "metadata": {
+          "_promptfooFileMetadata": {}
+        },
+        "failureReason": 1
+      }
+    ],
+    "stats": {
+      "successes": 0,
+      "failures": 1,
+      "errors": 0,
+      "tokenUsage": {
+        "prompt": 0,
+        "completion": 0,
+        "cached": 0,
+        "total": 0,
+        "numRequests": 1,
+        "completionDetails": {
+          "reasoning": 0,
+          "acceptedPrediction": 0,
+          "rejectedPrediction": 0,
+          "cacheReadInputTokens": 0,
+          "cacheCreationInputTokens": 0
+        },
+        "assertions": {
+          "total": 0,
+          "prompt": 0,
+          "completion": 0,
+          "cached": 0,
+          "numRequests": 0,
+          "completionDetails": {
+            "reasoning": 0,
+            "acceptedPrediction": 0,
+            "rejectedPrediction": 0,
+            "cacheReadInputTokens": 0,
+            "cacheCreationInputTokens": 0
+          }
+        }
+      },
+      "durationMs": 35,
+      "evaluationDurationMs": 35
+    }
+  },
+  "config": {
+    "tags": {},
+    "description": "Evaluación de Calidad y Robustez de IA - ICASE Studio",
+    "prompts": [
+      "Evaluar generación de artefacto {{task}} para el proyecto {{projectName}}"
+    ],
+    "providers": [
+      {
+        "id": "file://providers/icase_provider.js",
+        "label": "ICASE-Engine-Provider"
+      }
+    ],
+    "tests": [
+      {
+        "description": "Requerimientos: estructura válida, campos obligatorios y ausencia de duplicados",
+        "vars": {
+          "task": "PROJECT_ANALYSIS",
+          "projectName": "Sistema de Biblioteca Municipal",
+          "systemDescription": "El sistema debe permitir al bibliotecario registrar préstamos de libros, controlar el catálogo y registrar nuevos socios."
+        },
+        "assert": [
+          {
+            "type": "is-json"
+          },
+          {
+            "type": "javascript",
+            "value": "const data = JSON.parse(output);\nconst reqs = data.requirements;\nif (!Array.isArray(reqs) || reqs.length === 0) return false;\n// Validar campos obligatorios\nconst allHaveFields = reqs.every(r => r.code && r.name && r.type);\nif (!allHaveFields) return false;\n// Ausencia de códigos duplicados\nconst codes = reqs.map(r => r.code);\nconst uniqueCodes = new Set(codes);\nreturn codes.length === uniqueCodes.size;\n"
+          }
+        ]
+      },
+      {
+        "description": "Actores: extracción coherente con la entrada y sin información inventada",
+        "vars": {
+          "task": "PROJECT_ANALYSIS",
+          "projectName": "Gestión Hospitalaria",
+          "systemDescription": "Los médicos registran diagnósticos clínicos y los pacientes consultan sus citas programadas."
+        },
+        "assert": [
+          {
+            "type": "is-json"
+          },
+          {
+            "type": "javascript",
+            "value": "const data = JSON.parse(output);\nconst actors = data.actors;\nif (!Array.isArray(actors) || actors.length === 0) return false;\nconst names = actors.map(a => a.name.toLowerCase());\n// Debe contener al menos paciente o médico/doctor\nconst hasExpected = names.some(n => n.includes('médic') || n.includes('medic') || n.includes('paciente') || n.includes('doctor') || n.includes('usuario'));\nreturn hasExpected;\n"
+          }
+        ]
+      },
+      {
+        "description": "Diagrama E/R: sintaxis Mermaid válida y cardinalidades declaradas",
+        "vars": {
+          "task": "ER_DIAGRAM",
+          "projectName": "Sistema Biblioteca",
+          "entities": [
+            {
+              "id": "e1",
+              "name": "Libro",
+              "attributes": [
+                {
+                  "name": "isbn",
+                  "type": "string",
+                  "isPk": true
+                }
+              ]
+            },
+            {
+              "id": "e2",
+              "name": "Prestamo",
+              "attributes": [
+                {
+                  "name": "id",
+                  "type": "string",
+                  "isPk": true
+                }
+              ]
+            }
+          ],
+          "relationships": [
+            {
+              "source": "e1",
+              "target": "e2",
+              "cardinality": "ONE_TO_MANY",
+              "description": "genera"
+            }
+          ]
+        },
+        "assert": [
+          {
+            "type": "contains",
+            "value": "erDiagram"
+          },
+          {
+            "type": "javascript",
+            "value": "return /LIBRO/i.test(output) && /PRESTAMO/i.test(output);\n"
+          }
+        ]
+      },
+      {
+        "description": "Diagrama de Clases POO: sin clases vacías y métodos del dominio de negocio",
+        "vars": {
+          "task": "CLASS_DIAGRAM",
+          "projectName": "Plataforma de Ventas",
+          "systemDescription": "Tienda online donde los clientes compran productos y consultan pedidos."
+        },
+        "assert": [
+          {
+            "type": "contains",
+            "value": "classDiagram"
+          },
+          {
+            "type": "javascript",
+            "value": "// Verifica que no haya clases vacías \"class Nombre {\\n  }\"\nreturn !/class\\s+[A-Za-z0-9_]+\\s*\\{\\s*\\}/.test(output);\n"
+          }
+        ]
+      },
+      {
+        "description": "Casos de Uso: relaciones justificadas y enlace a actores declarados",
+        "vars": {
+          "task": "USE_CASE_DIAGRAM",
+          "projectName": "Control de Acceso",
+          "actors": [
+            {
+              "id": "act-1",
+              "name": "Administrador"
+            }
+          ],
+          "useCases": [
+            {
+              "id": "uc-1",
+              "code": "CU-01",
+              "name": "Gestionar Usuarios",
+              "actorIds": [
+                "act-1"
+              ],
+              "relations": []
+            }
+          ]
+        },
+        "assert": [
+          {
+            "type": "contains",
+            "value": "Administrador"
+          },
+          {
+            "type": "contains",
+            "value": "Gestionar Usuarios"
+          }
+        ]
+      },
+      {
+        "description": "Árbol de Navegación: jerarquía de pantallas y rutas consistentes",
+        "vars": {
+          "task": "NAVIGATION_DIAGRAM",
+          "projectName": "App Movil",
+          "screens": [
+            {
+              "id": "s1",
+              "name": "Login",
+              "route": "/login"
+            },
+            {
+              "id": "s2",
+              "name": "Home",
+              "route": "/home",
+              "parentId": "s1"
+            }
+          ]
+        },
+        "assert": [
+          {
+            "type": "contains",
+            "value": "Login"
+          },
+          {
+            "type": "contains",
+            "value": "Home"
+          }
+        ]
+      },
+      {
+        "description": "Arquitectura: capas de software definidas y conexiones justificadas",
+        "vars": {
+          "task": "ARCHITECTURE",
+          "projectName": "Sistema Bancario",
+          "architecture": {
+            "components": [
+              {
+                "name": "Capa Presentación Web"
+              },
+              {
+                "name": "Servicio de Negocio Core"
+              },
+              {
+                "name": "Motor de Base de Datos"
+              }
+            ],
+            "connections": [
+              {
+                "from": "Capa Presentación Web",
+                "to": "Servicio de Negocio Core",
+                "type": "HTTPS"
+              },
+              {
+                "from": "Servicio de Negocio Core",
+                "to": "Motor de Base de Datos",
+                "type": "TCP"
+              }
+            ]
+          }
+        },
+        "assert": [
+          {
+            "type": "contains",
+            "value": "Capa Presentación Web"
+          },
+          {
+            "type": "contains",
+            "value": "Motor de Base de Datos"
+          }
+        ]
+      }
+    ],
+    "env": {},
+    "outputPath": [
+      "tests/ai/eval-debug.json"
+    ],
+    "extensions": [],
+    "metadata": {},
+    "evaluateOptions": {},
+    "basePath": "C:\\Users\\mateo\\Downloads\\Otros\\UNI_local\\DAS\\Proyecto_ICase\\tests\\ai"
+  },
+  "shareableUrl": null,
+  "metadata": {
+    "promptfooVersion": "0.125.1",
+    "nodeVersion": "v24.14.0",
+    "platform": "win32",
+    "arch": "x64",
+    "exportedAt": "2026-11-09T15:15:40.307Z",
+    "evaluationCreatedAt": "2026-11-09T15:15:40.151Z"
+  },
+  "vars": [
+    "task",
+    "projectName",
+    "entities",
+    "relationships"
+  ],
+  "runtimeOptions": {
+    "eventSource": "cli",
+    "showProgressBar": true,
+    "repeat": 1,
+    "maxConcurrency": 4,
+    "cache": false
+  }
+}

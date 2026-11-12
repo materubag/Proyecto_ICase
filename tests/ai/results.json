@@ -1,0 +1,1304 @@
+{
+  "evalId": "eval-QBb-2026-11-09T15:21:09",
+  "results": {
+    "version": 3,
+    "timestamp": "2026-11-09T15:21:09.527Z",
+    "prompts": [
+      {
+        "id": "fd0d28773f57385c06235a35dcf45fefcb18396a769354f4b789ce036012f0e2",
+        "raw": "Evaluar generación de artefacto {{task}} para el proyecto {{projectName}}",
+        "label": "Evaluar generación de artefacto {{task}} para el proyecto {{projectName}}",
+        "provider": "ICASE-Engine-Provider",
+        "metrics": {
+          "score": 7,
+          "testPassCount": 7,
+          "testFailCount": 0,
+          "testErrorCount": 0,
+          "testCacheHitCount": 0,
+          "assertPassCount": 14,
+          "assertFailCount": 0,
+          "totalLatencyMs": 62,
+          "tokenUsage": {
+            "prompt": 0,
+            "completion": 0,
+            "cached": 0,
+            "total": 0,
+            "numRequests": 7,
+            "completionDetails": {
+              "reasoning": 0,
+              "acceptedPrediction": 0,
+              "rejectedPrediction": 0,
+              "cacheReadInputTokens": 0,
+              "cacheCreationInputTokens": 0
+            },
+            "assertions": {
+              "total": 0,
+              "prompt": 0,
+              "completion": 0,
+              "cached": 0,
+              "numRequests": 0,
+              "completionDetails": {
+                "reasoning": 0,
+                "acceptedPrediction": 0,
+                "rejectedPrediction": 0,
+                "cacheReadInputTokens": 0,
+                "cacheCreationInputTokens": 0
+              }
+            }
+          },
+          "namedScores": {},
+          "namedScoresCount": {},
+          "namedScoreWeights": {},
+          "cost": 0
+        }
+      }
+    ],
+    "results": [
+      {
+        "cost": 0,
+        "gradingResult": {
+          "pass": true,
+          "score": 1,
+          "reason": "All assertions passed",
+          "namedScores": {},
+          "tokensUsed": {
+            "total": 0,
+            "prompt": 0,
+            "completion": 0,
+            "cached": 0,
+            "numRequests": 0
+          },
+          "componentResults": [
+            {
+              "pass": true,
+              "score": 1,
+              "reason": "Assertion passed",
+              "assertion": {
+                "type": "is-json"
+              }
+            },
+            {
+              "pass": true,
+              "score": 1,
+              "reason": "Assertion passed",
+              "assertion": {
+                "type": "javascript",
+                "value": "const data = JSON.parse(output);\nconst reqs = data.requirements;\nif (!Array.isArray(reqs) || reqs.length === 0) return false;\nconst allHaveFields = reqs.every(r => r.code && r.name && r.type);\nif (!allHaveFields) return false;\nconst codes = reqs.map(r => r.code);\nreturn codes.length === new Set(codes).size;\n"
+              }
+            }
+          ]
+        },
+        "id": "f5aa71f7-3d2f-4357-ae82-d2afe10a7531",
+        "latencyMs": 11,
+        "namedScores": {},
+        "prompt": {
+          "raw": "Evaluar generación de artefacto PROJECT_ANALYSIS para el proyecto Sistema de Biblioteca Municipal",
+          "label": "Evaluar generación de artefacto {{task}} para el proyecto {{projectName}}",
+          "config": {}
+        },
+        "promptId": "fd0d28773f57385c06235a35dcf45fefcb18396a769354f4b789ce036012f0e2",
+        "promptIdx": 0,
+        "provider": {
+          "id": "file://providers/icase_provider.js",
+          "label": "ICASE-Engine-Provider"
+        },
+        "response": {
+          "output": "{\n  \"project\": {\n    \"name\": \"Sistema de Biblioteca Municipal\",\n    \"description\": \"El sistema debe permitir al bibliotecario registrar préstamos de libros, controlar el catálogo y registrar nuevos socios.\"\n  },\n  \"actors\": [\n    {\n      \"id\": \"ACT-01\",\n      \"name\": \"Bibliotecario\",\n      \"description\": \"Supervisa el inventario bibliográfico, emite préstamos y recibe devoluciones.\"\n    },\n    {\n      \"id\": \"ACT-02\",\n      \"name\": \"Usuario Lector\",\n      \"description\": \"Consulta el catálogo público, reserva ejemplares y revisa su estado de préstamo.\"\n    },\n    {\n      \"id\": \"ACT-03\",\n      \"name\": \"Administrador\",\n      \"description\": \"Gestiona políticas del sistema, multas y cuentas de usuarios.\"\n    }\n  ],\n  \"requirements\": [\n    {\n      \"code\": \"RF-01\",\n      \"name\": \"Catálogo de Libros\",\n      \"description\": \"Permite registrar, actualizar y catalogar libros con título, autor, ISBN y stock.\",\n      \"type\": \"FUNCTIONAL\",\n      \"priority\": \"HIGH\",\n      \"actorIds\": [\n        \"ACT-01\",\n        \"ACT-03\"\n      ],\n      \"dependencies\": []\n    },\n    {\n      \"code\": \"RF-02\",\n      \"name\": \"Gestión de Préstamos\",\n      \"description\": \"Registra préstamos de libros a usuarios con fecha límite de devolución.\",\n      \"type\": \"FUNCTIONAL\",\n      \"priority\": \"HIGH\",\n      \"actorIds\": [\n        \"ACT-01\",\n        \"ACT-02\"\n      ],\n      \"dependencies\": [\n        \"RF-01\"\n      ]\n    },\n    {\n      \"code\": \"RF-03\",\n      \"name\": \"Búsqueda y Consulta\",\n      \"description\": \"Búsqueda de ejemplares con filtros por título, autor y categoría temática.\",\n      \"type\": \"FUNCTIONAL\",\n      \"priority\": \"MEDIUM\",\n      \"actorIds\": [\n        \"ACT-02\"\n      ],\n      \"dependencies\": [\n        \"RF-01\"\n      ]\n    },\n    {\n      \"code\": \"RF-04\",\n      \"name\": \"Control de Devoluciones y Multas\",\n      \"description\": \"Calcula recargos por días de retraso al devolver ejemplares prestados.\",\n      \"type\": \"FUNCTIONAL\",\n      \"priority\": \"MEDIUM\",\n      \"actorIds\": [\n        \"ACT-01\"\n      ],\n      \"dependencies\": [\n        \"RF-02\"\n      ]\n    },\n    {\n      \"code\": \"RNF-01\",\n      \"name\": \"Disponibilidad del Catálogo\",\n      \"description\": \"El catálogo público debe garantizar un tiempo de actividad >= 99.5%.\",\n      \"type\": \"NON_FUNCTIONAL\",\n      \"priority\": \"HIGH\",\n      \"actorIds\": [],\n      \"dependencies\": []\n    },\n    {\n      \"code\": \"RNF-02\",\n      \"name\": \"Tiempos de Respuesta de Búsqueda\",\n      \"description\": \"Las consultas de búsqueda en el catálogo deben resolver en menos de 800 ms.\",\n      \"type\": \"NON_FUNCTIONAL\",\n      \"priority\": \"MEDIUM\",\n      \"actorIds\": [],\n      \"dependencies\": []\n    }\n  ],\n  \"entities\": [\n    {\n      \"id\": \"ENT-01\",\n      \"name\": \"Libro\",\n      \"description\": \"Ejemplar bibliográfico físico o digital disponible en el catálogo.\",\n      \"attributes\": [\n        {\n          \"name\": \"id\",\n          \"type\": \"Int\"\n        },\n        {\n          \"name\": \"isbn\",\n          \"type\": \"String\"\n        },\n        {\n          \"name\": \"titulo\",\n          \"type\": \"String\"\n        },\n        {\n          \"name\": \"autor\",\n          \"type\": \"String\"\n        },\n        {\n          \"name\": \"ejemplaresDisponibles\",\n          \"type\": \"Int\"\n        }\n      ]\n    },\n    {\n      \"id\": \"ENT-02\",\n      \"name\": \"Usuario\",\n      \"description\": \"Miembro o estudiante registrado para préstamos.\",\n      \"attributes\": [\n        {\n          \"name\": \"id\",\n          \"type\": \"Int\"\n        },\n        {\n          \"name\": \"dni\",\n          \"type\": \"String\"\n        },\n        {\n          \"name\": \"nombreCompleto\",\n          \"type\": \"String\"\n        },\n        {\n          \"name\": \"correo\",\n          \"type\": \"String\"\n        },\n        {\n          \"name\": \"estado\",\n          \"type\": \"String\"\n        }\n      ]\n    },\n    {\n      \"id\": \"ENT-03\",\n      \"name\": \"Prestamo\",\n      \"description\": \"Registro de asignación temporal de un libro a un usuario.\",\n      \"attributes\": [\n        {\n          \"name\": \"id\",\n          \"type\": \"Int\"\n        },\n        {\n          \"name\": \"fechaPrestamo\",\n          \"type\": \"DateTime\"\n        },\n        {\n          \"name\": \"fechaVencimiento\",\n          \"type\": \"DateTime\"\n        },\n        {\n          \"name\": \"fechaDevolucion\",\n          \"type\": \"DateTime\"\n        },\n        {\n          \"name\": \"estado\",\n          \"type\": \"String\"\n        }\n      ]\n    }\n  ],\n  \"relationships\": [\n    {\n      \"id\": \"REL-01\",\n      \"source\": \"Usuario\",\n      \"target\": \"Prestamo\",\n      \"cardinality\": \"1:N\",\n      \"description\": \"Un usuario puede tener múltiples préstamos a lo largo del tiempo.\"\n    },\n    {\n      \"id\": \"REL-02\",\n      \"source\": \"Libro\",\n      \"target\": \"Prestamo\",\n      \"cardinality\": \"1:N\",\n      \"description\": \"Un libro puede figurar en varios préstamos históricos.\"\n    }\n  ],\n  \"screens\": [\n    {\n      \"id\": \"SCR-01\",\n      \"name\": \"Inicio de Sesión\",\n      \"description\": \"Acceso seguro para bibliotecarios y lectores.\",\n      \"route\": \"/login\",\n      \"purpose\": \"Autenticación de credenciales de usuario.\",\n      \"components\": [\n        {\n          \"type\": \"heading\",\n          \"label\": \"Bienvenido al Sistema de Biblioteca\"\n        },\n        {\n          \"type\": \"text\",\n          \"label\": \"Ingrese sus credenciales universitarias para continuar.\"\n        },\n        {\n          \"type\": \"input\",\n          \"label\": \"Correo Electrónico\",\n          \"placeholder\": \"usuario@uni.edu.pe\"\n        },\n        {\n          \"type\": \"input\",\n          \"label\": \"Contraseña\",\n          \"placeholder\": \"••••••••••••\"\n        },\n        {\n          \"type\": \"button\",\n          \"label\": \"Ingresar al Portal\"\n        }\n      ]\n    },\n    {\n      \"id\": \"SCR-02\",\n      \"name\": \"Dashboard Principal\",\n      \"description\": \"Resumen operativo de préstamos activos, vencimientos y libros populares.\",\n      \"route\": \"/dashboard\",\n      \"purpose\": \"Panel central de control y métricas clave.\",\n      \"components\": [\n        {\n          \"type\": \"navbar\",\n          \"label\": \"Biblioteca Central - Panel de Control\"\n        },\n        {\n          \"type\": \"heading\",\n          \"label\": \"Métricas de Circulación\"\n        },\n        {\n          \"type\": \"card\",\n          \"label\": \"Préstamos Activos\",\n          \"description\": \"42 préstamos en curso (3 vencen hoy)\"\n        },\n        {\n          \"type\": \"card\",\n          \"label\": \"Total de Libros\",\n          \"description\": \"1,280 ejemplares registrados en inventario\"\n        },\n        {\n          \"type\": \"button\",\n          \"label\": \"Registrar Nuevo Préstamo\"\n        },\n        {\n          \"type\": \"button\",\n          \"label\": \"Consultar Catálogo\"\n        }\n      ]\n    },\n    {\n      \"id\": \"SCR-03\",\n      \"name\": \"Catálogo de Libros\",\n      \"description\": \"Listado y búsqueda de ejemplares.\",\n      \"route\": \"/libros\",\n      \"purpose\": \"Gestión y exploración de títulos bibliográficos.\",\n      \"components\": [\n        {\n          \"type\": \"heading\",\n          \"label\": \"Catálogo General de Ejemplares\"\n        },\n        {\n          \"type\": \"input\",\n          \"label\": \"Buscar por título, autor o ISBN\",\n          \"placeholder\": \"Ej: Clean Architecture\"\n        },\n        {\n          \"type\": \"table\",\n          \"label\": \"Libros Disponibles\",\n          \"meta\": {\n            \"headers\": [\n              \"ISBN\",\n              \"Título\",\n              \"Autor\",\n              \"Disponibles\"\n            ],\n            \"rows\": [\n              [\n                \"978-0134494166\",\n                \"Clean Architecture\",\n                \"Robert C. Martin\",\n                \"4\"\n              ],\n              [\n                \"978-0201633610\",\n                \"Design Patterns (GoF)\",\n                \"Erich Gamma et al.\",\n                \"2\"\n              ],\n              [\n                \"978-0321125217\",\n                \"Domain-Driven Design\",\n                \"Eric Evans\",\n                \"3\"\n              ]\n            ]\n          }\n        }\n      ]\n    },\n    {\n      \"id\": \"SCR-04\",\n      \"name\": \"Registro de Préstamo\",\n      \"description\": \"Formulario de asignación de libros a usuarios.\",\n      \"route\": \"/prestamos/nuevo\",\n      \"purpose\": \"Captura y validación de una nueva transacción de préstamo.\",\n      \"components\": [\n        {\n          \"type\": \"heading\",\n          \"label\": \"Asignar Nuevo Préstamo\"\n        },\n        {\n          \"type\": \"input\",\n          \"label\": \"DNI o Código de Lector\",\n          \"placeholder\": \"Ingrese código de estudiante...\"\n        },\n        {\n          \"type\": \"input\",\n          \"label\": \"Código de Barra / ISBN del Libro\",\n          \"placeholder\": \"Escanee o digite código...\"\n        },\n        {\n          \"type\": \"input\",\n          \"label\": \"Días de Préstamo\",\n          \"placeholder\": \"7 días hábiles\"\n        },\n        {\n          \"type\": \"button\",\n          \"label\": \"Confirmar y Emitir Boleta de Préstamo\"\n        }\n      ]\n    }\n  ],\n  \"navigation\": [\n    {\n      \"from\": \"Inicio de Sesión\",\n      \"to\": \"Dashboard Principal\",\n      \"action\": \"Autenticación Exitosa\"\n    },\n    {\n      \"from\": \"Dashboard Principal\",\n      \"to\": \"Catálogo de Libros\",\n      \"action\": \"Ver Catálogo\"\n    },\n    {\n      \"from\": \"Dashboard Principal\",\n      \"to\": \"Registro de Préstamo\",\n      \"action\": \"Nuevo Préstamo\"\n    },\n    {\n      \"from\": \"Catálogo de Libros\",\n      \"to\": \"Registro de Préstamo\",\n      \"action\": \"Prestar Libro Seleccionado\"\n    },\n    {\n      \"from\": \"Registro de Préstamo\",\n      \"to\": \"Dashboard Principal\",\n      \"action\": \"Préstamo Confirmado\"\n    }\n  ],\n  \"architecture\": {\n    \"style\": \"Clean Architecture en 3 Capas\",\n    \"frontend\": \"React 18 + Vite SPA\",\n    \"backend\": \"Node.js + Express REST API\",\n    \"database\": \"PostgreSQL 16 (Model First Prisma)\",\n    \"components\": [\n      {\n        \"name\": \"Catálogo UI\",\n        \"layer\": \"Presentation\",\n        \"type\": \"Component\"\n      },\n      {\n        \"name\": \"Préstamos UI\",\n        \"layer\": \"Presentation\",\n        \"type\": \"Component\"\n      },\n      {\n        \"name\": \"Libro Controller\",\n        \"layer\": \"Application\",\n        \"type\": \"Controller\"\n      },\n      {\n        \"name\": \"Préstamo Service\",\n        \"layer\": \"Domain\",\n        \"type\": \"Service\"\n      },\n      {\n        \"name\": \"Prisma Client\",\n        \"layer\": \"Infrastructure\",\n        \"type\": \"ORM\"\n      },\n      {\n        \"name\": \"PostgreSQL DB\",\n        \"layer\": \"Persistence\",\n        \"type\": \"Database\"\n      }\n    ],\n    \"connections\": [\n      {\n        \"from\": \"Catálogo UI\",\n        \"to\": \"Libro Controller\",\n        \"type\": \"HTTP\"\n      },\n      {\n        \"from\": \"Préstamos UI\",\n        \"to\": \"Libro Controller\",\n        \"type\": \"HTTP\"\n      },\n      {\n        \"from\": \"Libro Controller\",\n        \"to\": \"Préstamo Service\",\n        \"type\": \"Internal Call\"\n      },\n      {\n        \"from\": \"Préstamo Service\",\n        \"to\": \"Prisma Client\",\n        \"type\": \"ORM Query\"\n      },\n      {\n        \"from\": \"Prisma Client\",\n        \"to\": \"PostgreSQL DB\",\n        \"type\": \"TCP / SQL\"\n      }\n    ]\n  }\n}"
+        },
+        "score": 1,
+        "success": true,
+        "testCase": {
+          "description": "Requerimientos: estructura válida, campos obligatorios y ausencia de duplicados",
+          "vars": {
+            "task": "PROJECT_ANALYSIS",
+            "projectName": "Sistema de Biblioteca Municipal",
+            "systemDescription": "El sistema debe permitir al bibliotecario registrar préstamos de libros, controlar el catálogo y registrar nuevos socios."
+          },
+          "assert": [
+            {
+              "type": "is-json"
+            },
+            {
+              "type": "javascript",
+              "value": "const data = JSON.parse(output);\nconst reqs = data.requirements;\nif (!Array.isArray(reqs) || reqs.length === 0) return false;\nconst allHaveFields = reqs.every(r => r.code && r.name && r.type);\nif (!allHaveFields) return false;\nconst codes = reqs.map(r => r.code);\nreturn codes.length === new Set(codes).size;\n"
+            }
+          ],
+          "options": {},
+          "metadata": {}
+        },
+        "testIdx": 0,
+        "tokenUsage": {
+          "prompt": 0,
+          "completion": 0,
+          "cached": 0,
+          "total": 0,
+          "numRequests": 1,
+          "completionDetails": {
+            "reasoning": 0,
+            "acceptedPrediction": 0,
+            "rejectedPrediction": 0,
+            "cacheReadInputTokens": 0,
+            "cacheCreationInputTokens": 0
+          },
+          "assertions": {
+            "total": 0,
+            "prompt": 0,
+            "completion": 0,
+            "cached": 0,
+            "numRequests": 0,
+            "completionDetails": {
+              "reasoning": 0,
+              "acceptedPrediction": 0,
+              "rejectedPrediction": 0,
+              "cacheReadInputTokens": 0,
+              "cacheCreationInputTokens": 0
+            }
+          }
+        },
+        "vars": {
+          "task": "PROJECT_ANALYSIS",
+          "projectName": "Sistema de Biblioteca Municipal",
+          "systemDescription": "El sistema debe permitir al bibliotecario registrar préstamos de libros, controlar el catálogo y registrar nuevos socios."
+        },
+        "metadata": {
+          "_promptfooFileMetadata": {}
+        },
+        "failureReason": 0
+      },
+      {
+        "cost": 0,
+        "gradingResult": {
+          "pass": true,
+          "score": 1,
+          "reason": "All assertions passed",
+          "namedScores": {},
+          "tokensUsed": {
+            "total": 0,
+            "prompt": 0,
+            "completion": 0,
+            "cached": 0,
+            "numRequests": 0
+          },
+          "componentResults": [
+            {
+              "pass": true,
+              "score": 1,
+              "reason": "Assertion passed",
+              "assertion": {
+                "type": "is-json"
+              }
+            },
+            {
+              "pass": true,
+              "score": 1,
+              "reason": "Assertion passed",
+              "assertion": {
+                "type": "javascript",
+                "value": "const data = JSON.parse(output);\nconst actors = data.actors;\nif (!Array.isArray(actors) || actors.length === 0) return false;\nconst names = actors.map(a => a.name.toLowerCase());\nreturn names.some(n => n.includes('médic') || n.includes('medic') || n.includes('paciente') || n.includes('doctor') || n.includes('usuario'));\n"
+              }
+            }
+          ]
+        },
+        "id": "9bdc9d83-3958-4ff1-a021-eb6b3f7e10f4",
+        "latencyMs": 9,
+        "namedScores": {},
+        "prompt": {
+          "raw": "Evaluar generación de artefacto PROJECT_ANALYSIS para el proyecto Gestión Hospitalaria",
+          "label": "Evaluar generación de artefacto {{task}} para el proyecto {{projectName}}",
+          "config": {}
+        },
+        "promptId": "fd0d28773f57385c06235a35dcf45fefcb18396a769354f4b789ce036012f0e2",
+        "promptIdx": 0,
+        "provider": {
+          "id": "file://providers/icase_provider.js",
+          "label": "ICASE-Engine-Provider"
+        },
+        "response": {
+          "output": "{\n  \"project\": {\n    \"name\": \"Gestión Hospitalaria\",\n    \"description\": \"Los médicos registran diagnósticos clínicos y los pacientes consultan sus citas programadas.\"\n  },\n  \"actors\": [\n    {\n      \"id\": \"ACT-01\",\n      \"name\": \"Médico\",\n      \"description\": \"Atiende consultas, prescribe recetas y actualiza historiales clínicos.\"\n    },\n    {\n      \"id\": \"ACT-02\",\n      \"name\": \"Paciente\",\n      \"description\": \"Solicita citas médicas y consulta sus resultados clínicos.\"\n    },\n    {\n      \"id\": \"ACT-03\",\n      \"name\": \"Recepcionista\",\n      \"description\": \"Registra pacientes y organiza los turnos de atención.\"\n    }\n  ],\n  \"requirements\": [\n    {\n      \"code\": \"RF-01\",\n      \"name\": \"Agendamiento de Citas\",\n      \"description\": \"Permite programar citas según especialidad y disponibilidad médica.\",\n      \"type\": \"FUNCTIONAL\",\n      \"priority\": \"HIGH\",\n      \"actorIds\": [\n        \"ACT-02\",\n        \"ACT-03\"\n      ],\n      \"dependencies\": []\n    },\n    {\n      \"code\": \"RF-02\",\n      \"name\": \"Historial Clínico\",\n      \"description\": \"Registro confidencial de diagnósticos, antecedentes y tratamientos.\",\n      \"type\": \"FUNCTIONAL\",\n      \"priority\": \"HIGH\",\n      \"actorIds\": [\n        \"ACT-01\"\n      ],\n      \"dependencies\": [\n        \"RF-01\"\n      ]\n    },\n    {\n      \"code\": \"RF-03\",\n      \"name\": \"Prescripción Médica\",\n      \"description\": \"Emisión digital de recetas farmacéuticas vinculadas a la cita.\",\n      \"type\": \"FUNCTIONAL\",\n      \"priority\": \"MEDIUM\",\n      \"actorIds\": [\n        \"ACT-01\"\n      ],\n      \"dependencies\": [\n        \"RF-02\"\n      ]\n    },\n    {\n      \"code\": \"RNF-01\",\n      \"name\": \"Confidencialidad Médica\",\n      \"description\": \"Cifrado en reposo y en tránsito de datos sensibles de salud.\",\n      \"type\": \"NON_FUNCTIONAL\",\n      \"priority\": \"HIGH\",\n      \"actorIds\": [],\n      \"dependencies\": []\n    }\n  ],\n  \"entities\": [\n    {\n      \"id\": \"ENT-01\",\n      \"name\": \"Paciente\",\n      \"description\": \"Persona que recibe atención médica.\",\n      \"attributes\": [\n        {\n          \"name\": \"id\",\n          \"type\": \"Int\"\n        },\n        {\n          \"name\": \"dni\",\n          \"type\": \"String\"\n        },\n        {\n          \"name\": \"nombreCompleto\",\n          \"type\": \"String\"\n        },\n        {\n          \"name\": \"historiaClinicaNum\",\n          \"type\": \"String\"\n        }\n      ]\n    },\n    {\n      \"id\": \"ENT-02\",\n      \"name\": \"Medico\",\n      \"description\": \"Profesional de la salud registrado.\",\n      \"attributes\": [\n        {\n          \"name\": \"id\",\n          \"type\": \"Int\"\n        },\n        {\n          \"name\": \"cmp\",\n          \"type\": \"String\"\n        },\n        {\n          \"name\": \"nombreCompleto\",\n          \"type\": \"String\"\n        },\n        {\n          \"name\": \"especialidad\",\n          \"type\": \"String\"\n        }\n      ]\n    },\n    {\n      \"id\": \"ENT-03\",\n      \"name\": \"CitaMedica\",\n      \"description\": \"Consulta programada entre paciente y médico.\",\n      \"attributes\": [\n        {\n          \"name\": \"id\",\n          \"type\": \"Int\"\n        },\n        {\n          \"name\": \"fechaHora\",\n          \"type\": \"DateTime\"\n        },\n        {\n          \"name\": \"motivo\",\n          \"type\": \"String\"\n        },\n        {\n          \"name\": \"estado\",\n          \"type\": \"String\"\n        }\n      ]\n    }\n  ],\n  \"relationships\": [\n    {\n      \"id\": \"REL-01\",\n      \"source\": \"Paciente\",\n      \"target\": \"CitaMedica\",\n      \"cardinality\": \"1:N\",\n      \"description\": \"Un paciente tiene múltiples citas programadas.\"\n    },\n    {\n      \"id\": \"REL-02\",\n      \"source\": \"Medico\",\n      \"target\": \"CitaMedica\",\n      \"cardinality\": \"1:N\",\n      \"description\": \"Un médico atiende diversas citas médicas.\"\n    }\n  ],\n  \"screens\": [\n    {\n      \"id\": \"SCR-01\",\n      \"name\": \"Dashboard Clínico\",\n      \"description\": \"Resumen de pacientes y agenda del día.\",\n      \"route\": \"/dashboard\",\n      \"purpose\": \"Control de turnos y estado de consultorios.\",\n      \"components\": [\n        {\n          \"type\": \"navbar\",\n          \"label\": \"Clínica Salud - Portal Médico\"\n        },\n        {\n          \"type\": \"heading\",\n          \"label\": \"Turnos del Día\"\n        },\n        {\n          \"type\": \"card\",\n          \"label\": \"Citas Hoy\",\n          \"description\": \"18 pacientes agendados\"\n        },\n        {\n          \"type\": \"button\",\n          \"label\": \"Programar Cita\"\n        }\n      ]\n    },\n    {\n      \"id\": \"SCR-02\",\n      \"name\": \"Nueva Cita Médica\",\n      \"description\": \"Registro de reserva médica.\",\n      \"route\": \"/citas/nueva\",\n      \"purpose\": \"Asignación de consultorio y fecha.\",\n      \"components\": [\n        {\n          \"type\": \"heading\",\n          \"label\": \"Registrar Cita Médica\"\n        },\n        {\n          \"type\": \"input\",\n          \"label\": \"DNI del Paciente\",\n          \"placeholder\": \"Documento nacional...\"\n        },\n        {\n          \"type\": \"input\",\n          \"label\": \"Especialidad\",\n          \"placeholder\": \"Ej: Cardiología\"\n        },\n        {\n          \"type\": \"button\",\n          \"label\": \"Agendar Cita\"\n        }\n      ]\n    }\n  ],\n  \"navigation\": [\n    {\n      \"from\": \"Dashboard Clínico\",\n      \"to\": \"Nueva Cita Médica\",\n      \"action\": \"Agendar Cita\"\n    },\n    {\n      \"from\": \"Nueva Cita Médica\",\n      \"to\": \"Dashboard Clínico\",\n      \"action\": \"Cita Confirmada\"\n    }\n  ],\n  \"architecture\": {\n    \"style\": \"Microservicios Modulares\",\n    \"frontend\": \"React SPA\",\n    \"backend\": \"Node.js Express Gateway\",\n    \"database\": \"PostgreSQL Relational DB\",\n    \"components\": [\n      {\n        \"name\": \"Citas Portal\",\n        \"layer\": \"Presentation\",\n        \"type\": \"SPA\"\n      },\n      {\n        \"name\": \"Citas Service\",\n        \"layer\": \"Application\",\n        \"type\": \"Microservice\"\n      },\n      {\n        \"name\": \"Postgres DB\",\n        \"layer\": \"Persistence\",\n        \"type\": \"Database\"\n      }\n    ],\n    \"connections\": [\n      {\n        \"from\": \"Citas Portal\",\n        \"to\": \"Citas Service\",\n        \"type\": \"REST\"\n      },\n      {\n        \"from\": \"Citas Service\",\n        \"to\": \"Postgres DB\",\n        \"type\": \"SQL\"\n      }\n    ]\n  }\n}"
+        },
+        "score": 1,
+        "success": true,
+        "testCase": {
+          "description": "Actores: extracción coherente con la entrada y sin información inventada",
+          "vars": {
+            "task": "PROJECT_ANALYSIS",
+            "projectName": "Gestión Hospitalaria",
+            "systemDescription": "Los médicos registran diagnósticos clínicos y los pacientes consultan sus citas programadas."
+          },
+          "assert": [
+            {
+              "type": "is-json"
+            },
+            {
+              "type": "javascript",
+              "value": "const data = JSON.parse(output);\nconst actors = data.actors;\nif (!Array.isArray(actors) || actors.length === 0) return false;\nconst names = actors.map(a => a.name.toLowerCase());\nreturn names.some(n => n.includes('médic') || n.includes('medic') || n.includes('paciente') || n.includes('doctor') || n.includes('usuario'));\n"
+            }
+          ],
+          "options": {},
+          "metadata": {}
+        },
+        "testIdx": 1,
+        "tokenUsage": {
+          "prompt": 0,
+          "completion": 0,
+          "cached": 0,
+          "total": 0,
+          "numRequests": 1,
+          "completionDetails": {
+            "reasoning": 0,
+            "acceptedPrediction": 0,
+            "rejectedPrediction": 0,
+            "cacheReadInputTokens": 0,
+            "cacheCreationInputTokens": 0
+          },
+          "assertions": {
+            "total": 0,
+            "prompt": 0,
+            "completion": 0,
+            "cached": 0,
+            "numRequests": 0,
+            "completionDetails": {
+              "reasoning": 0,
+              "acceptedPrediction": 0,
+              "rejectedPrediction": 0,
+              "cacheReadInputTokens": 0,
+              "cacheCreationInputTokens": 0
+            }
+          }
+        },
+        "vars": {
+          "task": "PROJECT_ANALYSIS",
+          "projectName": "Gestión Hospitalaria",
+          "systemDescription": "Los médicos registran diagnósticos clínicos y los pacientes consultan sus citas programadas."
+        },
+        "metadata": {
+          "_promptfooFileMetadata": {}
+        },
+        "failureReason": 0
+      },
+      {
+        "cost": 0,
+        "gradingResult": {
+          "pass": true,
+          "score": 1,
+          "reason": "All assertions passed",
+          "namedScores": {},
+          "tokensUsed": {
+            "total": 0,
+            "prompt": 0,
+            "completion": 0,
+            "cached": 0,
+            "numRequests": 0
+          },
+          "componentResults": [
+            {
+              "pass": true,
+              "score": 1,
+              "reason": "Assertion passed",
+              "assertion": {
+                "type": "contains",
+                "value": "erDiagram"
+              }
+            },
+            {
+              "pass": true,
+              "score": 1,
+              "reason": "Assertion passed",
+              "assertion": {
+                "type": "javascript",
+                "value": "/LIBRO/i.test(output) && /PRESTAMO/i.test(output)"
+              }
+            }
+          ]
+        },
+        "id": "775bf424-321b-4120-bf40-c13e3944a958",
+        "latencyMs": 9,
+        "namedScores": {},
+        "prompt": {
+          "raw": "Evaluar generación de artefacto ER_DIAGRAM para el proyecto Sistema Biblioteca",
+          "label": "Evaluar generación de artefacto {{task}} para el proyecto {{projectName}}",
+          "config": {}
+        },
+        "promptId": "fd0d28773f57385c06235a35dcf45fefcb18396a769354f4b789ce036012f0e2",
+        "promptIdx": 0,
+        "provider": {
+          "id": "file://providers/icase_provider.js",
+          "label": "ICASE-Engine-Provider"
+        },
+        "response": {
+          "output": "erDiagram\n    T_LIBRO {\n        string isbn PK\n    }\n    T_PRESTAMO {\n        string id PK\n    }\n    T_LIBRO ||--o{ T_PRESTAMO : \"genera\""
+        },
+        "score": 1,
+        "success": true,
+        "testCase": {
+          "description": "Diagrama E/R: sintaxis Mermaid válida y cardinalidades declaradas",
+          "vars": {
+            "task": "ER_DIAGRAM",
+            "projectName": "Sistema Biblioteca",
+            "entities": [
+              {
+                "id": "e1",
+                "name": "Libro",
+                "attributes": [
+                  {
+                    "name": "isbn",
+                    "type": "string",
+                    "isPk": true
+                  }
+                ]
+              },
+              {
+                "id": "e2",
+                "name": "Prestamo",
+                "attributes": [
+                  {
+                    "name": "id",
+                    "type": "string",
+                    "isPk": true
+                  }
+                ]
+              }
+            ],
+            "relationships": [
+              {
+                "source": "e1",
+                "target": "e2",
+                "cardinality": "ONE_TO_MANY",
+                "description": "genera"
+              }
+            ]
+          },
+          "assert": [
+            {
+              "type": "contains",
+              "value": "erDiagram"
+            },
+            {
+              "type": "javascript",
+              "value": "/LIBRO/i.test(output) && /PRESTAMO/i.test(output)"
+            }
+          ],
+          "options": {},
+          "metadata": {}
+        },
+        "testIdx": 2,
+        "tokenUsage": {
+          "prompt": 0,
+          "completion": 0,
+          "cached": 0,
+          "total": 0,
+          "numRequests": 1,
+          "completionDetails": {
+            "reasoning": 0,
+            "acceptedPrediction": 0,
+            "rejectedPrediction": 0,
+            "cacheReadInputTokens": 0,
+            "cacheCreationInputTokens": 0
+          },
+          "assertions": {
+            "total": 0,
+            "prompt": 0,
+            "completion": 0,
+            "cached": 0,
+            "numRequests": 0,
+            "completionDetails": {
+              "reasoning": 0,
+              "acceptedPrediction": 0,
+              "rejectedPrediction": 0,
+              "cacheReadInputTokens": 0,
+              "cacheCreationInputTokens": 0
+            }
+          }
+        },
+        "vars": {
+          "task": "ER_DIAGRAM",
+          "projectName": "Sistema Biblioteca",
+          "entities": [
+            {
+              "id": "e1",
+              "name": "Libro",
+              "attributes": [
+                {
+                  "name": "isbn",
+                  "type": "string",
+                  "isPk": true
+                }
+              ]
+            },
+            {
+              "id": "e2",
+              "name": "Prestamo",
+              "attributes": [
+                {
+                  "name": "id",
+                  "type": "string",
+                  "isPk": true
+                }
+              ]
+            }
+          ],
+          "relationships": [
+            {
+              "source": "e1",
+              "target": "e2",
+              "cardinality": "ONE_TO_MANY",
+              "description": "genera"
+            }
+          ]
+        },
+        "metadata": {
+          "_promptfooFileMetadata": {}
+        },
+        "failureReason": 0
+      },
+      {
+        "cost": 0,
+        "gradingResult": {
+          "pass": true,
+          "score": 1,
+          "reason": "All assertions passed",
+          "namedScores": {},
+          "tokensUsed": {
+            "total": 0,
+            "prompt": 0,
+            "completion": 0,
+            "cached": 0,
+            "numRequests": 0
+          },
+          "componentResults": [
+            {
+              "pass": true,
+              "score": 1,
+              "reason": "Assertion passed",
+              "assertion": {
+                "type": "contains",
+                "value": "classDiagram"
+              }
+            },
+            {
+              "pass": true,
+              "score": 1,
+              "reason": "Assertion passed",
+              "assertion": {
+                "type": "javascript",
+                "value": "!/class\\s+[A-Za-z0-9_]+\\s*\\{\\s*\\}/.test(output)"
+              }
+            }
+          ]
+        },
+        "id": "5bafe824-2e26-4df6-b43e-3113667130a5",
+        "latencyMs": 9,
+        "namedScores": {},
+        "prompt": {
+          "raw": "Evaluar generación de artefacto CLASS_DIAGRAM para el proyecto Plataforma de Ventas",
+          "label": "Evaluar generación de artefacto {{task}} para el proyecto {{projectName}}",
+          "config": {}
+        },
+        "promptId": "fd0d28773f57385c06235a35dcf45fefcb18396a769354f4b789ce036012f0e2",
+        "promptIdx": 0,
+        "provider": {
+          "id": "file://providers/icase_provider.js",
+          "label": "ICASE-Engine-Provider"
+        },
+        "response": {
+          "output": "classDiagram\n  class Producto {\n    +int id\n    +string sku\n    +string nombre\n    +float precio\n    +int stock\n    +registrar() void\n    +consultar() void\n  }\n  class Cliente {\n    +int id\n    +string correo\n    +string nombre\n    +registrar() void\n    +consultar() void\n  }\n  class Pedido {\n    +int id\n    +float total\n    +string estado\n    +datetime fecha\n    +registrar() void\n    +consultar() void\n  }\n  Producto \"1\" -- \"0..*\" Cliente : relaciona\n  Producto \"1\" -- \"0..*\" Pedido : relaciona"
+        },
+        "score": 1,
+        "success": true,
+        "testCase": {
+          "description": "Diagrama de Clases POO: sin clases vacías y métodos del dominio de negocio",
+          "vars": {
+            "task": "CLASS_DIAGRAM",
+            "projectName": "Plataforma de Ventas",
+            "systemDescription": "Tienda online donde los clientes compran productos y consultan pedidos."
+          },
+          "assert": [
+            {
+              "type": "contains",
+              "value": "classDiagram"
+            },
+            {
+              "type": "javascript",
+              "value": "!/class\\s+[A-Za-z0-9_]+\\s*\\{\\s*\\}/.test(output)"
+            }
+          ],
+          "options": {},
+          "metadata": {}
+        },
+        "testIdx": 3,
+        "tokenUsage": {
+          "prompt": 0,
+          "completion": 0,
+          "cached": 0,
+          "total": 0,
+          "numRequests": 1,
+          "completionDetails": {
+            "reasoning": 0,
+            "acceptedPrediction": 0,
+            "rejectedPrediction": 0,
+            "cacheReadInputTokens": 0,
+            "cacheCreationInputTokens": 0
+          },
+          "assertions": {
+            "total": 0,
+            "prompt": 0,
+            "completion": 0,
+            "cached": 0,
+            "numRequests": 0,
+            "completionDetails": {
+              "reasoning": 0,
+              "acceptedPrediction": 0,
+              "rejectedPrediction": 0,
+              "cacheReadInputTokens": 0,
+              "cacheCreationInputTokens": 0
+            }
+          }
+        },
+        "vars": {
+          "task": "CLASS_DIAGRAM",
+          "projectName": "Plataforma de Ventas",
+          "systemDescription": "Tienda online donde los clientes compran productos y consultan pedidos."
+        },
+        "metadata": {
+          "_promptfooFileMetadata": {}
+        },
+        "failureReason": 0
+      },
+      {
+        "cost": 0,
+        "gradingResult": {
+          "pass": true,
+          "score": 1,
+          "reason": "All assertions passed",
+          "namedScores": {},
+          "tokensUsed": {
+            "total": 0,
+            "prompt": 0,
+            "completion": 0,
+            "cached": 0,
+            "numRequests": 0
+          },
+          "componentResults": [
+            {
+              "pass": true,
+              "score": 1,
+              "reason": "Assertion passed",
+              "assertion": {
+                "type": "contains",
+                "value": "Administrador"
+              }
+            },
+            {
+              "pass": true,
+              "score": 1,
+              "reason": "Assertion passed",
+              "assertion": {
+                "type": "contains",
+                "value": "Gestionar Usuarios"
+              }
+            }
+          ]
+        },
+        "id": "f8342bd4-0c94-4785-bc9c-fdc2b9206a21",
+        "latencyMs": 10,
+        "namedScores": {},
+        "prompt": {
+          "raw": "Evaluar generación de artefacto USE_CASE_DIAGRAM para el proyecto Control de Acceso",
+          "label": "Evaluar generación de artefacto {{task}} para el proyecto {{projectName}}",
+          "config": {}
+        },
+        "promptId": "fd0d28773f57385c06235a35dcf45fefcb18396a769354f4b789ce036012f0e2",
+        "promptIdx": 0,
+        "provider": {
+          "id": "file://providers/icase_provider.js",
+          "label": "ICASE-Engine-Provider"
+        },
+        "response": {
+          "output": "flowchart LR\n  ACTOR_N_a0e5f5786f8a2289d934((\"👤 Administrador\"))\n  subgraph SYSTEM[\"Sistema\"]\n  N_a7fa94ff2623907bc65c([\"CU-01: Gestionar Usuarios\"])\n  end\n  ACTOR_N_a0e5f5786f8a2289d934 --- N_a7fa94ff2623907bc65c"
+        },
+        "score": 1,
+        "success": true,
+        "testCase": {
+          "description": "Casos de Uso: relaciones justificadas y enlace a actores declarados",
+          "vars": {
+            "task": "USE_CASE_DIAGRAM",
+            "projectName": "Control de Acceso",
+            "actors": [
+              {
+                "id": "act-1",
+                "name": "Administrador"
+              }
+            ],
+            "useCases": [
+              {
+                "id": "uc-1",
+                "code": "CU-01",
+                "name": "Gestionar Usuarios",
+                "actorIds": [
+                  "act-1"
+                ],
+                "relations": []
+              }
+            ]
+          },
+          "assert": [
+            {
+              "type": "contains",
+              "value": "Administrador"
+            },
+            {
+              "type": "contains",
+              "value": "Gestionar Usuarios"
+            }
+          ],
+          "options": {},
+          "metadata": {}
+        },
+        "testIdx": 4,
+        "tokenUsage": {
+          "prompt": 0,
+          "completion": 0,
+          "cached": 0,
+          "total": 0,
+          "numRequests": 1,
+          "completionDetails": {
+            "reasoning": 0,
+            "acceptedPrediction": 0,
+            "rejectedPrediction": 0,
+            "cacheReadInputTokens": 0,
+            "cacheCreationInputTokens": 0
+          },
+          "assertions": {
+            "total": 0,
+            "prompt": 0,
+            "completion": 0,
+            "cached": 0,
+            "numRequests": 0,
+            "completionDetails": {
+              "reasoning": 0,
+              "acceptedPrediction": 0,
+              "rejectedPrediction": 0,
+              "cacheReadInputTokens": 0,
+              "cacheCreationInputTokens": 0
+            }
+          }
+        },
+        "vars": {
+          "task": "USE_CASE_DIAGRAM",
+          "projectName": "Control de Acceso",
+          "actors": [
+            {
+              "id": "act-1",
+              "name": "Administrador"
+            }
+          ],
+          "useCases": [
+            {
+              "id": "uc-1",
+              "code": "CU-01",
+              "name": "Gestionar Usuarios",
+              "actorIds": [
+                "act-1"
+              ],
+              "relations": []
+            }
+          ]
+        },
+        "metadata": {
+          "_promptfooFileMetadata": {}
+        },
+        "failureReason": 0
+      },
+      {
+        "cost": 0,
+        "gradingResult": {
+          "pass": true,
+          "score": 1,
+          "reason": "All assertions passed",
+          "namedScores": {},
+          "tokensUsed": {
+            "total": 0,
+            "prompt": 0,
+            "completion": 0,
+            "cached": 0,
+            "numRequests": 0
+          },
+          "componentResults": [
+            {
+              "pass": true,
+              "score": 1,
+              "reason": "Assertion passed",
+              "assertion": {
+                "type": "contains",
+                "value": "Login"
+              }
+            },
+            {
+              "pass": true,
+              "score": 1,
+              "reason": "Assertion passed",
+              "assertion": {
+                "type": "contains",
+                "value": "Home"
+              }
+            }
+          ]
+        },
+        "id": "b3bf01f1-5edd-4079-8dae-46215f488e44",
+        "latencyMs": 7,
+        "namedScores": {},
+        "prompt": {
+          "raw": "Evaluar generación de artefacto NAVIGATION_DIAGRAM para el proyecto App Movil",
+          "label": "Evaluar generación de artefacto {{task}} para el proyecto {{projectName}}",
+          "config": {}
+        },
+        "promptId": "fd0d28773f57385c06235a35dcf45fefcb18396a769354f4b789ce036012f0e2",
+        "promptIdx": 0,
+        "provider": {
+          "id": "file://providers/icase_provider.js",
+          "label": "ICASE-Engine-Provider"
+        },
+        "response": {
+          "output": "flowchart TD\n  APP_ROOT[\"🌐 App Movil\"]\n  APP_ROOT --> MOD_AUTH[\"Portal de Acceso\"]\n  MOD_AUTH --> SCR_LOGIN[\"Login\\n/login\"]\n  APP_ROOT --> SCR_HOME[\"Home\\n/home\"]"
+        },
+        "score": 1,
+        "success": true,
+        "testCase": {
+          "description": "Árbol de Navegación: jerarquía de pantallas y rutas consistentes",
+          "vars": {
+            "task": "NAVIGATION_DIAGRAM",
+            "projectName": "App Movil",
+            "screens": [
+              {
+                "id": "s1",
+                "name": "Login",
+                "route": "/login"
+              },
+              {
+                "id": "s2",
+                "name": "Home",
+                "route": "/home",
+                "parentId": "s1"
+              }
+            ]
+          },
+          "assert": [
+            {
+              "type": "contains",
+              "value": "Login"
+            },
+            {
+              "type": "contains",
+              "value": "Home"
+            }
+          ],
+          "options": {},
+          "metadata": {}
+        },
+        "testIdx": 5,
+        "tokenUsage": {
+          "prompt": 0,
+          "completion": 0,
+          "cached": 0,
+          "total": 0,
+          "numRequests": 1,
+          "completionDetails": {
+            "reasoning": 0,
+            "acceptedPrediction": 0,
+            "rejectedPrediction": 0,
+            "cacheReadInputTokens": 0,
+            "cacheCreationInputTokens": 0
+          },
+          "assertions": {
+            "total": 0,
+            "prompt": 0,
+            "completion": 0,
+            "cached": 0,
+            "numRequests": 0,
+            "completionDetails": {
+              "reasoning": 0,
+              "acceptedPrediction": 0,
+              "rejectedPrediction": 0,
+              "cacheReadInputTokens": 0,
+              "cacheCreationInputTokens": 0
+            }
+          }
+        },
+        "vars": {
+          "task": "NAVIGATION_DIAGRAM",
+          "projectName": "App Movil",
+          "screens": [
+            {
+              "id": "s1",
+              "name": "Login",
+              "route": "/login"
+            },
+            {
+              "id": "s2",
+              "name": "Home",
+              "route": "/home",
+              "parentId": "s1"
+            }
+          ]
+        },
+        "metadata": {
+          "_promptfooFileMetadata": {}
+        },
+        "failureReason": 0
+      },
+      {
+        "cost": 0,
+        "gradingResult": {
+          "pass": true,
+          "score": 1,
+          "reason": "All assertions passed",
+          "namedScores": {},
+          "tokensUsed": {
+            "total": 0,
+            "prompt": 0,
+            "completion": 0,
+            "cached": 0,
+            "numRequests": 0
+          },
+          "componentResults": [
+            {
+              "pass": true,
+              "score": 1,
+              "reason": "Assertion passed",
+              "assertion": {
+                "type": "contains",
+                "value": "Capa Presentación Web"
+              }
+            },
+            {
+              "pass": true,
+              "score": 1,
+              "reason": "Assertion passed",
+              "assertion": {
+                "type": "contains",
+                "value": "Motor de Base de Datos"
+              }
+            }
+          ]
+        },
+        "id": "38d8c7ab-d23f-4683-aa62-67887820fa21",
+        "latencyMs": 7,
+        "namedScores": {},
+        "prompt": {
+          "raw": "Evaluar generación de artefacto ARCHITECTURE para el proyecto Sistema Bancario",
+          "label": "Evaluar generación de artefacto {{task}} para el proyecto {{projectName}}",
+          "config": {}
+        },
+        "promptId": "fd0d28773f57385c06235a35dcf45fefcb18396a769354f4b789ce036012f0e2",
+        "promptIdx": 0,
+        "provider": {
+          "id": "file://providers/icase_provider.js",
+          "label": "ICASE-Engine-Provider"
+        },
+        "response": {
+          "output": "flowchart TD\n  N_b2e8360a47fec36342de[\"Capa Presentación Web\"]\n  N_4f008d1f049c3c962818[\"Servicio de Negocio Core\"]\n  N_d22b9df075252102f4f7[\"Motor de Base de Datos\"]\n  N_b2e8360a47fec36342de -->|\"HTTPS\"| N_4f008d1f049c3c962818\n  N_4f008d1f049c3c962818 -->|\"TCP\"| N_d22b9df075252102f4f7"
+        },
+        "score": 1,
+        "success": true,
+        "testCase": {
+          "description": "Arquitectura: capas de software definidas y conexiones justificadas",
+          "vars": {
+            "task": "ARCHITECTURE",
+            "projectName": "Sistema Bancario",
+            "architecture": {
+              "components": [
+                {
+                  "name": "Capa Presentación Web"
+                },
+                {
+                  "name": "Servicio de Negocio Core"
+                },
+                {
+                  "name": "Motor de Base de Datos"
+                }
+              ],
+              "connections": [
+                {
+                  "from": "Capa Presentación Web",
+                  "to": "Servicio de Negocio Core",
+                  "type": "HTTPS"
+                },
+                {
+                  "from": "Servicio de Negocio Core",
+                  "to": "Motor de Base de Datos",
+                  "type": "TCP"
+                }
+              ]
+            }
+          },
+          "assert": [
+            {
+              "type": "contains",
+              "value": "Capa Presentación Web"
+            },
+            {
+              "type": "contains",
+              "value": "Motor de Base de Datos"
+            }
+          ],
+          "options": {},
+          "metadata": {}
+        },
+        "testIdx": 6,
+        "tokenUsage": {
+          "prompt": 0,
+          "completion": 0,
+          "cached": 0,
+          "total": 0,
+          "numRequests": 1,
+          "completionDetails": {
+            "reasoning": 0,
+            "acceptedPrediction": 0,
+            "rejectedPrediction": 0,
+            "cacheReadInputTokens": 0,
+            "cacheCreationInputTokens": 0
+          },
+          "assertions": {
+            "total": 0,
+            "prompt": 0,
+            "completion": 0,
+            "cached": 0,
+            "numRequests": 0,
+            "completionDetails": {
+              "reasoning": 0,
+              "acceptedPrediction": 0,
+              "rejectedPrediction": 0,
+              "cacheReadInputTokens": 0,
+              "cacheCreationInputTokens": 0
+            }
+          }
+        },
+        "vars": {
+          "task": "ARCHITECTURE",
+          "projectName": "Sistema Bancario",
+          "architecture": {
+            "components": [
+              {
+                "name": "Capa Presentación Web"
+              },
+              {
+                "name": "Servicio de Negocio Core"
+              },
+              {
+                "name": "Motor de Base de Datos"
+              }
+            ],
+            "connections": [
+              {
+                "from": "Capa Presentación Web",
+                "to": "Servicio de Negocio Core",
+                "type": "HTTPS"
+              },
+              {
+                "from": "Servicio de Negocio Core",
+                "to": "Motor de Base de Datos",
+                "type": "TCP"
+              }
+            ]
+          }
+        },
+        "metadata": {
+          "_promptfooFileMetadata": {}
+        },
+        "failureReason": 0
+      }
+    ],
+    "stats": {
+      "successes": 7,
+      "failures": 0,
+      "errors": 0,
+      "tokenUsage": {
+        "prompt": 0,
+        "completion": 0,
+        "cached": 0,
+        "total": 0,
+        "numRequests": 7,
+        "completionDetails": {
+          "reasoning": 0,
+          "acceptedPrediction": 0,
+          "rejectedPrediction": 0,
+          "cacheReadInputTokens": 0,
+          "cacheCreationInputTokens": 0
+        },
+        "assertions": {
+          "total": 0,
+          "prompt": 0,
+          "completion": 0,
+          "cached": 0,
+          "numRequests": 0,
+          "completionDetails": {
+            "reasoning": 0,
+            "acceptedPrediction": 0,
+            "rejectedPrediction": 0,
+            "cacheReadInputTokens": 0,
+            "cacheCreationInputTokens": 0
+          }
+        }
+      },
+      "durationMs": 88,
+      "evaluationDurationMs": 88
+    }
+  },
+  "config": {
+    "tags": {},
+    "description": "Evaluación de Calidad y Robustez de IA - ICASE Studio",
+    "prompts": [
+      "Evaluar generación de artefacto {{task}} para el proyecto {{projectName}}"
+    ],
+    "providers": [
+      {
+        "id": "file://providers/icase_provider.js",
+        "label": "ICASE-Engine-Provider"
+      }
+    ],
+    "tests": [
+      {
+        "description": "Requerimientos: estructura válida, campos obligatorios y ausencia de duplicados",
+        "vars": {
+          "task": "PROJECT_ANALYSIS",
+          "projectName": "Sistema de Biblioteca Municipal",
+          "systemDescription": "El sistema debe permitir al bibliotecario registrar préstamos de libros, controlar el catálogo y registrar nuevos socios."
+        },
+        "assert": [
+          {
+            "type": "is-json"
+          },
+          {
+            "type": "javascript",
+            "value": "const data = JSON.parse(output);\nconst reqs = data.requirements;\nif (!Array.isArray(reqs) || reqs.length === 0) return false;\nconst allHaveFields = reqs.every(r => r.code && r.name && r.type);\nif (!allHaveFields) return false;\nconst codes = reqs.map(r => r.code);\nreturn codes.length === new Set(codes).size;\n"
+          }
+        ]
+      },
+      {
+        "description": "Actores: extracción coherente con la entrada y sin información inventada",
+        "vars": {
+          "task": "PROJECT_ANALYSIS",
+          "projectName": "Gestión Hospitalaria",
+          "systemDescription": "Los médicos registran diagnósticos clínicos y los pacientes consultan sus citas programadas."
+        },
+        "assert": [
+          {
+            "type": "is-json"
+          },
+          {
+            "type": "javascript",
+            "value": "const data = JSON.parse(output);\nconst actors = data.actors;\nif (!Array.isArray(actors) || actors.length === 0) return false;\nconst names = actors.map(a => a.name.toLowerCase());\nreturn names.some(n => n.includes('médic') || n.includes('medic') || n.includes('paciente') || n.includes('doctor') || n.includes('usuario'));\n"
+          }
+        ]
+      },
+      {
+        "description": "Diagrama E/R: sintaxis Mermaid válida y cardinalidades declaradas",
+        "vars": {
+          "task": "ER_DIAGRAM",
+          "projectName": "Sistema Biblioteca",
+          "entities": [
+            {
+              "id": "e1",
+              "name": "Libro",
+              "attributes": [
+                {
+                  "name": "isbn",
+                  "type": "string",
+                  "isPk": true
+                }
+              ]
+            },
+            {
+              "id": "e2",
+              "name": "Prestamo",
+              "attributes": [
+                {
+                  "name": "id",
+                  "type": "string",
+                  "isPk": true
+                }
+              ]
+            }
+          ],
+          "relationships": [
+            {
+              "source": "e1",
+              "target": "e2",
+              "cardinality": "ONE_TO_MANY",
+              "description": "genera"
+            }
+          ]
+        },
+        "assert": [
+          {
+            "type": "contains",
+            "value": "erDiagram"
+          },
+          {
+            "type": "javascript",
+            "value": "/LIBRO/i.test(output) && /PRESTAMO/i.test(output)"
+          }
+        ]
+      },
+      {
+        "description": "Diagrama de Clases POO: sin clases vacías y métodos del dominio de negocio",
+        "vars": {
+          "task": "CLASS_DIAGRAM",
+          "projectName": "Plataforma de Ventas",
+          "systemDescription": "Tienda online donde los clientes compran productos y consultan pedidos."
+        },
+        "assert": [
+          {
+            "type": "contains",
+            "value": "classDiagram"
+          },
+          {
+            "type": "javascript",
+            "value": "!/class\\s+[A-Za-z0-9_]+\\s*\\{\\s*\\}/.test(output)"
+          }
+        ]
+      },
+      {
+        "description": "Casos de Uso: relaciones justificadas y enlace a actores declarados",
+        "vars": {
+          "task": "USE_CASE_DIAGRAM",
+          "projectName": "Control de Acceso",
+          "actors": [
+            {
+              "id": "act-1",
+              "name": "Administrador"
+            }
+          ],
+          "useCases": [
+            {
+              "id": "uc-1",
+              "code": "CU-01",
+              "name": "Gestionar Usuarios",
+              "actorIds": [
+                "act-1"
+              ],
+              "relations": []
+            }
+          ]
+        },
+        "assert": [
+          {
+            "type": "contains",
+            "value": "Administrador"
+          },
+          {
+            "type": "contains",
+            "value": "Gestionar Usuarios"
+          }
+        ]
+      },
+      {
+        "description": "Árbol de Navegación: jerarquía de pantallas y rutas consistentes",
+        "vars": {
+          "task": "NAVIGATION_DIAGRAM",
+          "projectName": "App Movil",
+          "screens": [
+            {
+              "id": "s1",
+              "name": "Login",
+              "route": "/login"
+            },
+            {
+              "id": "s2",
+              "name": "Home",
+              "route": "/home",
+              "parentId": "s1"
+            }
+          ]
+        },
+        "assert": [
+          {
+            "type": "contains",
+            "value": "Login"
+          },
+          {
+            "type": "contains",
+            "value": "Home"
+          }
+        ]
+      },
+      {
+        "description": "Arquitectura: capas de software definidas y conexiones justificadas",
+        "vars": {
+          "task": "ARCHITECTURE",
+          "projectName": "Sistema Bancario",
+          "architecture": {
+            "components": [
+              {
+                "name": "Capa Presentación Web"
+              },
+              {
+                "name": "Servicio de Negocio Core"
+              },
+              {
+                "name": "Motor de Base de Datos"
+              }
+            ],
+            "connections": [
+              {
+                "from": "Capa Presentación Web",
+                "to": "Servicio de Negocio Core",
+                "type": "HTTPS"
+              },
+              {
+                "from": "Servicio de Negocio Core",
+                "to": "Motor de Base de Datos",
+                "type": "TCP"
+              }
+            ]
+          }
+        },
+        "assert": [
+          {
+            "type": "contains",
+            "value": "Capa Presentación Web"
+          },
+          {
+            "type": "contains",
+            "value": "Motor de Base de Datos"
+          }
+        ]
+      }
+    ],
+    "env": {},
+    "outputPath": [
+      "tests/ai/results.json"
+    ],
+    "extensions": [],
+    "metadata": {},
+    "evaluateOptions": {},
+    "basePath": "C:\\Users\\mateo\\Downloads\\Otros\\UNI_local\\DAS\\Proyecto_ICase\\tests\\ai"
+  },
+  "shareableUrl": null,
+  "metadata": {
+    "promptfooVersion": "0.125.1",
+    "nodeVersion": "v24.14.0",
+    "platform": "win32",
+    "arch": "x64",
+    "exportedAt": "2026-11-09T15:21:10.284Z",
+    "evaluationCreatedAt": "2026-11-09T15:21:09.527Z"
+  },
+  "vars": [
+    "task",
+    "projectName",
+    "systemDescription",
+    "entities",
+    "relationships",
+    "actors",
+    "useCases",
+    "screens",
+    "architecture"
+  ],
+  "runtimeOptions": {
+    "eventSource": "cli",
+    "showProgressBar": true,
+    "repeat": 1,
+    "maxConcurrency": 4,
+    "cache": false
+  }
+}

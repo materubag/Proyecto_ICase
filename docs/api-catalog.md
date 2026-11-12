@@ -164,3 +164,26 @@ Generado por `backend/scripts/sync-docs.cjs` desde OpenAPI. El servidor base es 
 | POST | `/projects/{projectId}/engineering/chat` | Consultar contexto o proponer cambio para revisi?n | path: `projectId` (obligatorio); body: `application/json` | 200, 400, default |
 | GET | `/projects/{projectId}/engineering/export` | GET /projects/{projectId}/engineering/export | path: `projectId` (obligatorio) | 200, default |
 
+## codegen
+
+| Método | Ruta | Operación | Entrada | Respuestas declaradas |
+| --- | --- | --- | --- | --- |
+| GET | `/projects/{projectId}/codegen/preview` | Inspección previa del árbol de código generado | path: `projectId` (obligatorio); query: `includeDocker`; query: `allowUnapproved`; query: `allowPartialScope`; query: `reviewOnly` | 200, default |
+| GET | `/projects/{projectId}/codegen/download` | Descarga de archivo ZIP del proyecto generado | path: `projectId` (obligatorio); query: `jobId`; query: `includeDocker`; query: `allowPartialScope`; query: `allowUnapproved`; query: `reviewOnly` | 200, default |
+| GET | `/projects/{projectId}/codegen/spec` | Consultar especificación ejecutable del proyecto (projectSpec) | path: `projectId` (obligatorio) | 200, default |
+| POST | `/projects/{projectId}/codegen/spec/validate` | Validación y diagnóstico de la especificación ejecutable | path: `projectId` (obligatorio) | 200, default |
+| POST | `/projects/{projectId}/codegen/spec/approve` | Aprobar y sellar la especificación como baseline ejecutable | path: `projectId` (obligatorio); body: `application/json` | 200, default |
+| GET | `/projects/{projectId}/codegen/ai/status` | Estado de propuestas de IA para operaciones y bindings de mockups | path: `projectId` (obligatorio) | 200, default |
+| POST | `/projects/{projectId}/codegen/ai/propose-operations` | Generar propuesta asistida por IA de pasos ejecutables para operaciones | path: `projectId` (obligatorio); body: `application/json` | 200, default |
+| POST | `/projects/{projectId}/codegen/ai/propose-bindings` | Generar propuesta asistida por IA de enlaces (bindings) entre pantallas y contratos | path: `projectId` (obligatorio); body: `application/json` | 200, default |
+| POST | `/projects/{projectId}/codegen/ai/review-proposal` | Revisar (aprobar o rechazar) una propuesta de IA | path: `projectId` (obligatorio); body: `application/json` | 200, default |
+| POST | `/projects/{projectId}/codegen/ai/apply` | Aplicar propuestas de IA aprobadas a la especificación ejecutable | path: `projectId` (obligatorio); body: `application/json` | 200, default |
+| POST | `/projects/{projectId}/codegen/jobs/start` | Iniciar trabajo asíncrono persistente de generación y verificación de código | path: `projectId` (obligatorio); body: `application/json` | 200, default |
+| GET | `/projects/{projectId}/codegen/jobs/active` | Consultar el trabajo de generación de código activo | path: `projectId` (obligatorio) | 200, default |
+| GET | `/projects/{projectId}/codegen/jobs/{jobId}` | Estado, fase, métricas y diagnóstico de un trabajo de generación | path: `projectId` (obligatorio); path: `jobId` (obligatorio) | 200, default |
+| POST | `/projects/{projectId}/codegen/jobs/{jobId}/input` | Enviar respuestas o decisiones requeridas durante la fase WAITING_FOR_INPUT | path: `projectId` (obligatorio); path: `jobId` (obligatorio); body: `application/json` | 200, default |
+| POST | `/projects/{projectId}/codegen/jobs/{jobId}/cancel` | Cancelar un trabajo de generación de código en ejecución | path: `projectId` (obligatorio); path: `jobId` (obligatorio) | 200, default |
+| POST | `/projects/{projectId}/codegen/jobs/{jobId}/resume` | Reanudar un trabajo de generación pausado o bloqueado | path: `projectId` (obligatorio); path: `jobId` (obligatorio) | 200, default |
+| GET | `/projects/{projectId}/codegen/decisions` | Listar decisiones arquitectónicas y técnicas pendientes | path: `projectId` (obligatorio) | 200, default |
+| POST | `/projects/{projectId}/codegen/decisions` | Registrar una decisión técnica o de diseño para resolver ambigüedades | path: `projectId` (obligatorio); body: `application/json` | 200, default |
+
