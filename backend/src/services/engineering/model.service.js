@@ -116,6 +116,7 @@ async function review(projectId, id, input) {
     if (input.status === 'REJECTED') return tx.modelCandidate.update({ where: { id }, data: { status: 'REJECTED' } });
     const content = input.content || c.content;
     if (input.status !== 'APPROVED') return tx.modelCandidate.update({ where: { id }, data: { content, name: text(content.name, 'nombre') } });
+    if (c.kind === 'Actor') d.fail('ACTOR_CATALOG_REVIEW_REQUIRED', 'Apruebe la versión del catálogo en el flujo documental.');
     const reqs = await d.approvedRequirements(tx, projectId, c.requirementIds);
     if (reqs.some(r => !c.evidence.some(e => e.requirementId === r.id && e.revision === r.revision))) d.fail('VERSION_CONFLICT', 'Cambió la evidencia. Genera un candidato actualizado.');
     const data = await contentData(tx, projectId, c.kind, content);

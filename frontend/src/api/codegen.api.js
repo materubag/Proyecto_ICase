@@ -38,10 +38,27 @@ export const codegenApi = {
   },
 
   /**
+   * Obtiene el estado persistido de las fases aprobadas en la base de datos
+   */
+  getStagesStatus: (projectId) => {
+    return request(`/projects/${projectId}/codegen/stages/status`);
+  },
+
+  /**
+   * Registra y persiste la aprobación formal de una fase en PostgreSQL
+   */
+  approveStage: (projectId, stageId, evidence = {}) => {
+    return request(`/projects/${projectId}/codegen/stages/approve`, {
+      method: 'POST',
+      body: { stageId, ...evidence }
+    });
+  },
+
+  /**
    * Descarga el archivo .zip directamente en el navegador
    */
   downloadZip: async (projectId, includeDocker = true, defaultFilename = 'proyecto-api.zip', jobId = null) => {
-    const url = `${BASE_URL}/projects/${projectId}/codegen/download?includeDocker=${includeDocker}${jobId ? '&jobId=' + encodeURIComponent(jobId) : ''}`;
+    const url = `${BASE_URL}/projects/${projectId}/codegen/workflow/download`;
     const response = await fetch(url);
     if (!response.ok) {
       const errJson = await response.json().catch(() => ({}));

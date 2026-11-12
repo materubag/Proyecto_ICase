@@ -5,6 +5,7 @@
 const express = require('express');
 const router = express.Router({ mergeParams: true });
 const codegenController = require('../controllers/codegen.controller');
+router.use('/workflow', require('./delivery.routes'));
 
 // GET /api/projects/:projectId/codegen/preview
 router.get('/preview', codegenController.getPreview);
@@ -14,6 +15,12 @@ router.get('/download', codegenController.downloadZip);
 
 // GET /api/projects/:projectId/codegen/spec
 router.get('/spec', codegenController.getSpecification);
+
+// GET /api/projects/:projectId/codegen/stages/status
+router.get('/stages/status', codegenController.getStagesStatus);
+
+// POST /api/projects/:projectId/codegen/stages/approve
+router.post('/stages/approve', codegenController.approveStage);
 
 // POST /api/projects/:projectId/codegen/spec/validate
 router.post('/spec/validate', codegenController.validateSpecification);
@@ -39,7 +46,7 @@ router.post('/ai/apply', codegenController.applyApprovedProposals);
 
 // Persistent Generation Jobs (ANALYZING -> WAITING_FOR_INPUT -> GENERATING -> VALIDATING -> REPAIRING -> COMPLETED)
 // POST /api/projects/:projectId/codegen/jobs/start
-router.post('/jobs/start', codegenController.startGenerationJob);
+router.post('/jobs/start', (_req,res)=>res.status(409).json({success:false,error:{message:'La generación se realiza en las siete etapas con aprobación individual. Use /codegen/workflow/tasks.'}}));
 
 // GET /api/projects/:projectId/codegen/jobs/active
 router.get('/jobs/active', codegenController.getActiveGenerationJob);

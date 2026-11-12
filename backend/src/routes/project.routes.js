@@ -27,6 +27,7 @@ const uploadMulti = multer({
 });
 
 // Projects CRUD
+router.use('/:projectId/document-workflow', require('./documentWorkflow.routes'));
 router.use('/:projectId/engineering', require('./engineering.routes'));
 router.use('/:projectId/codegen', require('./codegen.routes'));
 router.get('/', (req, res, next) => projectController.getAll(req, res, next));
@@ -42,28 +43,15 @@ router.post('/:projectId/requirements', (req, res, next) => requirementControlle
 
 // Nested Project Actors
 router.get('/:projectId/actors', (req, res, next) => actorController.getByProject(req, res, next));
-router.post('/:projectId/actor-relations/regenerate', async (req,res,next)=>{
-  try{const service=require('../services/analysis/actorRelationRegeneration');await service.prepare(req.params.projectId);res.status(202).json({success:true,data:service.jobs.start({projectId:req.params.projectId,sourceId:req.params.projectId})});}catch(e){next(e);}
-});
+router.post('/:projectId/actor-relations/regenerate', (req,res) => res.status(409).json({success:false,error:{message:'Prepare y revise requisitos y relaciones en el flujo documental; las relaciones requieren aprobación humana.'}}));
 router.get('/:projectId/actor-relations/jobs/:jobId', (req,res)=>{
   const job=require('../services/analysis/actorRelationRegeneration').jobs.get(req.params.projectId,req.params.jobId);
   if(!job)return res.status(404).json({success:false,error:{message:'La tarea no está disponible; vuelve a regenerar las relaciones.'}});
   res.json({success:true,data:job});
 });
 router.post('/:projectId/actors', (req, res, next) => actorController.create(req, res, next));
-router.post('/:projectId/actors/approve-all', async (req, res, next) => {
-  try {
-    const { projectId } = req.params;
-    const prisma = require('../config/prisma');
-    const updated = await prisma.$transaction(async tx => {
-      const actors=await tx.actor.findMany({where:{projectId,isDeleted:false}});
-      const eligible=actors.filter(a=>require('../services/analysis/actorEvidence').classify(a)==='ROLE');
-      const result=await tx.actor.updateMany({where:{projectId,id:{in:eligible.map(a=>a.id)}},data:{reviewStatus:'APPROVED',status:'APPROVED'}});
-      await require('../services/analysis/actorIdentity').refresh(tx,projectId);
-      return result;
-    });
-    res.json({ success: true, count: updated.count });
-  } catch (err) { next(err); }
+router.post('/:projectId/actors/approve-all', async (req,res,next) => {
+  try { const data = await require('../services/analysis/documentWorkflow').service().approve(req.params.projectId, 'actors', req.body.revision, req.body.resolution); res.json({success:true,data}); } catch(e) {next(e);}
 });
 
 // Nested Entities & Approvals

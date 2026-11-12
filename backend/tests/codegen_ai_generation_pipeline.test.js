@@ -139,7 +139,7 @@ test('Incomplete CREATE contracts and unknown query fields reject; false predica
   assert.equal(writes, 0);
 });
 
-test('Persistent job invokes planning, seals exact verified files, and download returns that ZIP (verification double)', async () => {
+test('Persistent legacy job seals files but cannot bypass verified delivery approval (verification double)', async () => {
   const { spec } = fixture('job-ai-sealed-' + Date.now());
   let planned = 0;
   const service = isolated('codegenJob.service.js', {
@@ -173,14 +173,19 @@ test('Persistent job invokes planning, seals exact verified files, and download 
   const entries = integrity.readZip(buffer);
   assert.equal(entries.filter(entry => entry.path === 'GENERATION_TRACE.json').length, 1);
   assert.equal(entries.find(entry => entry.path === 'mockups/original/books.html').content.toString(), spec.screens[0].html);
-  const controller = isolated('../../controllers/codegen.controller.js', { '../services/codegen/codegenJob.service': service });
-  let downloaded;
-  const response = { setHeader() {}, end(value) { downloaded = value; return this; }, status(value) { this.code = value; return this; }, json(value) { this.body = value; return this; } };
+  const requests = [];
+  const controller = isolated('../../controllers/codegen.controller.js', {
+    '../services/codegen/codegenJob.service': service,
+    '../services/codegen/deliveryWorkflow': { service: () => ({ archive: async id => {
+      requests.push(id);
+      throw Object.assign(new Error('La entrega requiere siete etapas vigentes, probadas y aprobadas'), { statusCode: 409 });
+    } }) }
+  });
+  const response = { status(value) { this.code = value; return this; }, json(value) { this.body = value; return this; } };
   await controller.downloadZip({ params: { projectId: spec.project.id }, query: { jobId: job.id } }, response);
-  assert.equal(integrity.sha256(downloaded), job.zipSha256);
-  const other = { ...response, code: null };
-  await controller.downloadZip({ params: { projectId: 'another-project' }, query: { jobId: job.id } }, other);
-  assert.equal(other.code, 404);
+  assert.equal(response.code, 409);
+  assert.match(response.body.error.message, /siete etapas/);
+  assert.deepEqual(requests, [spec.project.id]);
 });
 
 module.exports.fixture = fixture;

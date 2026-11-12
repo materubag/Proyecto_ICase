@@ -1,6 +1,9 @@
 try { require('dotenv').config(); } catch (_) {}
 
 module.exports = {
+  DOCUMENT_PREPARATION_MODEL: process.env.DOCUMENT_PREPARATION_MODEL || process.env.OPENAI_MODEL || 'gpt-4o-mini',
+  DOCUMENT_REVIEW_MODEL: process.env.DOCUMENT_REVIEW_MODEL || process.env.ANTHROPIC_MODEL || 'claude-3-5-sonnet-20241022',
+  DOCUMENT_REASONING_EFFORT: process.env.DOCUMENT_REASONING_EFFORT || '',
   PORT: process.env.PORT || 8080,
   DATABASE_URL: process.env.DATABASE_URL,
   FRONTEND_URL: process.env.FRONTEND_URL || 'http://localhost:5173',
@@ -40,8 +43,13 @@ module.exports = {
 
   // Configuración OpenAI (Opcional - nunca obligatorio para el flujo principal)
   OPENAI_API_KEY: process.env.OPENAI_API_KEY || '',
-  OPENAI_MODEL: process.env.OPENAI_MODEL || 'gpt-5.6-luna',
-  OPENAI_REASONING_EFFORT: process.env.OPENAI_REASONING_EFFORT || 'high',
+  OPENAI_MODEL: process.env.OPENAI_MODEL || 'gpt-4o-mini',
+  OPENAI_REASONING_EFFORT: process.env.OPENAI_REASONING_EFFORT || 'medium',
+
+  // Configuración Anthropic / Claude 3.5 Sonnet
+  ANTHROPIC_API_KEY: process.env.ANTHROPIC_API_KEY || '',
+  ANTHROPIC_MODEL: process.env.ANTHROPIC_MODEL || 'claude-3-5-sonnet-20241022',
+  DEFAULT_AI_PIPELINE: process.env.DEFAULT_AI_PIPELINE || 'hybrid',
 
   // Configuración n8n y Google Stitch (Mockups)
   N8N_BASE_URL: process.env.N8N_BASE_URL || '',

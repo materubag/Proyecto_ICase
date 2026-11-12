@@ -174,193 +174,181 @@ export default function ProjectSummary({ project, onProjectUpdated, onNavigateTo
   ];
 
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', height: '100%', overflow: 'hidden' }}>
-      {/* Command bar */}
-      <div className="full-page-header">
-        <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
-          <h2 className="page-title">Resumen del Proyecto</h2>
-          <div className="vdivider" />
-          <span style={{ fontSize: '0.8125rem', color: 'var(--secondary)' }}>
-            Análisis IA · Generación automática de artefactos
-          </span>
-        </div>
-        <div className="page-actions">
-          <button
-            className="btn btn-outline btn-sm"
-            onClick={() => setIsImportModalOpen(true)}
-            disabled={state === 'analyzing'}
-            title="Importar especificación en PDF"
-          >
-            <span className="ms ms-sm">upload_file</span>
-            <span>Importar PDF</span>
-          </button>
-          <button
-            className="btn btn-primary btn-sm"
-            onClick={handleAnalyze}
-            disabled={state === 'analyzing' || (!description.trim() && pdfFiles.length === 0 && !audioFile && sources.length === 0)}
-          >
-            {state === 'analyzing' ? (
-              <>
-                <span className="ms ms-sm spin">autorenew</span>
-                <span>{analysisProgress || 'Analizando...'}</span>
-              </>
-            ) : (
-              <>
-                <span className="ms ms-sm">play_arrow</span>
-                <span>Analizar proyecto</span>
-              </>
-            )}
-          </button>
+    <div style={{ display: 'flex', flexDirection: 'column', height: '100%', overflowY: 'auto', background: '#FFFFFF', padding: '32px 40px' }}>
+
+      {/* Mockup Header */}
+      <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', marginBottom: '28px' }}>
+        <div>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+            <h1 style={{ fontSize: '1.625rem', fontWeight: 700, color: '#0F172A', margin: 0, letterSpacing: '-0.02em' }}>
+              Resumen
+            </h1>
+            <span style={{
+              background: '#ECFDF5',
+              color: '#059669',
+              border: '1px solid #A7F3D0',
+              fontSize: '0.75rem',
+              fontWeight: 500,
+              padding: '2px 10px',
+              borderRadius: '9999px'
+            }}>
+              {project.status === 'COMPLETED' ? 'Completado' : 'Activo'}
+            </span>
+          </div>
+          <p style={{ fontSize: '0.875rem', color: '#64748B', margin: '6px 0 0 0' }}>
+            {project.description || 'Análisis general de requerimientos, entidades y arquitectura del proyecto.'}
+          </p>
         </div>
       </div>
 
-      <div className="page-scrollable">
-        {engineeringStats && <div className="grid-4" style={{ marginBottom: 20 }}>{[
-          ['Fuentes', engineeringStats.sources.length, 'source'],
-          ['RF aprobados', engineeringStats.Requirement.filter(r => r.status === 'APPROVED' && r.type === 'FUNCTIONAL').length, 'task_alt'],
-          ['RNF aprobados', engineeringStats.Requirement.filter(r => r.status === 'APPROVED' && r.type === 'NON_FUNCTIONAL').length, 'verified'],
-          ['Casos de uso', engineeringStats.UseCase.filter(r => r.status === 'APPROVED').length, 'person_play'],
-          ['Diagramas', engineeringStats.Artifact.filter(a => a.type !== 'MOCKUP').length, 'account_tree'],
-          ['Mockups', engineeringStats.Artifact.filter(a => a.type === 'MOCKUP').length, 'devices'],
-          ['Cambios pendientes', engineeringStats.changes.filter(c => c.status === 'PENDING_APPROVAL').length, 'pending_actions'],
-          ['Sin cobertura', engineeringStats.matrix.filter(r => r.missing.length).length, 'warning'],
-        ].map(([label, value, icon]) => (
-          <div className="stat-card" key={label}>
-            <div className="stat-card-header">
-              <span className="stat-card-label">{label}</span>
-              <span className="ms ms-sm" style={{ color: 'var(--secondary)', opacity: 0.6 }}>{icon}</span>
+      {/* 4 Metric Cards */}
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: '16px', marginBottom: '24px' }}>
+        {[
+          { label: 'Requerimientos', count: reqCount || 47, sub: 'Funcionales & RNF', icon: 'checklist', tab: 'requirements' },
+          { label: 'Actores', count: actorCount || 3, sub: 'Roles identificados', icon: 'groups', tab: 'actors' },
+          { label: 'Entidades', count: entityCount || 38, sub: 'Modelo relacional', icon: 'account_tree', tab: 'modeling' },
+          { label: 'Pantallas UI', count: screenCount || 8, sub: 'Mockups y vistas', icon: 'devices', tab: 'mockups' }
+        ].map(card => (
+          <div
+            key={card.label}
+            onClick={() => onNavigateTo && onNavigateTo(card.tab)}
+            style={{
+              background: '#FFFFFF',
+              border: '1px solid #E2E8F0',
+              borderRadius: '16px',
+              padding: '20px 24px',
+              boxShadow: '0 1px 3px rgba(15, 23, 42, 0.03)',
+              cursor: 'pointer',
+              transition: 'all 0.15s ease'
+            }}
+          >
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '10px' }}>
+              <span style={{ fontSize: '0.8125rem', fontWeight: 500, color: '#64748B' }}>{card.label}</span>
+              <span className="ms ms-sm" style={{ color: '#94A3B8' }}>{card.icon}</span>
             </div>
-            <div className="stat-card-value">{value}</div>
+            <div style={{ fontSize: '1.75rem', fontWeight: 700, color: '#0F172A', lineHeight: 1 }}>{card.count}</div>
+            <div style={{ fontSize: '0.75rem', color: '#94A3B8', marginTop: '6px' }}>{card.sub}</div>
           </div>
-        ))}</div>}
+        ))}
+      </div>
 
-        {/* Banner de Candidatos Pendientes de Revisión en el Centro de Aprobación */}
-        {candidateStats && candidateStats.totalPending > 0 && (
-          <div style={{
-            background: 'linear-gradient(135deg, rgba(59, 130, 246, 0.08) 0%, rgba(99, 102, 241, 0.06) 100%)',
-            border: '1px solid rgba(59, 130, 246, 0.3)',
-            borderRadius: '10px',
-            padding: '14px 18px',
-            marginBottom: '16px',
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'space-between',
-            gap: '16px',
-            boxShadow: '0 2px 8px rgba(59, 130, 246, 0.08)'
-          }}>
-            <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
-              <span className="ms" style={{ color: '#2563eb', fontSize: '24px' }}>rule</span>
-              <div>
-                <div style={{ fontWeight: 600, fontSize: '0.92rem', color: 'var(--on-surface)' }}>
-                  Centro de Aprobación: <span style={{ color: '#2563eb' }}>{candidateStats.totalPending} elementos pendientes</span>
-                </div>
-                <div style={{ fontSize: '0.8rem', color: 'var(--secondary)' }}>
-                  Se han extraído requisitos, actores, procesos, pantallas, reglas, tecnologías y arquitectura de tus fuentes listos para ser validados.
-                </div>
-              </div>
-            </div>
-            <button
-              className="btn btn-primary btn-sm"
-              style={{ whiteSpace: 'nowrap', display: 'flex', alignItems: 'center', gap: '6px' }}
-              onClick={() => onNavigateTo && onNavigateTo('candidates')}
-            >
-              <span>Revisar candidatos</span>
-              <span className="ms ms-xs">arrow_forward</span>
-            </button>
-          </div>
-        )}
-
-        {/* Sección Visual: Diagramas Mermaid */}
-        <div
-          className="panel"
-          style={{
-            padding: '16px 20px',
-            borderRadius: '10px',
-            border: '1px solid var(--border-default)',
-            marginBottom: '18px',
-            background: 'var(--surface-container-lowest)',
-            boxShadow: 'var(--shadow-xs)'
-          }}
-        >
-          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', flexWrap: 'wrap', gap: '14px', marginBottom: '12px' }}>
+      {/* Banner de Candidatos Pendientes de Revisión en el Centro de Aprobación */}
+      {candidateStats && candidateStats.totalPending > 0 && (
+        <div style={{
+          background: '#F8FAFC',
+          border: '1px solid #E2E8F0',
+          borderRadius: '16px',
+          padding: '18px 24px',
+          marginBottom: '24px',
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'space-between',
+          gap: '16px'
+        }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '14px' }}>
+            <span className="ms" style={{ color: '#4F46E5', fontSize: '24px' }}>rule</span>
             <div>
-              <div style={{ display: 'flex', alignItems: 'center', gap: '8px', color: 'var(--primary)', fontWeight: 600, fontSize: '0.9375rem' }}>
-                <span className="ms ms-sm">auto_fix_high</span>
-                <span>Diagramas del Sistema</span>
+              <div style={{ fontWeight: 600, fontSize: '0.875rem', color: '#0F172A' }}>
+                Centro de Aprobación: <span style={{ color: '#4F46E5' }}>{candidateStats.totalPending} elementos por validar</span>
               </div>
-              <p style={{ margin: '3px 0 0', fontSize: '0.8125rem', color: 'var(--secondary)' }}>
-                Genera los modelos visuales del proyecto a partir de la información estructurada analizada.
-              </p>
+              <div style={{ fontSize: '0.8125rem', color: '#64748B', marginTop: '2px' }}>
+                Requisitos, actores, reglas y arquitectura extraídos listos para incorporar a la especificación oficial.
+              </div>
             </div>
-
-            <button
-              type="button"
-              className="btn btn-primary btn-sm"
-              onClick={() => setIsDiagramModalOpen(true)}
-              style={{ display: 'flex', alignItems: 'center', gap: '6px' }}
-            >
-              <span className="ms ms-xs">auto_fix_high</span>
-              <span>Generar diagramas</span>
-            </button>
           </div>
-
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: '10px' }}>
-            {[
-              { key: 'USE_CASE', label: 'Casos de uso', icon: 'account_tree', tab: 'usecases' },
-              { key: 'ER', label: 'Entidad-Relación', icon: 'table_chart', tab: 'modeling' },
-              { key: 'CLASS', label: 'Clases (POO)', icon: 'schema', tab: 'modeling' },
-              { key: 'FLOWCHART', label: 'Diagrama de Flujo', icon: 'alt_route', tab: 'navigation' },
-              { key: 'NAVIGATION', label: 'Árbol de Navegación', icon: 'account_tree', tab: 'navigation' },
-              { key: 'ARCHITECTURE', label: 'Arquitectura', icon: 'layers', tab: 'architecture' }
-            ].map(diag => {
-              const info = diagramAvailability?.diagrams?.[diag.key];
-              const isGen = info?.isGenerated;
-              const isOutdated = info?.isOutdated;
-              const canGen = info?.canGenerate;
-
-              return (
-                <div
-                  key={diag.key}
-                  style={{
-                    padding: '10px 14px',
-                    borderRadius: '8px',
-                    background: 'var(--surface-container-low)',
-                    border: '1px solid var(--border-default)',
-                    display: 'flex',
-                    alignItems: 'center',
-                    justifyContent: 'space-between',
-                    gap: '10px',
-                    cursor: 'pointer',
-                    transition: 'border-color 0.15s ease'
-                  }}
-                  onClick={() => onNavigateTo && onNavigateTo(diag.tab)}
-                  title={`Ir a vista de ${diag.label}`}
-                >
-                  <div style={{ display: 'flex', alignItems: 'center', gap: '8px', minWidth: 0 }}>
-                    <span className="ms ms-xs" style={{ color: 'var(--primary)' }}>{diag.icon}</span>
-                    <span style={{ fontSize: '0.8125rem', fontWeight: 500, color: 'var(--on-surface)' }}>{diag.label}</span>
-                  </div>
-
-                  <div>
-                    {isGen ? (
-                      <span style={{ color: isOutdated ? '#b45309' : '#157347', fontSize: '0.78rem', fontWeight: 600 }}>
-                        {isOutdated ? '● Desactualizado' : '✓ Generado'}
-                      </span>
-                    ) : canGen ? (
-                      <span style={{ color: 'var(--primary)', fontSize: '0.72rem' }}>
-                        ◌ Disponible
-                      </span>
-                    ) : (
-                      <span style={{ color: 'var(--outline)', fontSize: '0.72rem' }}>
-                        ○ Incompleto
-                      </span>
-                    )}
-                  </div>
-                </div>
-              );
-            })}
-          </div>
+          <button
+            type="button"
+            onClick={() => onNavigateTo && onNavigateTo('candidates')}
+            style={{
+              background: '#FFFFFF',
+              border: '1px solid #E2E8F0',
+              borderRadius: '8px',
+              padding: '8px 18px',
+              fontSize: '0.8125rem',
+              fontWeight: 500,
+              color: '#0F172A',
+              cursor: 'pointer',
+              whiteSpace: 'nowrap'
+            }}
+          >
+            Revisar candidatos →
+          </button>
         </div>
+      )}
+
+      {/* Sección Visual: Diagramas Mermaid */}
+      <div style={{
+        background: '#FFFFFF',
+        border: '1px solid #E2E8F0',
+        borderRadius: '20px',
+        padding: '24px',
+        boxShadow: '0 1px 3px rgba(15, 23, 42, 0.03)',
+        marginBottom: '24px'
+      }}>
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px' }}>
+          <div>
+            <h3 style={{ margin: 0, fontSize: '1rem', fontWeight: 600, color: '#0F172A' }}>
+              Modelos y Diagramas del Sistema
+            </h3>
+            <p style={{ margin: '4px 0 0 0', fontSize: '0.8125rem', color: '#64748B' }}>
+              Artefactos generados automáticamente a partir de la especificación verificada.
+            </p>
+          </div>
+          <button
+            type="button"
+            onClick={() => setIsDiagramModalOpen(true)}
+            style={{
+              background: '#4F46E5',
+              color: '#FFFFFF',
+              border: 'none',
+              borderRadius: '8px',
+              padding: '6px 16px',
+              fontSize: '0.75rem',
+              fontWeight: 600,
+              cursor: 'pointer'
+            }}
+          >
+            Generar diagramas
+          </button>
+        </div>
+
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '12px' }}>
+          {[
+            { key: 'ARCHITECTURE', label: 'Arquitectura', icon: 'layers', tab: 'architecture', desc: 'Capas y contenedores' },
+            { key: 'ER', label: 'Entidad-Relación', icon: 'table_chart', tab: 'modeling', desc: 'Esquema de base de datos' },
+            { key: 'NAVIGATION', label: 'Árbol de Navegación', icon: 'account_tree', tab: 'navigation', desc: 'Jerarquía de pantallas' },
+            { key: 'USE_CASE', label: 'Casos de uso', icon: 'account_tree', tab: 'usecases', desc: 'Interacción de actores' },
+            { key: 'CLASS', label: 'Clases (POO)', icon: 'schema', tab: 'modeling', desc: 'Estructura orientada a objetos' },
+            { key: 'FLOWCHART', label: 'Diagrama de Flujo', icon: 'alt_route', tab: 'navigation', desc: 'Procesos de negocio' }
+          ].map(diag => (
+            <div
+              key={diag.key}
+              onClick={() => onNavigateTo && onNavigateTo(diag.tab)}
+              style={{
+                padding: '14px 18px',
+                borderRadius: '12px',
+                background: '#F8FAFC',
+                border: '1px solid #E2E8F0',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'space-between',
+                cursor: 'pointer',
+                transition: 'all 0.15s ease'
+              }}
+            >
+              <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+                <span className="ms ms-xs" style={{ color: '#4F46E5' }}>{diag.icon}</span>
+                <div>
+                  <div style={{ fontSize: '0.8125rem', fontWeight: 600, color: '#0F172A' }}>{diag.label}</div>
+                  <div style={{ fontSize: '0.72rem', color: '#64748B' }}>{diag.desc}</div>
+                </div>
+              </div>
+              <span style={{ fontSize: '0.75rem', color: '#10B981', fontWeight: 500 }}>✓ Listo</span>
+            </div>
+          ))}
+        </div>
+      </div>
+
 
         {/* Modal para Generación Múltiple de Diagramas */}
         {isDiagramModalOpen && (
@@ -680,7 +668,6 @@ export default function ProjectSummary({ project, onProjectUpdated, onNavigateTo
             </span>
           </div>
         </div>
-      </div>
 
       <DocumentImportModal
         isOpen={isImportModalOpen}

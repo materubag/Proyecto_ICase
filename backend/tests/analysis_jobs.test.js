@@ -20,24 +20,21 @@ test('provider failure remains a JSON job error, and retry starts a new job',asy
   assert.equal(failed.status,'FAILED');assert.deepEqual(failed.error,{message:'Provider unavailable',code:'AI_UNAVAILABLE'});
   assert.notEqual(jobs.start({sourceId:'s'}).jobId,first.jobId);await flush();
 });
-test('source endpoint responds 202 while analysis is pending; status returns completed JSON',async()=>{
+test('source analysis delegates to persistent context preparation',async()=>{
   const sourcePath=require.resolve('../src/services/source.service');
-  const pipelinePath=require.resolve('../src/services/analysis/analysisPipeline');
-  const previousSource=require.cache[sourcePath],previousPipeline=require.cache[pipelinePath];
-  let complete;
-  require.cache[sourcePath]={id:sourcePath,filename:sourcePath,loaded:true,exports:{getById:async()=>({id:'endpoint-source'})}};
-  require.cache[pipelinePath]={id:pipelinePath,filename:pipelinePath,loaded:true,exports:{run:()=>new Promise(resolve=>{complete=resolve;})}};
-  try{
+  const workflowPath=require.resolve('../src/services/analysis/documentWorkflow');
+  const previousSource=require.cache[sourcePath],previousWorkflow=require.cache[workflowPath];
+  let args;
+  require.cache[sourcePath]={id:sourcePath,filename:sourcePath,loaded:true,exports:{getById:async()=>({id:'s',projectId:'p'})}};
+  require.cache[workflowPath]={id:workflowPath,filename:workflowPath,loaded:true,exports:{service:()=>({run:async(...input)=>{args=input;return {revision:1};}})}};
+  try {
+    delete require.cache[require.resolve('../src/controllers/source.controller')];
     const controller=require('../src/controllers/source.controller');
-    const response={statusCode:200,status(code){this.statusCode=code;return this;},json(body){this.body=body;return this;}};
-    await controller.analyze({params:{sourceId:'endpoint-source'},body:{async:true}},response,error=>{throw error;});
-    assert.equal(response.statusCode,202);assert.equal(response.body.success,true);assert.equal(response.body.data.status,'RUNNING');
-    await flush();complete({success:true,partial:false});await flush();
-    const status={json(body){this.body=body;}};
-    await controller.analysisStatus({params:{sourceId:'endpoint-source',jobId:response.body.data.jobId}},status,error=>{throw error;});
-    assert.equal(status.body.data.status,'COMPLETED');assert.equal(status.body.data.result.partial,false);
+    const response={json(body){this.body=body;}};
+    await controller.analyze({params:{sourceId:'s'},body:{}},response,error=>{throw error;});
+    assert.deepEqual(args,['p','context','prepare']);assert.equal(response.body.data.workflow,true);assert.equal(response.body.data.revision,1);
   }finally{
     if(previousSource)require.cache[sourcePath]=previousSource;else delete require.cache[sourcePath];
-    if(previousPipeline)require.cache[pipelinePath]=previousPipeline;else delete require.cache[pipelinePath];
+    if(previousWorkflow)require.cache[workflowPath]=previousWorkflow;else delete require.cache[workflowPath];
   }
 });

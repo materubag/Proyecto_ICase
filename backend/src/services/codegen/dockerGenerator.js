@@ -12,7 +12,7 @@ WORKDIR /app
 
 # Instalar dependencias primero para aprovechar el cache de capas
 COPY package*.json ./
-RUN npm install --omit=dev
+RUN npm install --omit=dev --no-audit --no-fund --fetch-retries=0 --fetch-timeout=30000 && npm ls --omit=dev --depth=0
 
 # Copiar el resto del código de la aplicación
 COPY . .

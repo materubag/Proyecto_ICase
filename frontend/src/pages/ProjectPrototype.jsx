@@ -300,100 +300,147 @@ export default function ProjectPrototype({ project, onProjectUpdated }) {
   }, [screens]);
 
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', height: '100%', overflow: 'hidden' }}>
-      {/* Command bar */}
-      <div className="full-page-header">
-        <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
-          <div>
-            <h2 className="page-title" style={{ fontSize: '1.125rem' }}>
-              Prototipos de la Aplicación (Sketch & Mockup)
-            </h2>
-            <span style={{ fontSize: '0.75rem', color: 'var(--secondary)' }}>
-              {screens.length} pantalla{screens.length !== 1 ? 's' : ''} · Visualización, relaciones entre pantallas y estructura de organización
+    <div style={{ display: 'flex', flexDirection: 'column', height: '100%', overflowY: 'auto', background: '#FFFFFF', padding: '32px 40px' }}>
+      
+      {/* Mockup Header */}
+      <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', marginBottom: '24px' }}>
+        <div>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+            <h1 style={{ fontSize: '1.625rem', fontWeight: 700, color: '#0F172A', margin: 0, letterSpacing: '-0.02em' }}>
+              Mockups
+            </h1>
+            <span style={{
+              background: '#EEF2FF',
+              color: '#4F46E5',
+              border: '1px solid #E0E7FF',
+              fontSize: '0.75rem',
+              fontWeight: 500,
+              padding: '2px 10px',
+              borderRadius: '9999px'
+            }}>
+              {screens.length > 0 ? `${screens.length} pantallas UI` : 'Prototipo'}
             </span>
           </div>
+          <p style={{ fontSize: '0.875rem', color: '#64748B', margin: '6px 0 0 0' }}>
+            Diseño interactivo de pantallas generado con Google Stitch para el sistema.
+          </p>
         </div>
 
-        <div className="page-actions">
+        {/* Header Right Actions */}
+        <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
           {screens.length > 0 && (
-            <div className="view-toggle">
-              <button
-                className={`view-toggle-btn ${viewMode === 'render' ? 'active' : ''}`}
-                onClick={() => setViewMode('render')}
-                title="Mockup interactivo en alta fidelidad"
-              >
-                <span className="ms ms-xs">palette</span><span>Mockup</span>
-              </button>
-              <button
-                className={`view-toggle-btn ${viewMode === 'sketch' ? 'active' : ''}`}
-                onClick={() => setViewMode('sketch')}
-                title="Sketch / Wireframe en baja fidelidad"
-              >
-                <span className="ms ms-xs">draw</span><span>Sketch</span>
-              </button>
-              <button
-                className={`view-toggle-btn ${viewMode === 'structure' ? 'active' : ''}`}
-                onClick={() => setViewMode('structure')}
-                title="Estructura de organización de la información de la vista"
-              >
-                <span className="ms ms-xs">view_quilt</span><span>Estructura de Información</span>
-              </button>
-              <button
-                className={`view-toggle-btn ${viewMode === 'relations' ? 'active' : ''}`}
-                onClick={() => setViewMode('relations')}
-                title="Relaciones entre pantallas y árbol de navegación"
-              >
-                <span className="ms ms-xs">account_tree</span><span>Relaciones</span>
-              </button>
-              <button
-                className={`view-toggle-btn ${viewMode === 'html' ? 'active' : ''}`}
-                onClick={() => setViewMode('html')}
-              >
-                <span className="ms ms-xs">code</span><span>HTML</span>
-              </button>
+            <div style={{
+              display: 'inline-flex',
+              background: '#FFFFFF',
+              border: '1px solid #E2E8F0',
+              borderRadius: '8px',
+              padding: '3px',
+              boxShadow: '0 1px 2px rgba(15, 23, 42, 0.04)'
+            }}>
+              {[
+                ['render', 'Mockup'],
+                ['sketch', 'Sketch'],
+                ['structure', 'Estructura'],
+                ['relations', 'Relaciones'],
+                ['html', 'HTML']
+              ].map(([vKey, label]) => (
+                <button
+                  key={vKey}
+                  type="button"
+                  onClick={() => setViewMode(vKey)}
+                  style={{
+                    background: viewMode === vKey ? '#0F172A' : 'transparent',
+                    color: viewMode === vKey ? '#FFFFFF' : '#64748B',
+                    border: 'none',
+                    borderRadius: '6px',
+                    padding: '6px 14px',
+                    fontSize: '0.8125rem',
+                    fontWeight: viewMode === vKey ? 600 : 500,
+                    cursor: 'pointer',
+                    transition: 'all 0.15s ease'
+                  }}
+                >
+                  {label}
+                </button>
+              ))}
             </div>
           )}
 
-          <button className="btn btn-primary btn-sm" onClick={handleGenerateMockup} disabled={isGenerating}>
+          <button
+            type="button"
+            onClick={() => setSelectorOpen(v => !v)}
+            style={{
+              background: '#FFFFFF',
+              border: '1px solid #E2E8F0',
+              color: '#334155',
+              borderRadius: '8px',
+              padding: '8px 16px',
+              fontSize: '0.8125rem',
+              fontWeight: 500,
+              cursor: 'pointer',
+              boxShadow: '0 1px 2px rgba(15, 23, 42, 0.04)'
+            }}
+          >
+            {selectorOpen ? 'Ocultar catálogo' : `Catálogo (${availableScreens.length})`}
+          </button>
+
+          <button
+            type="button"
+            onClick={handleGenerateMockup}
+            disabled={isGenerating}
+            style={{
+              background: '#4F46E5',
+              color: '#FFFFFF',
+              border: 'none',
+              borderRadius: '8px',
+              padding: '8px 18px',
+              fontSize: '0.8125rem',
+              fontWeight: 600,
+              cursor: 'pointer',
+              boxShadow: '0 1px 3px rgba(79, 70, 229, 0.25)',
+              display: 'flex',
+              alignItems: 'center',
+              gap: '6px'
+            }}
+          >
             {isGenerating ? (
-              <><span className="ms ms-sm spin">progress_activity</span><span>Generando con Stitch ({Math.floor(elapsedSeconds / 60)}m {elapsedSeconds % 60 < 10 ? '0' : ''}{elapsedSeconds % 60}s)...</span></>
+              <span>Generando ({Math.floor(elapsedSeconds / 60)}m {elapsedSeconds % 60 < 10 ? '0' : ''}{elapsedSeconds % 60}s)...</span>
             ) : (
-              <><span className="ms ms-sm">auto_awesome</span><span>Generar con Stitch</span></>
+              <span>Generar con Stitch</span>
             )}
           </button>
         </div>
       </div>
 
-      <section style={{flexShrink:0,padding:'16px 24px',borderBottom:'1px solid var(--border-default)',background:'var(--surface-container-lowest)'}}>
-        <div style={{display:'flex',alignItems:'center',justifyContent:'space-between',gap:12,flexWrap:'wrap'}}>
-          <div style={{display:'flex',alignItems:'center',gap:10}}>
-            <strong style={{fontSize:14}}>Pantallas para Prototipo</strong>
-            <span style={{fontSize:12,color:'var(--secondary)',background:'var(--surface-container-low)',padding:'2px 8px',borderRadius:6}}>
-              {selectedNodeIds.length} de {availableScreens.length} seleccionadas
-            </span>
-          </div>
-          <div style={{display:'flex',gap:6,alignItems:'center',flexWrap:'wrap'}}>
-            <button type="button" className="btn btn-outline btn-xs" onClick={handleSelectCore} title="Selecciona las pantallas Core prioritarias">
-              <span className="ms ms-xs">target</span><span>Pantallas Core</span>
-            </button>
-            {selectedCategory !== 'all' && (
-              <button type="button" className="btn btn-outline btn-xs" onClick={handleSelectCategory} title="Selecciona todas las pantallas del actor actual">
-                <span className="ms ms-xs">checklist</span><span>Actor ({categories.find(c=>c.id===selectedCategory)?.label || 'Actual'})</span>
+      {selectorOpen && (
+        <section style={{flexShrink:0,padding:'16px 24px',marginBottom:'16px',borderRadius:'12px',border:'1px solid #E2E8F0',background:'#FFFFFF',boxShadow:'0 1px 3px rgba(15, 23, 42, 0.04)'}}>
+          <div style={{display:'flex',alignItems:'center',justifyContent:'space-between',gap:12,flexWrap:'wrap'}}>
+            <div style={{display:'flex',alignItems:'center',gap:10}}>
+              <strong style={{fontSize:14,color:'#0F172A'}}>Catálogo de Pantallas</strong>
+              <span style={{fontSize:12,color:'#475569',background:'#F1F5F9',padding:'2px 8px',borderRadius:6}}>
+                {selectedNodeIds.length} de {availableScreens.length} seleccionadas
+              </span>
+            </div>
+            <div style={{display:'flex',gap:6,alignItems:'center',flexWrap:'wrap'}}>
+              <button type="button" className="btn btn-outline btn-xs" onClick={handleSelectCore} title="Selecciona las pantallas Core prioritarias">
+                <span className="ms ms-xs">target</span><span>Pantallas Core</span>
               </button>
-            )}
-            <button type="button" className="btn btn-outline btn-xs" onClick={handleSelectAll}>
-              <span className="ms ms-xs">select_all</span><span>Todas ({availableScreens.length})</span>
-            </button>
-            <button type="button" className="btn btn-ghost btn-xs" onClick={handleClearSelection} disabled={!selectedNodeIds.length}>
-              <span className="ms ms-xs">clear</span><span>Limpiar</span>
-            </button>
-            <button type="button" className="btn btn-primary btn-sm" aria-expanded={selectorOpen} onClick={()=>setSelectorOpen(v=>!v)}>
-              <span className="ms ms-xs">{selectorOpen ? 'expand_less' : 'tune'}</span>
-              <span>{selectorOpen ? 'Ocultar catálogo' : 'Elegir pantallas'}</span>
-            </button>
+              {selectedCategory !== 'all' && (
+                <button type="button" className="btn btn-outline btn-xs" onClick={handleSelectCategory} title="Selecciona todas las pantallas del actor actual">
+                  <span className="ms ms-xs">checklist</span><span>Actor ({categories.find(c=>c.id===selectedCategory)?.label || 'Actual'})</span>
+                </button>
+              )}
+              <button type="button" className="btn btn-outline btn-xs" onClick={handleSelectAll}>
+                <span className="ms ms-xs">select_all</span><span>Todas ({availableScreens.length})</span>
+              </button>
+              <button type="button" className="btn btn-ghost btn-xs" onClick={handleClearSelection} disabled={!selectedNodeIds.length}>
+                <span className="ms ms-xs">clear</span><span>Limpiar</span>
+              </button>
+              <button type="button" className="btn btn-ghost btn-xs" onClick={()=>setSelectorOpen(false)}>
+                ✕ Cerrar
+              </button>
+            </div>
           </div>
-        </div>
-        {selectorOpen && (
           <div style={{marginTop:14}}>
             {/* Category tabs */}
             <div style={{display:'flex',gap:6,marginBottom:12,borderBottom:'1px solid var(--border-default)',paddingBottom:8,overflowX:'auto'}}>
@@ -487,8 +534,8 @@ export default function ProjectPrototype({ project, onProjectUpdated }) {
                 })}
             </div>
           </div>
-        )}
-      </section>
+        </section>
+      )}
       <Modal isOpen={!!detailsScreen} onClose={()=>setDetailsScreen(null)} title={detailsScreen?.name||'Pantalla'}>
         <p>{detailsScreen?.description}</p><small>{detailsScreen?.route}</small>
         <h4>Funcionalidades</h4><ul>{detailsScreen?.functionalities.map(item=><li key={item.id}><strong>{item.code}</strong>: {item.text}</li>)}</ul>
@@ -553,115 +600,13 @@ export default function ProjectPrototype({ project, onProjectUpdated }) {
         </div>
       ) : (
         <>
-          {/* Control Bar: Sistema de Diseño Unificado */}
-          <div style={{
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'space-between',
-            padding: '10px 24px',
-            backgroundColor: 'var(--surface-container-low)',
-            borderBottom: '1px solid var(--border-default)',
-            fontSize: '0.8rem',
-            flexWrap: 'wrap',
-            gap: '12px'
-          }}>
-            <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
-              <span className="ms ms-xs" style={{ color: 'var(--primary)' }}>auto_fix_high</span>
-              <strong style={{ fontSize: '0.8rem', color: 'var(--on-surface)' }}>Diseño Unificado de la Aplicación:</strong>
-              
-              {/* Presets de Color */}
-              <div style={{ display: 'flex', alignItems: 'center', gap: '4px', marginLeft: '6px' }}>
-                {[
-                  { id: 'indigo', label: 'Índigo', color: '#4f46e5' },
-                  { id: 'blue', label: 'Azul', color: '#2563eb' },
-                  { id: 'emerald', label: 'Esmeralda', color: '#059669' },
-                  { id: 'violet', label: 'Violeta', color: '#7c3aed' },
-                  { id: 'slate', label: 'Slate', color: '#0f172a' }
-                ].map(th => (
-                  <button
-                    key={th.id}
-                    type="button"
-                    title={`Aplicar paleta ${th.label}`}
-                    onClick={() => setThemeConfig(prev => ({ ...prev, color: th.id }))}
-                    style={{
-                      display: 'flex',
-                      alignItems: 'center',
-                      gap: '4px',
-                      padding: '3px 8px',
-                      borderRadius: '12px',
-                      fontSize: '0.725rem',
-                      fontWeight: themeConfig.color === th.id ? 600 : 400,
-                      border: themeConfig.color === th.id ? `2px solid ${th.color}` : '1px solid var(--border-default)',
-                      backgroundColor: themeConfig.color === th.id ? 'var(--surface)' : 'transparent',
-                      color: 'var(--on-surface)',
-                      cursor: 'pointer'
-                    }}
-                  >
-                    <span style={{ width: '8px', height: '8px', borderRadius: '50%', backgroundColor: th.color, display: 'inline-block' }} />
-                    <span>{th.label}</span>
-                  </button>
-                ))}
-              </div>
-            </div>
-
-            {/* Layout Mode y Toggle Shell */}
-            <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-              <div style={{ display: 'flex', backgroundColor: 'var(--surface)', borderRadius: '6px', border: '1px solid var(--border-default)', padding: '2px' }}>
-                <button
-                  type="button"
-                  onClick={() => setThemeConfig(prev => ({ ...prev, layout: 'sidebar' }))}
-                  style={{
-                    padding: '3px 8px',
-                    borderRadius: '4px',
-                    fontSize: '0.725rem',
-                    border: 'none',
-                    cursor: 'pointer',
-                    fontWeight: themeConfig.layout === 'sidebar' ? 600 : 400,
-                    backgroundColor: themeConfig.layout === 'sidebar' ? 'var(--primary)' : 'transparent',
-                    color: themeConfig.layout === 'sidebar' ? '#ffffff' : 'var(--secondary)'
-                  }}
-                >
-                  Sidebar Lateral
-                </button>
-                <button
-                  type="button"
-                  onClick={() => setThemeConfig(prev => ({ ...prev, layout: 'topbar' }))}
-                  style={{
-                    padding: '3px 8px',
-                    borderRadius: '4px',
-                    fontSize: '0.725rem',
-                    border: 'none',
-                    cursor: 'pointer',
-                    fontWeight: themeConfig.layout === 'topbar' ? 600 : 400,
-                    backgroundColor: themeConfig.layout === 'topbar' ? 'var(--primary)' : 'transparent',
-                    color: themeConfig.layout === 'topbar' ? '#ffffff' : 'var(--secondary)'
-                  }}
-                >
-                  Navbar Superior
-                </button>
-              </div>
-
-              {/* Toggle de Marco Completo */}
-              <button
-                type="button"
-                onClick={() => setThemeConfig(prev => ({ ...prev, showShell: !prev.showShell }))}
-                className="btn btn-outline btn-xs"
-                style={{ fontSize: '0.725rem', display: 'flex', alignItems: 'center', gap: '4px' }}
-                title="Alternar entre ver la aplicación completa con navegación o solo la tarjeta"
-              >
-                <span className="ms ms-xs">{themeConfig.showShell ? 'check_box' : 'check_box_outline_blank'}</span>
-                <span>Solo contenido de la pantalla</span>
-              </button>
-            </div>
-          </div>
-
           {/* Screen selector tabs */}
           {viewMode !== 'relations' && (
-            <div className="screen-selector" style={{flexShrink:0}}>
+            <div style={{display: "flex", gap: "8px", overflowX: "auto", paddingBottom: "12px", marginBottom: "16px", flexShrink: 0}}>
               {screens.map(screen => (
                 <button
                   key={screen.id}
-                  className={`screen-tab ${selectedScreenId === screen.id ? 'active' : ''}`}
+                  style={{display: "flex", alignItems: "center", gap: "6px", padding: "6px 14px", borderRadius: "8px",background: selectedScreenId === screen.id ? "#0F172A" : "#FFFFFF",color: selectedScreenId === screen.id ? "#FFFFFF" : "#334155",border: "1px solid #E2E8F0", fontSize: "0.8125rem", fontWeight: selectedScreenId === screen.id ? 600 : 400,cursor: "pointer", whiteSpace: "nowrap", transition: "all 0.15s ease"}}
                   onClick={() => setSelectedScreenId(screen.id)}
                 >
                   <span className="ms ms-xs">monitor</span>
@@ -675,7 +620,7 @@ export default function ProjectPrototype({ project, onProjectUpdated }) {
           )}
 
           {/* Content */}
-          <div className="page-scrollable" style={{ padding: '20px 24px', flex:1, minHeight:0 }}>
+          <div style={{background: "#FFFFFF", border: "1px solid #E2E8F0", borderRadius: "20px", padding: "24px", boxShadow: "0 1px 3px rgba(15, 23, 42, 0.03)", flex: 1, minHeight: "560px"}}>
             {viewMode === 'structure' ? (
               <div>
                 <div style={{ marginBottom: '16px' }}>

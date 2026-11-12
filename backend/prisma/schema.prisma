@@ -10,6 +10,76 @@ datasource db {
   url      = env("DATABASE_URL")
 }
 
+// Append-only snapshots and calls; no legacy approvals are inferred.
+model DocumentWorkflow {
+  projectId String @id
+  revision Int @default(0)
+  state Json
+  updatedAt DateTime @updatedAt
+}
+
+model DocumentWorkflowCall {
+  id String @id @default(uuid())
+  projectId String
+  cacheKey String @unique
+  stage String
+  task String
+  provider String
+  model String
+  status String @default("RUNNING")
+  inputVersions Json
+  response Json?
+  usage Json?
+  error String?
+  attempts Int @default(1)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  @@index([projectId, status])
+}
+
+model DeliveryWorkflow {
+  projectId String @id
+  revision Int @default(0)
+  state Json
+  updatedAt DateTime @updatedAt
+}
+
+model DeliveryJob {
+  id String @id @default(uuid())
+  projectId String
+  task String
+  target String
+  inputHash String
+  cacheKey String @unique
+  status String @default("QUEUED")
+  request Json
+  result Json?
+  error String?
+  logs Json
+  attempts Int @default(1)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  @@index([projectId, status])
+}
+
+model DeliveryCall {
+  id String @id @default(uuid())
+  projectId String
+  cacheKey String @unique
+  task String
+  target String
+  provider String
+  model String
+  status String @default("RUNNING")
+  request Json
+  response Json?
+  usage Json?
+  error String?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  @@index([projectId, status])
+}
+
 enum ProjectStatus {
   PLANNING
   IN_PROGRESS

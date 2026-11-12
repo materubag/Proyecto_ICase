@@ -21,7 +21,7 @@ class CodegenVerificationService {
     const report = { ready: false, passed: false, scope: spec?.scope || 'Contratos explícitos del proyecto', directory, checks: [], skipped: [], errors: [], screenshots: [], tests: [] };
     const check = name => { report.checks.push(name); options.onProgress?.({ check: name }); };
     const fail = (stage, code) => { const error = { stage, code, message: code }; report.errors.push(error); options.onProgress?.({ error }); };
-    const walk = dir => !fs.existsSync(dir) ? [] : fs.readdirSync(dir, { withFileTypes: true }).flatMap(entry => entry.isDirectory() ? ['node_modules', 'dist', '.git'].includes(entry.name) ? [] : walk(path.join(dir, entry.name)) : [path.join(dir, entry.name)]);
+    const walk = dir => !fs.existsSync(dir) ? [] : fs.readdirSync(dir, { withFileTypes: true }).filter(entry=>!['node_modules','dist','.git','.runtime'].includes(entry.name)).flatMap(entry => entry.isDirectory() ? walk(path.join(dir, entry.name)) : [path.join(dir, entry.name)]);
     let admin, migrationDb, models, independentDb, independentModels, server, database;
     const envKeys = ['DB_HOST', 'DB_PORT', 'DB_NAME', 'DB_USER', 'DB_PASSWORD', 'JWT_SECRET', 'AUTO_SYNC_DB'];
     const priorEnv = Object.fromEntries(envKeys.map(key => [key, process.env[key]]));
@@ -44,7 +44,7 @@ class CodegenVerificationService {
         check('Compilación Vite con la configuración y dependencias exportadas');
       }
       const integrity = require('./exportIntegrity');
-      const testedPaths = (options.filePaths || walk(directory).map(f => path.relative(directory, f))).filter(name => !['REVIEW_STATUS.json', 'GENERATION_TRACE.json', 'acceptance-results.json'].includes(name));
+      const testedPaths = (options.filePaths || walk(directory).map(f => path.relative(directory, f))).map(name=>name.split(path.sep).join('/')).filter(name => !['REVIEW_STATUS.json', 'GENERATION_TRACE.json', 'acceptance-results.json'].includes(name));
       report.testedFiles = integrity.snapshotFiles(directory, testedPaths).map(f => ({ path: f.path, sha256: integrity.sha256(f.content) }));
       report.testedSourceHash = integrity.fingerprint(integrity.snapshotFiles(directory, testedPaths));
       const port = Number(process.env.CODEGEN_TEST_DB_PORT || '55439');
@@ -100,6 +100,9 @@ class CodegenVerificationService {
     } catch (error) {
       fail('EXECUTION_VERIFICATION', 'VERIFICATION_EXECUTION_FAILED');
       report.errors.at(-1).errorType = error.code || error.name;
+      let detail=String(error.message||error.code||'Error de ejecución');
+      for(const key of ['DB_PASSWORD','JWT_SECRET','OPENAI_API_KEY','ANTHROPIC_API_KEY','GOOGLE_STITCH_API_KEY'])if(process.env[key]?.length>=6)detail=detail.split(process.env[key]).join('[REDACTED]');
+      report.errors.at(-1).detail=detail.slice(0,1800);
     } finally {
       if (report.testedFiles) {
         const integrity = require('./exportIntegrity');

@@ -10,7 +10,7 @@ test('Stitch & Design System: Loads DESIGN_SYSTEM.md and produces domain-agnosti
   assert.ok(content.length > 50, 'DESIGN_SYSTEM.md must be loaded');
 
   const tokens = designSystemService.getCssTokens();
-  assert.equal(tokens['--color-primary'].toLowerCase(), '#4f46e5');
+  assert.equal(tokens['--color-primary'].toLowerCase(), '#4338ca');
   assert.equal(tokens['--color-surface'].toLowerCase(), '#ffffff');
   assert.equal(tokens['--radius-lg'], '16px');
 
@@ -23,7 +23,7 @@ test('Stitch & Design System: Loads DESIGN_SYSTEM.md and produces domain-agnosti
   assert.ok(prompt.includes('Librería Central'), 'Prompt must use dynamic project name');
   assert.ok(prompt.includes('Gestión de préstamos'), 'Prompt must use dynamic project domain');
   assert.equal(prompt.includes('automotriz'), false, 'Must not inject automotive domain into library project');
-  assert.ok(prompt.includes('#4F46E5'), 'Must enforce primary color token');
+  assert.ok(prompt.includes('#4338CA'), 'Must enforce primary color token');
 });
 
 test('Stitch & Design System: GoogleStitchService incorporates design system rules into screen prompt', () => {

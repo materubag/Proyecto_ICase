@@ -77,26 +77,49 @@ class DesignSystemService {
     const lines = content.split('\n');
 
     for (const line of lines) {
+      // 1. Direct CSS variable matches: | `--color-primary` | `#4338CA` |
       const match = line.match(/^\|\s*(`?--[\w-]+`?)\s*\|\s*`?([^`|]+)`?\s*\|/);
       if (match) {
         const tokenName = match[1].replace(/`/g, '').trim();
-        // If there are multiple values (e.g. #16A34A / #F0FDF4), take the primary value
         const rawValue = match[2].trim().split('/')[0].trim();
         tokens[tokenName] = rawValue;
+        continue;
+      }
+
+      // 2. Role-based markdown table support: | Rol | Valor |
+      const roleMatch = line.match(/^\|\s*([^|]+)\|\s*`?([^`|]+)`?\s*\|/);
+      if (roleMatch) {
+        const role = roleMatch[1].replace(/\*/g, '').trim().toLowerCase();
+        const rawValue = roleMatch[2].replace(/\*/g, '').trim().split('/')[0].trim();
+        if (rawValue.startsWith('#')) {
+          if (role.includes('fondo de página')) tokens['--color-bg-app'] = rawValue;
+          else if (role.includes('superficie')) tokens['--color-surface'] = rawValue;
+          else if (role.includes('divisoria')) tokens['--color-border'] = rawValue;
+          else if (role.includes('borde de controles')) tokens['--color-border-control'] = rawValue;
+          else if (role.includes('texto principal')) { tokens['--color-text-title'] = rawValue; tokens['--color-text-body'] = rawValue; }
+          else if (role.includes('texto secundario')) tokens['--color-text-muted'] = rawValue;
+          else if (role.includes('acento')) { tokens['--color-primary'] = rawValue; tokens['--color-primary-hover'] = rawValue; }
+          else if (role.includes('éxito')) tokens['--status-success'] = rawValue;
+          else if (role.includes('error')) tokens['--status-danger'] = rawValue;
+        }
       }
     }
 
-    // Fallback if parsing produced no tokens
-    if (Object.keys(tokens).length === 0) {
-      return {
-        '--color-primary': '#4f46e5',
-        '--color-primary-hover': '#4338ca',
-        '--color-bg-app': '#f8fafc',
-        '--color-surface': '#ffffff',
-        '--color-border': '#e2e8f0',
-        '--radius-md': '8px'
-      };
-    }
+    // Default radii and tokens if not explicitly parsed
+    if (!tokens['--radius-sm']) tokens['--radius-sm'] = '6px';
+    if (!tokens['--radius-md']) tokens['--radius-md'] = '10px';
+    if (!tokens['--radius-lg']) tokens['--radius-lg'] = '16px';
+    if (!tokens['--color-primary']) tokens['--color-primary'] = '#4338CA';
+    if (!tokens['--color-primary-hover']) tokens['--color-primary-hover'] = '#3730A3';
+    if (!tokens['--color-bg-app']) tokens['--color-bg-app'] = '#FAFAF9';
+    if (!tokens['--color-surface']) tokens['--color-surface'] = '#FFFFFF';
+    if (!tokens['--color-border']) tokens['--color-border'] = '#E7E5E0';
+    if (!tokens['--color-border-control']) tokens['--color-border-control'] = '#D6D3CC';
+    if (!tokens['--color-text-title']) tokens['--color-text-title'] = '#111111';
+    if (!tokens['--color-text-body']) tokens['--color-text-body'] = '#111111';
+    if (!tokens['--color-text-muted']) tokens['--color-text-muted'] = '#5F5F5A';
+    if (!tokens['--status-success']) tokens['--status-success'] = '#1F7A4D';
+    if (!tokens['--status-danger']) tokens['--status-danger'] = '#B42318';
 
     return tokens;
   }
@@ -111,47 +134,33 @@ class DesignSystemService {
       throw new Error('DESIGN_SYSTEM_NOT_FOUND: No se puede generar contexto de diseño sin DESIGN_SYSTEM.md.');
     }
 
-    // Extract core sections dynamically from DESIGN_SYSTEM.md
-    const manifestoMatch = content.match(/## 1\. Manifiesto y Filosofía[\s\S]*?(?=## 2)/i);
-    const archetypesMatch = content.match(/## 3\. Arquetipos de Pantalla[\s\S]*$/i);
+    const tokens = this.getCssTokens();
+    const primaryColor = brandIdentity.primaryColor || tokens['--color-primary'] || '#4338CA';
 
-    const manifestoText = manifestoMatch ? manifestoMatch[0].trim() : 'SISTEMA DE DISEÑO MINIMALISTA: Solo lo esencial.';
-    const archetypesText = archetypesMatch ? archetypesMatch[0].trim() : 'ARQUETIPOS: Focal, Guiado, Dashboard.';
+    return `SISTEMA DE DISEÑO OFICIAL OBLIGATORIO (FUENTE: DESIGN_SYSTEM.md):
 
-    const primaryColor = brandIdentity.primaryColor || '#4F46E5';
-
-    return `SISTEMA DE DISEÑO OFICIAL OBLIGATORIO (FUENTE: DESIGN_SYSTEM.md v3.0):
-
-${manifestoText}
-
-REGLAS GENERALES DE COMPONENTES:
-- Paleta Primaria: ${primaryColor} (acciones principales, selección activa).
-- Superficie: Blanco puro (#FFFFFF) con bordes finos (#E2E8F0) y esquinas redondeadas.
-- Tipografía: Títulos en Slate (#0F172A), cuerpo (#334155), textos secundarios (#64748B).
-- Controles: Altura de 44px en inputs y botones primarios.
-- Idioma: 100% en español.
-- Cero ruido administrativo: Prohibido exponer códigos RF-XX, hashes o sellos técnicos en la UI regular.
-
-${archetypesText}
+${content}
 
 IDENTIDAD APROBADA DEL PROYECTO:
 - Nombre: "${projectName}"
 - Dominio / Propósito: ${projectDescription || 'Gestión operativa institucional'}
-- Identidad de Marca: Color de acción ${primaryColor}.`;
+- Color de Acento: ${primaryColor} (único color destacado permitido)`;
   }
 
   getStitchScreenVisualRules(archetype = 'B', projectName = 'App', projectDescription = '') {
-    const primaryColor = '#4F46E5';
-    const archetypes = {
-      A: `ARQUETIPO A — Focal / Login: tarjeta central 440-480px, máximo 3 campos, un botón de ancho completo, sin menú de módulos.`,
-      B: `ARQUETIPO B — Formulario guiado: cabecera con logo y menú del rol, cuerpo 1200px, formulario a la izquierda y resumen a la derecha, un botón principal.`,
-      C: `ARQUETIPO C — Listado / tablero: máximo 4 KPIs, tabla aireada, búsqueda simple, badges de estado.`
-    };
-    return `SISTEMA DE DISEÑO OFICIAL OBLIGATORIO (FUENTE: DESIGN_SYSTEM.md v3.0):
-- Paleta primaria ${primaryColor}, superficie blanca, bordes #E2E8F0, textos Slate.
-- 100% en español. Un propósito. Un CTA principal.
-- Prohibido mostrar códigos RF, hashes o jerga de requisitos.
-- ${archetypes[archetype] || archetypes.B}
+    const tokens = this.getCssTokens();
+    const primaryColor = tokens['--color-primary'] || '#4338CA';
+    const bgColor = tokens['--color-bg-app'] || '#FAFAF9';
+    const borderColor = tokens['--color-border'] || '#E7E5E0';
+    return `SISTEMA DE DISEÑO OFICIAL OBLIGATORIO (FUENTE: DESIGN_SYSTEM.md):
+- Estilo: minimalista, limpio y aireado. Menos elementos, más espacio. Sin sombras, degradados, emojis ni decoraciones.
+- Color: Fondo de página ${bgColor}, superficie blanca (#FFFFFF), líneas divisorias y bordes ${borderColor}, texto principal #111111, texto secundario #5F5F5A.
+- Acento único: ${primaryColor} (solo en botón principal, enlaces, elemento de navegación activo, opción seleccionada).
+- Controles: Alto 48px, esquinas 10px. Máximo UN botón relleno por pantalla (los demás contorno o texto).
+- Tarjetas: borde 1px ${borderColor}, esquinas 16px, padding 32px, SIN sombra. Ancho máx 1200px.
+- Resumen: máximo 4 indicadores arriba (número grande 38px + etiqueta).
+- Estructura: 1) Ruta pequeña gris, 2) Título + descripción corta, 3) Máx 3 acciones, 4) Resumen opcional, 5) Tarjeta principal + lateral opcional.
+- 100% en español, textos cortos y directos. Prohibido mostrar códigos RF, hashes o jerga técnica de requisitos.
 IDENTIDAD: "${projectName}" — ${projectDescription || 'Operación del sistema'}.`;
   }
 

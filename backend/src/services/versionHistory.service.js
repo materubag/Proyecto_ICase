@@ -48,6 +48,8 @@ class VersionHistoryService {
     }
 
     const { projectId, entityType, snapshot } = historyItem;
+    if (entityType === 'REQUIREMENT') snapshot.status = 'PENDING';
+    if (entityType === 'ACTOR') { snapshot.reviewStatus = 'PENDING'; snapshot.status = 'PENDING_REVIEW'; }
     let restoredEntity = null;
 
     if (entityType === 'REQUIREMENT') {

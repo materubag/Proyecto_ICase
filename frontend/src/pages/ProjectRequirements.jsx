@@ -29,6 +29,7 @@ export default function ProjectRequirements({ project, onProjectUpdated, initial
   const [changeError, setChangeError] = useState('');
   const requirements = (project.requirements || []).filter(r=>!r.isDeleted&&r.status!=='REMOVED');
   const actorsMap = new Map((project.actors || []).map(a => [a.id, a.name]));
+  const pendingActorsCount = (project.actors || []).filter(a => a.reviewStatus !== 'APPROVED').length;
 
 
 
@@ -160,44 +161,130 @@ export default function ProjectRequirements({ project, onProjectUpdated, initial
   }
 
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', height: '100%', overflow: 'hidden' }}>
+    <div style={{ display: 'flex', flexDirection: 'column', height: '100%', overflowY: 'auto', background: '#FFFFFF', padding: '32px 40px' }}>
       {changeError && <p role="alert">{changeError}</p>}
       <ImpactModal change={pendingChange} busy={savingReq} onClose={() => setPendingChange(null)} onConfirm={async () => { setSavingReq(true); setChangeError(''); try { await engineering(project.id, `/changes/${pendingChange.id}`, { status: 'APPROVED', confirmImpact: true }, 'PATCH'); setPendingChange(null); setSelected(null); await onProjectUpdated(); } catch (e) { setChangeError(e.message); } finally { setSavingReq(false); } }} />
 
-      {/* Sub-tab navigation */}
-      <div style={{
-        display: 'flex',
-        alignItems: 'center',
-        justifyContent: 'space-between',
-        padding: '8px 20px',
-        borderBottom: '1px solid var(--outline-variant)',
-        background: 'var(--surface-container-low)',
-        flexShrink: 0
-      }}>
-        <div style={{ display: 'flex', alignItems: 'center', gap: '8px', overflowX: 'auto' }}>
+      {/* Mockup Header */}
+      <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', marginBottom: '24px' }}>
+        <div>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+            <h1 style={{ fontSize: '1.625rem', fontWeight: 700, color: '#0F172A', margin: 0, letterSpacing: '-0.02em' }}>
+              Requerimientos
+            </h1>
+            <span style={{
+              background: '#EEF2FF',
+              color: '#4F46E5',
+              border: '1px solid #E0E7FF',
+              fontSize: '0.75rem',
+              fontWeight: 500,
+              padding: '2px 10px',
+              borderRadius: '9999px'
+            }}>
+              {requirements.length} especificados
+            </span>
+          </div>
+          <p style={{ fontSize: '0.875rem', color: '#64748B', margin: '6px 0 0 0' }}>
+            Especificación funcional y no funcional bajo estándar ISO/IEC/IEEE 29148.
+          </p>
+        </div>
+
+        {/* Capsule Switcher & New Button */}
+        <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+          <div style={{
+            display: 'inline-flex',
+            background: '#FFFFFF',
+            border: '1px solid #E2E8F0',
+            borderRadius: '8px',
+            padding: '3px',
+            boxShadow: '0 1px 2px rgba(15, 23, 42, 0.04)'
+          }}>
+            {[
+              ['uta_table', `Requisitos (${requirements.length})`],
+              ['candidates', 'Candidatos por Revisar'],
+              ['actors', `Actores (${project.actors?.length || 0})`]
+            ].map(([tabKey, label]) => (
+              <button
+                key={tabKey}
+                type="button"
+                onClick={() => setReqSubTab(tabKey)}
+                style={{
+                  background: reqSubTab === tabKey ? '#0F172A' : 'transparent',
+                  color: reqSubTab === tabKey ? '#FFFFFF' : '#64748B',
+                  border: 'none',
+                  borderRadius: '6px',
+                  padding: '6px 14px',
+                  fontSize: '0.8125rem',
+                  fontWeight: reqSubTab === tabKey ? 600 : 500,
+                  cursor: 'pointer',
+                  transition: 'all 0.15s ease'
+                }}
+              >
+                {label}
+              </button>
+            ))}
+          </div>
+
           <button
-            className={`btn btn-sm ${reqSubTab === 'candidates' ? 'btn-primary' : 'btn-outline'}`}
-            onClick={() => setReqSubTab('candidates')}
+            type="button"
+            onClick={openNewModal}
+            style={{
+              background: '#4F46E5',
+              color: '#FFFFFF',
+              border: 'none',
+              borderRadius: '8px',
+              padding: '8px 18px',
+              fontSize: '0.8125rem',
+              fontWeight: 600,
+              cursor: 'pointer',
+              boxShadow: '0 1px 3px rgba(79, 70, 229, 0.25)',
+              display: 'flex',
+              alignItems: 'center',
+              gap: '6px'
+            }}
           >
-            <span className="ms ms-xs">rate_review</span>
-            <span>Candidatos por Revisar</span>
-          </button>
-          <button
-            className={`btn btn-sm ${reqSubTab === 'uta_table' ? 'btn-primary' : 'btn-outline'}`}
-            onClick={() => setReqSubTab('uta_table')}
-          >
-            <span className="ms ms-xs">checklist</span>
-            <span>Requisitos ({requirements.length})</span>
-          </button>
-          <button
-            className={`btn btn-sm ${reqSubTab === 'actors' ? 'btn-primary' : 'btn-outline'}`}
-            onClick={() => setReqSubTab('actors')}
-          >
-            <span className="ms ms-xs">groups</span>
-            <span>Actores ({project.actors?.length || 0})</span>
+            + Nuevo Requisito
           </button>
         </div>
       </div>
+
+      {pendingActorsCount > 0 && reqSubTab !== 'actors' && (
+        <div style={{
+          background: '#FFFBEB',
+          border: '1px solid #FDE68A',
+          borderRadius: '12px',
+          padding: '12px 18px',
+          marginBottom: '20px',
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'space-between',
+          boxShadow: '0 1px 2px rgba(217, 119, 6, 0.05)'
+        }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+            <span className="ms ms-sm" style={{ color: '#D97706' }}>group</span>
+            <span style={{ fontSize: '0.8125rem', color: '#92400E', fontWeight: 500 }}>
+              Hay <strong>{pendingActorsCount}</strong> actor{pendingActorsCount > 1 ? 'es' : ''} pendiente{pendingActorsCount > 1 ? 's' : ''} de aprobación. Apruébalos primero para congelar su asignación a los requerimientos y diagramas.
+            </span>
+          </div>
+          <button
+            type="button"
+            onClick={() => setReqSubTab('actors')}
+            style={{
+              background: '#D97706',
+              color: '#FFFFFF',
+              border: 'none',
+              borderRadius: '6px',
+              padding: '6px 14px',
+              fontSize: '0.75rem',
+              fontWeight: 600,
+              cursor: 'pointer',
+              transition: 'all 0.15s ease'
+            }}
+          >
+            Revisar y Aprobar Actores ({pendingActorsCount}) →
+          </button>
+        </div>
+      )}
 
       {reqSubTab === 'candidates' && (
         <div className="page-scrollable" style={{ flex: 1, minHeight: 0, overflowY: 'auto', padding: '20px 24px' }}>
@@ -220,52 +307,106 @@ export default function ProjectRequirements({ project, onProjectUpdated, initial
 
       {reqSubTab === 'uta_table' && (
         <>
-      {/* Command bar */}
-      <div className="full-page-header">
-        <div style={{ display: 'flex', alignItems: 'center', gap: '12px', minWidth: 0, flexWrap: 'wrap' }}>
-          <h2 className="page-title">Requisitos</h2>
-          <div className="vdivider" />
-          {/* Segmented filter */}
-          <div className="seg-control">
-            <button className={`seg-btn ${filterType === 'all' ? 'active' : ''}`} onClick={() => setFilterType('all')}>
-              <span>Todos</span>
-              <span className="seg-btn-count">{counts.all}</span>
-            </button>
-            <button className={`seg-btn ${filterType === 'FUNCTIONAL' ? 'active' : ''}`} onClick={() => setFilterType('FUNCTIONAL')}>
-              <span>Funcionales</span>
-              <span className="seg-btn-count" style={{ color: 'var(--outline)' }}>{counts.FUNCTIONAL}</span>
-            </button>
-            <button className={`seg-btn ${filterType === 'NON_FUNCTIONAL' ? 'active' : ''}`} onClick={() => setFilterType('NON_FUNCTIONAL')}>
-              <span>No Funcionales</span>
-              <span className="seg-btn-count" style={{ color: 'var(--outline)' }}>{counts.NON_FUNCTIONAL}</span>
-            </button>
+          {/* Sub-toolbar */}
+          <div style={{
+            display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+            marginBottom: '16px', flexWrap: 'wrap', gap: '12px'
+          }}>
+            {/* Filter pills */}
+            <div style={{
+              display: 'inline-flex',
+              background: '#FFFFFF',
+              border: '1px solid #E2E8F0',
+              borderRadius: '8px',
+              padding: '3px',
+              boxShadow: '0 1px 2px rgba(15, 23, 42, 0.04)'
+            }}>
+              {[
+                ['all', `Todos (${counts.all})`],
+                ['FUNCTIONAL', `Funcionales (${counts.FUNCTIONAL})`],
+                ['NON_FUNCTIONAL', `No Funcionales (${counts.NON_FUNCTIONAL})`]
+              ].map(([fKey, label]) => (
+                <button
+                  key={fKey}
+                  type="button"
+                  onClick={() => setFilterType(fKey)}
+                  style={{
+                    background: filterType === fKey ? '#0F172A' : 'transparent',
+                    color: filterType === fKey ? '#FFFFFF' : '#64748B',
+                    border: 'none',
+                    borderRadius: '6px',
+                    padding: '6px 14px',
+                    fontSize: '0.75rem',
+                    fontWeight: filterType === fKey ? 600 : 500,
+                    cursor: 'pointer'
+                  }}
+                >
+                  {label}
+                </button>
+              ))}
+            </div>
+
+            {/* Search & Actions */}
+            <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+              <input
+                type="text"
+                placeholder="Buscar requisito..."
+                value={search}
+                onChange={e => setSearch(e.target.value)}
+                style={{
+                  width: '240px',
+                  padding: '7px 12px',
+                  border: '1px solid #E2E8F0',
+                  borderRadius: '8px',
+                  fontSize: '0.8125rem',
+                  outline: 'none',
+                  background: '#FFFFFF'
+                }}
+              />
+              <div style={{
+                display: 'inline-flex',
+                background: '#FFFFFF',
+                border: '1px solid #E2E8F0',
+                borderRadius: '8px',
+                padding: '3px'
+              }}>
+                <button
+                  type="button"
+                  onClick={() => setViewMode('uta_table')}
+                  style={{
+                    background: viewMode === 'uta_table' ? '#0F172A' : 'transparent',
+                    color: viewMode === 'uta_table' ? '#FFFFFF' : '#64748B',
+                    border: 'none', borderRadius: '6px', padding: '5px 10px', fontSize: '0.75rem', cursor: 'pointer'
+                  }}
+                >
+                  Tabla
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setViewMode('split')}
+                  style={{
+                    background: viewMode === 'split' ? '#0F172A' : 'transparent',
+                    color: viewMode === 'split' ? '#FFFFFF' : '#64748B',
+                    border: 'none', borderRadius: '6px', padding: '5px 10px', fontSize: '0.75rem', cursor: 'pointer'
+                  }}
+                >
+                  Detalle
+                </button>
+              </div>
+
+              <button
+                type="button"
+                className="btn btn-outline btn-sm"
+                onClick={handleOpenHistory}
+                style={{
+                  background: '#FFFFFF', border: '1px solid #E2E8F0', color: '#334155',
+                  borderRadius: '8px', padding: '7px 14px', fontSize: '0.75rem'
+                }}
+              >
+                Historial
+              </button>
+            </div>
           </div>
-        </div>
-        <div className="page-actions" style={{ display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap' }}>
-          <div className="search-bar" style={{ width: '220px' }}>
-            <span className="ms">search</span>
-            <input type="text" placeholder="Buscar requisito..." value={search} onChange={e => setSearch(e.target.value)} />
-          </div>
-          <div className="view-toggle">
-            <button className={`view-toggle-btn ${viewMode === 'uta_table' ? 'active' : ''}`} onClick={() => setViewMode('uta_table')} title="Vista de tabla">
-              <span className="ms ms-xs">table_chart</span>
-              <span>Tabla</span>
-            </button>
-            <button className={`view-toggle-btn ${viewMode === 'split' ? 'active' : ''}`} onClick={() => setViewMode('split')} title="Vista de detalle">
-              <span className="ms ms-xs">splitscreen</span>
-              <span>Detalle</span>
-            </button>
-          </div>
-          <button className="btn btn-outline btn-sm" onClick={handleOpenHistory} title="Historial de Versiones y Papelera">
-            <span className="ms ms-sm">history</span>
-            <span>Historial</span>
-          </button>
-          <button className="btn btn-primary btn-sm" onClick={openNewModal}>
-            <span className="ms ms-sm">add</span>
-            <span>Nuevo requisito</span>
-          </button>
-        </div>
-      </div>
 
       {viewMode === 'uta_table' ? (
         <div className="page-scrollable" style={{ padding: '20px 24px', flex: 1, overflowY: 'auto' }}>
@@ -289,7 +430,10 @@ export default function ProjectRequirements({ project, onProjectUpdated, initial
                 {filtered.map((req, idx) => {
                   const pre = req.qualityReport?.preconditions || req.preconditions || 'El usuario debe estar autenticado con rol y permisos correspondientes.';
                   const post = req.qualityReport?.postconditions || req.postconditions || 'El sistema actualiza el registro en la base de datos y refleja los cambios.';
-                  const actors = (req.actorIds || []).map(id => actorsMap.get(id) || id).join(', ') || 'Sin actor asignado';
+                  const hasActors = Array.isArray(req.actorIds) && req.actorIds.length > 0;
+                  const actors = hasActors
+                    ? req.actorIds.map(id => actorsMap.get(id) || id).join(', ')
+                    : (req.type === 'NON_FUNCTIONAL' ? 'Sistema (RNF)' : 'Sistema (Funcionalidad Automática)');
                   const deps = (req.dependencies || []).join(', ') || 'Ninguna';
 
                   return (
@@ -324,10 +468,23 @@ export default function ProjectRequirements({ project, onProjectUpdated, initial
                           <span style={{ fontWeight: 600 }}>{PRIORITY_LABEL[req.priority] || req.priority}</span>
                         </div>
                       </td>
-                      <td style={{ padding: '12px 14px', color: 'var(--secondary)' }}>
-                        <div style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
-                          <span className="ms ms-xs" style={{ color: 'var(--primary)' }}>person</span>
-                          <span>{actors}</span>
+                      <td style={{ padding: '12px 14px' }}>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '5px' }}>
+                          <span className="ms ms-xs" style={{ color: hasActors ? 'var(--primary)' : '#64748B' }}>
+                            {hasActors ? 'person' : 'settings'}
+                          </span>
+                          <span style={{
+                            fontSize: hasActors ? '0.8125rem' : '0.75rem',
+                            fontWeight: hasActors ? 500 : 600,
+                            color: hasActors ? 'var(--secondary)' : '#475569',
+                            background: hasActors ? 'transparent' : '#F1F5F9',
+                            padding: hasActors ? '0' : '2px 8px',
+                            borderRadius: hasActors ? '0' : '6px',
+                            border: hasActors ? 'none' : '1px solid #E2E8F0',
+                            display: 'inline-block'
+                          }}>
+                            {actors}
+                          </span>
                         </div>
                       </td>
                       <td style={{ padding: '12px 14px', color: 'var(--on-surface-variant)', fontSize: '0.75rem', lineHeight: 1.4 }}>
@@ -651,11 +808,16 @@ export default function ProjectRequirements({ project, onProjectUpdated, initial
             </div>
           </div>
           <div className="grid-2">
-            <ActorMultiSelect
-              actors={project.actors || []}
-              selectedIds={actorIds}
-              onChange={setActorIds}
-            />
+            <div>
+              <ActorMultiSelect
+                actors={(project.actors || []).filter(a => a.reviewStatus === 'APPROVED')}
+                selectedIds={actorIds}
+                onChange={setActorIds}
+              />
+              <span style={{ fontSize: '0.72rem', color: '#64748B', display: 'block', marginTop: '4px' }}>
+                Dejar vacío si es una funcionalidad automática del sistema o RNF.
+              </span>
+            </div>
             <RequirementMultiSelect
               requirements={requirements}
               selectedDependencies={dependencies}

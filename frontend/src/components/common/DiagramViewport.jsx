@@ -112,10 +112,10 @@ export default function DiagramViewport({
       style={{
         display: 'flex',
         flexDirection: 'column',
-        borderRadius: isFullscreen ? 0 : 'var(--radius-md)',
-        border: '1px solid var(--border-default)',
-        background: 'var(--surface-container-lowest)',
-        boxShadow: isFullscreen ? 'none' : 'var(--shadow-xs)',
+        borderRadius: isFullscreen ? 0 : (title ? 'var(--radius-md)' : 0),
+        border: (isFullscreen || !title) ? 'none' : '1px solid var(--border-default)',
+        background: isFullscreen ? '#ffffff' : (title ? 'var(--surface-container-lowest)' : 'transparent'),
+        boxShadow: isFullscreen ? 'none' : (title ? 'var(--shadow-xs)' : 'none'),
         position: isFullscreen ? 'fixed' : 'relative',
         top: isFullscreen ? 0 : 'auto',
         left: isFullscreen ? 0 : 'auto',
@@ -129,85 +129,112 @@ export default function DiagramViewport({
     >
 
       {/* Viewport Toolbar */}
-      <div
-        className="diagram-viewport-toolbar"
-        style={{
+      {title ? (
+        <div
+          className="diagram-viewport-toolbar"
+          style={{
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'space-between',
+            padding: '8px 14px',
+            borderBottom: '1px solid var(--border-default)',
+            background: 'var(--surface-container-low)',
+            flexShrink: 0,
+            gap: '10px',
+            flexWrap: 'wrap'
+          }}
+        >
+          <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+            <span className="ms ms-xs" style={{ color: 'var(--primary)' }}>
+              schema
+            </span>
+            <span style={{ fontSize: '0.8125rem', fontWeight: 600, color: 'var(--on-surface)' }}>
+              {title}
+            </span>
+
+            {code && (
+              <span
+                style={{
+                  fontSize: '0.6875rem',
+                  color: 'var(--secondary)',
+                  background: 'var(--surface-container)',
+                  padding: '2px 6px',
+                  borderRadius: 'var(--radius-xs)',
+                  fontFamily: 'var(--font-mono)'
+                }}
+              >
+                {fitMode ? 'Ajustado' : `${Math.round(zoom * 100)}%`}
+              </span>
+            )}
+          </div>
+
+          <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+            {code && (
+              <>
+                <button
+                  type="button"
+                  className="btn btn-ghost btn-sm btn-icon"
+                  onClick={handleZoomOut}
+                  disabled={zoom <= 0.4}
+                  title="Reducir zoom (-)"
+                >
+                  <span className="ms ms-xs">zoom_out</span>
+                </button>
+                <button
+                  type="button"
+                  className="btn btn-ghost btn-sm"
+                  onClick={handleResetZoom}
+                  style={{ fontSize: '0.75rem', padding: '0 6px', height: '26px' }}
+                >
+                  100%
+                </button>
+                <button
+                  type="button"
+                  className="btn btn-ghost btn-sm btn-icon"
+                  onClick={handleZoomIn}
+                  disabled={zoom >= 2.5}
+                  title="Aumentar zoom (+)"
+                >
+                  <span className="ms ms-xs">zoom_in</span>
+                </button>
+                <button
+                  type="button"
+                  className={`btn btn-sm ${fitMode ? 'btn-primary' : 'btn-ghost'}`}
+                  onClick={handleToggleFit}
+                  style={{ fontSize: '0.75rem', padding: '0 8px', height: '26px' }}
+                >
+                  Ajustar
+                </button>
+                <button
+                  type="button"
+                  className="btn btn-ghost btn-sm btn-icon"
+                  onClick={handleToggleFullscreen}
+                  title={isFullscreen ? 'Salir' : 'Pantalla completa'}
+                >
+                  <span className="ms ms-xs">{isFullscreen ? 'close_fullscreen' : 'open_in_full'}</span>
+                </button>
+              </>
+            )}
+          </div>
+        </div>
+      ) : (
+        /* Minimal subtle floating controls when title is empty (Mockup Canvas) */
+        <div style={{
+          position: 'absolute',
+          top: '12px',
+          right: '16px',
+          zIndex: 20,
           display: 'flex',
           alignItems: 'center',
-          justifyContent: 'space-between',
-          padding: '8px 14px',
-          borderBottom: '1px solid var(--border-default)',
-          background: 'var(--surface-container-low)',
-          flexShrink: 0,
-          gap: '10px',
-          flexWrap: 'wrap'
-        }}
-      >
-        <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
-          <span className="ms ms-xs" style={{ color: 'var(--primary)' }}>
-            schema
-          </span>
-          <span style={{ fontSize: '0.8125rem', fontWeight: 600, color: 'var(--on-surface)' }}>
-            {title || 'Diagrama Mermaid'}
-          </span>
-
+          gap: '4px',
+          background: 'rgba(255, 255, 255, 0.9)',
+          backdropFilter: 'blur(4px)',
+          border: '1px solid #E2E8F0',
+          borderRadius: '8px',
+          padding: '2px 6px',
+          boxShadow: '0 1px 2px rgba(15, 23, 42, 0.04)'
+        }}>
           {code && (
-            <span
-              style={{
-                fontSize: '0.6875rem',
-                color: 'var(--secondary)',
-                background: 'var(--surface-container)',
-                padding: '2px 6px',
-                borderRadius: 'var(--radius-xs)',
-                fontFamily: 'var(--font-mono)'
-              }}
-            >
-              {fitMode ? 'Ajustado' : `${Math.round(zoom * 100)}%`}
-            </span>
-          )}
-
-          {/* Toggle [ Diagrama ] [ Código Mermaid ] */}
-          {code && (
-            <div className="view-toggle" style={{ transform: 'scale(0.9)', transformOrigin: 'left center' }}>
-              <button
-                type="button"
-                className={`view-toggle-btn ${viewMode === 'diagram' ? 'active' : ''}`}
-                onClick={() => setViewMode('diagram')}
-                style={{ padding: '2px 10px', fontSize: '0.75rem' }}
-              >
-                <span>Diagrama</span>
-              </button>
-              <button
-                type="button"
-                className={`view-toggle-btn ${viewMode === 'code' ? 'active' : ''}`}
-                onClick={() => setViewMode('code')}
-                style={{ padding: '2px 10px', fontSize: '0.75rem' }}
-              >
-                <span>Código Mermaid</span>
-              </button>
-            </div>
-          )}
-        </div>
-
-        {/* Action Controls */}
-        <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
-          {onRegenerate && (
-            <button
-              type="button"
-              className="btn btn-outline btn-sm"
-              onClick={handleRegenerateClick}
-              disabled={isGenerating || !canGenerate}
-              style={{ fontSize: '0.75rem', height: '28px', display: 'flex', alignItems: 'center', gap: '4px' }}
-              title={code ? 'Regenerar diagrama con Gemini' : 'Generar diagrama con Gemini'}
-            >
-              <span className={`ms ms-xs ${isGenerating ? 'spin' : ''}`}>
-                {isGenerating ? 'autorenew' : code ? 'sync' : 'auto_fix_high'}
-              </span>
-              <span>{isGenerating ? 'Generando...' : code ? 'Regenerar' : 'Generar diagrama'}</span>
-            </button>
-          )}
-
-          {code && viewMode === 'diagram' && (
             <>
               <button
                 type="button"
@@ -215,70 +242,41 @@ export default function DiagramViewport({
                 onClick={handleZoomOut}
                 disabled={zoom <= 0.4}
                 title="Reducir zoom (-)"
-                aria-label="Reducir zoom"
+                style={{ height: '24px', width: '24px', padding: 0 }}
               >
-                <span className="ms ms-xs">zoom_out</span>
+                <span className="ms ms-xs" style={{ fontSize: '14px' }}>zoom_out</span>
               </button>
-
               <button
                 type="button"
                 className="btn btn-ghost btn-sm"
                 onClick={handleResetZoom}
-                style={{ fontSize: '0.75rem', padding: '0 6px', height: '26px' }}
-                title="Restablecer tamaño real (100%)"
+                style={{ fontSize: '0.6875rem', padding: '0 4px', height: '24px', color: '#64748B' }}
               >
-                100%
+                {Math.round(zoom * 100)}%
               </button>
-
               <button
                 type="button"
                 className="btn btn-ghost btn-sm btn-icon"
                 onClick={handleZoomIn}
                 disabled={zoom >= 2.5}
                 title="Aumentar zoom (+)"
-                aria-label="Aumentar zoom"
+                style={{ height: '24px', width: '24px', padding: 0 }}
               >
-                <span className="ms ms-xs">zoom_in</span>
+                <span className="ms ms-xs" style={{ fontSize: '14px' }}>zoom_in</span>
               </button>
-
-              <div style={{ width: '1px', height: '16px', background: 'var(--border-default)', margin: '0 2px' }} />
-
               <button
                 type="button"
-                className={`btn btn-sm ${fitMode ? 'btn-primary' : 'btn-ghost'}`}
-                onClick={handleToggleFit}
-                style={{ fontSize: '0.75rem', padding: '0 8px', height: '26px' }}
-                title="Ajustar al ancho disponible"
+                className="btn btn-ghost btn-sm btn-icon"
+                onClick={handleToggleFullscreen}
+                title={isFullscreen ? 'Salir' : 'Pantalla completa'}
+                style={{ height: '24px', width: '24px', padding: 0 }}
               >
-                <span className="ms ms-xs">fit_screen</span>
-                <span style={{ marginLeft: '4px' }}>Ajustar</span>
+                <span className="ms ms-xs" style={{ fontSize: '14px' }}>{isFullscreen ? 'close_fullscreen' : 'open_in_full'}</span>
               </button>
             </>
           )}
-
-          {code && (
-            <button
-              type="button"
-              className="btn btn-ghost btn-sm btn-icon"
-              onClick={copyMermaidCode}
-              title={copied ? '¡Copiado!' : 'Copiar código Mermaid'}
-              aria-label="Copiar código"
-            >
-              <span className="ms ms-xs">{copied ? 'done' : 'content_copy'}</span>
-            </button>
-          )}
-
-          <button
-            type="button"
-            className="btn btn-ghost btn-sm btn-icon"
-            onClick={handleToggleFullscreen}
-            title={isFullscreen ? 'Salir de pantalla completa' : 'Pantalla completa'}
-            aria-label="Pantalla completa"
-          >
-            <span className="ms ms-xs">{isFullscreen ? 'close_fullscreen' : 'open_in_full'}</span>
-          </button>
         </div>
-      </div>
+      )}
 
       {/* Main View Area */}
       {!code ? (

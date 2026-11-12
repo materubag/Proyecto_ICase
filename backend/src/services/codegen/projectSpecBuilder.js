@@ -608,7 +608,7 @@ async function buildProjectSpec(projectId, options = {}) {
 
   const generationDecisions = require('./codegenDecision.service').getProjectDecisions(projectId);
   const confirmedDecisionContextHash = computeCanonicalHash(generationDecisions);
-  const commandContracts = require('./commandContracts').applyCommandContracts(projectId, operations, normalizedEntities, approvedRequirements, roles, generationDecisions);
+  const commandContracts = require('./commandContracts').applyCommandContracts(projectId, operations, normalizedEntities, approvedRequirements, roles, generationDecisions, null, options);
   normalizedRelationships.push(...commandContracts.relationships);
   const { attachDecisions } = require('./generationClarifications');
   for (const operation of operations) {
@@ -818,8 +818,8 @@ async function buildProjectSpec(projectId, options = {}) {
   }
 
   const extension = require('./projectContractExtensions').loadExtension(projectId);
-  require('./projectContractExtensions').applyExtension(extension, approvedRequirements, operations, screens, { reviewedGroups: commandContracts.groups });
-  require('./commandContracts').applyCommandRecordScopes(commandContracts.recordScopes, operations, normalizedEntities, generationDecisions);
+  require('./projectContractExtensions').applyExtension(extension, approvedRequirements, operations, screens, { ...options, reviewedGroups: commandContracts.groups });
+  require('./commandContracts').applyCommandRecordScopes(commandContracts.recordScopes, operations, normalizedEntities, generationDecisions, options);
   for (const screen of screens) {
     const ent = normalizedEntities.find(e => screen.id === 'scr_' + e.tableName);
     if (ent) {
@@ -841,9 +841,21 @@ async function buildProjectSpec(projectId, options = {}) {
   // Permissions come exclusively from approved entity/operation contracts.
   // A screen or an administrator role never grants implicit API access.
 
-  require('./commandContracts').applyCommandScreens(commandContracts.screenDefinitions, screens, operations, generationDecisions);
-  require('./commandContracts').applyCommandScreenActions(commandContracts.screenActions, screens, operations, generationDecisions);
-  require('./commandContracts').applyCommandWorkspaces(commandContracts.workspaces, screens, operations, generationDecisions);
+  try {
+    require('./commandContracts').applyCommandScreens(commandContracts.screenDefinitions, screens, operations, generationDecisions, options);
+  } catch (err) {
+    if (!options?.allowUnapproved && !options?.ignoreStale) throw err;
+  }
+  try {
+    require('./commandContracts').applyCommandScreenActions(commandContracts.screenActions, screens, operations, generationDecisions, options);
+  } catch (err) {
+    if (!options?.allowUnapproved && !options?.ignoreStale) throw err;
+  }
+  try {
+    require('./commandContracts').applyCommandWorkspaces(commandContracts.workspaces, screens, operations, generationDecisions, options);
+  } catch (err) {
+    if (!options?.allowUnapproved && !options?.ignoreStale) throw err;
+  }
   if (commandContracts.credentialChangeContract) {
     const login = screens.find(screen => screen.route === '/login');
     if (login) {

@@ -3,6 +3,8 @@
  */
 const BASE_URL = import.meta.env.VITE_API_URL || '/api';
 
+export const apiUrl = endpoint => BASE_URL + (endpoint.startsWith('/') ? endpoint : '/' + endpoint);
+
 export async function request(endpoint, options = {}) {
   const url = `${BASE_URL}${endpoint.startsWith('/') ? endpoint : `/${endpoint}`}`;
   const isFormData = options.body instanceof FormData;

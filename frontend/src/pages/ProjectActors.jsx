@@ -195,7 +195,7 @@ export default function ProjectActors({ project, onProjectUpdated }) {
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', height: '100%', overflow: 'hidden' }}>
-      {/* Command bar */}
+            {/* Command bar */}
       <div className="full-page-header">
         <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
           <h2 className="page-title">

@@ -185,7 +185,7 @@ class ProjectSpecService {
     const manifest = spec.dependencyManifest;
     if (manifest?.sourceFingerprint) {
       try {
-        const current = await buildProjectSpec(projectId);
+        const current = await buildProjectSpec(projectId, { allowUnapproved: true, ignoreStale: true });
         if (current.dependencyManifest.sourceFingerprint !== manifest.sourceFingerprint) return { upToDate: false, reason: 'DEPENDENCY_MODIFIED', details: { message: 'Cambió el contenido de requisitos, contratos, permisos, navegación o mockups.' } };
       } catch (_) { return { upToDate: false, reason: 'SPEC_SOURCE_UNAVAILABLE' }; }
     }

@@ -2,17 +2,54 @@ const AIProvider = require('./AIProvider');
 const env = require('../../config/env');
 
 class OpenAIProvider extends AIProvider {
+  // Responses API avoids temperature and legacy max_tokens for reasoning models.
+  async executePrompt({ system, prompt, model, maxTokens = 8192 }) {
+    if (!env.OPENAI_API_KEY) throw new Error('OpenAI no configurado');
+    if (!model) throw new Error('Modelo Luna no configurado');
+
+    // OpenAI Responses API with text.format 'json_object' requires the word 'json' inside the input message.
+    let inputPayload;
+    if (typeof prompt === 'string') {
+      inputPayload = /json/i.test(prompt) ? prompt : `${prompt}\n\n(Formato de salida requerido: objeto JSON válido)`;
+    } else if (prompt && typeof prompt === 'object') {
+      inputPayload = { ...prompt, _output_format: 'json' };
+    } else {
+      inputPayload = { input: prompt, _output_format: 'json' };
+    }
+    const instructions = system
+      ? (/json/i.test(system) ? system : `${system}\nReturn a valid JSON object.`)
+      : 'You are an expert software engineering assistant. Return a valid JSON object.';
+
+    const response = await fetch('https://api.openai.com/v1/responses', {
+      method: 'POST', signal: AbortSignal.timeout(120000),
+      headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${env.OPENAI_API_KEY}` },
+      body: JSON.stringify({ model, instructions, input: typeof inputPayload === 'string' ? inputPayload : JSON.stringify(inputPayload),
+        max_output_tokens: maxTokens, store: false, text: { format: { type: 'json_object' } },
+        ...(env.DOCUMENT_REASONING_EFFORT && !/^(gpt-4(?:[.\-o]|$)|chatgpt-4o)/i.test(model) ? { reasoning: { effort: env.DOCUMENT_REASONING_EFFORT } } : {}) })
+    });
+    if (!response.ok) throw new Error(`OpenAI HTTP ${response.status}: ${(await response.text()).slice(0, 250)}`);
+    const result = await response.json();
+    try {
+      if (result.status !== 'completed') throw new Error('Respuesta OpenAI incompleta');
+      const content = result.output?.flatMap(o => o.content || []).filter(o => o.type === 'output_text').map(o => o.text).join('');
+      return { data: JSON.parse(content), usage: result.usage, model: result.model || model };
+    } catch (e) { e.usage = result.usage; throw e; }
+  }
   async extractDocumentBatch(input, options = {}) {
     if (!env.OPENAI_API_KEY) throw new Error('OpenAI no configurado');
     const model = options.model || env.OPENAI_MODEL || 'gpt-5.6-luna';
     const reasoningEffort = options.reasoning_effort || env.OPENAI_REASONING_EFFORT;
+
+    const userContent = typeof input === 'string'
+      ? (/json/i.test(input) ? input : `${input}\n(Responde en formato JSON)`)
+      : JSON.stringify({ ...input, _format: 'json' });
 
     const bodyPayload = {
       model,
       response_format: { type: 'json_object' },
       messages: [
         { role: 'system', content: options.prompt || require('../analysis/extractionContract').prompt },
-        { role: 'user', content: JSON.stringify(input) }
+        { role: 'user', content: userContent }
       ],
       ...(reasoningEffort && (model.startsWith('o1') || model.startsWith('o3')) ? { reasoning_effort: reasoningEffort } : {})
     };
@@ -86,7 +123,7 @@ Reglas:
       .replace(/[ \t]+/g, ' ')
       .slice(0, 8000); // Límite de seguridad de tokens
 
-    const userMessage = `Proyecto: ${input.name}\nEspecificación:\n${cleanDescription}`;
+    const userMessage = `Proyecto: ${input.name}\nEspecificación (responder en formato JSON):\n${cleanDescription}`;
 
     async function sendRequest(modelName) {
       return await fetch(endpoint, {

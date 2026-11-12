@@ -1,0 +1,11 @@
+<!doctype html>
+<html lang="es"><head><meta charset="utf-8"><title>Prueba del flujo de entrega</title></head><body><div id="root"></div><script type="module">
+import React from 'react';
+import { createRoot } from 'react-dom/client';
+import DeliveryWorkflowPanel from '/src/components/DeliveryWorkflowPanel.jsx';
+import GlobalAIChatWidget from '/src/components/common/GlobalAIChatWidget.jsx';
+const project = {id:'delivery-ui-test'};
+createRoot(document.getElementById('root')).render(React.createElement(React.Fragment, null,
+  React.createElement(DeliveryWorkflowPanel, {project, mode:new URLSearchParams(location.search).get('mode') || 'implementation'}),
+  React.createElement(GlobalAIChatWidget, {project})));
+</script></body></html>

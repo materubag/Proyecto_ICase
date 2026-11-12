@@ -3,20 +3,14 @@ const versionHistoryService = require('./versionHistory.service');
 
 
 async function validateActors(projectId, refs) {
-  const actors = await prisma.actor.findMany({where:{projectId,isDeleted:false}});
+  if (refs.length) await require('./analysis/documentWorkflow').assertCatalog(projectId, refs);
+  const actors = await prisma.actor.findMany({where:{projectId,isDeleted:false,reviewStatus:'APPROVED'}});
   const unknown = refs.filter(ref => !actors.some(a => a.id === ref));
   if (unknown.length) { const error = new Error('Use IDs persistidos de actores: ' + unknown.join(', ')); error.statusCode=422; throw error; }
 }
 
 class RequirementService {
   async getRequirementsByProject(projectId) {
-    try {
-      const projectConsolidationService = require('./analysis/projectConsolidationService');
-      await projectConsolidationService.consolidateProject(projectId);
-    } catch (e) {
-      console.warn('[RequirementService] Warning during project consolidation:', e.message);
-    }
-
     return await prisma.requirement.findMany({
       where: { projectId, isDeleted: false, status: {not:'REMOVED'} },
       orderBy: { code: 'asc' }
@@ -24,6 +18,7 @@ class RequirementService {
   }
 
   async createRequirement(projectId, data) {
+    if (['APPROVED', 'IMPLEMENTED'].includes(data.status)) await require('./analysis/documentWorkflow').assertLegacyApproval(projectId, data.actorIds || []);
     const project = await prisma.project.findUnique({ where: { id: projectId } });
     if (!project) {
       const error = new Error(`Project with ID ${projectId} not found`);
@@ -31,6 +26,7 @@ class RequirementService {
       throw error;
     }
 
+    await require('./analysis/documentWorkflow').service().get(projectId);
     await validateActors(projectId, data.actorIds || []);
     const { code, name, description, type, priority, status, actorIds, dependencies, preconditions, postconditions } = data;
     if (!code || !name || !description) {
@@ -65,6 +61,7 @@ class RequirementService {
       `Creación de requisito ${created.code}: ${created.name}`
     );
 
+    await require('./analysis/documentWorkflow').service().get(projectId);
     return created;
   }
 
@@ -76,6 +73,8 @@ class RequirementService {
       throw error;
     }
 
+    await require('./analysis/documentWorkflow').service().get(existing.projectId);
+    if (['APPROVED', 'IMPLEMENTED'].includes(data.status)) await require('./analysis/documentWorkflow').assertLegacyApproval(existing.projectId, data.actorIds || existing.actorIds || []);
     await validateActors(existing.projectId, data.actorIds || []);
     const { code, name, description, type, priority, status, actorIds, dependencies, preconditions, postconditions } = data;
     
@@ -156,10 +155,15 @@ class RequirementService {
       }
     }
 
+    await require('./analysis/documentWorkflow').service().get(existing.projectId);
     return updated;
   }
 
   async updateStatus(id, status) {
+    if (['APPROVED', 'IMPLEMENTED'].includes(status)) {
+      const existing = await prisma.requirement.findUnique({where:{id}});
+      if (existing) await require('./analysis/documentWorkflow').assertLegacyApproval(existing.projectId, existing.actorIds || []);
+    }
     const validStatuses = ['PENDING', 'APPROVED', 'NEEDS_REVIEW', 'REJECTED', 'DISCARDED', 'IMPLEMENTED'];
     if (!validStatuses.includes(status)) {
       const err = new Error(`Estado '${status}' no válido`);

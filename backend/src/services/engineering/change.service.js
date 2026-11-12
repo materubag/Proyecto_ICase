@@ -60,12 +60,18 @@ async function review(projectId, id, input) {
     if (input.status === 'REJECTED') return tx.changeRequest.update({ where: { id }, data: { status: 'REJECTED' } });
     if (input.status !== 'APPROVED' || input.confirmImpact !== true) d.fail('IMPACT_CONFIRMATION_REQUIRED', 'Revisa el impacto y confirma para continuar.');
     const current = await d.element(tx, projectId, change.elementType, change.elementId);
+    if (['Actor', 'Requirement'].includes(change.elementType)) {
+      const workflow = new (require('../analysis/documentWorkflow').DocumentWorkflow)(tx);
+      await workflow.lock(tx, projectId); await workflow.load(tx, projectId);
+    }
+    if (change.elementType === 'Requirement' && ['APPROVED', 'IMPLEMENTED'].includes(change.proposedState.status || current.status)) await require('../analysis/documentWorkflow').assertLegacyApproval(projectId, change.proposedState.actorIds || current.actorIds || [], tx);
     if (current.revision !== change.expectedRevision) d.fail('VERSION_CONFLICT');
     const impact = await impactService.analyze(projectId, change.elementType, current.id, tx);
     if (d.hash(impact) !== d.hash(change.impact)) d.fail('VERSION_CONFLICT', 'Cambió el impacto. Crea una nueva solicitud.');
     if (change.elementType === 'Requirement') await remember(tx, current);
     await tx.changeRequest.update({ where: { id }, data: { status: 'APPROVED' } });
     const updated = await tx[d.delegates[change.elementType]].update({ where: { id: current.id }, data: { ...change.proposedState, ...(change.elementType==='Requirement'&&change.type==='DELETE'?{isDeleted:true}:{}), ...(change.elementType==='Requirement'&&change.type==='RESTORE'?{isDeleted:false}:{}), revision: { increment: 1 } } });
+    if (['Actor', 'Requirement'].includes(change.elementType)) await new (require('../analysis/documentWorkflow').DocumentWorkflow)(tx).load(tx, projectId);
     if (change.elementType === 'Requirement') await remember(tx, updated, id, change.basedOnVersionId);
     if (change.sourceCandidateId && change.elementType === 'Requirement') {
       const c = await tx.requirementCandidate.findFirst({ where: { id: change.sourceCandidateId, projectId, status: 'PENDING_REVIEW' } });

@@ -96,6 +96,7 @@ async function persist(projectId,result,meta={}){
   },{timeout:20000});
 }
 async function promote(tx,candidate){
+  await require('./documentWorkflow').assertLegacyApproval(candidate.projectId, [], tx);
   await lock(tx,candidate.projectId);
   const current=await tx.requirementCandidate.findUnique({where:{id:candidate.id}});
   if(current.rejectionReason==='RECLASSIFIED_PROJECT_OBJECTIVE' || require('./statementClassifier').classify(current.statement,current.evidence)==='OBJECTIVE') {

@@ -33,7 +33,7 @@ function readUpload(token, user, context) {
   if (upload.purpose !== 'icase-upload' || String(upload.ownerId) !== String(user?.id)) throw Object.assign(new Error('La carga no pertenece al usuario autenticado'), { statusCode: 403 });
   const filename = resolveFile(upload.filename);
   if (!fs.existsSync(filename) || fs.statSync(filename).size !== upload.pesoBytes) throw Object.assign(new Error('El archivo seleccionado no está disponible'), { statusCode: 422, code: 'UPLOAD_MISSING' });
-  if (context === 'recepcion' && upload.diagnosticoId) throw Object.assign(new Error('La carga pertenece a un diagnóstico'), { statusCode: 403 });
+  if (context && upload.attachmentContext && upload.attachmentContext !== context) throw Object.assign(new Error('La carga pertenece a otro contexto'), { statusCode: 403 });
   return { archivoId: upload.archivoId || require('crypto').createHash('sha256').update(String(user.id) + ':' + upload.filename).digest('hex'), urlOriginal: '/api/upload/files/' + upload.filename, pesoBytes: upload.pesoBytes, formatoMime: upload.formatoMime };
 }
 

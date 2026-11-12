@@ -285,6 +285,7 @@ class CandidateService {
       throw err;
     }
 
+    if (modelCandidate.kind === 'ACTOR') throw Object.assign(new Error('Revise y apruebe la versión del catálogo en el flujo documental'), {statusCode:409});
     if (modelCandidate.status === 'APPROVED') {
       if(modelCandidate.kind==='ACTOR')await prisma.$transaction(tx=>require('./actorIdentity').refresh(tx,modelCandidate.projectId));
       return { candidate: modelCandidate, kind: modelCandidate.kind, message: 'Ya aprobado previamente.' };

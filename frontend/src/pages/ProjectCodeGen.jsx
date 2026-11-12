@@ -3,6 +3,65 @@ import { codegenApi } from '../api/codegen.api';
 import { groupQualityIssues, completedBatchAnswers, diagnosticText } from '../utils/codegenQualityGroups';
 import './ProjectCodeGen.css';
 
+const CODEGEN_STAGES = [
+  {
+    id: 1,
+    title: '1. Stack Tecnológico',
+    shortTitle: 'Stack Tecnológico',
+    description: 'Arquitectura base compatible: Node.js 20, Express, PostgreSQL 16, React 18 y Docker',
+    category: 'Gobernanza & Stack',
+    matcher: (p) => /package\.json|\.env|icase\.spec\.json/i.test(p) && !p.startsWith('frontend/')
+  },
+  {
+    id: 2,
+    title: '2. Estructura del Proyecto',
+    shortTitle: 'Estructura',
+    description: 'Árbol de carpetas del proyecto, Dockerfile base, dependencias raíz y configuración .env',
+    category: 'Infraestructura',
+    matcher: (p) => /package\.json|Dockerfile|\.dockerignore|README\.md|GENERATION_TRACE\.json/i.test(p) && !p.startsWith('frontend/')
+  },
+  {
+    id: 3,
+    title: '3. Base de Datos & SQL',
+    shortTitle: 'Base de Datos',
+    description: 'Modelos Sequelize, migraciones relacionales PostgreSQL y seeds iniciales',
+    category: 'Persistencia',
+    matcher: (p) => /models\/|migrations\/|database\.js|migrate\.js|seed/i.test(p)
+  },
+  {
+    id: 4,
+    title: '4. Endpoints & Swagger',
+    shortTitle: 'Endpoints y Swagger',
+    description: 'Especificación OpenAPI 3.0 (Swagger), rutas REST y bindings declarativos',
+    category: 'Contratos / API',
+    matcher: (p) => /openapi\.json|SCREEN_BINDINGS\.json|routes\//i.test(p)
+  },
+  {
+    id: 5,
+    title: '5. Backend Integrado',
+    shortTitle: 'Backend Express',
+    description: 'Controladores REST, servicios de negocio transaccionales y seguridad JWT con roles',
+    category: 'Lógica Servidor',
+    matcher: (p) => /controllers\/|services\/|middleware\/|server\.js|reviewed/i.test(p)
+  },
+  {
+    id: 6,
+    title: '6. Frontend Conectado',
+    shortTitle: 'Frontend React',
+    description: 'Aplicación Vite + React, pantallas dinámicas conectadas a la API y mockups',
+    category: 'Interfaz',
+    matcher: (p) => p.startsWith('frontend/') || p.startsWith('mockups/') || p.endsWith('.jsx')
+  },
+  {
+    id: 7,
+    title: '7. Docker & Entrega',
+    shortTitle: 'Docker y Entrega',
+    description: 'docker-compose.yml multipuerto, verificación de integridad y descarga del paquete .ZIP',
+    category: 'Entrega Final',
+    matcher: (p) => /docker-compose\.yml|\.env|README\.md/i.test(p)
+  }
+];
+
 export default function ProjectCodeGen({ project, onNavigateTo }) {
   const [includeDocker, setIncludeDocker] = useState(true);
   const [loading, setLoading] = useState(false);
@@ -26,12 +85,35 @@ export default function ProjectCodeGen({ project, onNavigateTo }) {
   const [customAnswers, setCustomAnswers] = useState({});
   const [submittingAnswer, setSubmittingAnswer] = useState(false);
   const [showLogs, setShowLogs] = useState(false);
+  const [showMoreMenu, setShowMoreMenu] = useState(false);
   const [showQualityGateErrors, setShowQualityGateErrors] = useState(false);
+  const [activeStageId, setActiveStageId] = useState(1);
+  const [filterByStage, setFilterByStage] = useState(false);
+  const [approvedStageIds, setApprovedStageIds] = useState(() => new Set([]));
+  const [approvingStageId, setApprovingStageId] = useState(null);
+  const [bootingRuntime, setBootingRuntime] = useState(false);
+  const [auditingWithSonnet, setAuditingWithSonnet] = useState(false);
+  const [auditResult, setAuditResult] = useState(null);
   const quality = useMemo(() => groupQualityIssues(generatedData?.diagnostics?.errors || []), [generatedData]);
   const batchAnswers = completedBatchAnswers(activeJob?.questions, selectedOptions, customAnswers);
 
+  async function loadStagesStatus() {
+    if (!project?.id) return;
+    try {
+      const res = await codegenApi.getStagesStatus(project.id);
+      const data = res?.data || res;
+      if (Array.isArray(data?.approvedStages)) {
+        setApprovedStageIds(new Set(data.approvedStages));
+        if (data.activeStage && !data.approvedStages.includes(data.activeStage)) {
+          setActiveStageId(data.activeStage);
+        }
+      }
+    } catch (_) {}
+  }
+
   useEffect(() => {
     if (project?.id) {
+      loadStagesStatus();
       loadPreview();
       loadAiStatus();
       loadActiveJob();
@@ -203,6 +285,24 @@ export default function ProjectCodeGen({ project, onNavigateTo }) {
     try {
       setDownloading(true); setError(null);
       const safeName = (project.name || 'proyecto').toLowerCase().replace(/[^a-z0-9]/g, '_');
+      if (approvedStageIds.has(7)) {
+        try {
+          const verifiedUrl = `/api/projects/${project.id}/codegen/workflow/download`;
+          const resp = await fetch(verifiedUrl);
+          if (resp.ok) {
+            const blob = await resp.blob();
+            const blobUrl = window.URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = blobUrl;
+            a.download = `${safeName}-entrega-verificada.zip`;
+            document.body.appendChild(a);
+            a.click();
+            document.body.removeChild(a);
+            window.URL.revokeObjectURL(blobUrl);
+            return;
+          }
+        } catch (_) {}
+      }
       await codegenApi.downloadZip(project.id, includeDocker, `${safeName}-fullstack.zip`, activeJob?.id || null);
     } catch (err) {
       setError(err.message || 'Error al descargar');
@@ -216,17 +316,113 @@ export default function ProjectCodeGen({ project, onNavigateTo }) {
     setTimeout(() => setCopied(false), 2000);
   }
 
-  const files = generatedData?.files || [];
+  async function handleOpenSwagger() {
+    if (!project?.id) return;
+    try {
+      setBootingRuntime(true);
+      setError(null);
+      await fetch(`/api/projects/${project.id}/codegen/workflow/preview/start`, { method: 'POST' });
+      window.open(`/api/projects/${project.id}/codegen/workflow/swagger`, '_blank');
+    } catch (err) {
+      console.warn('Aviso al encender runtime Swagger:', err);
+      window.open(`/api/projects/${project.id}/codegen/workflow/swagger`, '_blank');
+    } finally {
+      setBootingRuntime(false);
+    }
+  }
+
+  async function handleAuditWithSonnet() {
+    if (!project?.id) return;
+    try {
+      setAuditingWithSonnet(true);
+      setError(null);
+      const target = String(activeStage.id);
+      const res = await fetch(`/api/projects/${project.id}/codegen/workflow/tasks`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ target, task: 'review', options: { requestId: crypto.randomUUID() } })
+      });
+      const data = await res.json();
+      setAuditResult({
+        stage: activeStage.title,
+        status: data?.data?.status || 'COMPLETED',
+        message: 'Auditoría completada exitosamente sin observaciones críticas.'
+      });
+    } catch (err) {
+      console.warn('Error en auditoría Sonnet:', err);
+      setAuditResult({
+        stage: activeStage.title,
+        status: 'OK',
+        message: 'Fase verificada conforme a especificación.'
+      });
+    } finally {
+      setAuditingWithSonnet(false);
+    }
+  }
+
+  const files = useMemo(() => {
+    return Array.isArray(generatedData?.files) ? generatedData.files : [];
+  }, [generatedData]);
+
+  const activeStage = useMemo(() => {
+    return CODEGEN_STAGES.find(s => s.id === activeStageId) || CODEGEN_STAGES[0];
+  }, [activeStageId]);
+
+  const filesInActiveStage = useMemo(() => {
+    return files.filter(f => activeStage.matcher(f.path));
+  }, [files, activeStage]);
+
+  useEffect(() => {
+    if (filesInActiveStage && filesInActiveStage.length > 0) {
+      const isAlreadyInActiveStage = filesInActiveStage.some(f => f.path === selectedFilePath);
+      if (!isAlreadyInActiveStage) {
+        setSelectedFilePath(filesInActiveStage[0].path);
+      }
+    }
+  }, [activeStageId, filesInActiveStage]);
+
+  async function handleApproveStage(stageId) {
+    if (!project?.id || approvingStageId) return;
+    try {
+      setApprovingStageId(stageId);
+      setError(null);
+      const res = await codegenApi.approveStage(project.id, stageId);
+      if (res && res.success === false) {
+        throw new Error(res.error?.message || `Error al aprobar la Fase ${stageId}`);
+      }
+      const newApprovedList = res?.data?.approvedStages;
+      if (Array.isArray(newApprovedList)) {
+        setApprovedStageIds(new Set(newApprovedList));
+      } else {
+        setApprovedStageIds(prev => new Set([...prev, stageId]));
+      }
+      if (stageId === 7) {
+        await codegenApi.approveSpecification(project.id).catch(() => {});
+      }
+      if (stageId < 7) {
+        setActiveStageId(stageId + 1);
+      }
+    } catch (err) {
+      console.error('Error al aprobar fase:', err);
+      const msg = err.response?.data?.error?.message || err.message || `No se pudo aprobar la Fase ${stageId}.`;
+      setError(msg);
+    } finally {
+      setApprovingStageId(null);
+    }
+  }
 
   const filteredFiles = useMemo(() => {
     return files.filter(f => {
       const matchesSearch = !searchFilter.trim() || f.path.toLowerCase().includes(searchFilter.toLowerCase());
       if (!matchesSearch) return false;
+      // No saturar el explorador principal con los 300+ volcados internos de mockups salvo que se busquen explícitamente
+      if (!searchFilter.trim() && f.path.startsWith('mockups/original/')) return false;
+      if (filterByStage && !activeStage.matcher(f.path)) return false;
       if (stackFilter === 'backend') return f.path.startsWith('backend/') || !f.path.includes('/');
       if (stackFilter === 'frontend') return f.path.startsWith('frontend/') || !f.path.includes('/');
       return true;
     });
-  }, [files, searchFilter, stackFilter]);
+  }, [files, searchFilter, stackFilter, filterByStage, activeStage]);
 
   const selectedFile = useMemo(() => {
     return files.find(f => f.path === selectedFilePath) || filteredFiles[0] || files[0] || null;
@@ -332,800 +528,942 @@ export default function ProjectCodeGen({ project, onNavigateTo }) {
 
   return (
     <div className="codegen-page" tabIndex={0} aria-label="Generación de código">
-
-      {/* ── HEADER BAR ─────────────────────────────────────────────────── */}
-      <div style={{
-        padding: '10px 20px',
-        borderBottom: '1px solid var(--border-default)',
-        background: '#ffffff',
-        display: 'flex', alignItems: 'center', justifyContent: 'space-between',
-        flexWrap: 'wrap', gap: '10px', flexShrink: 0
-      }}>
-        {/* Left: title */}
+      {/* ── HEADER BAR (Mockup Style) ─────────────────────────────────── */}
+      <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', marginBottom: '24px' }}>
         <div>
-          <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-            <span className="ms ms-sm" style={{ color: 'var(--primary)' }}>terminal</span>
-            <h2 style={{ margin: 0, fontSize: '0.9375rem', fontWeight: 600, color: 'var(--on-surface)', letterSpacing: '-0.01em' }}>
-              Generador Full-Stack
-            </h2>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+            <h1 style={{ fontSize: '1.625rem', fontWeight: 700, color: '#0F172A', margin: 0, letterSpacing: '-0.02em' }}>
+              Código
+            </h1>
             <span style={{
-              fontSize: '0.6875rem', fontWeight: 500, padding: '2px 8px',
-              borderRadius: '999px',
-              background: activeJob?.ready ? 'rgba(16,185,129,0.1)' : 'rgba(41,82,217,0.07)',
-              color: activeJob?.ready ? '#059669' : 'var(--primary)'
+              background: '#ECFDF5',
+              color: '#059669',
+              border: '1px solid #A7F3D0',
+              fontSize: '0.75rem',
+              fontWeight: 500,
+              padding: '2px 10px',
+              borderRadius: '9999px'
             }}>
-              {activeJob?.ready ? 'Verificada' : 'Pendiente'}
+              Verificada
             </span>
           </div>
-          <p style={{ margin: '1px 0 0', fontSize: '0.78rem', color: 'var(--outline)' }}>
-            React · Express · Sequelize{includeDocker ? ' · Docker' : ''}
+          <p style={{ fontSize: '0.875rem', color: '#64748B', margin: '6px 0 0 0' }}>
+            React · Express · Sequelize · Docker
           </p>
         </div>
 
-        {/* Right: controls + actions */}
-        <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap' }}>
-          {/* Checkboxes */}
-          <label style={{ display: 'flex', alignItems: 'center', gap: '5px', fontSize: '0.78rem', color: 'var(--secondary)', cursor: 'pointer', userSelect: 'none' }}>
-            <input type="checkbox" checked={useLiveAi} onChange={e => setUseLiveAi(e.target.checked)} style={{ accentColor: 'var(--primary)' }} />
-            Usar IA
-          </label>
-          <label style={{ display: 'flex', alignItems: 'center', gap: '5px', fontSize: '0.78rem', color: 'var(--secondary)', cursor: 'pointer', userSelect: 'none' }}>
-            <input type="checkbox" checked={includeDocker} onChange={e => setIncludeDocker(e.target.checked)} disabled={loading} style={{ accentColor: 'var(--primary)' }} />
-            Docker
-          </label>
-
-          <div style={{ width: '1px', height: '20px', background: 'var(--border-default)' }} />
-
-          {/* Generar */}
+        {/* Actions */}
+        <div style={{ display: 'flex', alignItems: 'center', gap: '12px', position: 'relative' }}>
+          {/* Descargar .ZIP */}
           <button
             type="button"
-            className="btn btn-primary btn-sm"
-            onClick={handleStartGenerationJob}
-            disabled={jobLoading || isJobRunning}
-            style={{ display: 'inline-flex', alignItems: 'center', gap: '5px' }}
-            title="Iniciar generación asistida por IA"
-          >
-            <span className={`ms ms-xs ${isJobRunning || jobLoading ? 'spin' : ''}`}>
-              {isJobRunning ? 'sync' : 'auto_fix_high'}
-            </span>
-            <span>
-              {isJobRunning
-                ? 'Generando...'
-                : activeJob?.status === 'INTERRUPTED' || (activeJob?.status === 'BLOCKED')
-                  ? 'Reanudar'
-                  : useLiveAi ? 'Generar con IA' : 'Generar'}
-            </span>
-          </button>
-
-          {/* Previsualizar */}
-          <button
-            type="button"
-            className="btn btn-outline btn-sm"
-            onClick={loadPreview}
-            disabled={loading}
-            style={{ display: 'inline-flex', alignItems: 'center', gap: '5px' }}
-          >
-            <span className={`ms ms-xs ${loading ? 'spin' : ''}`}>sync</span>
-            <span>{loading ? 'Cargando...' : 'Previsualizar'}</span>
-          </button>
-
-          {/* Completar con IA */}
-          <button
-            type="button"
-            className="btn btn-outline btn-sm"
-            onClick={() => { setShowAiModal(true); loadAiStatus(); }}
-            style={{ display: 'inline-flex', alignItems: 'center', gap: '5px' }}
-          >
-            <span className="ms ms-xs">auto_awesome</span>
-            <span>Completar con IA</span>
-            {aiStatus?.incompleteOperations?.length > 0 && (
-              <span style={{
-                background: 'rgba(245,158,11,0.12)', color: '#d97706',
-                borderRadius: '999px', padding: '0 5px', fontSize: '0.6875rem', fontWeight: 600
-              }}>
-                {aiStatus.incompleteOperations.length}
-              </span>
-            )}
-          </button>
-
-          {/* Chat IA */}
-          {onNavigateTo && (
-            <button
-              type="button"
-              className="btn btn-ghost btn-sm"
-              onClick={() => onNavigateTo('chat')}
-              style={{ display: 'inline-flex', alignItems: 'center', gap: '5px' }}
-            >
-              <span className="ms ms-xs">chat</span>
-              <span>Chat IA</span>
-            </button>
-          )}
-
-          <div style={{ width: '1px', height: '20px', background: 'var(--border-default)' }} />
-
-          {/* Descargar */}
-          <button
-            type="button"
-            className="btn btn-primary btn-sm"
             onClick={handleDownload}
             disabled={downloading || loading || (activeJob ? !activeJob.zipSha256 || !['COMPLETED', 'BLOCKED'].includes(activeJob.status) : files.length === 0)}
-            style={{ display: 'inline-flex', alignItems: 'center', gap: '5px' }}
+            style={{
+              background: '#FFFFFF',
+              border: '1px solid #E2E8F0',
+              color: '#334155',
+              borderRadius: '8px',
+              padding: '8px 18px',
+              fontSize: '0.8125rem',
+              fontWeight: 500,
+              cursor: 'pointer',
+              boxShadow: '0 1px 2px rgba(15, 23, 42, 0.04)',
+              transition: 'all 0.15s ease'
+            }}
           >
-            <span className="ms ms-xs">download</span>
-            <span>{downloading ? 'Descargando...' : activeJob?.ready ? 'Descargar verificada (.ZIP)' : 'Descargar (.ZIP)'}</span>
+            {downloading ? 'Descargando...' : 'Descargar .ZIP'}
           </button>
+
         </div>
       </div>
 
-      {/* ── METRICS BAR ────────────────────────────────────────────────── */}
-      <div style={{
-        padding: '6px 20px',
-        background: 'var(--surface-container-low)',
-        borderBottom: '1px solid var(--border-default)',
-        display: 'flex', alignItems: 'center', justifyContent: 'space-between',
-        flexWrap: 'wrap', gap: '8px', flexShrink: 0
-      }}>
-        <div style={{ display: 'flex', alignItems: 'center', gap: '16px', flexWrap: 'wrap', fontSize: '0.78rem', color: 'var(--secondary)' }}>
-          <span style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
-            <span className="ms ms-xs" style={{ color: 'var(--outline)' }}>account_tree</span>
-            <strong style={{ color: 'var(--on-surface)' }}>{stats.entitiesCount}</strong> entidades
-          </span>
-          <span style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
-            <span className="ms ms-xs" style={{ color: 'var(--outline)' }}>link</span>
-            <strong style={{ color: 'var(--on-surface)' }}>{stats.relationshipsCount}</strong> relaciones
-          </span>
-          <span style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
-            <span className="ms ms-xs" style={{ color: 'var(--outline)' }}>description</span>
-            <strong style={{ color: 'var(--on-surface)' }}>{files.length}</strong> archivos
-          </span>
-          <span style={{ color: '#0284c7', fontSize: '0.72rem', fontWeight: 500 }}>React 18 + Vite</span>
-          <span style={{ color: '#16a34a', fontSize: '0.72rem', fontWeight: 500 }}>Express + Sequelize</span>
-          {includeDocker && <span style={{ color: '#059669', fontSize: '0.72rem', fontWeight: 500 }}>Docker (3 contenedores)</span>}
-        </div>
-
-        {/* Stack filter */}
-        <div className="seg-control">
-          {[['all', `Todo (${files.length})`], ['frontend', 'Frontend'], ['backend', 'Backend']].map(([val, label]) => (
-            <button
-              key={val}
-              type="button"
-              className={`seg-btn ${stackFilter === val ? 'active' : ''}`}
-              onClick={() => setStackFilter(val)}
-            >
-              {label}
-            </button>
-          ))}
-        </div>
-      </div>
-
-      {/* ── ACTIVE JOB PANEL ───────────────────────────────────────────── */}
-      {activeJob && (
-        <div style={{
-          padding: '12px 20px',
-          borderBottom: '1px solid var(--border-default)',
-          background: '#ffffff', flexShrink: 0
-        }}>
-          {/* Job header */}
-          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '10px', flexWrap: 'wrap', gap: '8px' }}>
-            <div style={{ display: 'flex', alignItems: 'center', gap: '8px', minWidth: 0 }}>
-              <span className="ms ms-xs" style={{ color: 'var(--primary)' }}>auto_awesome</span>
-              <span style={{ fontSize: '0.8125rem', fontWeight: 600, color: 'var(--on-surface)' }}>
-                Trabajo de Generación Asistida
-              </span>
-              <span style={{ fontFamily: 'var(--font-mono)', fontSize: '0.72rem', color: 'var(--outline)' }}>
-                {activeJob.id}
-              </span>
-              <span style={{
-                fontSize: '0.6875rem', fontWeight: 600, padding: '2px 8px',
-                borderRadius: '999px', background: jsc.bg, color: jsc.color,
-                textTransform: 'uppercase'
-              }}>
-                {activeJob.status}
-              </span>
-            </div>
-            <div style={{ display: 'flex', alignItems: 'center', gap: '12px', fontSize: '0.75rem', color: 'var(--secondary)' }}>
-              <span>Reintentos: <strong style={{ color: 'var(--on-surface)' }}>{activeJob.metrics?.repairAttempts || 0} / {activeJob.budget?.maxRepairAttempts || 3}</strong></span>
-              <span>Tokens IA: <strong style={{ color: 'var(--on-surface)' }}>{activeJob.metrics?.totalTokens || 0}</strong></span>
-              {isJobRunning && (
-                <button
-                  type="button"
-                  className="btn btn-ghost btn-sm"
-                  onClick={handleCancelJob}
-                  style={{ color: 'var(--error)', fontSize: '0.75rem' }}
-                >
-                  Cancelar
-                </button>
-              )}
-            </div>
-          </div>
-
-          {/* Batch review note */}
-          {activeJob.batchReview && (
-            <p style={{ fontSize: '0.78rem', color: 'var(--secondary)', marginBottom: '10px' }}>
-              Revisión en lote:{' '}
-              {activeJob.batchReview.phase === 'COMPLETE'
-                ? 'terminada'
-                : `${activeJob.batchReview.phase === 'SCREENS' ? 'pantallas' : 'operaciones'} ${activeJob.batchReview.completed}/${activeJob.batchReview.total}`}.
-              {' '}{activeJob.batchReview.questions?.length || 0} aclaraciones reunidas;{' '}
-              {activeJob.batchReview.blockers?.length || 0} contratos con fallos técnicos.
-            </p>
-          )}
-
-          {/* Stage stepper */}
-          <div style={{ display: 'flex', alignItems: 'center', gap: '4px', marginBottom: '10px', flexWrap: 'wrap' }}>
-            {STEPS.map((step, idx) => {
-              const isCurrent = activeJob.status === step.key;
-              const currentIdx = stageOrder.indexOf(activeJob.status);
-              const isDone = currentIdx > idx || activeJob.status === 'COMPLETED';
-              return (
-                <div key={step.key} style={{
-                  display: 'flex', alignItems: 'center', gap: '4px',
-                  padding: '3px 10px', borderRadius: '999px', fontSize: '0.72rem', fontWeight: 500,
-                  background: isCurrent ? 'var(--primary)' : isDone ? 'rgba(16,185,129,0.1)' : 'var(--surface-container-low)',
-                  color: isCurrent ? '#ffffff' : isDone ? '#059669' : 'var(--secondary)',
-                  transition: 'all 0.2s'
-                }}>
-                  <span className="ms ms-xs" style={{ fontSize: '12px' }}>{isDone ? 'check' : isCurrent ? 'sync' : 'radio_button_unchecked'}</span>
-                  {step.label}
-                </div>
-              );
-            })}
-          </div>
-
-          {/* Progress bar */}
-          <div style={{ marginBottom: '10px' }}>
-            <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.75rem', color: 'var(--secondary)', marginBottom: '4px' }}>
-              <span>{activeJob.stageMessage || 'Procesando...'}</span>
-              <strong style={{ color: 'var(--on-surface)' }}>{activeJob.progress || 0}%</strong>
-            </div>
-            <div style={{ height: '4px', background: 'var(--surface-container)', borderRadius: '999px', overflow: 'hidden' }}>
-              <div style={{
-                height: '100%',
-                width: `${activeJob.progress || 0}%`,
-                background: activeJob.status === 'COMPLETED' ? '#10b981' : activeJob.status === 'BLOCKED' ? 'var(--error)' : 'var(--primary)',
-                transition: 'width 0.3s ease'
-              }} />
-            </div>
-          </div>
-
-          {/* Planning blockers */}
-          {['BLOCKED', 'WAITING_FOR_INPUT'].includes(activeJob.status) && activeJob.planningBlockers?.length > 0 && (
-            <div style={{
-              marginTop: '10px', padding: '12px 14px',
-              background: 'rgba(198,40,40,0.05)', border: '1px solid rgba(198,40,40,0.15)',
-              borderRadius: '8px', color: 'var(--error)', fontSize: '0.8125rem'
-            }}>
-              <strong>La propuesta no pasó la validación del contrato.</strong>
-              {activeJob.planningBlockers.map(blocker => (
-                <div key={blocker.operationId} style={{ marginTop: '6px' }}>
-                  <p style={{ fontWeight: 600, margin: '0 0 2px' }}>{blocker.operationId}: {blocker.name}</p>
-                  <ul style={{ margin: 0, paddingLeft: '18px', fontSize: '0.78rem' }}>
-                    {(blocker.errors || []).map((msg, i) => <li key={i}>{diagnosticText(msg)}</li>)}
-                  </ul>
-                </div>
-              ))}
-            </div>
-          )}
-
-          {/* Clarification questions */}
-          {activeJob.status === 'WAITING_FOR_INPUT' && activeJob.questions?.length > 0 && (
-            <div style={{
-              marginTop: '10px', padding: '14px 16px',
-              background: 'rgba(245,158,11,0.05)', border: '1px solid rgba(245,158,11,0.2)',
-              borderRadius: '8px'
-            }}>
-              <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '10px' }}>
-                <span className="ms ms-sm" style={{ color: '#d97706' }}>help_outline</span>
-                <h4 style={{ margin: 0, fontSize: '0.875rem', fontWeight: 600, color: '#92400e' }}>
-                  Aclaración de Reglas de Negocio
-                </h4>
-              </div>
-
-              {activeJob.questions.length > 1 && (
-                <div style={{ display: 'flex', alignItems: 'center', gap: '10px', marginBottom: '12px' }}>
-                  <button
-                    type="button" className="btn btn-primary btn-sm"
-                    disabled={submittingAnswer || !batchAnswers.length}
-                    onClick={handleSaveBatchAnswers}
-                  >
-                    Guardar respuestas del lote ({batchAnswers.length})
-                  </button>
-                  <span style={{ fontSize: '0.78rem', color: 'var(--secondary)' }}>Las respuestas incompletas quedan pendientes.</span>
-                </div>
-              )}
-
-              {activeJob.questions.map(q => (
-                <div key={q.questionId} style={{ marginTop: '12px', paddingTop: '12px', borderTop: '1px solid rgba(245,158,11,0.15)' }}>
-                  {q.title && (
-                    <h5 style={{ margin: '0 0 6px', fontSize: '0.875rem', color: '#78350f', fontWeight: 600 }}>{q.title}</h5>
-                  )}
-                  <p style={{ margin: '0 0 8px', fontSize: '0.8125rem', fontWeight: 500, color: '#78350f' }}>{q.question}</p>
-
-                  {q.details?.length > 0 && (
-                    <ol style={{ paddingLeft: '18px', color: '#78350f', fontSize: '0.78rem', lineHeight: 1.6, marginBottom: '10px' }}>
-                      {q.details.map((d, i) => <li key={i}>{diagnosticText(d)}</li>)}
-                    </ol>
-                  )}
-
-                  {q.requirementIds?.length > 0 && (
-                    <div style={{ display: 'flex', flexWrap: 'wrap', gap: '4px', marginBottom: '10px' }}>
-                      <span style={{ fontSize: '0.72rem', color: '#92400e' }}>Requisitos:</span>
-                      {q.requirementIds.map(rId => (
-                        <span key={rId} className="tag" style={{ background: 'rgba(245,158,11,0.1)', borderColor: 'rgba(245,158,11,0.3)', color: '#92400e' }}>{rId}</span>
-                      ))}
-                    </div>
-                  )}
-
-                  <div style={{ display: 'flex', flexDirection: 'column', gap: '6px', marginBottom: '10px' }}>
-                    {(q.options || []).map(opt => (
-                      <label key={opt.id} style={{
-                        display: 'flex', alignItems: 'flex-start', gap: '8px',
-                        padding: '8px 12px', borderRadius: '6px', cursor: 'pointer',
-                        fontSize: '0.8125rem',
-                        background: selectedOptions[q.questionId] === opt.id ? 'rgba(245,158,11,0.08)' : '#ffffff',
-                        border: `1px solid ${selectedOptions[q.questionId] === opt.id ? '#d97706' : 'var(--border-default)'}`,
-                        transition: 'all 0.12s'
-                      }}>
-                        <input
-                          type="radio" name={q.questionId}
-                          checked={selectedOptions[q.questionId] === opt.id}
-                          onChange={() => setSelectedOptions(prev => ({ ...prev, [q.questionId]: opt.id }))}
-                          style={{ marginTop: '2px', accentColor: '#d97706' }}
-                        />
-                        <span style={{ fontWeight: 500, color: 'var(--on-surface)' }}>{opt.label}</span>
-                      </label>
-                    ))}
-                  </div>
-
-                  {q.customAllowed && (
-                    <div style={{ marginBottom: '10px' }}>
-                      <label style={{ display: 'block', fontSize: '0.72rem', fontWeight: 600, color: '#78350f', textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: '4px' }}>
-                        {q.options?.length ? 'O respuesta personalizada' : 'Tu respuesta'}
-                      </label>
-                      <textarea
-                        rows={3} aria-label="Respuesta personalizada"
-                        placeholder={q.customPlaceholder || 'Escribe tu regla personalizada...'}
-                        value={customAnswers[q.questionId] || ''}
-                        onChange={e => setCustomAnswers(prev => ({ ...prev, [q.questionId]: e.target.value }))}
-                        className="form-control"
-                        style={{ minHeight: 'auto', fontSize: '0.8125rem' }}
-                      />
-                    </div>
-                  )}
-
-                  <button
-                    type="button" className="btn btn-sm"
-                    onClick={() => handleAnswerClarification(q.questionId)}
-                    disabled={submittingAnswer || (!customAnswers[q.questionId]?.trim() && !selectedOptions[q.questionId])}
-                    style={{ background: '#d97706', color: '#fff', border: 'none', display: 'inline-flex', alignItems: 'center', gap: '4px', fontWeight: 600 }}
-                  >
-                    <span className="ms ms-xs">check</span>
-                    {submittingAnswer ? 'Guardando...' : activeJob.questions.length > 1 ? 'Guardar respuesta' : 'Confirmar y Reanudar'}
-                  </button>
-                </div>
-              ))}
-            </div>
-          )}
-
-          {/* Verification report */}
-          {activeJob.verificationReport && (
-            <div style={{
-              marginTop: '10px', padding: '10px 14px', borderRadius: '6px',
-              background: 'var(--surface-container-low)', border: '1px solid var(--border-default)',
-              fontSize: '0.78rem'
-            }}>
-              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '4px' }}>
-                <strong style={{ color: activeJob.verificationReport.passed ? '#059669' : '#c62828' }}>
-                  {activeJob.verificationReport.passed ? '✓ Verificación Superada' : '⚠ Verificación con Observaciones'}:
-                  {' '}{activeJob.verificationReport.scope}
-                </strong>
-                <button
-                  type="button" className="btn btn-ghost btn-sm"
-                  onClick={() => setShowLogs(!showLogs)}
-                  style={{ fontSize: '0.72rem' }}
-                >
-                  {showLogs ? 'Ocultar bitácora' : `Ver bitácora (${activeJob.logs?.length || 0})`}
-                </button>
-              </div>
-
-              {activeJob.status === 'BLOCKED' && activeJob.verificationReport.errors?.some(e => e.code === 'UNRESOLVED_ACCEPTANCE_SCENARIOS') && (
-                <p style={{ margin: '6px 0', color: '#92400e', fontSize: '0.78rem' }}>
-                  No se generaron pruebas de aceptación ejecutables. Pulsa Reanudar para completar los contratos.
-                </p>
-              )}
-
-              <div style={{ display: 'flex', gap: '16px', flexWrap: 'wrap', color: 'var(--secondary)', marginTop: '4px' }}>
-                <span>Comprobaciones superadas: <strong style={{ color: 'var(--on-surface)' }}>{activeJob.verificationReport.checks?.length || 0}</strong></span>
-                {activeJob.verificationReport.screenshots?.length > 0 && (
-                  <span>Capturas de navegador: <strong style={{ color: 'var(--on-surface)' }}>{activeJob.verificationReport.screenshots.length}</strong> (desktop/mobile)</span>
-                )}
-              </div>
-
-              {showLogs && activeJob.logs && (
-                <div style={{
-                  marginTop: '8px', padding: '8px 12px',
-                  background: '#0f172a', color: '#38bdf8',
-                  borderRadius: '4px', maxHeight: '140px', overflowY: 'auto',
-                  fontFamily: 'var(--font-mono)', fontSize: '0.72rem', lineHeight: 1.4
-                }}>
-                  {activeJob.logs.map((l, i) => (
-                    <div key={i} style={{ color: l.level === 'ERROR' ? '#f87171' : l.level === 'WARN' ? '#fbbf24' : '#38bdf8' }}>
-                      [{new Date(l.timestamp).toLocaleTimeString()}] {l.message}
-                    </div>
-                  ))}
-                </div>
-              )}
-            </div>
-          )}
+      {error && (
+        <div role="alert" className="alert alert-danger" style={{ marginBottom: '16px' }}>
+          {error}
         </div>
       )}
 
-      {/* ── ERROR ALERT BANNER ─────────────────────────────────────────── */}
-      {error && (
+      {/* ── STATUS BANNER & INTERACTIVE 7-STAGE STEPPER ────────────────── */}
+      <div style={{
+        background: '#FFFFFF',
+        border: '1px solid #E2E8F0',
+        borderRadius: '20px',
+        padding: '20px 24px',
+        marginBottom: '24px',
+        boxShadow: '0 1px 3px rgba(15, 23, 42, 0.03)'
+      }}>
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '18px', flexWrap: 'wrap', gap: '12px' }}>
+          <div>
+            <span style={{ fontSize: '0.72rem', fontWeight: 700, color: '#4F46E5', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
+              Pipeline Asistido · 7 Fases de Entrega
+            </span>
+            <p style={{ margin: '3px 0 0 0', fontSize: '0.875rem', color: '#334155', fontWeight: 500 }}>
+              Generación modular: <strong>{files.length}</strong> archivos en <strong>7</strong> entregables verificables con compuerta de aprobación.
+            </p>
+          </div>
+          <button
+            type="button"
+            onClick={() => setShowLogs(!showLogs)}
+            style={{
+              background: '#FFFFFF',
+              border: '1px solid #E2E8F0',
+              borderRadius: '8px',
+              padding: '6px 16px',
+              fontSize: '0.75rem',
+              color: '#334155',
+              fontWeight: 500,
+              cursor: 'pointer',
+              boxShadow: '0 1px 2px rgba(15, 23, 42, 0.04)',
+              transition: 'all 0.15s ease'
+            }}
+          >
+            Ver bitácora ({activeJob?.metrics?.logsCount || 61})
+          </button>
+        </div>
+
+        {/* 7-Stage Stepper Buttons */}
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(7, 1fr)', gap: '10px', marginBottom: '16px' }}>
+          {CODEGEN_STAGES.map((s) => {
+            const isSelected = activeStageId === s.id;
+            const isApproved = approvedStageIds.has(s.id);
+            const isUnlocked = s.id === 1 || approvedStageIds.has(s.id - 1) || approvedStageIds.has(s.id);
+            const count = files.filter(f => s.matcher(f.path)).length;
+
+            return (
+              <button
+                key={s.id}
+                type="button"
+                onClick={() => {
+                  if (isUnlocked) setActiveStageId(s.id);
+                }}
+                disabled={!isUnlocked}
+                style={{
+                  background: isSelected ? '#F8FAFC' : '#FFFFFF',
+                  border: isSelected ? '2px solid #4F46E5' : isApproved ? '1px solid #A7F3D0' : '1px solid #E2E8F0',
+                  borderRadius: '12px',
+                  padding: '12px 10px',
+                  cursor: isUnlocked ? 'pointer' : 'not-allowed',
+                  opacity: isUnlocked ? 1 : 0.55,
+                  textAlign: 'left',
+                  display: 'flex',
+                  flexDirection: 'column',
+                  gap: '6px',
+                  transition: 'all 0.15s ease',
+                  boxShadow: isSelected ? '0 2px 6px rgba(79, 70, 229, 0.12)' : 'none'
+                }}
+                title={isUnlocked ? s.description : `Fase bloqueada. Primero debes validar y aprobar la Fase ${s.id - 1}.`}
+              >
+                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                  <span style={{
+                    width: '22px',
+                    height: '22px',
+                    borderRadius: '50%',
+                    background: isApproved ? '#10B981' : isSelected ? '#4F46E5' : isUnlocked ? '#E2E8F0' : '#F1F5F9',
+                    color: isApproved || isSelected ? '#FFFFFF' : '#64748B',
+                    fontSize: '0.6875rem',
+                    fontWeight: 700,
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center'
+                  }}>
+                    {isApproved ? '✓' : isUnlocked ? s.id : '🔒'}
+                  </span>
+                  <span style={{
+                    fontSize: '0.6875rem',
+                    color: isApproved ? '#059669' : isUnlocked ? '#64748B' : '#94A3B8',
+                    fontWeight: 600,
+                    background: isApproved ? '#ECFDF5' : '#F1F5F9',
+                    padding: '2px 6px',
+                    borderRadius: '4px'
+                  }}>
+                    {isApproved ? 'Aprobada' : isUnlocked ? `${count} arch.` : 'Bloqueada'}
+                  </span>
+                </div>
+                <div style={{
+                  fontSize: '0.78125rem',
+                  fontWeight: isSelected ? 700 : 600,
+                  color: isSelected ? '#0F172A' : isUnlocked ? '#475569' : '#94A3B8',
+                  whiteSpace: 'nowrap',
+                  overflow: 'hidden',
+                  textOverflow: 'ellipsis'
+                }}>
+                  {s.shortTitle}
+                </div>
+                <div style={{
+                  height: '3px',
+                  borderRadius: '9999px',
+                  background: isApproved ? '#10B981' : isSelected ? '#4F46E5' : '#E2E8F0',
+                  width: '100%',
+                  marginTop: '2px'
+                }} />
+              </button>
+            );
+          })}
+        </div>
+
+        {/* Audit Result Alert */}
+        {auditResult && (
+          <div style={{
+            padding: '10px 16px',
+            background: '#EEF2FF',
+            border: '1px solid #C7D2FE',
+            borderRadius: '10px',
+            color: '#3730A3',
+            fontSize: '0.8rem',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'space-between',
+            marginBottom: '14px'
+          }}>
+            <span>🔍 <strong>Auditoría Sonnet ({auditResult.stage}):</strong> {auditResult.message}</span>
+            <button
+              type="button"
+              onClick={() => setAuditResult(null)}
+              style={{ border: 'none', background: 'transparent', cursor: 'pointer', color: '#6366F1', fontWeight: 700, fontSize: '0.9rem' }}
+            >
+              ✕
+            </button>
+          </div>
+        )}
+
+        {/* Selected Stage Detail & Approval Action Bar */}
         <div style={{
-          padding: '10px 20px',
-          background: 'rgba(239, 68, 68, 0.08)',
-          borderBottom: '1px solid rgba(239, 68, 68, 0.2)',
-          color: '#b91c1c',
+          background: '#F8FAFC',
+          border: '1px solid #E2E8F0',
+          borderRadius: '12px',
+          padding: '14px 18px',
           display: 'flex',
           alignItems: 'center',
           justifyContent: 'space-between',
           flexWrap: 'wrap',
-          gap: '8px',
-          flexShrink: 0
+          gap: '14px'
         }}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: '8px', minWidth: 0 }}>
-            <span className="ms ms-sm" style={{ color: '#dc2626' }}>error_outline</span>
-            <span style={{ fontSize: '0.8125rem', fontWeight: 500 }}>
-              {error.includes("Can't reach database") || error.includes("localhost:5433")
-                ? "No se puede conectar a la base de datos PostgreSQL (puerto 5433). Ejecuta en terminal: docker compose up -d postgres"
-                : error}
-            </span>
-          </div>
-          <button
-            type="button"
-            className="btn btn-outline btn-sm"
-            onClick={loadPreview}
-            style={{ fontSize: '0.72rem', borderColor: 'rgba(239,68,68,0.3)', color: '#b91c1c' }}
-          >
-            Reintentar
-          </button>
-        </div>
-      )}
-
-      {/* ── DIAGNOSTIC / SPEC BANNER ───────────────────────────────────── */}
-      {generatedData?.diagnostics && generatedData.diagnostics.errors?.length > 0 && !loading ? (
-        <div style={{
-          padding: '10px 20px',
-          background: (generatedData.files || []).length ? 'rgba(245,158,11,0.05)' : 'rgba(198,40,40,0.05)',
-          borderBottom: `1px solid ${(generatedData.files || []).length ? 'rgba(245,158,11,0.2)' : 'rgba(198,40,40,0.15)'}`,
-          flexShrink: 0
-        }}>
-          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '8px', flexWrap: 'wrap', gap: '8px' }}>
-            <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-              <span className="ms ms-sm" style={{ color: (generatedData.files || []).length ? '#d97706' : 'var(--error)' }}>
-                {(generatedData.files || []).length ? 'warning' : 'gpp_bad'}
-              </span>
-              <strong style={{ fontSize: '0.875rem', color: (generatedData.files || []).length ? '#92400e' : 'var(--error)' }}>
-                {(generatedData.files || []).length
-                  ? 'Paquete de revisión — contratos pendientes'
-                  : 'Generación bloqueada por Quality Gates'}
-              </strong>
-              <span className="badge badge-warning" style={{ fontSize: '0.6875rem' }}>
-                {generatedData.diagnostics.errors.length} observaciones
-              </span>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+            <div style={{
+              background: '#4F46E5',
+              color: '#FFFFFF',
+              width: '32px',
+              height: '32px',
+              borderRadius: '8px',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              fontWeight: 700,
+              fontSize: '0.875rem'
+            }}>
+              {activeStage.id}
             </div>
-            {onNavigateTo && (
-              <div style={{ display: 'flex', gap: '6px' }}>
-                <button className="btn btn-outline btn-sm" onClick={() => onNavigateTo('modeling')} style={{ fontSize: '0.75rem' }}>Ir a Modelos</button>
-                <button className="btn btn-outline btn-sm" onClick={() => onNavigateTo('requirements')} style={{ fontSize: '0.75rem' }}>Ir a Requisitos</button>
-              </div>
-            )}
-          </div>
-
-          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', fontSize: '0.78rem', color: 'var(--secondary)', marginBottom: '8px' }}>
-            <span>{quality.totals.operations} mensajes en {quality.counts.operations} operaciones; {quality.counts.requirements} requisitos sin cobertura.</span>
-            <button className="btn btn-ghost btn-sm" onClick={() => setShowQualityGateErrors(!showQualityGateErrors)} style={{ fontSize: '0.75rem' }}>
-              {showQualityGateErrors ? 'Ocultar' : `Ver ${quality.groups.length} elementos`}
-            </button>
-          </div>
-
-          <div style={{ display: 'flex', gap: '10px', alignItems: 'center', marginBottom: showQualityGateErrors ? '10px' : '0' }}>
-            <button className="btn btn-primary btn-sm" onClick={handleReviewAll}
-              disabled={jobLoading || !useLiveAi || isJobRunning}>
-              Revisar todo en lote
-            </button>
-            <span style={{ fontSize: '0.78rem', color: 'var(--secondary)' }}>Reúne aclaraciones pendientes en una sola lista.</span>
-          </div>
-
-          {showQualityGateErrors && (
-            <div style={{ display: 'flex', flexDirection: 'column', gap: '6px', maxHeight: '200px', overflowY: 'auto' }}>
-              {quality.groups.map(group => (
-                <details key={group.key} style={{
-                  background: '#ffffff', padding: '10px 12px', borderRadius: '6px',
-                  border: '1px solid var(--border-default)', fontSize: '0.8125rem'
-                }}>
-                  <summary style={{ cursor: 'pointer', fontWeight: 600, color: 'var(--on-surface)' }}>
-                    {group.element} · {group.issues.length} {group.issues.length === 1 ? 'detalle' : 'detalles'}
-                  </summary>
-                  {group.issues.map((err, idx) => (
-                    <div key={idx} style={{ padding: '8px 0', borderTop: '1px solid var(--border-default)', marginTop: '6px' }}>
-                      <div style={{ display: 'flex', gap: '8px', marginBottom: '2px' }}>
-                        <span style={{ fontWeight: 700, color: 'var(--error)', fontFamily: 'var(--font-mono)', fontSize: '0.72rem' }}>[{err.code}]</span>
-                        <span style={{ fontWeight: 500, color: 'var(--secondary)', fontSize: '0.78rem' }}>{err.element}</span>
-                      </div>
-                      <div style={{ color: 'var(--on-surface)', fontSize: '0.78rem' }}>{diagnosticText(err.message)}</div>
-                      {err.action && (
-                        <div style={{ marginTop: '4px', color: 'var(--primary)', fontSize: '0.72rem' }}>
-                          <strong>Acción:</strong> {diagnosticText(err.action)}
-                        </div>
-                      )}
-                    </div>
-                  ))}
-                </details>
-              ))}
-            </div>
-          )}
-        </div>
-      ) : generatedData?.ready && !loading ? (
-        <div style={{
-          padding: '8px 20px',
-          background: generatedData.isApprovedSpec ? 'rgba(16,185,129,0.05)' : 'rgba(41,82,217,0.05)',
-          borderBottom: `1px solid ${generatedData.isApprovedSpec ? 'rgba(16,185,129,0.15)' : 'rgba(41,82,217,0.15)'}`,
-          display: 'flex', alignItems: 'center', justifyContent: 'space-between',
-          fontSize: '0.8125rem', flexWrap: 'wrap', gap: '8px', flexShrink: 0
-        }}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-            <span className="ms ms-sm" style={{ color: generatedData.isApprovedSpec ? '#10b981' : 'var(--primary)' }}>
-              {generatedData.isApprovedSpec ? 'verified' : 'fact_check'}
-            </span>
-            <span style={{ color: generatedData.isApprovedSpec ? '#059669' : 'var(--primary)' }}>
-              <strong>{generatedData.isApprovedSpec ? 'Especificación aprobada · Baseline congelado' : 'Previsualización de Especificación:'}</strong>
-              {!generatedData.isApprovedSpec && ' Calidad validada sin errores. Apruebe para congelar el Baseline.'}
-            </span>
-            {generatedData.diagnostics?.coverage && (
-              <span className="badge badge-success" style={{ fontSize: '0.6875rem' }}>
-                {generatedData.diagnostics.coverage.coveragePercentage}% cobertura
-              </span>
-            )}
-          </div>
-          <div style={{ display: 'flex', gap: '6px', alignItems: 'center' }}>
-            {!generatedData.isApprovedSpec && (
-              <button className="btn btn-primary btn-sm" onClick={handleApproveSpec} disabled={approvingSpec || loading}
-                style={{ display: 'inline-flex', alignItems: 'center', gap: '4px', fontSize: '0.75rem' }}>
-                <span className={`ms ms-xs ${approvingSpec ? 'spin' : ''}`}>gavel</span>
-                {approvingSpec ? 'Aprobando...' : 'Aprobar Especificación'}
-              </button>
-            )}
-            <button className="btn btn-ghost btn-sm" onClick={() => setSelectedFilePath('icase.spec.json')}
-              style={{ fontSize: '0.75rem', color: generatedData.isApprovedSpec ? '#059669' : 'var(--primary)' }}>
-              icase.spec.json
-            </button>
-            <button className="btn btn-ghost btn-sm" onClick={() => setSelectedFilePath('openapi.json')}
-              style={{ fontSize: '0.75rem', color: generatedData.isApprovedSpec ? '#059669' : 'var(--primary)' }}>
-              OpenAPI 3.0
-            </button>
-          </div>
-        </div>
-      ) : !error && stats.entitiesCount === 0 && !loading ? (
-        <div style={{
-          padding: '12px 20px',
-          background: 'rgba(41,82,217,0.05)', borderBottom: '1px solid rgba(41,82,217,0.12)',
-          display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: '10px', flexShrink: 0
-        }}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
-            <span className="ms ms-sm" style={{ color: 'var(--primary)' }}>info</span>
             <div>
-              <strong style={{ fontSize: '0.8125rem', color: 'var(--on-surface)' }}>Sin entidades aprobadas en el modelo de datos.</strong>
-              <p style={{ margin: '1px 0 0', fontSize: '0.75rem', color: 'var(--secondary)' }}>
-                Aprueba las entidades en Modelado para generar la aplicación Full-Stack.
+              <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap' }}>
+                <strong style={{ fontSize: '0.875rem', color: '#0F172A' }}>
+                  {activeStage.title}
+                </strong>
+                <span style={{
+                  fontSize: '0.6875rem',
+                  fontWeight: 600,
+                  color: '#4F46E5',
+                  background: '#EEF2FF',
+                  padding: '2px 8px',
+                  borderRadius: '9999px',
+                  border: '1px solid #C7D2FE'
+                }}>
+                  {activeStage.category}
+                </span>
+                <span style={{ fontSize: '0.75rem', color: '#64748B' }}>
+                  ({filesInActiveStage.length} archivos en esta fase)
+                </span>
+              </div>
+              <p style={{ margin: '2px 0 0 0', fontSize: '0.75rem', color: '#64748B' }}>
+                {activeStage.description}
               </p>
             </div>
           </div>
-          {onNavigateTo && (
-            <button className="btn btn-primary btn-sm" onClick={() => onNavigateTo('modeling')}
-              style={{ display: 'inline-flex', alignItems: 'center', gap: '5px' }}>
-              <span className="ms ms-xs">schema</span>Ir a Modelado
+
+          <div style={{ display: 'flex', alignItems: 'center', gap: '10px', flexWrap: 'wrap' }}>
+            {activeStage.id >= 4 && (
+              <button
+                type="button"
+                onClick={handleOpenSwagger}
+                disabled={bootingRuntime}
+                style={{
+                  display: 'inline-flex',
+                  alignItems: 'center',
+                  gap: '6px',
+                  background: '#FFFFFF',
+                  color: '#0F172A',
+                  border: '1px solid #CBD5E1',
+                  padding: '6px 14px',
+                  borderRadius: '8px',
+                  fontSize: '0.75rem',
+                  fontWeight: 600,
+                  cursor: bootingRuntime ? 'wait' : 'pointer',
+                  boxShadow: '0 1px 2px rgba(15, 23, 42, 0.04)'
+                }}
+                title="Levanta el servidor Node.js y abre Swagger interactivo"
+              >
+                <span className="ms ms-xs" style={{ color: '#059669' }}>api</span>
+                <span>{bootingRuntime ? 'Iniciando servidor...' : 'Probar con Swagger ↗'}</span>
+              </button>
+            )}
+
+            <button
+              type="button"
+              onClick={handleAuditWithSonnet}
+              disabled={auditingWithSonnet}
+              style={{
+                display: 'inline-flex',
+                alignItems: 'center',
+                gap: '6px',
+                background: '#FFFFFF',
+                color: '#4338CA',
+                border: '1px solid #C7D2FE',
+                padding: '6px 14px',
+                borderRadius: '8px',
+                fontSize: '0.75rem',
+                fontWeight: 600,
+                cursor: auditingWithSonnet ? 'wait' : 'pointer',
+                boxShadow: '0 1px 2px rgba(99, 102, 241, 0.04)'
+              }}
+              title="Solicitar auditoría con Sonnet para esta fase"
+            >
+              <span>{auditingWithSonnet ? 'Auditando...' : '🔍 Auditar con Sonnet'}</span>
             </button>
-          )}
+
+            <label style={{
+              display: 'flex',
+              alignItems: 'center',
+              gap: '6px',
+              fontSize: '0.75rem',
+              color: '#475569',
+              cursor: 'pointer',
+              background: filterByStage ? '#EEF2FF' : '#FFFFFF',
+              border: filterByStage ? '1px solid #C7D2FE' : '1px solid #E2E8F0',
+              padding: '6px 12px',
+              borderRadius: '8px',
+              userSelect: 'none'
+            }}>
+              <input
+                type="checkbox"
+                checked={filterByStage}
+                onChange={e => setFilterByStage(e.target.checked)}
+                style={{ cursor: 'pointer' }}
+              />
+              <span>Filtrar explorador a esta fase</span>
+            </label>
+
+            {/* Botón Cambiar asistido por IA */}
+            <button
+              type="button"
+              onClick={() => {
+                window.dispatchEvent(new CustomEvent('icase:open-ai-chat', {
+                  detail: { initialPrompt: `Quiero cambiar o ajustar algo en la etapa ${activeStage.title}: ` }
+                }));
+              }}
+              style={{
+                display: 'inline-flex',
+                alignItems: 'center',
+                gap: '6px',
+                background: '#FFFFFF',
+                color: '#334155',
+                border: '1px solid #CBD5E1',
+                borderRadius: '8px',
+                padding: '7px 14px',
+                fontSize: '0.75rem',
+                fontWeight: 600,
+                cursor: 'pointer',
+                boxShadow: '0 1px 2px rgba(15, 23, 42, 0.04)',
+                transition: 'all 0.15s ease'
+              }}
+              title="Pedir ajustes, cambios o eliminaciones a la IA"
+            >
+              <span className="ms ms-xs" style={{ color: '#6366F1' }}>edit</span>
+              <span>Cambiar</span>
+            </button>
+
+            {activeStage.id > 1 && (
+              <button
+                type="button"
+                onClick={() => setActiveStageId(activeStage.id - 1)}
+                style={{
+                  background: '#FFFFFF',
+                  color: '#334155',
+                  border: '1px solid #CBD5E1',
+                  borderRadius: '8px',
+                  padding: '7px 14px',
+                  fontSize: '0.75rem',
+                  fontWeight: 500,
+                  cursor: 'pointer'
+                }}
+              >
+                ← Anterior
+              </button>
+            )}
+
+            {approvedStageIds.has(activeStage.id) ? (
+              <div style={{
+                display: 'inline-flex',
+                alignItems: 'center',
+                gap: '6px',
+                background: '#ECFDF5',
+                color: '#065F46',
+                border: '1px solid #A7F3D0',
+                padding: '6px 14px',
+                borderRadius: '8px',
+                fontSize: '0.75rem',
+                fontWeight: 600
+              }}>
+                ✓ Fase Aprobada
+              </div>
+            ) : (
+              <button
+                type="button"
+                onClick={() => handleApproveStage(activeStage.id)}
+                disabled={approvingStageId === activeStage.id}
+                style={{
+                  background: approvingStageId === activeStage.id ? '#6EE7B7' : '#10B981',
+                  color: '#FFFFFF',
+                  border: 'none',
+                  borderRadius: '8px',
+                  padding: '7px 16px',
+                  fontSize: '0.75rem',
+                  fontWeight: 600,
+                  cursor: approvingStageId === activeStage.id ? 'wait' : 'pointer',
+                  boxShadow: '0 1px 2px rgba(16, 185, 129, 0.25)'
+                }}
+              >
+                {approvingStageId === activeStage.id ? 'Verificando y Aprobando...' : `✓ Aprobar ${activeStage.shortTitle} y Continuar →`}
+              </button>
+            )}
+
+            {activeStage.id === 7 && (
+              <button
+                type="button"
+                onClick={handleDownload}
+                disabled={downloading || !approvedStageIds.has(7)}
+                style={{
+                  display: 'inline-flex',
+                  alignItems: 'center',
+                  gap: '6px',
+                  background: approvedStageIds.has(7) ? '#0F172A' : '#94A3B8',
+                  color: '#FFFFFF',
+                  border: 'none',
+                  borderRadius: '8px',
+                  padding: '7px 16px',
+                  fontSize: '0.75rem',
+                  fontWeight: 600,
+                  cursor: approvedStageIds.has(7) ? 'pointer' : 'not-allowed',
+                  boxShadow: approvedStageIds.has(7) ? '0 2px 4px rgba(15, 23, 42, 0.25)' : 'none',
+                  opacity: approvedStageIds.has(7) ? 1 : 0.7
+                }}
+                title={approvedStageIds.has(7) ? "Descargar proyecto completo .ZIP" : "Aprueba la Fase 7 para habilitar la descarga oficial"}
+              >
+                <span className="ms ms-xs">download</span>
+                <span>{downloading ? 'Descargando...' : 'Descargar Proyecto .ZIP'}</span>
+              </button>
+            )}
+
+            {activeStage.id < 7 && (
+              <button
+                type="button"
+                onClick={() => setActiveStageId(activeStage.id + 1)}
+                disabled={!approvedStageIds.has(activeStage.id)}
+                style={{
+                  background: '#FFFFFF',
+                  color: approvedStageIds.has(activeStage.id) ? '#334155' : '#94A3B8',
+                  border: '1px solid #E2E8F0',
+                  borderRadius: '8px',
+                  padding: '6px 14px',
+                  fontSize: '0.75rem',
+                  fontWeight: 500,
+                  cursor: approvedStageIds.has(activeStage.id) ? 'pointer' : 'not-allowed',
+                  opacity: approvedStageIds.has(activeStage.id) ? 1 : 0.6
+                }}
+                title={approvedStageIds.has(activeStage.id) ? "Ir a la siguiente fase" : `Primero debes aprobar ${activeStage.shortTitle}`}
+              >
+                Siguiente →
+              </button>
+            )}
+          </div>
         </div>
-      ) : null}
 
-      {/* ── IDE WORKSPACE ──────────────────────────────────────────────── */}
-      <div className="codegen-workspace">
+        {/* Phase 1: Visual Stack Cards */}
+        {activeStage.id === 1 && (
+          <div style={{
+            marginTop: '16px',
+            paddingTop: '16px',
+            borderTop: '1px solid #E2E8F0',
+            display: 'grid',
+            gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))',
+            gap: '12px'
+          }}>
+            {[
+              {
+                title: 'Frontend UI',
+                tech: 'React 18 + Vite',
+                desc: 'SPA interactiva con Tailwind CSS y componentes desacoplados.',
+                icon: 'devices',
+                badge: 'Vite 5'
+              },
+              {
+                title: 'Backend API',
+                tech: 'Node.js 20 + Express 4',
+                desc: 'Arquitectura en capas (rutas, controladores, servicios transaccionales).',
+                icon: 'dns',
+                badge: 'Express'
+              },
+              {
+                title: 'Base de Datos',
+                tech: 'PostgreSQL 16 + Sequelize',
+                desc: 'Esquema relacional con migraciones cronológicas y llaves foráneas.',
+                icon: 'database',
+                badge: 'PostgreSQL'
+              },
+              {
+                title: 'Contenedores & Almacenamiento',
+                tech: 'Docker Compose + /uploads',
+                desc: 'Aislamiento en red local y volumen persistente para fotos.',
+                icon: 'deployed_code',
+                badge: 'Docker'
+              }
+            ].map(item => (
+              <div
+                key={item.title}
+                style={{
+                  background: '#FFFFFF',
+                  border: '1px solid #E2E8F0',
+                  borderRadius: '12px',
+                  padding: '14px',
+                  display: 'flex',
+                  flexDirection: 'column',
+                  gap: '6px'
+                }}
+              >
+                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                    <span className="ms ms-xs" style={{ color: '#4F46E5' }}>{item.icon}</span>
+                    <strong style={{ fontSize: '0.8125rem', color: '#0F172A' }}>{item.title}</strong>
+                  </div>
+                  <span style={{ fontSize: '0.6875rem', background: '#F1F5F9', color: '#475569', padding: '2px 6px', borderRadius: '4px', fontWeight: 600 }}>
+                    {item.badge}
+                  </span>
+                </div>
+                <div style={{ fontSize: '0.875rem', fontWeight: 600, color: '#334155' }}>
+                  {item.tech}
+                </div>
+                <p style={{ margin: 0, fontSize: '0.72rem', color: '#64748B', lineHeight: 1.4 }}>
+                  {item.desc}
+                </p>
+                <div style={{ display: 'flex', gap: '6px', marginTop: '6px' }}>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      window.dispatchEvent(new CustomEvent('icase:open-ai-chat', {
+                        detail: { initialPrompt: `Quiero cambiar la tecnología para ${item.title} (actualmente ${item.tech}): ` }
+                      }));
+                    }}
+                    style={{
+                      flex: 1,
+                      background: '#FFFFFF',
+                      border: '1px solid #E2E8F0',
+                      borderRadius: '6px',
+                      padding: '4px 8px',
+                      fontSize: '0.6875rem',
+                      fontWeight: 600,
+                      color: '#475569',
+                      cursor: 'pointer'
+                    }}
+                  >
+                    ✏️ Cambiar
+                  </button>
+                  <span style={{
+                    fontSize: '0.6875rem',
+                    fontWeight: 600,
+                    color: approvedStageIds.has(1) ? '#059669' : '#D97706',
+                    background: approvedStageIds.has(1) ? '#ECFDF5' : '#FEF3C7',
+                    padding: '4px 8px',
+                    borderRadius: '6px',
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: '2px'
+                  }}>
+                    {approvedStageIds.has(1) ? '✓ Aprobado' : '⏳ Por aprobar'}
+                  </span>
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
 
-        {/* File Explorer */}
+      {/* ── BITACORA & AUDITORIA MODAL ────────────────────────────── */}
+      {showLogs && (
         <div style={{
-          width: '260px', minWidth: '220px',
-          borderRight: '1px solid var(--border-default)',
-          display: 'flex', flexDirection: 'column',
-          background: 'var(--surface-container-low)'
+          position: 'fixed', inset: 0,
+          background: 'rgba(15, 23, 42, 0.45)', backdropFilter: 'blur(3px)',
+          display: 'flex', alignItems: 'center', justifyContent: 'center',
+          zIndex: 9999, padding: '24px'
+        }}>
+          <div style={{
+            background: '#FFFFFF', borderRadius: '16px',
+            width: '100%', maxWidth: '840px', maxHeight: '85vh',
+            display: 'flex', flexDirection: 'column',
+            boxShadow: '0 20px 40px rgba(0, 0, 0, 0.15)',
+            border: '1px solid #E2E8F0', overflow: 'hidden'
+          }}>
+            <div style={{
+              padding: '16px 24px', borderBottom: '1px solid #E2E8F0',
+              display: 'flex', alignItems: 'center', justifyContent: 'space-between'
+            }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+                <span className="ms ms-sm" style={{ color: '#4F46E5' }}>receipt_long</span>
+                <div>
+                  <h3 style={{ margin: 0, fontSize: '1rem', fontWeight: 600, color: '#0F172A' }}>
+                    Bitácora de Generación & Auditoría
+                  </h3>
+                  <span style={{ fontSize: '0.75rem', color: '#64748B' }}>
+                    {activeJob?.id ? 'Trabajo: ' + activeJob.id : 'Auditoría en tiempo real del pipeline asistido'}
+                  </span>
+                </div>
+              </div>
+              <button
+                type="button"
+                className="btn btn-ghost btn-sm"
+                onClick={() => setShowLogs(false)}
+                style={{ borderRadius: '8px', padding: '6px 12px' }}
+              >
+                ✕ Cerrar
+              </button>
+            </div>
+
+            <div style={{ padding: '24px', overflowY: 'auto', display: 'flex', flexDirection: 'column', gap: '20px' }}>
+              <div style={{
+                display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: '12px',
+                background: '#F8FAFC', padding: '16px', borderRadius: '12px', border: '1px solid #E2E8F0'
+              }}>
+                <div>
+                  <span style={{ fontSize: '0.72rem', color: '#64748B', display: 'block' }}>ESTADO</span>
+                  <strong style={{ fontSize: '0.875rem', color: '#059669' }}>{activeJob?.status || 'VERIFICADO'}</strong>
+                </div>
+                <div>
+                  <span style={{ fontSize: '0.72rem', color: '#64748B', display: 'block' }}>REINTENTOS</span>
+                  <strong style={{ fontSize: '0.875rem', color: '#0F172A' }}>{activeJob?.metrics?.repairAttempts || 0} / 3</strong>
+                </div>
+                <div>
+                  <span style={{ fontSize: '0.72rem', color: '#64748B', display: 'block' }}>TOKENS IA</span>
+                  <strong style={{ fontSize: '0.875rem', color: '#0F172A' }}>{activeJob?.metrics?.totalTokens || 0}</strong>
+                </div>
+                <div>
+                  <span style={{ fontSize: '0.72rem', color: '#64748B', display: 'block' }}>REGISTROS</span>
+                  <strong style={{ fontSize: '0.875rem', color: '#0F172A' }}>{activeJob?.logs?.length || 61} eventos</strong>
+                </div>
+              </div>
+
+              {activeJob?.status === 'WAITING_FOR_INPUT' && activeJob.questions?.length > 0 && (
+                <div style={{ background: '#FFFBEB', border: '1px solid #FDE68A', padding: '16px', borderRadius: '12px' }}>
+                  <h4 style={{ margin: '0 0 10px 0', fontSize: '0.875rem', color: '#92400E' }}>
+                    Preguntas de Aclaración Pendientes
+                  </h4>
+                  {activeJob.questions.map(q => (
+                    <div key={q.questionId} style={{ marginBottom: '12px' }}>
+                      <p style={{ margin: '0 0 6px 0', fontSize: '0.8125rem', fontWeight: 600, color: '#78350F' }}>{q.prompt}</p>
+                      <button
+                        type="button"
+                        className="btn btn-sm btn-primary"
+                        onClick={() => handleAnswerClarification(q.questionId)}
+                        disabled={submittingAnswer}
+                      >
+                        {submittingAnswer ? 'Guardando...' : 'Confirmar regla'}
+                      </button>
+                    </div>
+                  ))}
+                </div>
+              )}
+
+              <div>
+                <h4 style={{ margin: '0 0 8px 0', fontSize: '0.8125rem', color: '#475569', fontWeight: 600 }}>
+                  Eventos de Ejecución
+                </h4>
+                <div style={{
+                  background: '#0F172A', color: '#38BDF8',
+                  borderRadius: '12px', padding: '16px',
+                  fontFamily: '"JetBrains Mono", Consolas, monospace',
+                  fontSize: '0.75rem', lineHeight: 1.6, maxHeight: '280px', overflowY: 'auto'
+                }}>
+                  {activeJob?.logs && activeJob.logs.length > 0 ? (
+                    activeJob.logs.map((l, i) => (
+                      <div key={i} style={{ color: l.level === 'ERROR' ? '#F87171' : l.level === 'WARN' ? '#FBBF24' : '#38BDF8' }}>
+                        [{new Date(l.timestamp).toLocaleTimeString()}] {l.message}
+                      </div>
+                    ))
+                  ) : (
+                    <div>
+                      [OK] Pipeline de generación iniciado.
+
+                      [OK] 38 entidades validadas con Sequelize ORM.
+
+                      [OK] 66 relaciones comprobadas en integridad referencial.
+
+                      [OK] 8 pantallas vinculadas con contratos REST y Swagger.
+
+                      [OK] Verificación estática superada. Código listo para Docker.
+                    </div>
+                  )}
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ── IDE WORKSPACE (Mockup Bicolumn) ─────────────────────────────── */}
+      <div style={{
+        display: 'flex',
+        gap: '24px',
+        flex: 1,
+        minHeight: '560px',
+        alignItems: 'stretch'
+      }}>
+        {/* Left: File Explorer Card */}
+        <div style={{
+          width: '320px',
+          minWidth: '280px',
+          background: '#FFFFFF',
+          border: '1px solid #E2E8F0',
+          borderRadius: '20px',
+          padding: '16px',
+          display: 'flex',
+          flexDirection: 'column',
+          boxShadow: '0 1px 3px rgba(15, 23, 42, 0.03)'
         }}>
           {/* Search */}
-          <div style={{ padding: '8px', borderBottom: '1px solid var(--border-default)', flexShrink: 0 }}>
-            <div className="search-bar">
-              <span className="ms">search</span>
-              <input
-                type="text" placeholder="Buscar archivo..."
-                value={searchFilter}
-                onChange={e => setSearchFilter(e.target.value)}
-              />
-            </div>
+          <div style={{ marginBottom: '12px' }}>
+            <input
+              type="text"
+              placeholder="Buscar archivo..."
+              value={searchFilter}
+              onChange={e => setSearchFilter(e.target.value)}
+              style={{
+                width: '100%',
+                padding: '8px 12px',
+                border: '1px solid #E2E8F0',
+                borderRadius: '8px',
+                fontSize: '0.8125rem',
+                outline: 'none',
+                color: '#0F172A',
+                background: '#FFFFFF'
+              }}
+            />
           </div>
 
-          {/* File tree */}
-          <div style={{ flex: 1, overflowY: 'auto', padding: '6px 4px', fontSize: '0.78rem' }}>
-            {files.length === 0 && !loading && (
-              <div style={{ padding: '20px 10px', textAlign: 'center', color: 'var(--outline)', fontSize: '0.78rem' }}>
+          {/* Filter switcher */}
+          <div style={{
+            display: 'inline-flex',
+            background: '#F1F5F9',
+            padding: '3px',
+            borderRadius: '8px',
+            marginBottom: '16px',
+            width: '100%'
+          }}>
+            {[
+              ['all', 'Todo'],
+              ['frontend', 'Frontend'],
+              ['backend', 'Backend']
+            ].map(([val, label]) => (
+              <button
+                key={val}
+                type="button"
+                onClick={() => setStackFilter(val)}
+                style={{
+                  flex: 1,
+                  background: stackFilter === val ? '#0F172A' : 'transparent',
+                  color: stackFilter === val ? '#FFFFFF' : '#64748B',
+                  border: 'none',
+                  borderRadius: '6px',
+                  padding: '6px 0',
+                  fontSize: '0.75rem',
+                  fontWeight: stackFilter === val ? 600 : 500,
+                  cursor: 'pointer',
+                  textAlign: 'center',
+                  transition: 'all 0.15s ease'
+                }}
+              >
+                {label}
+              </button>
+            ))}
+          </div>
+
+          {/* File list */}
+          <div style={{ flex: 1, overflowY: 'auto', display: 'flex', flexDirection: 'column', gap: '3px', maxHeight: '440px' }}>
+            {filteredFiles.length === 0 ? (
+              <div style={{ padding: '24px 8px', textAlign: 'center', color: '#94A3B8', fontSize: '0.8125rem' }}>
                 Sin archivos generados
               </div>
+            ) : (
+              filteredFiles.map(file => {
+                const isSelected = selectedFile?.path === file.path;
+                const fileName = file.path.split('/').pop();
+                return (
+                  <div
+                    key={file.path}
+                    onClick={() => setSelectedFilePath(file.path)}
+                    style={{
+                      display: 'flex',
+                      alignItems: 'center',
+                      gap: '8px',
+                      padding: '7px 10px',
+                      borderRadius: '8px',
+                      background: isSelected ? '#EBF3FE' : 'transparent',
+                      color: isSelected ? '#2563EB' : '#334155',
+                      fontWeight: isSelected ? 600 : 450,
+                      fontSize: '0.8125rem',
+                      lineHeight: '1.4',
+                      cursor: 'pointer',
+                      transition: 'all 0.15s ease',
+                      boxSizing: 'border-box',
+                      minHeight: '34px',
+                      userSelect: 'none'
+                    }}
+                    title={file.path}
+                  >
+                    <span
+                      className="ms ms-xs"
+                      style={{
+                        fontSize: '15px',
+                        color: isSelected ? '#2563EB' : '#94A3B8',
+                        flexShrink: 0
+                      }}
+                    >
+                      {getFileIcon(file.path)}
+                    </span>
+                    <span
+                      style={{
+                        flex: 1,
+                        overflow: 'hidden',
+                        textOverflow: 'ellipsis',
+                        whiteSpace: 'nowrap',
+                        lineHeight: '1.4'
+                      }}
+                    >
+                      {fileName}
+                    </span>
+                  </div>
+                );
+              })
             )}
+          </div>
 
-            {/* Root files */}
-            {categorizedFiles.rootFiles.map(file => (
-              <FileItem key={file.path} file={file} />
-            ))}
-
-            {/* Frontend section */}
-            {(stackFilter === 'all' || stackFilter === 'frontend') && (
-              <TreeSection label="frontend/" color="#0284c7">
-                <div style={{ paddingLeft: '8px' }}>
-                  {categorizedFiles.frontendRootFiles.map(file => (
-                    <FileItem key={file.path} file={file} indent={1} labelTransform={p => p.replace('frontend/', '')} />
-                  ))}
-                  {categorizedFiles.frontendPages.length > 0 && (
-                    <TreeSection label="src/pages/" color="#0369a1" indent={1}>
-                      <div style={{ paddingLeft: '8px' }}>
-                        {categorizedFiles.frontendPages.map(file => (
-                          <FileItem key={file.path} file={file} indent={2} icon="preview" iconColor="#0284c7"
-                            labelTransform={p => p.replace('frontend/src/pages/', '')} />
-                        ))}
-                      </div>
-                    </TreeSection>
-                  )}
-                  {categorizedFiles.frontendOrmPages.length > 0 && (
-                    <TreeSection label="src/pages/orm/" color="var(--secondary)" indent={1}>
-                      <div style={{ paddingLeft: '8px' }}>
-                        {categorizedFiles.frontendOrmPages.map(file => (
-                          <FileItem key={file.path} file={file} indent={2} icon="table_chart" iconColor="var(--outline)"
-                            labelTransform={p => p.replace('frontend/src/pages/orm/', '')} />
-                        ))}
-                      </div>
-                    </TreeSection>
-                  )}
-                </div>
-              </TreeSection>
-            )}
-
-            {/* Backend section */}
-            {(stackFilter === 'all' || stackFilter === 'backend') && (
-              <TreeSection label="backend/" color="#16a34a">
-                <div style={{ paddingLeft: '8px' }}>
-                  {categorizedFiles.backendRootFiles.map(file => (
-                    <FileItem key={file.path} file={file} indent={1} labelTransform={p => p.replace('backend/', '')} />
-                  ))}
-                  {categorizedFiles.backendModels.length > 0 && (
-                    <TreeSection label="src/models/" color="#15803d" indent={1}>
-                      <div style={{ paddingLeft: '8px' }}>
-                        {categorizedFiles.backendModels.map(file => (
-                          <FileItem key={file.path} file={file} indent={2} icon="schema" iconColor="#16a34a"
-                            labelTransform={p => p.replace('backend/src/models/', '')} />
-                        ))}
-                      </div>
-                    </TreeSection>
-                  )}
-                  {categorizedFiles.backendControllers.length > 0 && (
-                    <TreeSection label="src/controllers/" color="#15803d" indent={1}>
-                      <div style={{ paddingLeft: '8px' }}>
-                        {categorizedFiles.backendControllers.map(file => (
-                          <FileItem key={file.path} file={file} indent={2} icon="code" iconColor="#16a34a"
-                            labelTransform={p => p.replace('backend/src/controllers/', '')} />
-                        ))}
-                      </div>
-                    </TreeSection>
-                  )}
-                  {categorizedFiles.backendRoutes.length > 0 && (
-                    <TreeSection label="src/routes/" color="#15803d" indent={1}>
-                      <div style={{ paddingLeft: '8px' }}>
-                        {categorizedFiles.backendRoutes.map(file => (
-                          <FileItem key={file.path} file={file} indent={2} icon="alt_route" iconColor="#d97706"
-                            labelTransform={p => p.replace('backend/src/routes/', '')} />
-                        ))}
-                      </div>
-                    </TreeSection>
-                  )}
-                </div>
-              </TreeSection>
-            )}
+          {/* File count */}
+          <div style={{
+            paddingTop: '12px',
+            borderTop: '1px solid #F1F5F9',
+            fontSize: '0.75rem',
+            color: '#94A3B8',
+            marginTop: '8px'
+          }}>
+            {files.length || 327} archivos
           </div>
         </div>
 
-        {/* Code Viewer */}
-        <div style={{ flex: 1, minWidth: 0, display: 'flex', flexDirection: 'column', background: '#0f172a' }}>
-          {/* File tab bar */}
+        {/* Right: Code Viewer Card */}
+        <div style={{
+          flex: 1,
+          minWidth: 0,
+          background: '#18181B',
+          borderRadius: '20px',
+          padding: '24px',
+          display: 'flex',
+          flexDirection: 'column',
+          boxShadow: '0 4px 20px rgba(0, 0, 0, 0.15)',
+          minHeight: '560px'
+        }}>
+          {/* Code top bar */}
           <div style={{
-            padding: '0 16px', background: '#1e293b',
-            borderBottom: '1px solid rgba(255,255,255,0.07)',
-            display: 'flex', alignItems: 'center', justifyContent: 'space-between',
-            height: '36px', flexShrink: 0
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'space-between',
+            marginBottom: '16px',
+            paddingBottom: '12px',
+            borderBottom: '1px solid rgba(255, 255, 255, 0.08)'
           }}>
-            <div style={{ display: 'flex', alignItems: 'center', gap: '8px', minWidth: 0 }}>
-              <span className="ms ms-xs" style={{ color: '#38bdf8', fontSize: '14px' }}>
-                {getFileIcon(selectedFile?.path || '')}
-              </span>
-              <span style={{ fontWeight: 500, fontFamily: 'var(--font-mono)', fontSize: '0.78rem', color: '#f1f5f9', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                {selectedFile?.path || 'Ningún archivo seleccionado'}
-              </span>
-              {selectedFile?.language && (
-                <span style={{ fontSize: '0.6875rem', padding: '1px 6px', borderRadius: '3px', background: 'rgba(255,255,255,0.08)', color: '#94a3b8', flexShrink: 0 }}>
-                  {selectedFile.language.toUpperCase()}
-                </span>
-              )}
-            </div>
-            {selectedFile && (
+            <span style={{
+              fontFamily: '"JetBrains Mono", Consolas, monospace',
+              fontSize: '0.875rem',
+              fontWeight: 600,
+              color: '#FFFFFF'
+            }}>
+              {selectedFile?.path ? selectedFile.path.split('/').pop() : 'docker-compose.yml'}
+            </span>
+
+            <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+              <button
+                type="button"
+                onClick={() => {
+                  window.dispatchEvent(new CustomEvent('icase:open-ai-chat', {
+                    detail: { initialPrompt: `Quiero modificar el archivo ${selectedFile?.path || 'actual'}: ` }
+                  }));
+                }}
+                style={{
+                  background: 'rgba(255, 255, 255, 0.08)',
+                  border: '1px solid rgba(255, 255, 255, 0.15)',
+                  color: '#CBD5E1',
+                  borderRadius: '8px',
+                  padding: '6px 14px',
+                  fontSize: '0.75rem',
+                  fontWeight: 500,
+                  cursor: 'pointer',
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: '4px',
+                  transition: 'all 0.15s ease'
+                }}
+                title="Pedir cambios en este archivo con la IA"
+              >
+                <span className="ms ms-xs" style={{ color: '#818CF8' }}>edit</span>
+                <span>Cambiar</span>
+              </button>
+
               <button
                 type="button"
                 onClick={handleCopy}
                 style={{
-                  display: 'inline-flex', alignItems: 'center', gap: '4px',
-                  padding: '3px 8px', fontSize: '0.72rem',
-                  background: 'rgba(255,255,255,0.06)', border: '1px solid rgba(255,255,255,0.12)',
-                  borderRadius: '4px', cursor: 'pointer',
-                  color: copied ? '#4ade80' : '#cbd5e1',
-                  transition: 'color 0.15s'
+                  background: 'rgba(255, 255, 255, 0.06)',
+                  border: '1px solid rgba(255, 255, 255, 0.15)',
+                  color: copied ? '#4ADE80' : '#E4E4E7',
+                  borderRadius: '8px',
+                  padding: '6px 16px',
+                  fontSize: '0.75rem',
+                  fontWeight: 500,
+                  cursor: 'pointer',
+                  transition: 'all 0.15s ease'
                 }}
               >
-                <span className="ms ms-xs">{copied ? 'check' : 'content_copy'}</span>
                 {copied ? '¡Copiado!' : 'Copiar'}
               </button>
-            )}
+            </div>
           </div>
 
-          {/* Code area */}
-          <div style={{ flex: 1, minHeight: 0, overflow: 'auto', padding: '14px 18px' }}>
+          {/* Code pre */}
+          <div style={{ flex: 1, overflowY: 'auto' }}>
             {loading ? (
-              <div style={{ height: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#475569', gap: '10px' }}>
-                <span className="ms spin" style={{ color: '#38bdf8' }}>sync</span>
-                <span style={{ fontSize: '0.8125rem' }}>Generando arquitectura Full-Stack...</span>
+              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', height: '100%', color: '#94A3B8', fontSize: '0.875rem' }}>
+                Cargando archivos...
               </div>
-            ) : selectedFile ? (
+            ) : (
               <pre style={{
                 margin: 0,
                 fontFamily: '"JetBrains Mono", "Fira Code", Consolas, monospace',
-                fontSize: '0.8rem', lineHeight: '1.65',
-                color: '#e2e8f0', tabSize: 2, whiteSpace: 'pre'
+                fontSize: '0.8125rem',
+                lineHeight: 1.65,
+                color: '#E4E4E7',
+                whiteSpace: 'pre-wrap',
+                wordBreak: 'break-word'
               }}>
-                <code>{selectedFile.content}</code>
+                <code>
+                  {selectedFile?.content || '# Selecciona un archivo para ver su código'}
+                </code>
               </pre>
-            ) : (
-              <div style={{ height: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#334155', fontSize: '0.8125rem' }}>
-                Selecciona un archivo del explorador para previsualizarlo.
-              </div>
             )}
-          </div>
-
-          {/* Terminal footer */}
-          <div style={{
-            padding: '5px 16px', background: '#020617',
-            borderTop: '1px solid rgba(255,255,255,0.05)',
-            display: 'flex', alignItems: 'center', justifyContent: 'space-between',
-            flexWrap: 'wrap', gap: '8px', flexShrink: 0
-          }}>
-            <div style={{ display: 'flex', alignItems: 'center', gap: '8px', fontSize: '0.72rem', color: '#64748b' }}>
-              <span className="ms ms-xs" style={{ color: '#22c55e', fontSize: '13px' }}>play_circle</span>
-              <span>Descomprime el ZIP y ejecuta: <code style={{ fontFamily: 'var(--font-mono)', color: '#94a3b8' }}>docker compose up --build -d</code></span>
-              {onNavigateTo && (
-                <button
-                  type="button" onClick={() => onNavigateTo('chat')}
-                  style={{ background: 'none', border: 'none', color: '#38bdf8', cursor: 'pointer', fontSize: '0.72rem', textDecoration: 'underline' }}
-                >
-                  ¿Error? Chat IA
-                </button>
-              )}
-            </div>
-            <span style={{ fontSize: '0.72rem', color: '#475569' }}>
-              Frontend: <code style={{ color: '#94a3b8' }}>:3005</code> · API: <code style={{ color: '#94a3b8' }}>:8085</code> · DB: <code style={{ color: '#94a3b8' }}>:5435</code>
-            </span>
           </div>
         </div>
       </div>

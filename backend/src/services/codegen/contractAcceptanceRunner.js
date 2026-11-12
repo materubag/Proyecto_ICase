@@ -162,7 +162,9 @@ async function runContractAcceptance({ models, independentModels, request, spec,
               await page.setViewportSize(viewport);
               await page.reload();
               for (const step of journey.steps.filter(step => step.action === 'text')) await page.getByText(String(resolveTest(step.value, context)), { exact: false }).first().waitFor({ state: 'visible', timeout: 10000 });
-              assert.equal(await page.evaluate(() => document.documentElement.scrollWidth > innerWidth), false, 'RESPONSIVE_HORIZONTAL_OVERFLOW');
+              const overflow = await page.evaluate(() => ({ width: innerWidth, scroll: document.documentElement.scrollWidth,
+                elements: [...document.querySelectorAll('body *')].filter(node => node.getBoundingClientRect().right > innerWidth + 1).slice(0, 8).map(node => ({ tag: node.tagName, className: typeof node.className === 'string' ? node.className.slice(0, 90) : '', right: Math.round(node.getBoundingClientRect().right) })) }));
+              assert.equal(overflow.scroll > overflow.width, false, 'RESPONSIVE_HORIZONTAL_OVERFLOW ' + JSON.stringify(overflow));
               const relative = 'screenshots/' + scenario.id + '-' + journeyIndex + '-' + viewport.width + '.png';
               fs.mkdirSync(path.join(directory, 'screenshots'), { recursive: true });
               await page.screenshot({ path: path.join(directory, relative), fullPage: true }); screenshots.push(relative);

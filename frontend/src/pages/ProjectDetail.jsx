@@ -12,6 +12,7 @@ import ProjectArchitecture from './ProjectArchitecture';
 import ProjectToolsTeam from './ProjectToolsTeam';
 import ProjectEngineering from './ProjectEngineering';
 import ProjectCodeGen from './ProjectCodeGen';
+import GlobalAIChatWidget from '../components/common/GlobalAIChatWidget';
 
 export default function ProjectDetail({
   project,
@@ -56,106 +57,7 @@ export default function ProjectDetail({
   };
 
   return (
-    <div className="full-page" style={{ display: 'flex', flexDirection: 'column', height: '100%', overflow: 'hidden' }}>
-      {/* Workspace Sub-header: project context & quick actions (without duplicate tab navigation) */}
-      <div className="page-subheader">
-        <div className="page-subheader-row">
-          <div style={{ display: 'flex', alignItems: 'center', gap: '10px', minWidth: 0, flexWrap: 'wrap' }}>
-            {isEditing ? (
-              <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap' }}>
-                <input
-                  type="text"
-                  className="form-control"
-                  value={nameValue}
-                  onChange={(e) => setNameValue(e.target.value)}
-                  style={{ width: '280px', height: '32px', padding: '0 8px', fontWeight: 600 }}
-                  autoFocus
-                />
-                <button
-                  type="button"
-                  className="btn btn-primary btn-sm"
-                  onClick={handleSave}
-                  disabled={saving || !nameValue.trim()}
-                >
-                  {saving ? 'Guardando...' : 'Guardar'}
-                </button>
-                <button
-                  type="button"
-                  className="btn btn-outline btn-sm"
-                  onClick={() => setIsEditing(false)}
-                  disabled={saving}
-                >
-                  Cancelar
-                </button>
-              </div>
-            ) : (
-              <>
-                <h1 className="page-title" style={{ margin: 0 }}>{project.name}</h1>
-                {statusBadge()}
-                <button
-                  type="button"
-                  className="btn btn-ghost btn-icon btn-sm"
-                  onClick={() => {
-                    setNameValue(project.name);
-                    setDescValue(project.description || '');
-                    setIsEditing(true);
-                  }}
-                  title="Editar nombre y descripción"
-                  aria-label="Editar proyecto"
-                >
-                  <span className="ms ms-sm">edit</span>
-                </button>
-              </>
-            )}
-          </div>
-
-          <div style={{ display: 'flex', alignItems: 'center', gap: '10px', flexShrink: 0 }}>
-            {/* Attention banner if pending candidates exist */}
-            {pendingCandidatesCount > 0 && activeTab !== 'requirements' && (
-              <button
-                type="button"
-                className="btn btn-outline btn-sm"
-                onClick={() => onTabChange('requirements')}
-                style={{
-                  color: '#b42318',
-                  borderColor: 'rgba(180, 35, 24, 0.3)',
-                  background: 'rgba(180, 35, 24, 0.05)',
-                  fontSize: '0.75rem'
-                }}
-                title="Ir a revisión de candidatos ISO 29148"
-              >
-                <span className="ms ms-xs">rate_review</span>
-                <span>{pendingCandidatesCount} candidatos por revisar</span>
-              </button>
-            )}
-
-            <span style={{ fontSize: '0.75rem', color: 'var(--outline)' }}>
-              Actualizado: {new Date(project.updatedAt).toLocaleDateString('es', { day: '2-digit', month: 'short', year: 'numeric' })}
-            </span>
-            <button
-              type="button"
-              className="btn btn-ghost btn-sm"
-              onClick={onBack}
-              title="Volver a lista de proyectos"
-            >
-              <span className="ms ms-sm">arrow_back</span>
-              <span>Proyectos</span>
-            </button>
-          </div>
-        </div>
-
-        {/* Inline description editor if editing */}
-        {isEditing && (
-          <textarea
-            className="form-control"
-            value={descValue}
-            onChange={(e) => setDescValue(e.target.value)}
-            placeholder="Descripción del proyecto..."
-            style={{ minHeight: '60px', marginTop: '6px' }}
-          />
-        )}
-      </div>
-
+    <div className="full-page" style={{ display: 'flex', flexDirection: 'column', height: '100%', overflow: 'hidden', background: '#FFFFFF' }}>
       {/* Module Workspace Content */}
       <div style={{ flex: 1, minHeight: 0, overflow: 'hidden', display: 'flex', flexDirection: 'column' }}>
         {activeTab === 'summary' && (
@@ -171,6 +73,7 @@ export default function ProjectDetail({
         {activeTab === 'sources' && (
           <ProjectSources
             project={project}
+            onProjectUpdated={onProjectUpdated}
             onNavigateToReview={() => onTabChange('requirements')}
             onNavigateToSummary={() => onTabChange('summary')}
           />
@@ -200,9 +103,12 @@ export default function ProjectDetail({
           <ProjectEngineering project={project} view={activeTab} onProjectUpdated={onProjectUpdated} />
         )}
         {activeTab === 'codegen' && (
-          <ProjectCodeGen project={project} onNavigateTo={onTabChange} />
+          <ProjectCodeGen project={project} onProjectUpdated={onProjectUpdated} />
         )}
       </div>
+
+      {/* Global AI Chat Popup Widget (Disponible en todas las pantallas) */}
+      <GlobalAIChatWidget key={project.id} project={project} onProjectUpdated={onProjectUpdated} />
     </div>
   );
 }

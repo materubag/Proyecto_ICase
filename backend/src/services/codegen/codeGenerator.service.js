@@ -336,6 +336,8 @@ JWT_EXPIRATION=8h
       addFile('backend/src/middleware/auth.middleware.js', auth.middleware, 'javascript');
       addFile('backend/src/controllers/auth.controller.js', auth.source, 'javascript');
       addFile('backend/src/routes/auth.routes.js', auth.routes, 'javascript');
+    } else {
+      addFile('backend/src/middleware/auth.middleware.js', generateAuthMiddlewareFile(), 'javascript');
     }
 
     // Express REST Controllers and Routes
@@ -364,7 +366,9 @@ JWT_EXPIRATION=8h
     // File & Image Upload Infrastructure (Multer)
     addFile('backend/src/middleware/upload.middleware.js', generateUploadMiddlewareFile(), 'javascript');
     addFile('backend/src/routes/upload.routes.js', spec.credentialChangeContract ? require('fs').readFileSync(require.resolve('./reviewedUploadRoutes'), 'utf8') : generateUploadRoutesFile({ privateUploads: Boolean(spec.uploads?.private), roles: spec.uploads?.roles || [] }), 'javascript');
-    addFile('backend/src/services/upload.storage.js', require('fs').readFileSync(require.resolve('./uploadStorageRuntime'), 'utf8'), 'javascript');
+    let uploadStorageSource = require('fs').readFileSync(require.resolve('./uploadStorageRuntime'), 'utf8');
+    if (require('./reviewedAcceptanceRegistry').resolve(spec)) uploadStorageSource = uploadStorageSource.replace('  return { archivoId: upload.archivoId', "  if (context === 'recepcion' && upload.diagnosticoId) throw Object.assign(new Error('La carga pertenece a un diagnóstico'), { statusCode: 403 });\n  return { archivoId: upload.archivoId");
+    addFile('backend/src/services/upload.storage.js', uploadStorageSource, 'javascript');
 
     // Central API Router index
     addFile('backend/src/routes/index.js', generateMasterRoutesIndexFile(spec.entities, { hasOperations, hasAuth }), 'javascript');
