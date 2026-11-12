@@ -1,4 +1,3 @@
-import DeliveryWorkflowPanel from '../components/DeliveryWorkflowPanel';
 import React, { useState, useEffect, useMemo } from 'react';
 import DiagramViewport from '../components/common/DiagramViewport';
 import { generateNavigationDiagram, generateFlowchartDiagram } from '../utils/mermaidGenerators';
@@ -141,8 +140,7 @@ export default function ProjectNavigation({ project, onProjectUpdated }) {
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', height: '100%', overflowY: 'auto', background: '#FFFFFF', padding: '32px 40px' }}>
-      <DeliveryWorkflowPanel project={project} mode="screens" onProjectUpdated={onProjectUpdated} />
-
+      
       {/* Mockup Header */}
       <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', marginBottom: '24px' }}>
         <div>

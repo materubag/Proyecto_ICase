@@ -24,10 +24,10 @@ async function main(){
   };
   try{
     await run(2);const database=await run(3);state.stages[3]={version:1,content:{physicalModel:structuredClone(f.spec.entities),relationships:[]}};
-    const definition={content:{operation,acceptanceScenarios:scenarios},validation:{passed:true},review:{status:'SUCCEEDED'}};definition.approval={contentHash:require('../src/services/codegen/deliveryPolicy').hash(definition.content)};
+    const definition={content:{operation,acceptanceScenarios:scenarios},validation:{passed:true,executedAt:new Date().toISOString()},review:{status:'SUCCEEDED'}};definition.review.contentHash=require('../src/services/codegen/deliveryPolicy').hash(definition.content);definition.approval={manualReview:{confirmed:true},contentHash:require('../src/services/codegen/deliveryPolicy').hash(definition.content)};
     state.endpoints[operation.operationId]={definition};
     await run(4,operation.operationId,definition.content);state.endpoints[operation.operationId].implemented=true;
-    const listDefinition={content:{operation:listing,acceptanceScenarios:listing.acceptanceScenarios},validation:{passed:true},review:{status:'SUCCEEDED'}};listDefinition.approval={contentHash:require('../src/services/codegen/deliveryPolicy').hash(listDefinition.content)};
+    const listDefinition={content:{operation:listing,acceptanceScenarios:listing.acceptanceScenarios},validation:{passed:true,executedAt:new Date().toISOString()},review:{status:'SUCCEEDED'}};listDefinition.review.contentHash=require('../src/services/codegen/deliveryPolicy').hash(listDefinition.content);listDefinition.approval={manualReview:{confirmed:true},contentHash:require('../src/services/codegen/deliveryPolicy').hash(listDefinition.content)};
     state.endpoints[listing.operationId]={definition:listDefinition};await run(4,listing.operationId,listDefinition.content);state.endpoints[listing.operationId].implemented=true;
     await run(5);await run(6);
     // Incremental DB change: a nullable field, preserving all previous migration files and data.

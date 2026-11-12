@@ -1,4 +1,3 @@
-import DocumentWorkflowPanel from '../components/DocumentWorkflowPanel';
 import React, { useState, useEffect } from 'react';
 import { engineering } from '../api/engineering.api';
 import ImpactModal from '../components/common/ImpactModal';
@@ -30,6 +29,7 @@ export default function ProjectRequirements({ project, onProjectUpdated, initial
   const [changeError, setChangeError] = useState('');
   const requirements = (project.requirements || []).filter(r=>!r.isDeleted&&r.status!=='REMOVED');
   const actorsMap = new Map((project.actors || []).map(a => [a.id, a.name]));
+  const pendingActorsCount = (project.actors || []).filter(a => a.reviewStatus !== 'APPROVED').length;
 
 
 
@@ -162,7 +162,6 @@ export default function ProjectRequirements({ project, onProjectUpdated, initial
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', height: '100%', overflowY: 'auto', background: '#FFFFFF', padding: '32px 40px' }}>
-      <DocumentWorkflowPanel project={project} stage="requirements" onProjectUpdated={onProjectUpdated} />
       {changeError && <p role="alert">{changeError}</p>}
       <ImpactModal change={pendingChange} busy={savingReq} onClose={() => setPendingChange(null)} onConfirm={async () => { setSavingReq(true); setChangeError(''); try { await engineering(project.id, `/changes/${pendingChange.id}`, { status: 'APPROVED', confirmImpact: true }, 'PATCH'); setPendingChange(null); setSelected(null); await onProjectUpdated(); } catch (e) { setChangeError(e.message); } finally { setSavingReq(false); } }} />
 
@@ -248,6 +247,44 @@ export default function ProjectRequirements({ project, onProjectUpdated, initial
           </button>
         </div>
       </div>
+
+      {pendingActorsCount > 0 && reqSubTab !== 'actors' && (
+        <div style={{
+          background: '#FFFBEB',
+          border: '1px solid #FDE68A',
+          borderRadius: '12px',
+          padding: '12px 18px',
+          marginBottom: '20px',
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'space-between',
+          boxShadow: '0 1px 2px rgba(217, 119, 6, 0.05)'
+        }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+            <span className="ms ms-sm" style={{ color: '#D97706' }}>group</span>
+            <span style={{ fontSize: '0.8125rem', color: '#92400E', fontWeight: 500 }}>
+              Hay <strong>{pendingActorsCount}</strong> actor{pendingActorsCount > 1 ? 'es' : ''} pendiente{pendingActorsCount > 1 ? 's' : ''} de aprobación. Apruébalos primero para congelar su asignación a los requerimientos y diagramas.
+            </span>
+          </div>
+          <button
+            type="button"
+            onClick={() => setReqSubTab('actors')}
+            style={{
+              background: '#D97706',
+              color: '#FFFFFF',
+              border: 'none',
+              borderRadius: '6px',
+              padding: '6px 14px',
+              fontSize: '0.75rem',
+              fontWeight: 600,
+              cursor: 'pointer',
+              transition: 'all 0.15s ease'
+            }}
+          >
+            Revisar y Aprobar Actores ({pendingActorsCount}) →
+          </button>
+        </div>
+      )}
 
       {reqSubTab === 'candidates' && (
         <div className="page-scrollable" style={{ flex: 1, minHeight: 0, overflowY: 'auto', padding: '20px 24px' }}>
@@ -393,7 +430,10 @@ export default function ProjectRequirements({ project, onProjectUpdated, initial
                 {filtered.map((req, idx) => {
                   const pre = req.qualityReport?.preconditions || req.preconditions || 'El usuario debe estar autenticado con rol y permisos correspondientes.';
                   const post = req.qualityReport?.postconditions || req.postconditions || 'El sistema actualiza el registro en la base de datos y refleja los cambios.';
-                  const actors = (req.actorIds || []).map(id => actorsMap.get(id) || id).join(', ') || 'Sin actor asignado';
+                  const hasActors = Array.isArray(req.actorIds) && req.actorIds.length > 0;
+                  const actors = hasActors
+                    ? req.actorIds.map(id => actorsMap.get(id) || id).join(', ')
+                    : (req.type === 'NON_FUNCTIONAL' ? 'Sistema (RNF)' : 'Sistema (Funcionalidad Automática)');
                   const deps = (req.dependencies || []).join(', ') || 'Ninguna';
 
                   return (
@@ -428,10 +468,23 @@ export default function ProjectRequirements({ project, onProjectUpdated, initial
                           <span style={{ fontWeight: 600 }}>{PRIORITY_LABEL[req.priority] || req.priority}</span>
                         </div>
                       </td>
-                      <td style={{ padding: '12px 14px', color: 'var(--secondary)' }}>
-                        <div style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
-                          <span className="ms ms-xs" style={{ color: 'var(--primary)' }}>person</span>
-                          <span>{actors}</span>
+                      <td style={{ padding: '12px 14px' }}>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '5px' }}>
+                          <span className="ms ms-xs" style={{ color: hasActors ? 'var(--primary)' : '#64748B' }}>
+                            {hasActors ? 'person' : 'settings'}
+                          </span>
+                          <span style={{
+                            fontSize: hasActors ? '0.8125rem' : '0.75rem',
+                            fontWeight: hasActors ? 500 : 600,
+                            color: hasActors ? 'var(--secondary)' : '#475569',
+                            background: hasActors ? 'transparent' : '#F1F5F9',
+                            padding: hasActors ? '0' : '2px 8px',
+                            borderRadius: hasActors ? '0' : '6px',
+                            border: hasActors ? 'none' : '1px solid #E2E8F0',
+                            display: 'inline-block'
+                          }}>
+                            {actors}
+                          </span>
                         </div>
                       </td>
                       <td style={{ padding: '12px 14px', color: 'var(--on-surface-variant)', fontSize: '0.75rem', lineHeight: 1.4 }}>
@@ -755,11 +808,16 @@ export default function ProjectRequirements({ project, onProjectUpdated, initial
             </div>
           </div>
           <div className="grid-2">
-            <ActorMultiSelect
-              actors={(project.actors || []).filter(a => a.reviewStatus === 'APPROVED')}
-              selectedIds={actorIds}
-              onChange={setActorIds}
-            />
+            <div>
+              <ActorMultiSelect
+                actors={(project.actors || []).filter(a => a.reviewStatus === 'APPROVED')}
+                selectedIds={actorIds}
+                onChange={setActorIds}
+              />
+              <span style={{ fontSize: '0.72rem', color: '#64748B', display: 'block', marginTop: '4px' }}>
+                Dejar vacío si es una funcionalidad automática del sistema o RNF.
+              </span>
+            </div>
             <RequirementMultiSelect
               requirements={requirements}
               selectedDependencies={dependencies}

@@ -154,22 +154,22 @@ function generateHtmlMockup(screen) {
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <style>
     :root {
-      --color-primary: ${tokens['--color-primary'] || '#4F46E5'};
-      --color-primary-hover: ${tokens['--color-primary-hover'] || '#4338CA'};
-      --color-bg-app: ${tokens['--color-bg-app'] || '#F8FAFC'};
+      --color-primary: ${tokens['--color-primary'] || '#4338CA'};
+      --color-primary-hover: ${tokens['--color-primary-hover'] || '#3730A3'};
+      --color-bg-app: ${tokens['--color-bg-app'] || '#FAFAF9'};
       --color-surface: ${tokens['--color-surface'] || '#FFFFFF'};
-      --color-border: ${tokens['--color-border'] || '#E2E8F0'};
-      --color-border-focus: ${tokens['--color-border-focus'] || '#6366F1'};
-      --color-text-title: ${tokens['--color-text-title'] || '#0F172A'};
-      --color-text-body: ${tokens['--color-text-body'] || '#334155'};
-      --color-text-muted: ${tokens['--color-text-muted'] || '#64748B'};
+      --color-border: ${tokens['--color-border'] || '#E7E5E0'};
+      --color-border-focus: ${tokens['--color-border-focus'] || '#4338CA'};
+      --color-text-title: ${tokens['--color-text-title'] || '#111111'};
+      --color-text-body: ${tokens['--color-text-body'] || '#111111'};
+      --color-text-muted: ${tokens['--color-text-muted'] || '#5F5F5A'};
       --radius-sm: ${tokens['--radius-sm'] || '6px'};
-      --radius-md: ${tokens['--radius-md'] || '8px'};
+      --radius-md: ${tokens['--radius-md'] || '10px'};
       --radius-lg: ${tokens['--radius-lg'] || '16px'};
     }
-    * { box-sizing: border-box; margin: 0; padding: 0; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; }
+    * { box-sizing: border-box; margin: 0; padding: 0; font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; }
     body { background-color: var(--color-bg-app); color: var(--color-text-title); padding: 1.25rem; }
-    .mockup-container { max-width: 820px; margin: 0 auto; background: var(--color-surface); border-radius: var(--radius-lg); border: 1px solid var(--color-border); box-shadow: 0 4px 16px -2px rgba(15, 23, 42, 0.04); overflow: hidden; }
+    .mockup-container { max-width: 1200px; margin: 0 auto; background: var(--color-surface); border-radius: var(--radius-lg); border: 1px solid var(--color-border); box-shadow: none; overflow: hidden; }
     .mockup-topbar { background: var(--color-text-title); color: #ffffff; padding: 0.7rem 1.25rem; display: flex; justify-content: space-between; align-items: center; font-size: 0.825rem; }
     .mockup-topbar .route-badge { background: #1e293b; color: #38bdf8; font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 0.75rem; padding: 3px 8px; border-radius: 4px; }
     .mockup-body { padding: 1.5rem; display: flex; flex-direction: column; gap: 1rem; }

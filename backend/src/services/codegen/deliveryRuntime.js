@@ -68,7 +68,18 @@ class DeliveryRuntime {
     return new Promise((resolve, reject) => {
       const child = spawn(command, args, { cwd: directory, env: { ...process.env, ...options.env }, windowsHide: true, shell: false });
       this.children.set(child,log?.projectId);
-      const timer = setTimeout(() => child.kill(), options.timeout || 240000);
+      const timer = setTimeout(() => {
+        if (process.platform === 'win32' && child.pid) {
+          const killer = spawn('taskkill', ['/pid', String(child.pid), '/T', '/F'], { windowsHide: true, stdio: 'ignore' });
+          killer.on('error', () => child.kill());
+          killer.on('exit', code => { if (code !== 0 && child.exitCode == null) child.kill(); });
+          killer.unref();
+        } else child.kill('SIGKILL');
+        this.children.delete(child);
+        child.stdout.destroy(); child.stderr.destroy();
+        child.unref();
+        reject(Object.assign(new Error('Tiempo límite de ejecución agotado'), { execution: { code: null, passed: false, output, startedAt, executedAt: new Date().toISOString() } }));
+      }, options.timeout || 240000);
       const collect = data => { let text = data.toString();for(const key of ['DB_PASSWORD','JWT_SECRET','OPENAI_API_KEY','ANTHROPIC_API_KEY','GOOGLE_STITCH_API_KEY'])for(const value of[options.env?.[key],process.env[key]])if(value?.length>=6)text=text.split(value).join('[REDACTED]'); output = (output + text).slice(-40000); log?.(text); };
       child.stdout.on('data', collect); child.stderr.on('data', collect);
       child.on('error', error => { clearTimeout(timer);this.children.delete(child); reject(error); });
@@ -121,6 +132,11 @@ class DeliveryRuntime {
   }
   async boot(projectId, directory, runtime, options = {}) {
     await this.close(projectId);
+    if (runtime) {
+      const db = new Client({ ...this.connection(), database: runtime.database });
+      try { await db.connect(); await db.query('SELECT 1'); }
+      finally { await db.end(); }
+    }
     const net = require('node:net');
     const port = await new Promise((resolve, reject) => { const socket = net.createServer(); socket.once('error', reject); socket.listen(0, '127.0.0.1', () => { const chosen = socket.address().port; socket.close(() => resolve(chosen)); }); });
     const child = spawn(process.execPath, [path.join(directory, 'backend/src/server.js')], { cwd: path.join(directory, 'backend'), windowsHide: true,
@@ -181,7 +197,7 @@ class DeliveryRuntime {
         { path: 'backend/src/routes/index.js', content: `const router=require('express').Router();router.get('/health',(_q,r)=>r.json({status:'OK'}));${spec.security?.authType === 'JWT' ? "router.use('/auth',require('./auth.routes'));" : ''}${mounts}\nmodule.exports=router;` },
         { path: 'backend/src/server.js', content: require('./serverGenerator').generateServerFile(spec.project.name,{serveFrontend:true}) },
         { path: 'backend/src/services/operation.runtime.js', content: fs.readFileSync(require.resolve('./operationRuntime'), 'utf8') },
-        { path: 'openapi.json', content: JSON.stringify(this.openapi(state, op), null, 2) }
+        { path: 'openapi.json', content: JSON.stringify(this.openapi({ ...state, security: spec.security }, op), null, 2) }
       ], prior);
       // Explicit endpoints only: no catch-all entity CRUD is mounted.
       runtime = await this.database(spec.project.id, runtime);
@@ -206,7 +222,7 @@ class DeliveryRuntime {
       changed = writeFiles(directory, frontendFiles, prior);
       const modules = path.join(directory, 'frontend/node_modules');
       if (fs.existsSync(modules) && fs.lstatSync(modules).isSymbolicLink()) fs.unlinkSync(modules);
-      tests.push(await this.command('npm', ['install', '--ignore-scripts', '--no-audit', '--no-fund'], path.join(directory, 'frontend'), log));
+      tests.push(await this.command('npm', ['install', '--ignore-scripts', '--no-audit', '--no-fund', '--fetch-retries=0', '--fetch-timeout=30000'], path.join(directory, 'frontend'), log));
       tests.push(await this.command(process.execPath, ['scripts/compile-mockup-themes.cjs'], path.join(directory, 'frontend'), log));
       tests.push(await this.command(process.execPath, ['node_modules/vite/bin/vite.js', 'build'], path.join(directory, 'frontend'), log));
       // Serve the actual built frontend from the same isolated HTTP backend.
@@ -267,15 +283,27 @@ class DeliveryRuntime {
     if (!scenarios.some(s => s.persistence?.length)) p.fail('Falta comprobación independiente de persistencia');
   }
   openapi(state, current) {
-    const operations = Object.values(state.endpoints || {}).map(e => e.definition?.content?.operation).filter(Boolean).filter(o => o.operationId !== current.operationId).concat(current);
+    const operations = Object.values(state.endpoints || {}).filter(e => p.approved(e.definition)).map(e => e.definition.content.operation)
+      .filter(o => o.operationId !== current?.operationId);
+    if (current) operations.push(current);
+    const jwt = state.security?.authType === 'JWT';
     const paths = {};
     for (const op of operations) {
       const route = op.route.replace(/:([a-zA-Z0-9_]+)/g, '{$1}');
       paths[route] ||= {}; paths[route][op.method.toLowerCase()] = { operationId: op.operationId, summary: op.name,
+        security: jwt && op.invocation !== 'SYSTEM' ? [{ bearerAuth: [] }] : [],
+        parameters: [...(route.matchAll(/\{([^}]+)\}/g))].map(match => ({ name: match[1], in: 'path', required: true, schema: { type: 'string' } })),
         ...(op.input?.bodySchema ? { requestBody: { content: { 'application/json': { schema: op.input.bodySchema } } } } : {}),
-        responses: { [op.output?.successStatus || 200]: { description: 'Respuesta definida en el contrato aprobado' } } };
+        responses: { [op.output?.successStatus || 200]: { description: 'Respuesta definida en el contrato aprobado' },
+          ...(jwt ? { 401: { description: 'Token ausente o inválido' }, 403: { description: 'Permisos insuficientes' } } : {}) } };
     }
-    return { openapi: '3.0.3', info: { title: 'Backend de pruebas', version: '1' }, paths };
+    paths['/api/health'] = { get: { summary: 'Salud del servidor', security: [], responses: { 200: { description: 'Servidor activo' } } } };
+    if (jwt) paths['/api/auth/login'] = { post: { operationId: 'login', summary: 'Obtener token JWT', security: [],
+      requestBody: { required: true, content: { 'application/json': { schema: { type: 'object', required: ['identifier', 'password'],
+        properties: { identifier: { type: 'string', description: 'Usuario o correo registrado' }, password: { type: 'string', format: 'password' } } } } } },
+      responses: { 200: { description: 'Token JWT. Cópielo en Authorize para probar los endpoints.' }, 401: { description: 'Credenciales inválidas' } } } };
+    return { openapi: '3.0.3', info: { title: 'Backend de pruebas', version: '1' }, paths,
+      ...(jwt ? { components: { securitySchemes: { bearerAuth: { type: 'http', scheme: 'bearer', bearerFormat: 'JWT' } } } } : {}) };
   }
   incrementalMigrations(before, after, version) {
     const additions = [];

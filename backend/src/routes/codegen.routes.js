@@ -16,6 +16,12 @@ router.get('/download', codegenController.downloadZip);
 // GET /api/projects/:projectId/codegen/spec
 router.get('/spec', codegenController.getSpecification);
 
+// GET /api/projects/:projectId/codegen/stages/status
+router.get('/stages/status', codegenController.getStagesStatus);
+
+// POST /api/projects/:projectId/codegen/stages/approve
+router.post('/stages/approve', codegenController.approveStage);
+
 // POST /api/projects/:projectId/codegen/spec/validate
 router.post('/spec/validate', codegenController.validateSpecification);
 

@@ -1,4 +1,3 @@
-import DocumentWorkflowPanel from '../components/DocumentWorkflowPanel';
 import React, { useEffect, useState } from 'react';
 import {
   FileText,
@@ -184,8 +183,7 @@ export default function ProjectSources({ project, embedded = false, onNavigateTo
 
   return (
     <div className={embedded ? '' : 'page-scrollable'} style={{ padding: embedded ? '0' : '24px', marginBottom: '24px' }}>
-      <DocumentWorkflowPanel project={project} stage="context" onProjectUpdated={onProjectUpdated} />
-      <section className="panel" style={{ padding: embedded ? '18px' : '20px' }}>
+            <section className="panel" style={{ padding: embedded ? '18px' : '20px' }}>
         {/* Cabecera */}
         <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: '16px', marginBottom: '18px' }}>
           <div style={{ display: 'flex', gap: '10px', alignItems: 'flex-start' }}>

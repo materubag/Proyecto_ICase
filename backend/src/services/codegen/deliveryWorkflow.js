@@ -18,14 +18,23 @@ class DeliveryWorkflow {
       entities: { include: { attributes: true } }, relationships: true, businessRules: true, navigationNodes: true, screens: true, technologies: true } });
     if (!project) p.fail('Proyecto no encontrado', 404);
     const accepted = rows => (rows || []).filter(r => !r.isDeleted && (r.status === 'APPROVED' || r.reviewStatus === 'APPROVED'));
-    const spec = await require('./projectSpecBuilder').buildProjectSpec(id);
+    let spec, contractError = null;
+    try {
+      spec = await require('./projectSpecBuilder').buildProjectSpec(id);
+    } catch (error) {
+      // Keep review and recovery accessible, but never execute an invalid contract.
+      contractError = error.message;
+      spec = { project: { id, name: project.name }, operations: [], entities: [], screens: [],
+        requirements: accepted(project.requirements), security: { roles: accepted(project.actors).map(a => a.name) } };
+    }
     const graph = { requirements: project.requirements, actors: project.actors, useCases: project.useCases, entities: project.entities,
       relationships: project.relationships, rules: project.businessRules, navigation: project.navigationNodes,
       contextVersion: document.context?.version, actorVersion: document.actors?.version, requirementVersion: document.requirements?.version,
-      documentApproved: !!document.context?.approval && !!document.actors?.approval && !!document.requirements?.approval };
+      documentApproved: !!document.context?.approval && !!document.actors?.approval && !!document.requirements?.approval,
+      contracts: p.hash({ operations: spec.operations, security: spec.security, contractError }), platform: project.platform };
     const clean = rows => rows.map(row => ({ ...row, createdAt: undefined, updatedAt: undefined }));
     for (const key of ['requirements', 'actors', 'useCases', 'entities', 'relationships', 'rules', 'navigation']) graph[key] = clean(graph[key]);
-    return { project: { id, name: project.name, platform: project.platform }, spec, graph:p.json(graph), document,
+    return { project: { id, name: project.name, platform: project.platform }, spec, contractError, graph:p.json(graph), document,
       requirements: accepted(project.requirements), actors: accepted(project.actors), useCases: accepted(project.useCases),
       entities: accepted(project.entities), rules: accepted(project.businessRules), navigation: accepted(project.navigationNodes),
       documentApproved: graph.documentApproved,
@@ -34,10 +43,14 @@ class DeliveryWorkflow {
   }
   initial(input) { return { version: 1, graphHash: p.hash(input.graph), graph: input.graph, documentApproved: input.documentApproved, prerequisites: input.prerequisites,
     catalog: null, mockups: {}, stages: {}, endpoints: {}, history: [], decisions: [], changes: [], files: {}, activeJobId: null, paused: false }; }
-  async save(tx, row, state) { return tx.deliveryWorkflow.update({ where: { projectId: row.projectId }, data: { state: p.json(state), revision: { increment: 1 } } }); }
-  invalidate(state, from, reason) {
+  async save(tx, row, state) {
+    delete state.approvedStageIds;
+    return tx.deliveryWorkflow.update({ where: { projectId: row.projectId }, data: { state: p.json(state), revision: { increment: 1 } } });
+  }
+  invalidate(state, from, reason, invalidateEndpoints = true) {
     for (let stage = from; stage <= 7; stage++) if (state.stages[stage]) { state.history.push(p.json({ kind: 'stage', stage, ...state.stages[stage], reason })); state.stages[stage].approval = null; state.stages[stage].review = { status: 'STALE', reason }; }
-    if (from <= 4) for (const endpoint of Object.values(state.endpoints)) {
+    if (from <= 1 && state.stages[1]) state.stages[1].componentApprovals = {};
+    if (from <= 4 && invalidateEndpoints) for (const endpoint of Object.values(state.endpoints)) {
       state.history.push(p.json({ kind: 'endpoint', ...endpoint, reason }));
       if (endpoint.definition) { endpoint.definition.approval = null; endpoint.definition.review = { status: 'STALE', reason }; }
       if (endpoint.execution) { endpoint.execution.approval = null; endpoint.execution.review = { status: 'STALE', reason }; }
@@ -46,17 +59,39 @@ class DeliveryWorkflow {
   async load(tx, id, input) {
     let row = await tx.deliveryWorkflow.findUnique({ where: { projectId: id } });
     if (!row) row = await tx.deliveryWorkflow.create({ data: { projectId: id, state: this.initial(input) } });
-    const state = p.json(row.state), hash = p.hash(input.graph);
+    const rawState = p.json(row.state || {});
+    const state = { ...this.initial(input), ...rawState };
+    state.mockups = state.mockups || {};
+    state.stages = state.stages || {};
+    state.endpoints = state.endpoints || {};
+    state.history = state.history || [];
+    state.decisions = state.decisions || [];
+    state.changes = state.changes || [];
+    state.files = state.files || {};
+    let repaired = Object.hasOwn(state, 'approvedStageIds');
+    delete state.approvedStageIds;
+    const artifacts = [...Object.entries(state.stages), ['screens', state.catalog],
+      ...Object.entries(state.mockups).map(([id, value]) => ['mockup:' + id, value]),
+      ...Object.entries(state.endpoints).flatMap(([id, value]) => [['definition:' + id, value.definition], ['execution:' + id, value.execution]])];
+    for (const [number, value] of artifacts) {
+      if (!value) continue;
+      if (value.approval && !p.approved(value)) {
+        state.history.push(p.json({ target: number, ...value, reason: 'Aprobación sin evidencia vigente' }));
+        value.approval = null;
+        repaired = true;
+      }
+    }
+    const hash = p.hash(input.graph);
     if (state.graphHash !== hash) {
       const changed = Object.keys(input.graph).filter(key => p.hash(input.graph[key]) !== p.hash(state.graph?.[key]));
-      const functional = changed.some(key => ['requirements', 'actors', 'useCases', 'rules', 'navigation', 'contextVersion', 'actorVersion', 'requirementVersion'].includes(key));
+      const functional = changed.some(key => ['requirements', 'actors', 'useCases', 'rules', 'navigation', 'contextVersion', 'actorVersion', 'requirementVersion', 'contracts', 'platform'].includes(key));
       if (functional && state.catalog) { state.history.push(p.json({ kind: 'catalog', ...state.catalog })); state.catalog.approval = null; state.catalog.review = { status: 'STALE' }; }
       if (functional) for (const mockup of Object.values(state.mockups)) { state.history.push(p.json({ kind: 'mockup', ...mockup })); mockup.approval = null; mockup.review = { status: 'STALE' }; }
       // Preserve physical migrations and all files. Only their approval is invalidated.
       this.invalidate(state, changed.includes('contextVersion') ? 1 : changed.some(key => ['entities', 'relationships'].includes(key)) ? 3 : changed.includes('navigation') && changed.length === 1 ? 6 : 4, 'Cambió una dependencia aprobada: ' + changed.join(', '));
       state.graphHash = hash; state.graph = input.graph; state.documentApproved = input.documentApproved; state.prerequisites = input.prerequisites;
       row = await this.save(tx, row, state);
-    }
+    } else if (repaired) row = await this.save(tx, row, state);
     return { row, state };
   }
   async get(id) {
@@ -66,9 +101,10 @@ class DeliveryWorkflow {
       const jobs = await tx.deliveryJob.findMany({ where: { projectId: id }, orderBy: { createdAt: 'desc' }, take: 40 });
       const calls = await tx.deliveryCall.findMany({ where: { projectId: id }, orderBy: { createdAt: 'desc' }, take: 100 });
       const expose = ({ request, ...job }) => job;
-      return { revision: row.revision, ...state, jobs: jobs.map(expose), calls: calls.map(expose), stageNames: p.stages,
+      return { revision: row.revision, ...state, ...p.stageStatus(state), contractError: input.contractError || null,
+        jobs: jobs.map(expose), calls: calls.map(expose), stageNames: p.stages, security: { authType: input.spec.security?.authType || 'NONE' },
         prerequisites: { ...state.prerequisites, catalog: p.approved(state.catalog), mockups: Object.entries(state.mockups).map(([id, m]) => ({ id, approved: p.approved(m), version: m.version })) },
-        availableOperations: (input.spec.operations || []).map(op => ({ id: op.operationId, name: op.name, method: op.method, route: op.route, requirementIds: op.requirementIds })) };
+        availableOperations: (input.spec.operations || []).filter(op => op.invocation !== 'SYSTEM').map(op => ({ id: op.operationId, name: op.name, method: op.method, route: op.route, requirementIds: op.requirementIds })) };
     });
   }
   pick(state, target) {
@@ -89,21 +125,22 @@ class DeliveryWorkflow {
       for (const [id, m] of Object.entries(state.mockups)) if (p.hash(old?.content?.screens.find(s => s.id === id)) !== p.hash(content.screens?.find(s => s.id === id))) { m.approval = null; m.review = { status: 'STALE' }; }
       this.invalidate(state, 6, 'Cambió la especificación de pantallas');
     } else if (target.startsWith('mockup:')) { state.mockups[target.slice(7)] = next; this.invalidate(state, 6, 'Cambió un mockup'); }
-    else if (target.startsWith('definition:')) { const id = target.slice(11); state.endpoints[id] ||= {}; state.endpoints[id].definition = next; state.endpoints[id].execution = null; this.invalidate(state, 5, 'Cambió una definición de endpoint'); }
-    else if (target.startsWith('execution:')) { const id = target.slice(10); state.endpoints[id].execution = next; state.endpoints[id].implemented = true; this.invalidate(state, 5, 'Se implementó un endpoint'); }
+    else if (target.startsWith('definition:')) { const id = target.slice(11); state.endpoints[id] ||= {}; state.endpoints[id].definition = next; state.endpoints[id].execution = null; this.invalidate(state, 4, 'Cambió una definición de endpoint', false); }
+    else if (target.startsWith('execution:')) { const id = target.slice(10); state.endpoints[id].execution = next; state.endpoints[id].implemented = true; this.invalidate(state, 4, 'Se implementó un endpoint', false); }
     else { const number = Number(target); this.invalidate(state, number + 1, 'Nueva versión de etapa ' + number); state.stages[number] = next; }
     return next;
   }
   gate(state, target, task, input) {
     if (!state.documentApproved) p.fail('El flujo documental requiere aprobaciones vigentes');
     if (state.paused && !['resume', 'cancel'].includes(task)) p.fail('Trabajo pausado; reanude para continuar');
+    if (input.contractError && (/^(definition|execution|change):/.test(target) || Number(target) >= 3)) p.fail('Corrija los contratos pendientes antes de continuar: ' + input.contractError);
     if(target.startsWith('change:')) { if(!state.changes.some(c=>c.id===target.slice(7)))p.fail('Solicitud de cambio inexistente');return; }
     if (target === 'screens') return;
     if (target.startsWith('mockup:')) { if (!p.approved(state.catalog)) p.fail('Apruebe el catálogo de pantallas antes de enviar a Stitch');
       if (!state.catalog.content.screens.some(s => s.id === target.slice(7))) p.fail('Pantalla ajena al catálogo aprobado'); return; }
     if (/^(definition|execution):/.test(target)) {
       p.assertStage(state, 4); const id = target.split(':').slice(1).join(':');
-      if (!(input.spec.operations || []).some(op => op.operationId === id)) p.fail('Endpoint ajeno a la especificación');
+      if (!(input.spec.operations || []).some(op => op.operationId === id && op.invocation !== 'SYSTEM')) p.fail('Endpoint ajeno a la especificación HTTP');
       if (target.startsWith('execution:') && !p.approved(state.endpoints[id]?.definition)) p.fail('Apruebe primero la definición individual del endpoint');
       const operation = state.endpoints[id]?.definition?.content?.operation;
       if (operation?.dependencies?.some(dep => !p.approved(state.endpoints[dep]?.execution))) p.fail('Falta aprobar el funcionamiento de endpoints dependientes');
@@ -113,7 +150,7 @@ class DeliveryWorkflow {
     if (number >= 3 && (!input.entities.length || input.prerequisites.models.some(m => m.status !== 'APPROVED'))) p.fail('Revise y apruebe el modelo de datos antes de generar la BD');
     if (number >= 6 && (!p.approved(state.catalog) || state.catalog.content.screens.some(s => !p.approved(state.mockups[s.id])))) p.fail('Faltan mockups aprobados y vigentes');
     if (number === 4 && task !== 'prepare') {
-      const operations = input.spec.operations || [];
+      const operations = (input.spec.operations || []).filter(op => op.invocation !== 'SYSTEM');
       if (!operations.length || operations.some(op => !p.approved(state.endpoints[op.operationId]?.definition) || !p.approved(state.endpoints[op.operationId]?.execution))) p.fail('Cada endpoint necesita aprobación de definición y funcionamiento');
     }
   }
@@ -192,10 +229,11 @@ class DeliveryWorkflow {
     const job = await this.db.deliveryJob.findUnique({ where: { id } });
     if (!job || !['QUEUED', 'INTERRUPTED'].includes(job.status)) return;
     await this.db.deliveryJob.update({ where: { id }, data: { status: 'RUNNING' } });
-    const input = await this.inputs(job.projectId);
-    const snapshot = await this.get(job.projectId), target = job.target;
-    let result;
+    let input, snapshot, result;
+    const target = job.target;
     try {
+      input = await this.inputs(job.projectId);
+      snapshot = await this.get(job.projectId);
       this.gate(snapshot, target, job.task, input);
       if (job.inputHash !== snapshot.graphHash) p.fail('Entradas obsoletas: el trabajo no se ejecutará');
       const context = await this.context(input, snapshot, target, job.task);
@@ -240,8 +278,8 @@ class DeliveryWorkflow {
         const stage = target.startsWith('execution:') ? 4 : Number(target);
         const operationId = target.startsWith('execution:') ? target.slice(10) : null;
         if (!Number.isInteger(stage) || stage < 2 || stage > 7) p.fail('Acción no disponible para este artefacto');
-        if (stage === 4 && !operationId) result = { passed: Object.values(snapshot.endpoints).length > 0 && (input.spec.operations || []).every(o => p.approved(snapshot.endpoints[o.operationId]?.execution)),
-          tests: Object.values(snapshot.endpoints).flatMap(e => e.execution?.validation?.tests || []), changed: [], manifest: snapshot.files };
+        if (stage === 4 && !operationId) result = { passed: Object.values(snapshot.endpoints).length > 0 && (input.spec.operations || []).filter(o => o.invocation !== 'SYSTEM').every(o => p.approved(snapshot.endpoints[o.operationId]?.execution)),
+          tests: Object.values(snapshot.endpoints).flatMap(e => e.execution?.validation?.tests || []), changed: [], manifest: snapshot.files, executedAt: new Date().toISOString() };
         else result = await this.runtime.execute(stage, { state: snapshot, spec: input.spec, workspace: job.id, target: operationId, content: operationId ? snapshot.endpoints[operationId].definition.content : null }, message => { this.log(id, message).catch(() => {}); });
       }
       const freshInput = await this.inputs(job.projectId);
@@ -298,7 +336,7 @@ class DeliveryWorkflow {
       if(job.task==='stitch')await this.db.deliveryCall.updateMany({where:{projectId:job.projectId,target,status:'RUNNING'},data:{status:'FAILED',error:error.message}});
       await this.db.deliveryJob.update({ where: { id }, data: { status: 'FAILED', error: error.message, ...(error.execution || error.report || error.diagnostics ? { result: p.json(error.execution || error.report || error.diagnostics) } : {}) } });
       await this.db.$transaction(async tx => { await this.lock(tx, job.projectId); const row = await tx.deliveryWorkflow.findUnique({ where: { projectId: job.projectId } }); if (!row) return;
-        const state = p.json(row.state); if (state.activeJobId === id) { state.activeJobId = null; const value = this.pick(state, target); if (job.task === 'review' && value && state.graphHash===job.inputHash && value.version===this.pick(snapshot,target)?.version) value.review = { status: 'FAILED', error: error.message }; await this.save(tx, row, state); } });
+        const state = p.json(row.state); if (state.activeJobId === id) { state.activeJobId = null; const value = this.pick(state, target); if (job.task === 'review' && value && snapshot && state.graphHash===job.inputHash && value.version===this.pick(snapshot,target)?.version) value.review = { status: 'FAILED', error: error.message }; await this.save(tx, row, state); } });
     }
   }
   async validate(input, state, target) {
@@ -347,22 +385,58 @@ class DeliveryWorkflow {
     return this.db.$transaction(async tx => {
       await this.lock(tx, id); const { row, state } = await this.load(tx, id, input); this.gate(state, target, 'approve', input);
       if (row.revision !== revision) p.fail('Versión desactualizada');
+      if (state.activeJobId) p.fail('Espere a que termine el trabajo antes de aprobar');
       const value = this.pick(state, target);
       if (!value?.validation?.passed || value.review?.status !== 'SUCCEEDED' || value.review.contentHash !== p.hash(value.content)) p.fail('Se requieren validación y revisión Sonnet vigentes');
+      if (!value.validation.executedAt) p.fail('La validación no tiene evidencia de ejecución');
+      p.assertExecuted(value, target);
+      if ((Number(target) >= 2 || target.startsWith('execution:')) && p.hash(value.validation.manifest) !== p.hash(state.files)) p.fail('Los archivos actuales requieren nuevas pruebas para esta aprobación');
+      if (options.manualReview?.confirmed !== true) p.fail('Confirme que revisó y probó esta versión antes de aprobar');
       if((/^\d$/.test(target)&&Number(target)>=2||target.startsWith('execution:'))&&p.hash(manifest(this.runtime.directory(id,state.workspace)))!==p.hash(state.files))p.fail('Los archivos cambiaron después de las pruebas; vuelva a validar sin sobrescribir cambios manuales');
       const pending = [...(value.content.questions || []), ...(value.review.questions || []), ...(value.review.observations || []), ...(value.review.corrections || [])];
       if (pending.length && !options.resolution?.trim()) p.fail('Resuelva las preguntas y observaciones con una decisión registrada');
       if (target === '1' && options.component) {
         if (!Object.hasOwn(p.stack, options.component)) p.fail('Componente de stack inválido');
-        value.componentApprovals ||= {}; value.componentApprovals[options.component] = { at: new Date().toISOString(), version: value.version, hash: p.hash(value.content[options.component]) };
+        value.componentApprovals ||= {}; value.componentApprovals[options.component] = { at: new Date().toISOString(), version: value.version, hash: p.hash(value.content[options.component]),
+          resolution: options.resolution || '', manualReview: { confirmed: true, notes: String(options.manualReview.notes || '').slice(0, 4000) } };
         if (!Object.keys(p.stack).every(key => value.componentApprovals[key]?.hash === p.hash(value.content[key]))) return this.save(tx, row, state);
       } else if (target === '1') p.fail('Apruebe backend, BD, frontend y servicios por separado');
-      value.approval = { by: 'USER', at: new Date().toISOString(), contentHash: p.hash(value.content), version: value.version, resolution: options.resolution || '' };
+      value.approval = { by: 'USER', at: new Date().toISOString(), contentHash: p.hash(value.content), version: value.version, resolution: options.resolution || '',
+        manualReview: { confirmed: true, notes: String(options.manualReview.notes || '').slice(0, 4000), version: value.version, fileHash: p.hash(state.files) } };
       state.decisions.push({ target, action: 'APPROVE', ...value.approval });
       if (target === 'screens') await this.publishScreens(tx, id, value, input);
       if (target.startsWith('mockup:')) await this.publishMockup(tx, id, target.slice(7), value, state);
       return this.save(tx, row, state);
     });
+  }
+  async preview(id) {
+    const state = await this.get(id);
+    if (state.contractError) p.fail(state.contractError);
+    if (p.stageStatus(state).approvedStages.length < 3 || !state.runtime?.database) p.fail('Ejecute y apruebe la base aislada antes de abrir el entorno');
+    if (state.activeJobId || state.paused) p.fail('Termine o reanude el trabajo antes de levantar el entorno');
+    const directory = this.runtime.directory(id, state.workspace);
+    if (p.hash(manifest(directory)) !== p.hash(state.files)) p.fail('Los archivos cambiaron; vuelva a comprobar la etapa afectada');
+    try {
+      const health = await this.runtime.boot(id, directory, state.runtime);
+      const fresh = await this.get(id);
+      if (fresh.revision !== state.revision) p.fail('La versión cambió durante el arranque; vuelva a abrir el entorno');
+      return { health, revision: state.revision, workspace: state.workspace,
+        url: `/api/projects/${id}/codegen/workflow/runtime/`, swagger: `/api/projects/${id}/codegen/workflow/swagger` };
+    } catch (error) {
+      await this.runtime.close(id);
+      throw error;
+    }
+  }
+  async archive(id) {
+    const state = await this.get(id);
+    if (state.contractError || state.paused || state.activeJobId || p.stageStatus(state).approvedStages.length !== 7) p.fail('La entrega requiere siete etapas vigentes, probadas y aprobadas');
+    p.assertExecuted(state.stages[7], '7');
+    const directory = this.runtime.directory(id, state.workspace);
+    if (p.hash(manifest(directory)) !== p.hash(state.stages[7].validation.manifest) || p.hash(state.files) !== p.hash(state.stages[7].validation.manifest)) p.fail('Los archivos cambiaron después de verificarse; repita las pruebas de entrega');
+    const files = Object.keys(state.files).filter(name => !/(^|\/)\.env(?:$|\.(?!example$))|secret|(^|\/)\.runtime\//.test(name))
+      .map(name => ({ path: name, content: fs.readFileSync(safeFile(directory, name)) }));
+    if (files.some(file => p.hash(file.content.toString('utf8')) !== state.files[file.path])) p.fail('Un archivo cambió durante la preparación del ZIP; vuelva a verificar');
+    return require('./zipHelper').createZipBuffer(files);
   }
   async publishScreens(tx, id, catalog, input) {
     for (const screen of catalog.content.screens) {

@@ -12,6 +12,7 @@ import ProjectArchitecture from './ProjectArchitecture';
 import ProjectToolsTeam from './ProjectToolsTeam';
 import ProjectEngineering from './ProjectEngineering';
 import ProjectCodeGen from './ProjectCodeGen';
+import GlobalAIChatWidget from '../components/common/GlobalAIChatWidget';
 
 export default function ProjectDetail({
   project,
@@ -102,9 +103,12 @@ export default function ProjectDetail({
           <ProjectEngineering project={project} view={activeTab} onProjectUpdated={onProjectUpdated} />
         )}
         {activeTab === 'codegen' && (
-          <ProjectCodeGen project={project} onNavigateTo={onTabChange} />
+          <ProjectCodeGen project={project} onProjectUpdated={onProjectUpdated} />
         )}
       </div>
+
+      {/* Global AI Chat Popup Widget (Disponible en todas las pantallas) */}
+      <GlobalAIChatWidget key={project.id} project={project} onProjectUpdated={onProjectUpdated} />
     </div>
   );
 }

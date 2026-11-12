@@ -199,49 +199,6 @@ export default function ProjectSummary({ project, onProjectUpdated, onNavigateTo
             {project.description || 'Análisis general de requerimientos, entidades y arquitectura del proyecto.'}
           </p>
         </div>
-
-        {/* Actions */}
-        <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
-          <button
-            type="button"
-            onClick={() => setIsImportModalOpen(true)}
-            disabled={state === 'analyzing'}
-            style={{
-              background: '#FFFFFF',
-              border: '1px solid #E2E8F0',
-              color: '#334155',
-              borderRadius: '8px',
-              padding: '8px 18px',
-              fontSize: '0.8125rem',
-              fontWeight: 500,
-              cursor: 'pointer',
-              boxShadow: '0 1px 2px rgba(15, 23, 42, 0.04)',
-              transition: 'all 0.15s ease'
-            }}
-          >
-            Importar PDF
-          </button>
-
-          <button
-            type="button"
-            onClick={handleAnalyze}
-            disabled={state === 'analyzing' || (!description.trim() && pdfFiles.length === 0 && !audioFile && sources.length === 0)}
-            style={{
-              background: '#4F46E5',
-              color: '#FFFFFF',
-              border: 'none',
-              borderRadius: '8px',
-              padding: '8px 20px',
-              fontSize: '0.8125rem',
-              fontWeight: 600,
-              cursor: 'pointer',
-              boxShadow: '0 1px 3px rgba(79, 70, 229, 0.25)',
-              transition: 'all 0.15s ease'
-            }}
-          >
-            {state === 'analyzing' ? (analysisProgress || 'Analizando...') : 'Analizar proyecto'}
-          </button>
-        </div>
       </div>
 
       {/* 4 Metric Cards */}

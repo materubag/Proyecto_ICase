@@ -11,7 +11,22 @@ const stack = {
 };
 const fail = (message, statusCode = 409) => { throw Object.assign(new Error(message), { statusCode }); };
 const json = value => JSON.parse(JSON.stringify(value));
-const approved = value => value?.approval && value.approval.contentHash === hash(value.content) && value.review?.status === 'SUCCEEDED' && value.validation?.passed === true;
+const approved = value => value?.approval && value.approval.source !== 'CODEGEN_PROGRESSIVE_GATE' && value.approval.contentHash === hash(value.content) && value.review?.status === 'SUCCEEDED' && value.validation?.passed === true;
+function stageStatus(state) {
+  const approvedStages = [];
+  for (let stage = 1; stage <= stages.length; stage++) {
+    if (!approved(state?.stages?.[stage])) break;
+    approvedStages.push(stage);
+  }
+  return { approvedStages, activeStage: Math.min(approvedStages.length + 1, stages.length) };
+}
+function assertExecuted(value, target) {
+  if (!/^([2-7])$/.test(target) && !target.startsWith('execution:')) return;
+  const tests = value?.validation?.tests;
+  if (!Array.isArray(tests) || !tests.length || tests.some(t => t.passed !== true || !t.executedAt)) fail('Falta evidencia de pruebas ejecutadas para esta versión');
+  if (target === '7' && value.validation.containerBehaviorPassed !== true) fail('Falta verificar el funcionamiento en contenedores');
+  if (!value.validation.manifest || !value.content?.fileHashes || hash(value.content.fileHashes) !== hash(value.validation.manifest)) fail('La evidencia no corresponde a los archivos de esta versión');
+}
 const artifact = (content, old) => ({ version: (old?.version || 0) + 1, content, validation: { passed: false }, review: { status: 'PENDING' }, approval: null });
 function assertStage(state, number) {
   if (!Number.isInteger(number) || number < 1 || number > 7) fail('Etapa inválida');
@@ -44,4 +59,4 @@ function publicSpec(spec) {
   delete copy.demoSeeds; delete copy.initialAccount;
   return copy;
 }
-module.exports = { hash, stages, stack, fail, json, approved, artifact, assertStage, screenErrors, assertNoSecrets, publicSpec };
+module.exports = { hash, stages, stack, fail, json, approved, artifact, assertStage, stageStatus, assertExecuted, screenErrors, assertNoSecrets, publicSpec };

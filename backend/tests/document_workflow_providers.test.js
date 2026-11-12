@@ -20,6 +20,18 @@ test('Luna uses Responses parameters and reports cached/reasoning usage', async 
     assert.equal(result.usage.input_tokens_details.cached_tokens, 3); assert.equal(result.usage.output_tokens_details.reasoning_tokens, 2);
   } finally { global.fetch = fetchBefore; env.OPENAI_API_KEY = key; }
 });
+test('non-reasoning OpenAI models never receive reasoning parameters', async () => {
+  const previous = { fetch: global.fetch, key: env.OPENAI_API_KEY, effort: env.DOCUMENT_REASONING_EFFORT };
+  env.OPENAI_API_KEY = 'test-only'; env.DOCUMENT_REASONING_EFFORT = 'low';
+  try {
+    global.fetch = async (_url, options) => {
+      assert.equal(JSON.parse(options.body).reasoning, undefined);
+      return { ok: true, json: async () => ({ status: 'completed', output: [{ content: [{ type: 'output_text', text: '{}' }] }] }) };
+    };
+    await new OpenAIProvider().executePrompt({ system: 'JSON', prompt: {}, model: 'gpt-4o-mini' });
+  } finally { global.fetch = previous.fetch; env.OPENAI_API_KEY = previous.key; env.DOCUMENT_REASONING_EFFORT = previous.effort; }
+});
+
 test('Sonnet Messages parameters reject truncation and preserve usage', async () => {
   const fetchBefore = global.fetch, key = env.ANTHROPIC_API_KEY;
   env.ANTHROPIC_API_KEY = 'test-only';

@@ -96,14 +96,6 @@ export default function Sidebar({
               >
                 <span>Código</span>
               </button>
-
-              <button
-                type="button"
-                className={`nav-link ${activeView === 'chat' ? 'active' : ''}`}
-                onClick={() => onViewChange('chat')}
-              >
-                <span>Chat IA</span>
-              </button>
             </>
           ) : (
             <div style={{ padding: '16px 8px', textAlign: 'center' }}>

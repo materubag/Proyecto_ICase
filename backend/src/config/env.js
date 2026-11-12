@@ -1,8 +1,8 @@
 try { require('dotenv').config(); } catch (_) {}
 
 module.exports = {
-  DOCUMENT_PREPARATION_MODEL: process.env.DOCUMENT_PREPARATION_MODEL || '',
-  DOCUMENT_REVIEW_MODEL: process.env.DOCUMENT_REVIEW_MODEL || '',
+  DOCUMENT_PREPARATION_MODEL: process.env.DOCUMENT_PREPARATION_MODEL || process.env.OPENAI_MODEL || 'gpt-4o-mini',
+  DOCUMENT_REVIEW_MODEL: process.env.DOCUMENT_REVIEW_MODEL || process.env.ANTHROPIC_MODEL || 'claude-3-5-sonnet-20241022',
   DOCUMENT_REASONING_EFFORT: process.env.DOCUMENT_REASONING_EFFORT || '',
   PORT: process.env.PORT || 8080,
   DATABASE_URL: process.env.DATABASE_URL,

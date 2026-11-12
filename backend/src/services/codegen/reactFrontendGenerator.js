@@ -79,7 +79,7 @@ function generateFrontendDockerfile() {
 FROM node:20-alpine AS build
 WORKDIR /app
 COPY package*.json ./
-RUN npm install
+RUN npm install --no-audit --no-fund --fetch-retries=0 --fetch-timeout=30000 && npm ls --depth=0
 COPY . .
 RUN npm run build
 
@@ -241,27 +241,28 @@ button[data-action-id] { padding: .7rem 1.25rem; border: 0; border-radius: var(-
 .field-automatic { display: block; margin-bottom: 1rem; color: var(--color-text-muted); font-size: .85rem; }
 @media(max-width: 640px) { table { display: block; max-width: 100%; overflow-x: auto; } input, select, textarea, button { min-height: 44px; } }
 :root {
-  --color-primary: #4f46e5;
-  --color-primary-hover: #4338ca;
+  --color-primary: #4338ca;
+  --color-primary-hover: #3730a3;
   --color-primary-subtle: #eef2ff;
-  --color-bg-app: #f8fafc;
+  --color-bg-app: #fafaf9;
   --color-surface: #ffffff;
-  --color-border: #e2e8f0;
-  --color-border-focus: #6366f1;
-  --color-text-title: #0f172a;
-  --color-text-body: #334155;
-  --color-text-muted: #64748b;
-  --color-text-placeholder: #94a3b8;
-  --status-success: #16a34a;
+  --color-border: #e7e5e0;
+  --color-border-control: #d6d3cc;
+  --color-border-focus: #4338ca;
+  --color-text-title: #111111;
+  --color-text-body: #111111;
+  --color-text-muted: #5f5f5a;
+  --color-text-placeholder: #8c8c85;
+  --status-success: #1f7a4d;
   --status-success-bg: #f0fdf4;
-  --status-warning: #d97706;
+  --status-warning: #b45309;
   --status-warning-bg: #fffbeb;
-  --status-danger: #dc2626;
+  --status-danger: #b42318;
   --status-danger-bg: #fef2f2;
   --radius-sm: 6px;
-  --radius-md: 8px;
+  --radius-md: 10px;
   --radius-lg: 16px;
-  --shadow-card: 0 1px 3px rgba(15, 23, 42, 0.04);
+  --shadow-card: none;
 
   /* Semantic Aliases */
   --primary: var(--color-primary);

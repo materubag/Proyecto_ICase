@@ -11,7 +11,9 @@ const { createZipBuffer } = require('../src/services/codegen/zipHelper');
 
 const AUTRON_PROJECT_ID = '6ba45264-e3e6-4819-a0dd-18909f1fb674';
 
-test('Autron5 Full Lifecycle Acceptance: Generar Código -> Decisión -> Generación -> Verificación -> Regeneración Idéntica', async () => {
+test('Autron5 Full Lifecycle Acceptance: Generar Código -> Decisión -> Generación -> Verificación -> Regeneración Idéntica', {
+  skip: process.env.AUTRON5_LIVE_ACCEPTANCE !== 'true' && 'Requires AUTRON5_LIVE_ACCEPTANCE=true and an explicitly configured Autron5 database'
+}, async () => {
   // 1. Iniciar trabajo persistente simulando presión del botón "Generar código"
   const job = await codegenJobService.startJob(AUTRON_PROJECT_ID, {
     scope: 'Cliente → Vehículo → Recepción',

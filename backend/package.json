@@ -20,7 +20,7 @@
     "export:autron5:review": "node scripts/export-autron5-review.cjs",
     "test:codegen:acceptance": "node tests/codegen_ai_export_acceptance.cjs",
     "test:document-workflow": "node --require ./tests/fixtures/offline.cjs --test tests/document_workflow.test.js tests/document_workflow_providers.test.js",
-    "test:delivery-workflow": "node --require ./tests/fixtures/offline.cjs --test tests/delivery_workflow.test.js tests/approved_stitch.test.js",
+    "test:delivery-workflow": "node --require ./tests/fixtures/offline.cjs --test tests/delivery_workflow.test.js tests/delivery_flow_regressions.test.js tests/approved_stitch.test.js",
     "test:delivery-runtime": "node tests/delivery_runtime.integration.cjs"
   },
   "keywords": [

@@ -157,7 +157,10 @@ class DocumentWorkflow {
     const cacheKey = c.hash([id, stage, task, model, provider, c.PROMPT_VERSION, versions, payload]);
     const previous = await this.db.documentWorkflowCall.findUnique({ where: { cacheKey } });
     if (previous?.status === 'SUCCEEDED') return previous.response;
-    if (previous) throw Object.assign(new Error('Llamada pendiente, fallida o interrumpida. Revise su estado antes de reintentar explícitamente.'), { statusCode: 409, code: previous.status === 'RUNNING' ? 'CALL_IN_PROGRESS' : 'CALL_FAILED' });
+    if (previous?.status === 'RUNNING') throw Object.assign(new Error('Llamada en progreso. Espere a que finalice.'), { statusCode: 409, code: 'CALL_IN_PROGRESS' });
+    if (previous?.status === 'FAILED') {
+      await this.db.documentWorkflowCall.delete({ where: { id: previous.id } }).catch(() => {});
+    }
     const attempts = 1 + await this.db.documentWorkflowCall.count({ where: { projectId: id, cacheKey: { startsWith: cacheKey + ':attempt:' } } });
     if (attempts > 3) fail('Reintentos agotados');
     let record;

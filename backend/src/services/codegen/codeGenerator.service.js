@@ -336,6 +336,8 @@ JWT_EXPIRATION=8h
       addFile('backend/src/middleware/auth.middleware.js', auth.middleware, 'javascript');
       addFile('backend/src/controllers/auth.controller.js', auth.source, 'javascript');
       addFile('backend/src/routes/auth.routes.js', auth.routes, 'javascript');
+    } else {
+      addFile('backend/src/middleware/auth.middleware.js', generateAuthMiddlewareFile(), 'javascript');
     }
 
     // Express REST Controllers and Routes

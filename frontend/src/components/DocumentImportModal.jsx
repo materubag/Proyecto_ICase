@@ -102,6 +102,7 @@ export default function DocumentImportModal({
   const [activeTab, setActiveTab] = useState('resumen');
   const [activeDiagramTab, setActiveDiagramTab] = useState('er');
   const [copiedCode, setCopiedCode] = useState(false);
+  const [aiProvider, setAiProvider] = useState('hybrid');
 
   const fileInputRef = useRef(null);
 
@@ -155,7 +156,7 @@ export default function DocumentImportModal({
       // 3. Pipeline híbrido
       setStatus('analyzing');
       setStatusMessage('Ejecutando pipeline híbrido determinista + IA...');
-      const analyzeRes = await documentsApi.analyze(extractRes);
+      const analyzeRes = await documentsApi.analyze(extractRes, { providerOverride: aiProvider });
 
       // 4. Validación canónica
       setStatus('validating');
@@ -415,6 +416,54 @@ export default function DocumentImportModal({
                     ? `Tamaño: ${formatFileSize(file.size)} | Listo para procesar con pipeline determinista`
                     : 'Documentos de especificación, propuestas técnicas o requerimientos en formato PDF'}
                 </p>
+              </div>
+
+              {/* Selector de Proveedor IA */}
+              <div style={{
+                marginTop: '1rem',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'space-between',
+                padding: '10px 14px',
+                background: '#F8FAFC',
+                border: '1px solid #E2E8F0',
+                borderRadius: '8px'
+              }}>
+                <span style={{ fontSize: '0.8125rem', color: '#334155', fontWeight: 600 }}>
+                  Motor de Análisis:
+                </span>
+                <div style={{
+                  display: 'inline-flex',
+                  background: '#FFFFFF',
+                  border: '1px solid #CBD5E1',
+                  borderRadius: '6px',
+                  padding: '2px'
+                }}>
+                  {[
+                    ['hybrid', 'Híbrido (Claude + GPT)'],
+                    ['anthropic', 'Claude 3.5 Sonnet'],
+                    ['openai', 'GPT-4o mini']
+                  ].map(([pKey, label]) => (
+                    <button
+                      key={pKey}
+                      type="button"
+                      onClick={() => setAiProvider(pKey)}
+                      style={{
+                        background: aiProvider === pKey ? '#0F172A' : 'transparent',
+                        color: aiProvider === pKey ? '#FFFFFF' : '#64748B',
+                        border: 'none',
+                        borderRadius: '4px',
+                        padding: '5px 12px',
+                        fontSize: '0.75rem',
+                        fontWeight: aiProvider === pKey ? 600 : 500,
+                        cursor: 'pointer',
+                        transition: 'all 0.15s ease'
+                      }}
+                    >
+                      {label}
+                    </button>
+                  ))}
+                </div>
               </div>
 
               <div

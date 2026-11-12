@@ -1,4 +1,3 @@
-import DocumentWorkflowPanel from '../components/DocumentWorkflowPanel';
 import React, { useState, useEffect } from 'react';
 import { actorsApi } from '../api/actors.api';
 import { diagramsApi } from '../api/diagrams.api';
@@ -196,8 +195,7 @@ export default function ProjectActors({ project, onProjectUpdated }) {
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', height: '100%', overflow: 'hidden' }}>
-      <DocumentWorkflowPanel project={project} stage="actors" onProjectUpdated={onProjectUpdated} />
-      {/* Command bar */}
+            {/* Command bar */}
       <div className="full-page-header">
         <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
           <h2 className="page-title">

@@ -14,17 +14,28 @@ function loadExtension(projectId) {
 
 function applyExtension(extension, requirements, operations, screens, options = {}) {
   if (!extension) return;
-  for (const code of extension.contract.requirementCodes) if (!requirements.some(r => r.code === code)) throw new Error('EXTENSION_REQUIREMENT_NOT_APPROVED: ' + code);
+  if (!options?.allowUnapproved && !options?.ignoreStale) {
+    for (const code of extension.contract.requirementCodes) if (!requirements.some(r => r.code === code)) throw new Error('EXTENSION_REQUIREMENT_NOT_APPROVED: ' + code);
+  }
   for (const patch of extension.contract.operations || []) {
     const operation = operations.find(o => o.operationId === patch.operationId);
     if (!operation && options.reviewedGroups?.some(group => group.parentOperationId === patch.operationId)) continue;
-    if (!operation) throw new Error('EXTENSION_OPERATION_NOT_FOUND: ' + patch.operationId);
+    if (!operation) {
+      if (!options?.allowUnapproved && !options?.ignoreStale) throw new Error('EXTENSION_OPERATION_NOT_FOUND: ' + patch.operationId);
+      continue;
+    }
     Object.assign(operation, patch);
   }
   for (const patch of extension.contract.screens || []) {
     const screen = screens.find(s => s.route === patch.route);
-    if (!screen) throw new Error('EXTENSION_SCREEN_NOT_FOUND: ' + patch.route);
-    if (patch.htmlHash && crypto.createHash('sha256').update(screen.html || '').digest('hex') !== patch.htmlHash) throw new Error('STALE_MOCKUP_BINDING: ' + patch.route);
+    if (!screen) {
+      if (!options?.allowUnapproved && !options?.ignoreStale) throw new Error('EXTENSION_SCREEN_NOT_FOUND: ' + patch.route);
+      continue;
+    }
+    if (patch.htmlHash && crypto.createHash('sha256').update(screen.html || '').digest('hex') !== patch.htmlHash) {
+      if (!options?.allowUnapproved && !options?.ignoreStale) throw new Error('STALE_MOCKUP_BINDING: ' + patch.route);
+      continue;
+    }
     screen.contract = { ...screen.contract, ...patch.contract };
     if (patch.roles) screen.roles = patch.roles;
     if (patch.targetEntity) screen.targetEntity = patch.targetEntity;

@@ -5,8 +5,8 @@ const p=require('../src/services/codegen/deliveryPolicy');
 const {DeliveryWorkflow}=require('../src/services/codegen/deliveryWorkflow');
 const {DeliveryRuntime,writeFiles,manifest,safeFile}=require('../src/services/codegen/deliveryRuntime');
 test('approvals require current content, technical validation and separate human decision',()=>{
-  const value=p.artifact({value:1});value.validation={passed:true};value.review={status:'SUCCEEDED'};
-  assert.equal(!!p.approved(value),false);value.approval={contentHash:p.hash(value.content)};assert.ok(p.approved(value));value.content.value=2;assert.equal(!!p.approved(value),false);
+  const value=p.artifact({value:1});value.validation={passed:true,executedAt:new Date().toISOString()};value.review={status:'SUCCEEDED',contentHash:p.hash(value.content)};
+  assert.equal(!!p.approved(value),false);value.approval={contentHash:p.hash(value.content),manualReview:{confirmed:true}};assert.ok(p.approved(value));value.content.value=2;assert.equal(!!p.approved(value),false);
   assert.throws(()=>p.assertStage({documentApproved:true,stages:{}},2),/anterior/);
 });
 test('incremental files preserve unrelated sources, reject conflicts and preserve applied migrations',()=>{
@@ -47,7 +47,7 @@ test('seven stages, screen designs, individual endpoints and durable jobs', {ski
     graph:{contextVersion:1,requirements:[{id:'r1',revision:1}]},document:{context:{content:{summary:'Registro de libros'}},units:[]},
     documentApproved:true,requirements:fixture.spec.requirements,actors:[{id:'a',status:'APPROVED'}],useCases:[],entities:fixture.spec.entities,rules:[],navigation:[],prerequisites:{context:true,actors:true,requirements:true,models:[],rules:[]}};
   const runtime=new DeliveryRuntime();
-  runtime.execute=async(stage,context)=>{executions++;onExecution?.();if(hold)await hold;return{workspace:context.workspace,manifest:{},changed:[],runtime:{database:'simulated'},tests:[{passed:true,executedAt:new Date().toISOString(),source:'TEST_DOUBLE',check:'INTEGRATION_WIRING'}],passed:true,containerBehaviorPassed:stage===7};};
+  runtime.execute=async(stage,context)=>{executions++;onExecution?.();if(hold)await hold;return{workspace:context.workspace,manifest:{},changed:[],executedAt:new Date().toISOString(),runtime:{database:'simulated'},tests:[{passed:true,executedAt:new Date().toISOString(),source:'TEST_DOUBLE',check:'INTEGRATION_WIRING'}],passed:true,containerBehaviorPassed:stage===7};};
   const ai={modelFor:task=>task==='review'?'sonnet-test':'luna-test',async documentTask(task,context){
     if(task==='review'){if(failReview)throw new Error('Sonnet failed');return{data:{observations:[],corrections:[],questions:[]},usage:{input_tokens:10,output_tokens:3}};}
     if(context.target==='screens')return{data:{screens:[structuredClone(screen)],questions:[]}};
@@ -60,7 +60,7 @@ test('seven stages, screen designs, individual endpoints and durable jobs', {ski
   workflow.validate=async(i,s,target)=>target.startsWith('mockup:')?{passed:true,rendered:false,visualInspection:'NOT_PERFORMED',executedAt:new Date().toISOString()}:validateOriginal(i,s,target);
   async function wait(job){for(let n=0;n<150;n++){const current=await db.deliveryJob.findUnique({where:{id:job.id}});if(!['RUNNING','QUEUED'].includes(current.status))return current;await new Promise(r=>setTimeout(r,15));}throw new Error('Job timeout');}
   async function task(target,name){const job=await workflow.start(project.id,String(target),name);const completed=await wait(job);assert.equal(completed.status,'COMPLETED',completed.error);return completed;}
-  async function approve(target,extra={}){const state=await workflow.get(project.id);return workflow.approve(project.id,String(target),state.revision,{resolution:'Decisión de prueba',...extra});}
+  async function approve(target,extra={}){const state=await workflow.get(project.id);return workflow.approve(project.id,String(target),state.revision,{resolution:'Decisión de prueba',manualReview:{confirmed:true,notes:'Revisión con dobles de prueba'},...extra});}
   async function finish(stage){await task(stage,'execute');await task(stage,'review');await approve(stage);}
   try{
     await t.test('backend rejects skipping steps and unapproved screens sent to Stitch',async()=>{

@@ -12,7 +12,7 @@ COPY package*.json ./
 COPY prisma ./prisma/
 
 # Install dependencies and generate Prisma client
-RUN npm install
+RUN npm install --no-audit --no-fund --fetch-retries=0 --fetch-timeout=30000 && npm ls --depth=0
 RUN npx prisma generate
 
 # Copy source code
