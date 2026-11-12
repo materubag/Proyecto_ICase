@@ -53,6 +53,10 @@
     },
     {
       "name": "engineering"
+    },
+    {
+      "name": "codegen",
+      "description": "Generación, verificación, diagnóstico y trabajos asíncronos de código fuente"
     }
   ],
   "paths": {
@@ -5173,6 +5177,944 @@
                       }
                     }
                   }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/projects/{projectId}/codegen/preview": {
+      "get": {
+        "tags": [
+          "codegen"
+        ],
+        "summary": "Inspección previa del árbol de código generado",
+        "description": "Genera en memoria la estructura de archivos, dependencias y diagnósticos de verificación del proyecto.",
+        "operationId": "get__projects_projectId_codegen_preview",
+        "parameters": [
+          {
+            "name": "projectId",
+            "in": "path",
+            "required": true,
+            "description": "Identificador único del proyecto",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "includeDocker",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "boolean",
+              "default": true
+            },
+            "description": "Incluir configuración de Docker"
+          },
+          {
+            "name": "allowUnapproved",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "boolean",
+              "default": true
+            },
+            "description": "Permitir inspección con especificaciones candidatas"
+          },
+          {
+            "name": "allowPartialScope",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "boolean",
+              "default": false
+            },
+            "description": "Generar alcance parcial si hay artefactos pendientes"
+          },
+          {
+            "name": "reviewOnly",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "boolean",
+              "default": false
+            },
+            "description": "Modo solo revisión para diagnóstico"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Árbol de archivos y diagnósticos de generación.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "Error en la generación de vista previa.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/projects/{projectId}/codegen/download": {
+      "get": {
+        "tags": [
+          "codegen"
+        ],
+        "summary": "Descarga de archivo ZIP del proyecto generado",
+        "description": "Genera o descarga el paquete ZIP sellado con hash SHA-256 verificado.",
+        "operationId": "get__projects_projectId_codegen_download",
+        "parameters": [
+          {
+            "name": "projectId",
+            "in": "path",
+            "required": true,
+            "description": "Identificador único del proyecto",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "jobId",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string"
+            },
+            "description": "ID de trabajo persistente completado"
+          },
+          {
+            "name": "includeDocker",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "boolean",
+              "default": true
+            }
+          },
+          {
+            "name": "allowPartialScope",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "boolean",
+              "default": false
+            }
+          },
+          {
+            "name": "allowUnapproved",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "boolean",
+              "default": false
+            }
+          },
+          {
+            "name": "reviewOnly",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "boolean",
+              "default": false
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Archivo ZIP del proyecto generado y listo para compilar.",
+            "content": {
+              "application/zip": {
+                "schema": {
+                  "type": "string",
+                  "format": "binary"
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "Error al generar o empaquetar el ZIP.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/projects/{projectId}/codegen/spec": {
+      "get": {
+        "tags": [
+          "codegen"
+        ],
+        "summary": "Consultar especificación ejecutable del proyecto (projectSpec)",
+        "description": "Obtiene el modelo canónico consolidado necesario para la síntesis de código (entidades, operaciones, pantallas, contratos y mockups).",
+        "operationId": "get__projects_projectId_codegen_spec",
+        "parameters": [
+          {
+            "name": "projectId",
+            "in": "path",
+            "required": true,
+            "description": "Identificador único del proyecto",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Especificación canónica del proyecto.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "Error al consultar especificación.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/projects/{projectId}/codegen/spec/validate": {
+      "post": {
+        "tags": [
+          "codegen"
+        ],
+        "summary": "Validación y diagnóstico de la especificación ejecutable",
+        "description": "Evalúa la completitud estructural de la especificación, detectando atributos faltantes, operaciones sin pasos o pantallas sin binding.",
+        "operationId": "post__projects_projectId_codegen_spec_validate",
+        "parameters": [
+          {
+            "name": "projectId",
+            "in": "path",
+            "required": true,
+            "description": "Identificador único del proyecto",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Diagnóstico de validación con lista de advertencias o errores.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "Error en la validación.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/projects/{projectId}/codegen/spec/approve": {
+      "post": {
+        "tags": [
+          "codegen"
+        ],
+        "summary": "Aprobar y sellar la especificación como baseline ejecutable",
+        "description": "Registra un baseline formal de especificación aprobado, habilitando la generación estricta de código.",
+        "operationId": "post__projects_projectId_codegen_spec_approve",
+        "parameters": [
+          {
+            "name": "projectId",
+            "in": "path",
+            "required": true,
+            "description": "Identificador único del proyecto",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": false,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "notes": {
+                    "type": "string"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Línea base aprobada exitosamente."
+          },
+          "default": {
+            "description": "Error al aprobar la especificación.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/projects/{projectId}/codegen/ai/status": {
+      "get": {
+        "tags": [
+          "codegen"
+        ],
+        "summary": "Estado de propuestas de IA para operaciones y bindings de mockups",
+        "description": "Consulta las propuestas automáticas generadas por IA que están pendientes de revisión humana.",
+        "operationId": "get__projects_projectId_codegen_ai_status",
+        "parameters": [
+          {
+            "name": "projectId",
+            "in": "path",
+            "required": true,
+            "description": "Identificador único del proyecto",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Resumen de propuestas pendientes y aprobadas."
+          },
+          "default": {
+            "description": "Error al consultar propuestas de IA.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/projects/{projectId}/codegen/ai/propose-operations": {
+      "post": {
+        "tags": [
+          "codegen"
+        ],
+        "summary": "Generar propuesta asistida por IA de pasos ejecutables para operaciones",
+        "description": "Utiliza el planificador de IA para inferir pasos atómicos, validaciones de precondición y transacciones de base de datos a partir de casos de uso y requerimientos.",
+        "operationId": "post__projects_projectId_codegen_ai_propose_operations",
+        "parameters": [
+          {
+            "name": "projectId",
+            "in": "path",
+            "required": true,
+            "description": "Identificador único del proyecto",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": false,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Propuesta de pasos de operaciones generada."
+          },
+          "default": {
+            "description": "Error al generar propuestas de operación.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/projects/{projectId}/codegen/ai/propose-bindings": {
+      "post": {
+        "tags": [
+          "codegen"
+        ],
+        "summary": "Generar propuesta asistida por IA de enlaces (bindings) entre pantallas y contratos",
+        "description": "Sintetiza la vinculación de campos visuales de prototipos y mockups HTML a entidades y llamadas API REST.",
+        "operationId": "post__projects_projectId_codegen_ai_propose_bindings",
+        "parameters": [
+          {
+            "name": "projectId",
+            "in": "path",
+            "required": true,
+            "description": "Identificador único del proyecto",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": false,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Propuesta de bindings generada."
+          },
+          "default": {
+            "description": "Error al generar bindings de mockups.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/projects/{projectId}/codegen/ai/review-proposal": {
+      "post": {
+        "tags": [
+          "codegen"
+        ],
+        "summary": "Revisar (aprobar o rechazar) una propuesta de IA",
+        "description": "Permite al arquitecto humano aceptar, rechazar o modificar una propuesta generada por IA.",
+        "operationId": "post__projects_projectId_codegen_ai_review_proposal",
+        "parameters": [
+          {
+            "name": "projectId",
+            "in": "path",
+            "required": true,
+            "description": "Identificador único del proyecto",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": [
+                  "proposalId",
+                  "decision"
+                ],
+                "properties": {
+                  "proposalId": {
+                    "type": "string"
+                  },
+                  "decision": {
+                    "type": "string",
+                    "enum": [
+                      "APPROVE",
+                      "REJECT"
+                    ]
+                  },
+                  "feedback": {
+                    "type": "string"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Propuesta revisada y actualizada."
+          },
+          "default": {
+            "description": "Error al procesar la revisión.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/projects/{projectId}/codegen/ai/apply": {
+      "post": {
+        "tags": [
+          "codegen"
+        ],
+        "summary": "Aplicar propuestas de IA aprobadas a la especificación ejecutable",
+        "description": "Integra los pasos y bindings aprobados en la especificación formal del proyecto.",
+        "operationId": "post__projects_projectId_codegen_ai_apply",
+        "parameters": [
+          {
+            "name": "projectId",
+            "in": "path",
+            "required": true,
+            "description": "Identificador único del proyecto",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": false,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Propuestas aplicadas a la especificación."
+          },
+          "default": {
+            "description": "Error al aplicar propuestas.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/projects/{projectId}/codegen/jobs/start": {
+      "post": {
+        "tags": [
+          "codegen"
+        ],
+        "summary": "Iniciar trabajo asíncrono persistente de generación y verificación de código",
+        "description": "Lanza el flujo de trabajo persistente en disco (ANALYZING -> WAITING_FOR_INPUT -> GENERATING -> VALIDATING -> REPAIRING -> COMPLETED).",
+        "operationId": "post__projects_projectId_codegen_jobs_start",
+        "parameters": [
+          {
+            "name": "projectId",
+            "in": "path",
+            "required": true,
+            "description": "Identificador único del proyecto",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": false,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "includeDocker": {
+                    "type": "boolean"
+                  },
+                  "allowPartialScope": {
+                    "type": "boolean"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Trabajo iniciado o retomado.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "Error al iniciar el trabajo.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/projects/{projectId}/codegen/jobs/active": {
+      "get": {
+        "tags": [
+          "codegen"
+        ],
+        "summary": "Consultar el trabajo de generación de código activo",
+        "description": "Obtiene el estado del trabajo en curso para el proyecto actual.",
+        "operationId": "get__projects_projectId_codegen_jobs_active",
+        "parameters": [
+          {
+            "name": "projectId",
+            "in": "path",
+            "required": true,
+            "description": "Identificador único del proyecto",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Detalle del trabajo activo o null si no hay ninguno."
+          },
+          "default": {
+            "description": "Error al consultar trabajo activo.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/projects/{projectId}/codegen/jobs/{jobId}": {
+      "get": {
+        "tags": [
+          "codegen"
+        ],
+        "summary": "Estado, fase, métricas y diagnóstico de un trabajo de generación",
+        "description": "Recupera el progreso detallado, fase actual, consumo de tokens y archivos generados.",
+        "operationId": "get__projects_projectId_codegen_jobs_jobId",
+        "parameters": [
+          {
+            "name": "projectId",
+            "in": "path",
+            "required": true,
+            "description": "Identificador único del proyecto",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "jobId",
+            "in": "path",
+            "required": true,
+            "description": "Identificador único del trabajo de generación",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Estado e historial de fases del trabajo."
+          },
+          "default": {
+            "description": "Trabajo no encontrado o error del servicio.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/projects/{projectId}/codegen/jobs/{jobId}/input": {
+      "post": {
+        "tags": [
+          "codegen"
+        ],
+        "summary": "Enviar respuestas o decisiones requeridas durante la fase WAITING_FOR_INPUT",
+        "description": "Desbloquea el avance del trabajo proveyendo respuestas a aclaraciones planteadas por el motor.",
+        "operationId": "post__projects_projectId_codegen_jobs_jobId_input",
+        "parameters": [
+          {
+            "name": "projectId",
+            "in": "path",
+            "required": true,
+            "description": "Identificador único del proyecto",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "jobId",
+            "in": "path",
+            "required": true,
+            "description": "Identificador único del trabajo de generación",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": [
+                  "input"
+                ],
+                "properties": {
+                  "input": {
+                    "type": "object"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Entrada procesada y trabajo continuado."
+          },
+          "default": {
+            "description": "Error al enviar entrada.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/projects/{projectId}/codegen/jobs/{jobId}/cancel": {
+      "post": {
+        "tags": [
+          "codegen"
+        ],
+        "summary": "Cancelar un trabajo de generación de código en ejecución",
+        "description": "Detiene la ejecución del trabajo y transiciona su estado a CANCELLED.",
+        "operationId": "post__projects_projectId_codegen_jobs_jobId_cancel",
+        "parameters": [
+          {
+            "name": "projectId",
+            "in": "path",
+            "required": true,
+            "description": "Identificador único del proyecto",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "jobId",
+            "in": "path",
+            "required": true,
+            "description": "Identificador único del trabajo de generación",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Trabajo cancelado exitosamente."
+          },
+          "default": {
+            "description": "Error al cancelar el trabajo.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/projects/{projectId}/codegen/jobs/{jobId}/resume": {
+      "post": {
+        "tags": [
+          "codegen"
+        ],
+        "summary": "Reanudar un trabajo de generación pausado o bloqueado",
+        "description": "Reactiva la generación tras haber resuelto conflictos o dependencias pendientes.",
+        "operationId": "post__projects_projectId_codegen_jobs_jobId_resume",
+        "parameters": [
+          {
+            "name": "projectId",
+            "in": "path",
+            "required": true,
+            "description": "Identificador único del proyecto",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "jobId",
+            "in": "path",
+            "required": true,
+            "description": "Identificador único del trabajo de generación",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Trabajo reanudado."
+          },
+          "default": {
+            "description": "Error al reanudar el trabajo.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/projects/{projectId}/codegen/decisions": {
+      "get": {
+        "tags": [
+          "codegen"
+        ],
+        "summary": "Listar decisiones arquitectónicas y técnicas pendientes",
+        "description": "Consulta los puntos de decisión detectados durante el análisis y la síntesis de código.",
+        "operationId": "get__projects_projectId_codegen_decisions",
+        "parameters": [
+          {
+            "name": "projectId",
+            "in": "path",
+            "required": true,
+            "description": "Identificador único del proyecto",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Lista de decisiones pendientes y resueltas."
+          },
+          "default": {
+            "description": "Error al consultar decisiones.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
+      },
+      "post": {
+        "tags": [
+          "codegen"
+        ],
+        "summary": "Registrar una decisión técnica o de diseño para resolver ambigüedades",
+        "description": "Almacena la elección y justificación seleccionada por el usuario para una decisión pendiente.",
+        "operationId": "post__projects_projectId_codegen_decisions",
+        "parameters": [
+          {
+            "name": "projectId",
+            "in": "path",
+            "required": true,
+            "description": "Identificador único del proyecto",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": [
+                  "decisionId",
+                  "choice"
+                ],
+                "properties": {
+                  "decisionId": {
+                    "type": "string"
+                  },
+                  "choice": {
+                    "type": "string"
+                  },
+                  "rationale": {
+                    "type": "string"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Decisión registrada correctamente."
+          },
+          "default": {
+            "description": "Error al registrar la decisión.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
                 }
               }
             }

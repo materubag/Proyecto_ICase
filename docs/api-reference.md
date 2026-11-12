@@ -230,6 +230,93 @@ Respuesta ilustrativa:
 {"success":true,"data":{"answer":"No se encontraron requisitos aprobados relacionados. No hay evidencia suficiente para responder.","context":[]}}
 ```
 
+## Generación y Verificación de Código
+
+Rutas bajo `/api/projects/{projectId}/codegen`. Permite la síntesis, validación estricta, asistencia por IA y descarga de proyectos ejecutables completos (frontend React + backend Express + base de datos PostgreSQL/Prisma o Sequelize + Docker).
+
+### Especificación ejecutable (`projectSpec`)
+
+| Método | Ruta | Parámetros / Cuerpo | Descripción |
+| --- | --- | --- | --- |
+| GET | `/projects/{projectId}/codegen/spec` | ID de proyecto | Obtiene la especificación formal consolidada de entidades, operaciones, pantallas, contratos y mockups |
+| POST | `/projects/{projectId}/codegen/spec/validate` | ID de proyecto | Diagnostica la completitud estructural de la especificación (atributos, operaciones sin pasos, pantallas sin binding) |
+| POST | `/projects/{projectId}/codegen/spec/approve` | `{ notes?: string }` | Aprueba y sella la especificación como baseline formal para generación |
+
+```sh
+curl -X POST http://localhost:8080/api/projects/<projectId>/codegen/spec/validate
+```
+
+### Propuestas asistidas por IA y Mockup Bindings
+
+| Método | Ruta | Cuerpo | Descripción |
+| --- | --- | --- | --- |
+| GET | `/projects/{projectId}/codegen/ai/status` | — | Estado de propuestas de IA para operaciones y bindings pendientes |
+| POST | `/projects/{projectId}/codegen/ai/propose-operations` | JSON opcional | Infiere pasos atómicos, validaciones y transacciones desde casos de uso y requerimientos |
+| POST | `/projects/{projectId}/codegen/ai/propose-bindings` | JSON opcional | Genera enlaces entre elementos visuales de mockups HTML y llamadas API REST |
+| POST | `/projects/{projectId}/codegen/ai/review-proposal` | `{"proposalId": "...", "decision": "APPROVE"\|"REJECT"}` | Aprueba o rechaza una propuesta generada por IA |
+| POST | `/projects/{projectId}/codegen/ai/apply` | JSON opcional | Aplica las propuestas aprobadas a la especificación ejecutable |
+
+```sh
+curl -X POST http://localhost:8080/api/projects/<projectId>/codegen/ai/review-proposal \
+  -H 'Content-Type: application/json' \
+  -d '{"proposalId":"prop-123","decision":"APPROVE"}'
+```
+
+### Trabajos asíncronos persistentes de generación
+
+El flujo de generación y verificación automática progresa a través de fases persistentes en disco (`.cache/codegen_jobs/`):
+`ANALYZING` → `WAITING_FOR_INPUT` → `GENERATING` → `VALIDATING` → `REPAIRING` → `COMPLETED` (o `BLOCKED` / `FAILED` / `CANCELLED`).
+
+| Método | Ruta | Parámetros / Cuerpo | Descripción |
+| --- | --- | --- | --- |
+| POST | `/projects/{projectId}/codegen/jobs/start` | `{ includeDocker?: boolean, allowPartialScope?: boolean }` | Inicia o retoma el pipeline de generación y verificación |
+| GET | `/projects/{projectId}/codegen/jobs/active` | ID de proyecto | Retorna el trabajo activo en curso o `null` |
+| GET | `/projects/{projectId}/codegen/jobs/{jobId}` | ID proyecto y trabajo | Estado detallado, fase, consumo de tokens, métricas y diagnóstico |
+| POST | `/projects/{projectId}/codegen/jobs/{jobId}/input` | `{"input": { ... }}` | Provee respuestas a decisiones requeridas durante la fase `WAITING_FOR_INPUT` |
+| POST | `/projects/{projectId}/codegen/jobs/{jobId}/cancel` | `{"reason": "..."}` | Cancela un trabajo en ejecución |
+| POST | `/projects/{projectId}/codegen/jobs/{jobId}/resume` | JSON opcional | Reanuda un trabajo pausado o bloqueado |
+
+```sh
+curl -X POST http://localhost:8080/api/projects/<projectId>/codegen/jobs/start \
+  -H 'Content-Type: application/json' \
+  -d '{"includeDocker":true,"allowPartialScope":false}'
+```
+
+Respuesta típica, HTTP 200:
+
+```json
+{
+  "success": true,
+  "data": {
+    "jobId": "job-8dc3a633",
+    "status": "GENERATING",
+    "phase": "GENERATING_CODE",
+    "ready": false,
+    "tokens": { "prompt": 1240, "completion": 480 },
+    "createdAt": "2026-11-09T16:00:00.000Z"
+  }
+}
+```
+
+### Decisiones arquitectónicas y resolución de ambigüedades
+
+| Método | Ruta | Parámetros / Cuerpo | Descripción |
+| --- | --- | --- | --- |
+| GET | `/projects/{projectId}/codegen/decisions` | ID de proyecto | Lista decisiones técnicas pendientes y resueltas |
+| POST | `/projects/{projectId}/codegen/decisions` | `{"decisionId": "...", "choice": "...", "rationale": "..."}` | Registra la elección tomada para desbloquear la generación |
+
+### Vista previa y descarga de archivo ZIP
+
+| Método | Ruta | Parámetros Query | Descripción |
+| --- | --- | --- | --- |
+| GET | `/projects/{projectId}/codegen/preview` | `includeDocker`, `allowUnapproved`, `allowPartialScope`, `reviewOnly` | Genera en memoria y retorna el árbol jerárquico de archivos y diagnósticos |
+| GET | `/projects/{projectId}/codegen/download` | `jobId`, `includeDocker`, `allowPartialScope` | Descarga el archivo `.zip` del proyecto sellado con hash criptográfico SHA-256 |
+
+```sh
+# Descarga directa del paquete generado
+curl -O -J http://localhost:8080/api/projects/<projectId>/codegen/download?includeDocker=true
+```
+
 ## Códigos y manejo de errores
 
 | Código | Uso y observaciones |
