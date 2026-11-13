@@ -40,9 +40,12 @@
     "json5": "^2.2.3",
     "multer": "^2.4.0",
     "pdf-parse": "^2.4.5",
-    "playwright-core": "1.63.0"
+    "pg": "^8.13.1",
+    "playwright-core": "1.63.0",
+    "swagger-ui-express": "^5.0.1"
   },
   "devDependencies": {
+    "@apidevtools/swagger-parser": "^13.1.0",
     "bcryptjs": "^3.0.3",
     "jsonwebtoken": "^9.0.3",
     "nodemon": "^3.1.4",
