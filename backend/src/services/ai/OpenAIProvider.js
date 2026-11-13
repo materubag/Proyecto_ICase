@@ -5,7 +5,7 @@ class OpenAIProvider extends AIProvider {
   // Responses API avoids temperature and legacy max_tokens for reasoning models.
   async executePrompt({ system, prompt, model, maxTokens = 8192 }) {
     if (!env.OPENAI_API_KEY) throw new Error('OpenAI no configurado');
-    if (!model) throw new Error('Modelo Luna no configurado');
+    const selectedModel = model || env.DOCUMENT_PREPARATION_MODEL || env.OPENAI_MODEL || 'gpt-4o-mini';
 
     // OpenAI Responses API with text.format 'json_object' requires the word 'json' inside the input message.
     let inputPayload;
@@ -23,16 +23,16 @@ class OpenAIProvider extends AIProvider {
     const response = await fetch('https://api.openai.com/v1/responses', {
       method: 'POST', signal: AbortSignal.timeout(120000),
       headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${env.OPENAI_API_KEY}` },
-      body: JSON.stringify({ model, instructions, input: typeof inputPayload === 'string' ? inputPayload : JSON.stringify(inputPayload),
+      body: JSON.stringify({ model: selectedModel, instructions, input: typeof inputPayload === 'string' ? inputPayload : JSON.stringify(inputPayload),
         max_output_tokens: maxTokens, store: false, text: { format: { type: 'json_object' } },
-        ...(env.DOCUMENT_REASONING_EFFORT && !/^(gpt-4(?:[.\-o]|$)|chatgpt-4o)/i.test(model) ? { reasoning: { effort: env.DOCUMENT_REASONING_EFFORT } } : {}) })
+        ...(env.DOCUMENT_REASONING_EFFORT && !/^(gpt-4(?:[.\-o]|$)|chatgpt-4o)/i.test(selectedModel) ? { reasoning: { effort: env.DOCUMENT_REASONING_EFFORT } } : {}) })
     });
     if (!response.ok) throw new Error(`OpenAI HTTP ${response.status}: ${(await response.text()).slice(0, 250)}`);
     const result = await response.json();
     try {
       if (result.status !== 'completed') throw new Error('Respuesta OpenAI incompleta');
       const content = result.output?.flatMap(o => o.content || []).filter(o => o.type === 'output_text').map(o => o.text).join('');
-      return { data: JSON.parse(content), usage: result.usage, model: result.model || model };
+      return { data: JSON.parse(content), usage: result.usage, model: result.model || selectedModel };
     } catch (e) { e.usage = result.usage; throw e; }
   }
   async extractDocumentBatch(input, options = {}) {

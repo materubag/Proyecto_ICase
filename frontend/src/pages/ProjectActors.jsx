@@ -179,7 +179,7 @@ export default function ProjectActors({ project, onProjectUpdated }) {
       if (onProjectUpdated) await onProjectUpdated();
     } catch (err) {
       console.error('Generation error:', err);
-      setDiagramError(err.message || 'Error al generar diagrama con Gemini');
+      setDiagramError(err.message || 'Error al generar diagrama con IA');
       setDiagramStatus('error');
     } finally {
       setDiagramGenerating(false);
@@ -318,7 +318,7 @@ export default function ProjectActors({ project, onProjectUpdated }) {
             <div style={{ flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', padding: '48px 16px' }}>
               <span className="ms ms-xl spin" style={{ color: 'var(--primary)', fontSize: '40px' }}>autorenew</span>
               <h4 style={{ margin: '16px 0 8px', fontSize: '1rem', fontWeight: 600 }}>
-                {diagramGenerating ? 'Generando diagrama de casos de uso con Gemini...' : 'Cargando información del diagrama...'}
+                {diagramGenerating ? 'Generando diagrama de casos de uso con IA...' : 'Cargando información del diagrama...'}
               </h4>
               <p style={{ color: 'var(--secondary)', fontSize: '0.8125rem' }}>
                 Preparando contexto estructurado de actores y requisitos funcionales...

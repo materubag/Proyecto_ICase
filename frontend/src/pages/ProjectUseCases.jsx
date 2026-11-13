@@ -212,6 +212,28 @@ export default function ProjectUseCases({ project, onProjectUpdated }) {
     return found ? found.name : actorCode;
   };
 
+  // Map requirements by ID and by code for fast friendly lookup
+  const reqMap = React.useMemo(() => {
+    const map = new Map();
+    for (const r of (project.requirements || [])) {
+      if (r.id) map.set(r.id, r);
+      if (r.code) map.set(r.code, r);
+    }
+    return map;
+  }, [project.requirements]);
+
+  const resolveReq = (rf) => {
+    if (!rf) return { label: '', full: '', code: '', name: '' };
+    const r = reqMap.get(rf);
+    if (!r) {
+      const shortId = rf.length > 10 ? rf.slice(0, 8) + '…' : rf;
+      return { label: shortId, full: rf, code: shortId, name: '' };
+    }
+    const label = r.code || r.name;
+    const full = r.code && r.name ? `${r.code} · ${r.name}` : (r.code || r.name || rf);
+    return { label, full, code: r.code || '', name: r.name || '' };
+  };
+
   return (
     <div style={{ display: 'flex', flexDirection: 'column', height: '100%', overflow: 'hidden' }}>
       {/* Top Header bar */}
@@ -419,11 +441,27 @@ export default function ProjectUseCases({ project, onProjectUpdated }) {
                   </div>
                   <div>
                     <div style={{ display: 'flex', flexWrap: 'wrap', gap: '3px' }}>
-                      {(uc.requirementIds || []).slice(0, 3).map(rf => (
-                        <span key={rf} className="code-tag" style={{ fontSize: '0.6875rem', padding: '1px 4px' }}>
-                          {rf}
-                        </span>
-                      ))}
+                      {(uc.requirementIds || []).slice(0, 3).map(rf => {
+                        const info = resolveReq(rf);
+                        return (
+                          <span
+                            key={rf}
+                            className="code-tag"
+                            title={info.full}
+                            style={{
+                              fontSize: '0.6875rem',
+                              padding: '1px 5px',
+                              background: 'rgba(67, 56, 202, 0.08)',
+                              color: '#4338CA',
+                              border: '1px solid rgba(67, 56, 202, 0.18)',
+                              borderRadius: '3px',
+                              fontWeight: 600
+                            }}
+                          >
+                            {info.label}
+                          </span>
+                        );
+                      })}
                       {(uc.requirementIds || []).length > 3 && (
                         <span style={{ fontSize: '0.6875rem', color: 'var(--secondary)' }}>
                           +{(uc.requirementIds.length - 3)}
@@ -516,10 +554,41 @@ export default function ProjectUseCases({ project, onProjectUpdated }) {
                   <label className="field-label" style={{ fontSize: '0.75rem', color: 'var(--secondary)' }}>
                     Requisitos Relacionados
                   </label>
-                  <div style={{ display: 'flex', flexWrap: 'wrap', gap: '4px', marginTop: '4px' }}>
-                    {(selected.requirementIds || []).map(rf => (
-                      <span key={rf} className="code-tag">{rf}</span>
-                    ))}
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: '4px', marginTop: '6px' }}>
+                    {(selected.requirementIds || []).map(rf => {
+                      const info = resolveReq(rf);
+                      return (
+                        <div
+                          key={rf}
+                          title={info.full}
+                          style={{
+                            display: 'flex',
+                            alignItems: 'center',
+                            gap: '6px',
+                            padding: '3px 6px',
+                            background: 'rgba(67, 56, 202, 0.05)',
+                            borderRadius: '4px',
+                            border: '1px solid rgba(67, 56, 202, 0.15)'
+                          }}
+                        >
+                          <span
+                            style={{
+                              fontFamily: 'var(--font-mono, monospace)',
+                              fontWeight: 700,
+                              fontSize: '0.72rem',
+                              color: '#4338CA'
+                            }}
+                          >
+                            {info.code || info.label}
+                          </span>
+                          {info.name && (
+                            <span style={{ fontSize: '0.75rem', color: 'var(--on-surface)' }}>
+                              {info.name}
+                            </span>
+                          )}
+                        </div>
+                      );
+                    })}
                   </div>
                 </div>
               </div>

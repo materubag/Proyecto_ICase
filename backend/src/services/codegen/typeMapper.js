@@ -56,15 +56,18 @@ const TYPE_MAPPINGS = {
   smallint: 'DataTypes.SMALLINT',
   bigint: 'DataTypes.BIGINT',
 
-  // Decimal / Float
-  float: 'DataTypes.FLOAT',
-  double: 'DataTypes.DOUBLE',
-  decimal: 'DataTypes.DECIMAL(10, 2)',
-  precio: 'DataTypes.DECIMAL(10, 2)',
-  monto: 'DataTypes.DECIMAL(10, 2)',
-  saldo: 'DataTypes.DECIMAL(10, 2)',
-  total: 'DataTypes.DECIMAL(10, 2)',
-  moneda: 'DataTypes.DECIMAL(10, 2)',
+  // Decimal / Float / Monetary
+  float: 'DataTypes.DECIMAL(12, 2)',
+  double: 'DataTypes.DECIMAL(12, 2)',
+  decimal: 'DataTypes.DECIMAL(12, 2)',
+  precio: 'DataTypes.DECIMAL(12, 2)',
+  monto: 'DataTypes.DECIMAL(12, 2)',
+  saldo: 'DataTypes.DECIMAL(12, 2)',
+  total: 'DataTypes.DECIMAL(12, 2)',
+  subtotal: 'DataTypes.DECIMAL(12, 2)',
+  costo: 'DataTypes.DECIMAL(12, 2)',
+  impuestos: 'DataTypes.DECIMAL(12, 2)',
+  moneda: 'DataTypes.DECIMAL(12, 2)',
 
   // Boolean
   bool: 'DataTypes.BOOLEAN',

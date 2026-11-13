@@ -271,36 +271,79 @@ export const SCREEN_CATALOG = [
   }
 ];
 
-export function screenOptions(project) {
-  const functionalReqs = (project.requirements || []).filter(r => r.status === 'APPROVED' && r.type === 'FUNCTIONAL');
-  const existingNodes = project.navigationNodes || [];
+function chooseIcon(name = '', actorName = '') {
+  const text = (name + ' ' + actorName).toLowerCase();
+  if (/login|acceso|auth|sesion/i.test(text)) return 'login';
+  if (/usuario|user|rol|permiso/i.test(text)) return 'admin_panel_settings';
+  if (/cita|agenda|calendario/i.test(text)) return 'event';
+  if (/cliente|directorio|persona|contacto/i.test(text)) return 'people';
+  if (/vehiculo|auto|coche|expediente/i.test(text)) return 'directions_car';
+  if (/diagnostico|falla|averia|obd|examen/i.test(text)) return 'build';
+  if (/orden|trabajo|reparacion|bitacora/i.test(text)) return 'engineering';
+  if (/cotiz|presupuesto|precio|tarifa/i.test(text)) return 'receipt_long';
+  if (/avance|progreso|seguimiento|estado/i.test(text)) return 'trending_up';
+  if (/inventario|stock|almacen|repuesto/i.test(text)) return 'inventory_2';
+  if (/venta|factur|caja|cobro/i.test(text)) return 'point_of_sale';
+  if (/compra|proveedor|pedido/i.test(text)) return 'local_shipping';
+  if (/reporte|indicador|dashboard|estadistica/i.test(text)) return 'analytics';
+  if (/conocimiento|manual|guia|base/i.test(text)) return 'menu_book';
+  return 'monitor';
+}
 
+export function screenOptions(project) {
+  const functionalReqs = (project.requirements || []).filter(r => r.type === 'FUNCTIONAL' || !r.type);
+  const existingNodes = (project.navigationNodes || []).filter(n => !n.isDeleted);
+  const projectActors = (project.actors || []).filter(a => !a.isDeleted);
+
+  // 1. Si existen nodos de navegación registrados en la BD, usarlos directamente de forma dinámica:
+  if (existingNodes.length > 0) {
+    return existingNodes.map(node => {
+      const actor = projectActors.find(a => (node.actorIds || []).includes(a.id));
+      const isPublic = /login|acceso|autentic/i.test(node.route + ' ' + node.name);
+      const combinedReqIds = Array.isArray(node.requirementIds) ? node.requirementIds : [];
+      const functionalities = combinedReqIds
+        .map(id => functionalReqs.find(r => r.id === id || r.code === id))
+        .filter(Boolean)
+        .map(r => ({ id: r.id, code: r.code, text: r.description || r.name }));
+
+      return {
+        id: node.id,
+        name: node.name,
+        route: node.route || `/${node.name.toLowerCase().replace(/[^a-z0-9]/g, '-')}`,
+        platform: node.platform || 'WEB',
+        category: isPublic ? 'public' : (actor?.id || 'general'),
+        categoryName: isPublic ? 'Acceso y Login' : (actor?.name || 'General'),
+        actorName: isPublic ? 'Público / Todos los Usuarios' : (actor?.name || 'Sistema'),
+        icon: chooseIcon(node.name, actor?.name),
+        isCore: node.isCore !== undefined ? node.isCore : true,
+        description: node.description || `Pantalla de ${node.name} del sistema.`,
+        proposed: false,
+        requirementIds: combinedReqIds,
+        functionalities
+      };
+    });
+  }
+
+  // 2. Si aún no se han persistido nodos, deducir la propuesta dinámica para cualquier aplicación:
   const screens = SCREEN_CATALOG.map(def => {
     const matched = functionalReqs.filter(r => {
       const text = ((r.description || r.name || '') + ' ' + (r.code || '')).normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase();
       return def.match.test(text);
     });
-    const existingNode = existingNodes.find(n => n.route === def.route || n.name === def.name);
 
-    // Unir requerimientos descubiertos
-    const combinedReqIds = Array.from(new Set([
-      ...(existingNode?.requirementIds || []),
-      ...matched.map(r => r.id)
-    ]));
-
+    const combinedReqIds = matched.map(r => r.id);
     const functionalities = combinedReqIds
       .map(id => functionalReqs.find(r => r.id === id))
       .filter(Boolean)
       .map(r => ({ id: r.id, code: r.code, text: r.description || r.name }));
 
     return {
-      id: existingNode?.id || ('proposal-' + def.key),
-      name: existingNode?.name || def.name,
-      route: existingNode?.route || def.route,
+      id: 'proposal-' + def.key,
+      name: def.name,
+      route: def.route,
       platform: 'WEB',
       category: (() => {
         if (def.category === 'public') return 'public';
-        const projectActors = (project.actors || []).filter(a => !a.isDeleted);
         const matchingActor = projectActors.find(a => 
           (a.id && def.category === a.id) ||
           (a.name && (def.categoryName || '').toLowerCase().includes(a.name.toLowerCase())) ||
@@ -313,7 +356,7 @@ export function screenOptions(project) {
       icon: def.icon,
       isCore: def.isCore,
       description: def.description,
-      proposed: !existingNode,
+      proposed: true,
       requirementIds: combinedReqIds,
       functionalities
     };

@@ -420,7 +420,7 @@ REGLAS CRÍTICAS DE AISLAMIENTO Y DOMINIO:
       case 'FLOWCHART':
         return flowchartGenerator.generate(context.steps || project.requirements || [], project.useCases || [], project.name);
       case 'NAVIGATION':
-        return require('./navigationTree').generate((project.navigationNodes||[]).length?project.navigationNodes:project.screens||[], project.name);
+        return require('./navigationTree').generate((project.navigationNodes||[]).length?project.navigationNodes:project.screens||[], project.name, project.actors || []);
       case 'ARCHITECTURE':
         return architectureGenerator.generate(project.architectures?.[0] || {
           components: (project.technologies || []).map(t => ({ name: t.name, layer: t.category }))
@@ -524,7 +524,7 @@ REGLAS CRÍTICAS DE AISLAMIENTO Y DOMINIO:
 
     let mermaidCode = null;
     let technicalError = null;
-    let usedProvider = 'GEMINI';
+    let usedProvider = (env.AI_PROVIDER || 'IA').toUpperCase();
     let repairMethod = 'DIRECT';
 
     const isMock = env.AI_PROVIDER === 'mock' || (!env.GEMINI_API_KEY && !this.gemini.apiKey);
@@ -533,7 +533,7 @@ REGLAS CRÍTICAS DE AISLAMIENTO Y DOMINIO:
       const proposal=require('./architectureProposal').generate(project);
       mermaidCode=proposal.code;structuredContext.architectureProposal=proposal;structuredContext.flowWarning=proposal.warning;
       usedProvider='LOCAL_PROPOSAL';repairMethod='REQUIREMENTS_BASED_PROPOSAL';
-    }else if(['ER','CLASS','NAVIGATION','FLOWCHART'].includes(diagramType)&&['openai','gemini'].includes(env.AI_PROVIDER)){
+    }else if(['ER','CLASS','NAVIGATION','FLOWCHART'].includes(diagramType)&&['openai','gemini','hybrid','anthropic'].includes(env.AI_PROVIDER)){
       const extraction=require('../analysis/documentExtraction');
       const config=extraction.configuration();
       const modelInstructions=diagramType==='ER'
@@ -666,8 +666,8 @@ REGLAS ESTRICTAS DE MODELADO:
       try {
         response=await extraction.createProvider(config.provider).extractDocumentBatch(structuredContext,{model:config.model,prompt:instructions+'\n'+format+' No modifiques requisitos ni actores ni inventes permisos.'});
       } catch(error) {
-        if(/HTTP (503|429)/.test(error.message)) {
-          console.warn(`[DiagramAiService] IA temporalmente ocupada para ${diagramType} (${error.message}). Generando mediante fallback determinista...`);
+        if(/HTTP (503|429)/.test(error.message) || /fetch failed|EAI_AGAIN|ECONNRESET|ETIMEDOUT|ENOTFOUND/i.test(error.message + ' ' + (error.cause?.code || '') + ' ' + (error.cause?.message || ''))) {
+          console.warn(`[DiagramAiService] IA temporalmente inaccesible para ${diagramType} (${error.message}). Generando mediante fallback determinista...`);
           mermaidCode = this.generateDeterministicFallback(diagramType, project, structuredContext);
           usedProvider = 'FALLBACK_DETERMINISTIC';
           technicalError = error.message;
@@ -687,9 +687,26 @@ REGLAS ESTRICTAS DE MODELADO:
           }
         }
         if(diagramType==='NAVIGATION'){
-          if(!Array.isArray(response?.data?.nodes))throw Object.assign(new Error('Jerarquia de navegacion invalida'),{statusCode:502});
-          response.data.mermaidCode=require('./navigationTree').generate(response.data.nodes,project.name);structuredContext.proposedNavigationNodes=response.data.nodes;
-          mermaidCode=this.cleanMermaidCode(response.data.mermaidCode);usedProvider=config.provider.toUpperCase();
+          const dbNodes = (project.navigationNodes || []).filter(n => !n.isDeleted);
+          if (dbNodes.length > 0) {
+            mermaidCode = require('./navigationTree').generate(dbNodes, project.name, project.actors || []);
+            usedProvider = 'DYNAMIC_PROJECT_NODES';
+          } else if(Array.isArray(response?.data?.nodes)) {
+            response.data.mermaidCode=require('./navigationTree').generate(response.data.nodes,project.name, project.actors || []);
+            structuredContext.proposedNavigationNodes=response.data.nodes;
+            mermaidCode=this.cleanMermaidCode(response.data.mermaidCode);
+            usedProvider=config.provider.toUpperCase();
+          } else if (typeof response?.data?.mermaidCode === 'string' && response.data.mermaidCode.trim()) {
+            mermaidCode=this.cleanMermaidCode(response.data.mermaidCode);
+            usedProvider=config.provider.toUpperCase();
+          } else if (typeof response?.raw === 'string' && response.raw.includes('flowchart')) {
+            mermaidCode=this.cleanMermaidCode(response.raw);
+            usedProvider=config.provider.toUpperCase();
+          } else {
+            console.warn('[DiagramAiService] Generando navegación mediante árbol determinista estructurado...');
+            mermaidCode = this.generateDeterministicFallback(diagramType, project, structuredContext);
+            usedProvider = 'FALLBACK_DETERMINISTIC';
+          }
         }
         if(!mermaidCode && typeof response?.data?.mermaidCode==='string') {
           mermaidCode=this.cleanMermaidCode(response.data.mermaidCode);usedProvider=config.provider.toUpperCase();
