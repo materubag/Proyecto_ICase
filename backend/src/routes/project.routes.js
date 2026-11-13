@@ -43,7 +43,15 @@ router.post('/:projectId/requirements', (req, res, next) => requirementControlle
 
 // Nested Project Actors
 router.get('/:projectId/actors', (req, res, next) => actorController.getByProject(req, res, next));
-router.post('/:projectId/actor-relations/regenerate', (req,res) => res.status(409).json({success:false,error:{message:'Prepare y revise requisitos y relaciones en el flujo documental; las relaciones requieren aprobación humana.'}}));
+router.post('/:projectId/actor-relations/regenerate', (req, res, next) => {
+  try {
+    const service = require('../services/analysis/actorRelationRegeneration');
+    const job = service.jobs.start({ projectId: req.params.projectId, sourceId: req.params.projectId });
+    res.json({ success: true, data: job });
+  } catch (err) {
+    next(err);
+  }
+});
 router.get('/:projectId/actor-relations/jobs/:jobId', (req,res)=>{
   const job=require('../services/analysis/actorRelationRegeneration').jobs.get(req.params.projectId,req.params.jobId);
   if(!job)return res.status(404).json({success:false,error:{message:'La tarea no está disponible; vuelve a regenerar las relaciones.'}});
@@ -105,6 +113,14 @@ router.get('/:projectId/classes/diagram', (req, res, next) => classModelControll
 router.get('/:projectId/screens', (req, res, next) => screenController.getByProject(req, res, next));
 router.post('/:projectId/screens/select-multiple', (req, res, next) => screenController.selectMultiple(req, res, next));
 router.post('/:projectId/screens/generate-selected', (req, res, next) => screenController.generateSelectedMockups(req, res, next));
+router.post('/:projectId/navigation/deduce', async (req, res, next) => {
+  try {
+    const nodes = await require('../services/analysis/navigationDeduction.service').deduceAndPersist(req.params.projectId);
+    res.json({ success: true, data: nodes });
+  } catch (e) {
+    next(e);
+  }
+});
 
 // Historial de Versiones y Recuperación
 router.get('/:projectId/history', (req, res, next) => versionHistoryController.getByProject(req, res, next));

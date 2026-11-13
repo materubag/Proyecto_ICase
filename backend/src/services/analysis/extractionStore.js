@@ -1,4 +1,4 @@
-﻿const crypto=require('node:crypto');
+const crypto=require('node:crypto');
 const identity=require('./requirementIdentity');
 const config=require('./documentExtraction').configuration;
 const prisma=require('../../config/prisma');
@@ -96,7 +96,10 @@ async function persist(projectId,result,meta={}){
   },{timeout:20000});
 }
 async function promote(tx,candidate){
-  await require('./documentWorkflow').assertLegacyApproval(candidate.projectId, [], tx);
+  const approvedActors = await tx.actor.count({ where: { projectId: candidate.projectId, isDeleted: false, status: 'APPROVED' } });
+  if (approvedActors === 0) {
+    throw Object.assign(new Error('Apruebe primero el catálogo de actores antes de aprobar requisitos.'), { statusCode: 409 });
+  }
   await lock(tx,candidate.projectId);
   const current=await tx.requirementCandidate.findUnique({where:{id:candidate.id}});
   if(current.rejectionReason==='RECLASSIFIED_PROJECT_OBJECTIVE' || require('./statementClassifier').classify(current.statement,current.evidence)==='OBJECTIVE') {
@@ -111,7 +114,7 @@ async function promote(tx,candidate){
   const ai=require('./actorIdentity');
   const actors=await tx.actor.findMany({where:{projectId:current.projectId,isDeleted:false}});
   const actorIds=ai.canonical(ai.executorAssociations(ev).map(a=>a.actorId),actors,actorModels).ids;
-  if(official)official=await tx.requirement.update({where:{id:official.id},data:{canonicalKey:key,sources:ev,actorIds:[...new Set([...official.actorIds,...actorIds])]}});
+  if(official)official=await tx.requirement.update({where:{id:official.id},data:{canonicalKey:key,sources:ev,status:'APPROVED',actorIds:[...new Set([...official.actorIds,...actorIds])]}});
   else{
     const prefix=current.type==='NON_FUNCTIONAL'?'RNF':'RF';
     let code=current.evidence?.originalCode;

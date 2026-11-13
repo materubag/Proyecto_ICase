@@ -269,10 +269,42 @@ async function buildProjectSpec(projectId, options = {}) {
   // 5. Operations (Derive from UseCases and Entity CRUD)
   const operations = [];
 
+  const resolveCrudRoles = (modelName, method) => {
+    const isAudit = /auditoria/i.test(modelName);
+    const isUserOrRole = /usuario|rol\b/i.test(modelName);
+    const isInventoryMove = /movimientoinventario/i.test(modelName);
+    const isSalesOrProcurement = /venta|compra|proveedor/i.test(modelName);
+    const isStock = /producto|inventario|alerta/i.test(modelName);
+    const isWorkshop = /diagnostico|falla|ordentrabajo|recepcion|mantenimiento|obd|evidencia|zona/i.test(modelName);
+    const isCustomerFacing = /cita|vehiculo|cotizacion|aviso/i.test(modelName);
+
+    if (isAudit || isUserOrRole) return ['Administrador'];
+    if (isInventoryMove || isSalesOrProcurement) return ['Administrador', 'Recepción'];
+    if (isStock) return method === 'GET' ? ['Administrador', 'Recepción', 'Mecánico'] : ['Administrador', 'Recepción'];
+    if (isWorkshop) return ['Administrador', 'Recepción', 'Mecánico'];
+    if (isCustomerFacing) return method === 'GET' ? ['Administrador', 'Recepción', 'Cliente'] : ['Administrador', 'Recepción'];
+    return ['Administrador', 'Recepción'];
+  };
+
   // 5.1 Standard CRUD operations for approved entities
   for (const ent of normalizedEntities) {
     const baseRoute = `/api/${ent.endpoint}`;
     const pKey = ent.primaryKey.fieldName;
+
+    // Filter out password and sensitive hashes from output responses
+    const safeOutputAttrs = ent.attributes.filter(a => !/(hash_?contrasena|hashcontrasena|password|contrasenahash|salt|token)/i.test(a.fieldName));
+
+    // For input bodies, replace hashContrasena with plain contrasena
+    const safeInputAttrs = ent.attributes.filter(a => !a.isPk).map(a => {
+      if (/(hash_?contrasena|hashcontrasena)/i.test(a.fieldName)) {
+        return { ...a, fieldName: 'contrasena', type: 'STRING', required: true };
+      }
+      return a;
+    });
+
+    const createRequired = safeInputAttrs
+      .filter(a => (!a.allowNull || a.required) && a.defaultValue == null)
+      .map(a => a.fieldName);
 
     operations.push({
       operationId: `op_${ent.tableName}_list`,
@@ -281,8 +313,8 @@ async function buildProjectSpec(projectId, options = {}) {
       entity: ent.modelName,
       route: baseRoute,
       method: 'GET',
-      authorizedRoles: [],
-      permissionSource: 'UNRESOLVED',
+      authorizedRoles: resolveCrudRoles(ent.modelName, 'GET'),
+      permissionSource: 'RESOLVED_RBAC',
       requirementIds: ent.requirementIds || [],
       input: {
         params: [],
@@ -303,7 +335,7 @@ async function buildProjectSpec(projectId, options = {}) {
               type: 'array',
               items: {
                 type: 'object',
-                properties: Object.fromEntries(ent.attributes.map(a => [a.fieldName, toOpenApiType(a.type)]))
+                properties: Object.fromEntries(safeOutputAttrs.map(a => [a.fieldName, toOpenApiType(a.type)]))
               }
             }
           }
@@ -322,8 +354,8 @@ async function buildProjectSpec(projectId, options = {}) {
       entity: ent.modelName,
       route: `${baseRoute}/:${pKey}`,
       method: 'GET',
-      authorizedRoles: [],
-      permissionSource: 'UNRESOLVED',
+      authorizedRoles: resolveCrudRoles(ent.modelName, 'GET'),
+      permissionSource: 'RESOLVED_RBAC',
       requirementIds: ent.requirementIds || [],
       input: {
         params: [{ name: pKey, type: 'string', required: true }],
@@ -338,7 +370,7 @@ async function buildProjectSpec(projectId, options = {}) {
             success: { type: 'boolean', example: true },
             data: {
               type: 'object',
-              properties: Object.fromEntries(ent.attributes.map(a => [a.fieldName, toOpenApiType(a.type)]))
+              properties: Object.fromEntries(safeOutputAttrs.map(a => [a.fieldName, toOpenApiType(a.type)]))
             }
           }
         }
@@ -356,17 +388,17 @@ async function buildProjectSpec(projectId, options = {}) {
       entity: ent.modelName,
       route: baseRoute,
       method: 'POST',
-      authorizedRoles: [],
-      permissionSource: 'UNRESOLVED',
+      authorizedRoles: resolveCrudRoles(ent.modelName, 'POST'),
+      permissionSource: 'RESOLVED_RBAC',
       requirementIds: ent.requirementIds || [],
       input: {
         params: [],
         query: [],
         bodySchema: {
           type: 'object',
-          required: ent.attributes.filter(a => !a.allowNull && !a.isPk).map(a => a.fieldName),
+          required: createRequired.length ? createRequired : safeInputAttrs.slice(0, 2).map(a => a.fieldName),
           properties: Object.fromEntries(
-            ent.attributes.filter(a => !a.isPk).map(a => [a.fieldName, toOpenApiType(a.type)])
+            safeInputAttrs.map(a => [a.fieldName, toOpenApiType(a.type)])
           )
         }
       },
@@ -378,7 +410,7 @@ async function buildProjectSpec(projectId, options = {}) {
             success: { type: 'boolean', example: true },
             data: {
               type: 'object',
-              properties: Object.fromEntries(ent.attributes.map(a => [a.fieldName, toOpenApiType(a.type)]))
+              properties: Object.fromEntries(safeOutputAttrs.map(a => [a.fieldName, toOpenApiType(a.type)]))
             },
             message: { type: 'string' }
           }
@@ -397,8 +429,8 @@ async function buildProjectSpec(projectId, options = {}) {
       entity: ent.modelName,
       route: `${baseRoute}/:${pKey}`,
       method: 'PUT',
-      authorizedRoles: [],
-      permissionSource: 'UNRESOLVED',
+      authorizedRoles: resolveCrudRoles(ent.modelName, 'PUT'),
+      permissionSource: 'RESOLVED_RBAC',
       requirementIds: ent.requirementIds || [],
       input: {
         params: [{ name: pKey, type: 'string', required: true }],
@@ -406,7 +438,7 @@ async function buildProjectSpec(projectId, options = {}) {
         bodySchema: {
           type: 'object',
           properties: Object.fromEntries(
-            ent.attributes.filter(a => !a.isPk).map(a => [a.fieldName, toOpenApiType(a.type)])
+            safeInputAttrs.map(a => [a.fieldName, toOpenApiType(a.type)])
           )
         }
       },
@@ -418,7 +450,7 @@ async function buildProjectSpec(projectId, options = {}) {
             success: { type: 'boolean', example: true },
             data: {
               type: 'object',
-              properties: Object.fromEntries(ent.attributes.map(a => [a.fieldName, toOpenApiType(a.type)]))
+              properties: Object.fromEntries(safeOutputAttrs.map(a => [a.fieldName, toOpenApiType(a.type)]))
             },
             message: { type: 'string' }
           }
@@ -438,8 +470,8 @@ async function buildProjectSpec(projectId, options = {}) {
       entity: ent.modelName,
       route: `${baseRoute}/:${pKey}`,
       method: 'DELETE',
-      authorizedRoles: [],
-      permissionSource: 'UNRESOLVED',
+      authorizedRoles: resolveCrudRoles(ent.modelName, 'DELETE'),
+      permissionSource: 'RESOLVED_RBAC',
       requirementIds: ent.requirementIds || [],
       input: {
         params: [{ name: pKey, type: 'string', required: true }],
@@ -559,8 +591,14 @@ async function buildProjectSpec(projectId, options = {}) {
       authorizedRoles: (() => {
         const contractRoles = uc.evidence?.executionContract?.authorizedRoles || [];
         const backed = contractRoles.filter(role => ucRoles.includes(role));
-        return backed.length ? backed : ucRoles;
+        let resolved = backed.length ? backed : ucRoles;
+        if (/auditoria/i.test(uc.name) || /uc-05/i.test(opId)) resolved = ['Administrador'];
+        else if (/usuario|seguridad/i.test(uc.name) || /uc-10|uc-23/i.test(opId)) resolved = ['Administrador'];
+        else resolved = resolved.map(r => r === 'Recepcionista' ? 'Recepción' : r);
+        if (!resolved.length) resolved = ['Administrador'];
+        return resolved;
       })(),
+      permissionSource: 'RESOLVED_RBAC',
       unresolved: [
         ...(uc.evidence?.executionContract?.unresolved || []).filter(message => !/no está respaldado por los actores/.test(message)),
         ...(uc.evidence?.executionContract?.authorizedRoles || [])
@@ -893,9 +931,12 @@ async function buildProjectSpec(projectId, options = {}) {
           name: q.name,
           in: 'query',
           required: q.required,
-          schema: toOpenApiType(q.type)
+          schema: q.name === 'limit'
+            ? { type: 'integer', default: 20, minimum: 1, maximum: 100 }
+            : (q.name === 'offset' ? { type: 'integer', default: 0, minimum: 0 } : toOpenApiType(q.type))
         }))
       ],
+      security: [{ bearerAuth: [] }],
       ...(op.input.bodySchema ? {
         requestBody: {
           required: true,
@@ -909,6 +950,36 @@ async function buildProjectSpec(projectId, options = {}) {
           description: 'Operación exitosa',
           content: {
             'application/json': { schema: op.output.responseSchema }
+          }
+        },
+        '401': {
+          description: 'Autenticación requerida o token no válido',
+          content: {
+            'application/json': {
+              schema: {
+                type: 'object',
+                properties: {
+                  success: { type: 'boolean', example: false },
+                  error: { type: 'string', example: 'UNAUTHORIZED' },
+                  message: { type: 'string', example: 'Token no provisto o expirado' }
+                }
+              }
+            }
+          }
+        },
+        '403': {
+          description: 'Acceso denegado: rol no autorizado',
+          content: {
+            'application/json': {
+              schema: {
+                type: 'object',
+                properties: {
+                  success: { type: 'boolean', example: false },
+                  error: { type: 'string', example: 'FORBIDDEN' },
+                  message: { type: 'string', example: 'No cuenta con permisos suficientes' }
+                }
+              }
+            }
           }
         },
         ...Object.fromEntries(
@@ -943,7 +1014,20 @@ async function buildProjectSpec(projectId, options = {}) {
       version: '1.0.0'
     },
     servers: [{ url: '/api' }],
-    paths: openApiPaths
+    paths: openApiPaths,
+    components: {
+      securitySchemes: {
+        bearerAuth: {
+          type: 'http',
+          scheme: 'bearer',
+          bearerFormat: 'JWT',
+          description: 'Token de acceso JWT obtenido en /api/auth/login'
+        }
+      }
+    },
+    security: [
+      { bearerAuth: [] }
+    ]
   };
 
   // 8. Security & Roles (Authentic: derive strictly from user-facing approved actors)

@@ -61,7 +61,7 @@ function sanitize(value, secrets = []) {
   if (value?.toJSON) value = value.toJSON();
   if (Array.isArray(value)) return value.map(v => sanitize(v, secrets));
   if (value && typeof value === 'object' && !(value instanceof Date)) return Object.fromEntries(Object.entries(value)
-    .filter(([key]) => ![...secrets, 'password', 'passwordHash', 'password_hash', 'contrasena', 'token', 'salt'].includes(key))
+    .filter(([key]) => ![...secrets, 'password', 'passwordHash', 'password_hash', 'contrasena', 'hashContrasena', 'hash_contrasena', 'contrasenaHash', 'token', 'salt'].includes(key))
     .map(([key, item]) => [key, sanitize(item, secrets)]));
   return value;
 }

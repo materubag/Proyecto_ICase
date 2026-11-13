@@ -89,12 +89,14 @@ export function generateERDiagram(entities = [], relationships = []) {
  * Genera el Árbol de Navegación (flowchart TD con jerarquía padre -> hijo).
  * Representa la estructura jerárquica de la aplicación, NO un flujo operativo.
  */
-export function generateNavigationDiagram(navigation = [], screens = [], projectName = 'Sistema') {
+export function generateNavigationDiagram(navigation = [], screens = [], projectName = 'Sistema', actors = []) {
   let lines = ['flowchart TD'];
   const rootId = 'APP_ROOT';
   lines.push(`    ${rootId}["🌐 ${sanitizeLabel(projectName)}"]`);
 
-  if (!screens || screens.length === 0) {
+  const allScreens = (screens && screens.length > 0) ? screens : (navigation && navigation.length > 0 ? navigation : []);
+
+  if (!allScreens || allScreens.length === 0) {
     lines.push(`    ${rootId} --> MOD_AUTH["Portal de Acceso"]`);
     lines.push(`    ${rootId} --> MOD_DASH["Panel Principal"]`);
     lines.push(`    MOD_AUTH --> SCR_LOGIN["Inicio de Sesión\\n/login"]`);
@@ -102,42 +104,56 @@ export function generateNavigationDiagram(navigation = [], screens = [], project
     return lines.join('\n');
   }
 
-  // Module buckets
-  const authScreens = [];
-  const dashboardScreens = [];
-  const otherScreens = [];
+  const actorMap = new Map((actors || []).map(a => [a.id, a]));
+  const modules = new Map();
 
-  for (const scr of screens) {
-    const safeId = 'SCR_' + sanitizeId(scr.name).slice(0, 25);
-    const label = sanitizeLabel(scr.name);
-    const route = scr.route ? `\\n${sanitizeLabel(scr.route)}` : '';
-    const item = { safeId, label: `${label}${route}`, raw: scr.name.toLowerCase() };
+  for (const scr of allScreens) {
+    const raw = (scr.name || '').toLowerCase() + ' ' + (scr.route || '').toLowerCase();
+    const isAuth = /login|acceso|autentic/i.test(raw) || ((scr.actorIds || []).length > 2);
+    let modKey = 'general';
+    let modLabel = 'Operaciones del Sistema';
 
-    if (item.raw.includes('login') || item.raw.includes('acceso') || item.raw.includes('autentica')) {
-      authScreens.push(item);
-    } else if (item.raw.includes('dashboard') || item.raw.includes('indicador') || item.raw.includes('resumen')) {
-      dashboardScreens.push(item);
+    if (isAuth) {
+      modKey = 'auth';
+      modLabel = 'Portal de Acceso';
     } else {
-      otherScreens.push(item);
+      const matchedActor = (scr.actorIds || []).map(id => actorMap.get(id)).find(Boolean) ||
+        (actors || []).find(a => (scr.name || '').toLowerCase().includes(a.name.toLowerCase()));
+
+      if (matchedActor) {
+        const safeKey = matchedActor.name.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/[^a-z0-9]/g, '');
+        modKey = 'actor_' + safeKey;
+        const isPortal = /client|externo|afiliado/i.test(matchedActor.name);
+        modLabel = (isPortal ? 'Portal ' : 'Módulo ') + matchedActor.name;
+      } else {
+        if (/recep|citas|cliente|vehiculo/i.test(raw)) {
+          modKey = 'recepcion';
+          modLabel = 'Módulo Recepción';
+        } else if (/diag|reparac|mecanic|conocimiento/i.test(raw)) {
+          modKey = 'mecanico';
+          modLabel = 'Módulo Mecánico y Taller';
+        } else if (/admin|usuario|reporte|inventario|compra|servicio|venta/i.test(raw)) {
+          modKey = 'admin';
+          modLabel = 'Módulo de Administración';
+        }
+      }
+    }
+
+    if (!modules.has(modKey)) modules.set(modKey, { label: modLabel, screens: [] });
+    modules.get(modKey).screens.push(scr);
+  }
+
+  for (const [modKey, mod] of modules.entries()) {
+    const modNodeId = 'MOD_' + modKey.toUpperCase();
+    lines.push(`    ${rootId} --> ${modNodeId}["${sanitizeLabel(mod.label)}"]`);
+    for (const s of mod.screens) {
+      const safeId = 'SCR_' + sanitizeId(s.name).slice(0, 25);
+      const label = sanitizeLabel(s.name);
+      const route = s.route ? `\\n${sanitizeLabel(s.route)}` : '';
+      lines.push(`    ${safeId}["${label}${route}"]`);
+      lines.push(`    ${modNodeId} --> ${safeId}`);
     }
   }
-
-  if (authScreens.length > 0) {
-    lines.push(`    ${rootId} --> MOD_AUTH["Portal de Acceso"]`);
-    authScreens.forEach(s => lines.push(`    MOD_AUTH --> ${s.safeId}["${s.label}"]`));
-  }
-
-  let mainHub = rootId;
-  if (dashboardScreens.length > 0) {
-    const dash = dashboardScreens[0];
-    lines.push(`    ${rootId} --> ${dash.safeId}["${dash.label}"]`);
-    mainHub = dash.safeId;
-    dashboardScreens.slice(1).forEach(s => lines.push(`    ${dash.safeId} --> ${s.safeId}["${s.label}"]`));
-  }
-
-  otherScreens.forEach(s => {
-    lines.push(`    ${mainHub} --> ${s.safeId}["${s.label}"]`);
-  });
 
   return lines.join('\n');
 }

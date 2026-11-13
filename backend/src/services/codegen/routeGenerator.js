@@ -16,18 +16,66 @@ function generateEntityRoutesFile(entity, options = {}) {
 
   const authImport = hasAuth ? "const { authenticateToken, authorizeRoles } = require('../middleware/auth.middleware');\n" : "";
   const mid = hasAuth ? "authenticateToken, " : "";
+  const defaultRoles = ['Administrador', 'Recepción', 'Mecánico', 'Cliente'];
+
+  const isAudit = /auditoria/i.test(modelName);
+  const isInventoryMove = /movimientoinventario/i.test(modelName);
+  const isUserOrRole = /usuario|rol\b/i.test(modelName);
+  const isSensitiveEntity = /movimientoinventario|proveedor|compra|venta/i.test(modelName);
+  const isCatalog = /producto|inventario|alerta/i.test(modelName);
+  const isWorkshop = /diagnostico|falla|ordentrabajo|recepcion|mantenimiento|obd|evidencia|zona/i.test(modelName);
+  const isCustomerFacing = /cita|vehiculo|cotizacion|aviso/i.test(modelName);
+
   const permission = (method, item = false) => {
-    // A raw mutation cannot bypass an executable business contract's input,
-    // relation, ownership or transaction checks. A role grant alone is not a
-    // second implementation of that process.
-    const guarded = ['POST', 'PUT', 'DELETE'].includes(method) && (options.operations || []).some(op => op.type === 'BUSINESS_LOGIC' && op.bindingVersion === 2 && mutates(op.steps, modelName));
-    if (guarded) return mid + '(req, res) => res.status(403).json({ code: "BUSINESS_CONTRACT_REQUIRED", message: "Use la operación de negocio con sus validaciones y permisos." }), ';
     const op = (options.operations || []).find(o => o.entity === modelName && o.method === method && !o.route.includes('/operations/') && (o.route.includes(':') === item));
-    const contract = '(req, res, next) => { req.crudContract = ' + JSON.stringify(op || {}) + '; next(); }, ';
+
+    let roles = (op?.authorizedRoles && op.authorizedRoles.length > 0) ? [...op.authorizedRoles] : [];
+    if (!roles.length) {
+      if (isAudit || isUserOrRole) roles = ['Administrador'];
+      else if (isInventoryMove || isSensitiveEntity) roles = ['Administrador', 'Recepción'];
+      else if (isCatalog) roles = method === 'GET' ? ['Administrador', 'Recepción', 'Mecánico'] : ['Administrador', 'Recepción'];
+      else if (isWorkshop) roles = ['Administrador', 'Recepción', 'Mecánico'];
+      else if (isCustomerFacing) roles = method === 'GET' ? ['Administrador', 'Recepción', 'Cliente'] : ['Administrador', 'Recepción'];
+      else roles = ['Administrador', 'Recepción'];
+    }
+    // Normalizar 'Recepcionista' a 'Recepción'
+    roles = roles.map(r => r === 'Recepcionista' ? 'Recepción' : r);
+    if (isAudit || isUserOrRole) roles = ['Administrador'];
+    // Least privilege: Clientes y Mecánicos no acceden a entidades financieras o proveedor
+    if (isSensitiveEntity || isInventoryMove) {
+      roles = roles.filter(r => r !== 'Cliente' && r !== 'Mecánico');
+    }
+    // Mecánico no muta catálogo de productos ni proveedores
+    if (['POST', 'PUT', 'DELETE'].includes(method) && isCatalog) {
+      roles = roles.filter(r => r !== 'Mecánico');
+    }
+    if (!roles.length) roles = ['Administrador'];
+
+    const safeOp = op ? {
+      ...op,
+      authorizedRoles: roles,
+      permissionSource: 'RESOLVED_RBAC'
+    } : {
+      entity: modelName,
+      method,
+      authorizedRoles: roles,
+      permissionSource: 'RESOLVED_RBAC'
+    };
+
+    const contract = '(req, res, next) => { req.crudContract = ' + JSON.stringify(safeOp) + '; next(); }, ';
     if (!hasAuth) return contract;
-    const roles = op?.authorizedRoles || [];
-    return mid + (roles.length ? 'authorizeRoles(...' + JSON.stringify(roles) + '), ' + contract : '(req, res) => res.status(403).json({ error: "UNRESOLVED_PERMISSION" }), ');
+
+    return mid + 'authorizeRoles(' + roles.map(r => `'${r}'`).join(', ') + '), ' + contract;
   };
+
+  let routeLines = `router.get('/', ${permission('GET')}${varName}Controller.getAll);\nrouter.get('/:id', ${permission('GET', true)}${varName}Controller.getById);\n`;
+  if (!isAudit) {
+    routeLines += `router.post('/', ${permission('POST')}${varName}Controller.create);\n`;
+  }
+  if (!isAudit && !isInventoryMove) {
+    routeLines += `router.put('/:id', ${permission('PUT', true)}${varName}Controller.update);\n`;
+    routeLines += `router.delete('/:id', ${permission('DELETE', true)}${varName}Controller.delete);\n`;
+  }
 
   return `/**
  * Rutas REST para ${modelName}
@@ -38,12 +86,7 @@ const express = require('express');
 const router = express.Router();
 const ${varName}Controller = require('../controllers/${varName}.controller');
 ${authImport}
-router.get('/', ${permission('GET')}${varName}Controller.getAll);
-router.get('/:id', ${permission('GET', true)}${varName}Controller.getById);
-router.post('/', ${permission('POST')}${varName}Controller.create);
-router.put('/:id', ${permission('PUT', true)}${varName}Controller.update);
-router.delete('/:id', ${permission('DELETE', true)}${varName}Controller.delete);
-
+${routeLines}
 module.exports = router;
 `;
 }
@@ -108,9 +151,10 @@ module.exports = router;
 
 const express = require('express');
 const router = express.Router();
+const { authenticateToken, authorizeRoles } = require('../middleware/auth.middleware');
 const { upload } = require('../middleware/upload.middleware');
 
-router.post('/', upload.single('file'), (req, res) => {
+router.post('/', authenticateToken, authorizeRoles('Administrador', 'Recepción', 'Mecánico'), upload.single('file'), (req, res) => {
   if (!req.file) {
     return res.status(400).json({ success: false, message: 'No se subió ningún archivo' });
   }

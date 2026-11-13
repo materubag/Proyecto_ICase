@@ -6,8 +6,9 @@ export const codegenApi = {
   /**
    * Obtiene la previsualización del árbol de archivos y contenido de código
    */
-  getPreview: (projectId, includeDocker = true) => {
-    return request(`/projects/${projectId}/codegen/preview?includeDocker=${includeDocker}`);
+  getPreview: (projectId, includeDocker = true, stageId = null) => {
+    const stageQuery = stageId ? `&stageId=${stageId}` : '';
+    return request(`/projects/${projectId}/codegen/preview?includeDocker=${includeDocker}${stageQuery}`);
   },
 
   /**
@@ -51,6 +52,33 @@ export const codegenApi = {
     return request(`/projects/${projectId}/codegen/stages/approve`, {
       method: 'POST',
       body: { stageId, ...evidence }
+    });
+  },
+
+  /**
+   * Ejecuta la auditoría pericial con Claude Sonnet 5.5 para una fase específica
+   */
+  auditStage: (projectId, stageId) => {
+    return request(`/projects/${projectId}/codegen/stages/${stageId}/audit`, {
+      method: 'POST'
+    });
+  },
+
+  /**
+   * Aplica automáticamente las correcciones recomendadas por Claude Sonnet para la fase activa
+   */
+  applyStageAuditFixes: (projectId, stageId) => {
+    return request(`/projects/${projectId}/codegen/stages/${stageId}/apply-audit-fixes`, {
+      method: 'POST'
+    });
+  },
+
+  /**
+   * Ejecuta una prueba y verificación en vivo de la Base de Datos para la Fase 3
+   */
+  testDatabase: (projectId) => {
+    return request(`/projects/${projectId}/codegen/stages/3/test-database`, {
+      method: 'POST'
     });
   },
 

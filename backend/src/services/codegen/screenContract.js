@@ -1,10 +1,10 @@
-﻿const { normalizeAttributes, deriveNaming, toCamelCase } = require('./typeMapper');
+const { normalizeAttributes, deriveNaming, toCamelCase } = require('./typeMapper');
 
 const tokenNorm = s => (s || '').toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/[^a-z0-9]/g, '');
 const matches = (ref, e) => [e.id, e.name, e.modelName].filter(Boolean).includes(ref);
 
 function isPasswordField(name = '') {
-  return /^(passwordHash|password_hash|password|contrasena|contraseña|clave)$/i.test(String(name));
+  return /(hash_?contrase|hashcontrasena|password|contrasena|contraseña|clave)/i.test(String(name));
 }
 
 function pickLabelAttr(attrs) {

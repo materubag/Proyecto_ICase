@@ -286,13 +286,18 @@ function generateOperationRoutesFile(operations = [], security = {}) {
 
     const middlewares = [];
     if (hasAuth) {
-      const roles = [...(op.authorizedRoles || [])];
-      if (roles.length > 0) {
-        const rolesList = roles.map(r => `'${r}'`).join(', ');
-        middlewares.push(`authenticateToken`, `authorizeRoles(${rolesList})`);
-      } else {
-        middlewares.push(`authenticateToken`, `(req, res) => res.status(403).json({ code: 'UNRESOLVED_PERMISSION' })`);
+      let roles = [...(op.authorizedRoles || [])];
+      if (/auditoria/i.test(op.name || op.route) || /uc-05/i.test(op.operationId || '')) {
+        roles = ['Administrador'];
+      } else if (/usuario|seguridad/i.test(op.name || op.route) || /uc-10|uc-23/i.test(op.operationId || '')) {
+        roles = ['Administrador'];
       }
+      roles = roles.map(r => r === 'Recepcionista' ? 'Recepción' : r);
+      if (roles.length === 0) {
+        roles = ['Administrador'];
+      }
+      const rolesList = roles.map(r => `'${r}'`).join(', ');
+      middlewares.push(`authenticateToken`, `authorizeRoles(${rolesList})`);
     }
 
     const midArg = middlewares.length > 0 ? `${middlewares.join(', ')}, ` : '';

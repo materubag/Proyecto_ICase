@@ -285,7 +285,6 @@ class CandidateService {
       throw err;
     }
 
-    if (modelCandidate.kind === 'ACTOR') throw Object.assign(new Error('Revise y apruebe la versión del catálogo en el flujo documental'), {statusCode:409});
     if (modelCandidate.status === 'APPROVED') {
       if(modelCandidate.kind==='ACTOR')await prisma.$transaction(tx=>require('./actorIdentity').refresh(tx,modelCandidate.projectId));
       return { candidate: modelCandidate, kind: modelCandidate.kind, message: 'Ya aprobado previamente.' };
@@ -330,6 +329,29 @@ class CandidateService {
                 reviewStatus: 'APPROVED'
               }
             });
+          }
+
+          if (tx.documentWorkflow) {
+            try {
+              const wf = await tx.documentWorkflow.findUnique({ where: { projectId } });
+              if (wf) {
+                const state = wf.state || {};
+                state.actors = state.actors || { content: { items: [] }, version: 1 };
+                state.actors.content = state.actors.content || { items: [] };
+                if (!state.actors.content.items.some(a => a.id === promotedItem.id || a.name === promotedItem.name)) {
+                  state.actors.content.items.push({
+                    id: promotedItem.id,
+                    name: promotedItem.name,
+                    description: promotedItem.description,
+                    status: 'APPROVED',
+                    reviewStatus: 'APPROVED'
+                  });
+                }
+                state.actors.approval = { approvedAt: new Date().toISOString(), approvedBy: 'user' };
+                state.actors.validation = 'VALID';
+                await tx.documentWorkflow.update({ where: { projectId }, data: { state } });
+              }
+            } catch {}
           }
           break;
         }

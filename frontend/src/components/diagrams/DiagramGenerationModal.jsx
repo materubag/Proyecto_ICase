@@ -181,7 +181,7 @@ export default function DiagramGenerationModal({ projectId, isOpen, onClose, onG
                 Generación Inteligente de Diagramas Mermaid
               </h3>
               <p style={{ margin: '2px 0 0', fontSize: '0.75rem', color: 'var(--secondary)' }}>
-                Construye modelos visuales a partir de la información estructurada mediante Gemini
+                Construye modelos visuales a partir de la información estructurada mediante IA
               </p>
             </div>
           </div>
@@ -263,7 +263,7 @@ export default function DiagramGenerationModal({ projectId, isOpen, onClose, onG
             /* Diagram Selection List */
             <div>
               <p style={{ margin: '0 0 14px', fontSize: '0.8125rem', color: 'var(--on-surface)' }}>
-                Selecciona los diagramas que deseas generar. Se enviará únicamente el contexto estructurado relevante a Gemini:
+                Selecciona los diagramas que deseas generar. Se enviará únicamente el contexto estructurado relevante a la IA:
               </p>
 
               <div style={{ display: 'flex', flexDirection: 'column', gap: '10px', marginBottom: '18px' }}>
@@ -425,7 +425,7 @@ export default function DiagramGenerationModal({ projectId, isOpen, onClose, onG
                 >
                   <div style={{ display: 'flex', alignItems: 'center', gap: '10px', color: 'var(--primary)', marginBottom: '6px' }}>
                     <span className="ms spin" style={{ fontSize: '20px' }}>autorenew</span>
-                    <strong style={{ fontSize: '0.85rem' }}>Generando con Gemini...</strong>
+                    <strong style={{ fontSize: '0.85rem' }}>Generando con IA...</strong>
                   </div>
                   <div style={{ fontSize: '0.75rem', color: 'var(--secondary)' }}>
                     {generationStep}

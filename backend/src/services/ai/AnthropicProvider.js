@@ -52,7 +52,6 @@ class AnthropicProvider extends AIProvider {
     }
 
     const result = await response.json();
-    if (result.stop_reason !== 'end_turn') throw Object.assign(new Error('Respuesta Sonnet incompleta'), { usage: result.usage });
     const rawContent = (result.content || []).filter(c => c.type === 'text').map(c => c.text).join('');
 
     // Extracción limpia de JSON si viene envuelto en markdown
@@ -65,6 +64,9 @@ class AnthropicProvider extends AIProvider {
 
     const match = cleanJson.match(/\{[\s\S]*\}|\[[\s\S]*\]/);
     if (!match) {
+      if (result.stop_reason !== 'end_turn') {
+        throw Object.assign(new Error('Respuesta Sonnet incompleta (límite de tokens alcanzado sin cerrar JSON)'), { usage: result.usage });
+      }
       throw Object.assign(new Error('Anthropic no devolvió un JSON reconocible en su respuesta'), {
         raw: rawContent,
         usage: result.usage

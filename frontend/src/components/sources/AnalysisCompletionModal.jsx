@@ -27,6 +27,7 @@ export default function AnalysisCompletionModal({
   isOpen,
   onClose,
   onNavigateToReview,
+  onReviewNow,
   onNavigateToSummary,
   summaryData = {}
 }) {
@@ -234,7 +235,8 @@ export default function AnalysisCompletionModal({
             className="btn btn-primary btn-md"
             onClick={() => {
               onClose();
-              onNavigateToReview?.();
+              if (typeof onNavigateToReview === 'function') onNavigateToReview();
+              if (typeof onReviewNow === 'function') onReviewNow();
             }}
             style={{ display: 'flex', alignItems: 'center', gap: '8px' }}
           >

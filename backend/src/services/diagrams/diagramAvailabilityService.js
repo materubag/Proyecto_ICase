@@ -144,7 +144,7 @@ class DiagramAvailabilityService {
     }
 
     const erOutdated = checkIsOutdated(erArtifact.generatedAt, [...approvedEntities, ...approvedRel]);
-    if(erStatus==='INSUFFICIENT'&&['openai','gemini'].includes(require('../../config/env').AI_PROVIDER)&&requirements.some(r=>!r.isDeleted&&r.status!=='REMOVED'&&r.type==='FUNCTIONAL')){
+    if(erStatus==='INSUFFICIENT'&&['openai','gemini','hybrid','anthropic'].includes(require('../../config/env').AI_PROVIDER)&&requirements.some(r=>!r.isDeleted&&r.status!=='REMOVED'&&r.type==='FUNCTIONAL')){
       erStatus='PARTIAL';erMissing.push('Se generará un modelo propuesto a partir de los requisitos; revisar sus entidades y cardinalidades.');
     }
 
@@ -169,7 +169,7 @@ class DiagramAvailabilityService {
     }
 
     const classOutdated = checkIsOutdated(classArtifact.generatedAt, [...approvedClasses, ...approvedEntities]);
-    if(classStatus==='INSUFFICIENT'&&['openai','gemini'].includes(require('../../config/env').AI_PROVIDER)&&requirements.some(r=>!r.isDeleted&&r.status!=='REMOVED'&&r.type==='FUNCTIONAL')){
+    if(classStatus==='INSUFFICIENT'&&['openai','gemini','hybrid','anthropic'].includes(require('../../config/env').AI_PROVIDER)&&requirements.some(r=>!r.isDeleted&&r.status!=='REMOVED'&&r.type==='FUNCTIONAL')){
       classStatus='PARTIAL';classMissing.push('Se generará un modelo UML propuesto desde los requisitos; revisar responsabilidades y relaciones.');
     }
 
@@ -207,7 +207,7 @@ class DiagramAvailabilityService {
     }
 
     const navOutdated = checkIsOutdated(navArtifact.generatedAt, [...approvedScreens, ...navigationNodes]);
-    if(navStatus==='INSUFFICIENT'&&['openai','gemini'].includes(require('../../config/env').AI_PROVIDER)&&requirements.some(r=>!r.isDeleted&&r.status!=='REMOVED'&&r.type==='FUNCTIONAL')){
+    if(navStatus==='INSUFFICIENT'&&['openai','gemini','hybrid','anthropic'].includes(require('../../config/env').AI_PROVIDER)&&requirements.some(r=>!r.isDeleted&&r.status!=='REMOVED'&&r.type==='FUNCTIONAL')){
       navStatus='PARTIAL';navMissing.push('Se propondrá una jerarquía de navegación desde los requisitos, sin inferir permisos.');
     }
 

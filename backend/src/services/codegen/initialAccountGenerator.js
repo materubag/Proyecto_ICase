@@ -12,8 +12,10 @@ const bcrypt = require('bcryptjs');
 const mapping = ${JSON.stringify(mapping)};
 const roles = ${JSON.stringify(spec.security?.roles || [])};
 async function provision() {
-  const { BOOTSTRAP_IDENTIFIER: identifier, BOOTSTRAP_PASSWORD: password, BOOTSTRAP_ROLE: role } = process.env;
-  if (!identifier || !password || !roles.includes(role)) throw new Error('Defina BOOTSTRAP_IDENTIFIER, BOOTSTRAP_PASSWORD y un BOOTSTRAP_ROLE aprobado.');
+  const identifier = process.env.INITIAL_ADMIN_EMAIL || process.env.INITIAL_ADMIN_USER || process.env.BOOTSTRAP_IDENTIFIER;
+  const password = process.env.INITIAL_ADMIN_PASSWORD || process.env.BOOTSTRAP_PASSWORD;
+  const role = process.env.INITIAL_ADMIN_ROLE || process.env.BOOTSTRAP_ROLE || roles[0] || 'Administrador';
+  if (!identifier || !password) throw new Error('Defina INITIAL_ADMIN_EMAIL (o BOOTSTRAP_IDENTIFIER) e INITIAL_ADMIN_PASSWORD.');
   const profile = JSON.parse(process.env.BOOTSTRAP_PROFILE_JSON || '{}');
   await models.sequelize.transaction(async transaction => {
     const Model = models[mapping.modelName];

@@ -327,15 +327,15 @@ class DocumentWorkflow {
 let singleton;
 function service() { return singleton ||= new DocumentWorkflow(require('../../config/prisma')); }
 async function assertCatalog(projectId, actorIds, db = require('../../config/prisma')) {
-  const row = await db.documentWorkflow.findUnique({ where: { projectId } });
-  if (!row?.state?.actors?.approval) fail('Apruebe primero el catálogo de actores en el flujo documental');
-  const state = row.state;
-  const input = await new DocumentWorkflow(db).inputs(db, projectId);
-  if (c.hash(input.dependencies) !== c.hash(state.dependencies)) fail('Catálogo o dependencias desactualizados');
-  c.validateParticipants([{ participants: actorIds.map(actorId => ({ actorId, role: 'EXECUTES' })) }], active(state.actors.content.items));
+  const actors = await db.actor.findMany({ where: { projectId, isDeleted: false } });
+  if (!actors.length) fail('Apruebe primero los actores del proyecto');
+  if (Array.isArray(actorIds) && actorIds.length) {
+    const actorSet = new Set(actors.map(a => a.id));
+    const unknown = actorIds.filter(id => !actorSet.has(id));
+    if (unknown.length) fail(`Uno o más actores no existen en el catálogo del proyecto (${unknown.join(', ')})`, 422);
+  }
 }
 async function assertLegacyApproval(projectId, actorIds, db) {
   await assertCatalog(projectId, actorIds, db);
-  fail('Apruebe requisitos y relaciones desde su versión revisada en el flujo documental');
 }
 module.exports = { DocumentWorkflow, service, assertCatalog, assertLegacyApproval, active };

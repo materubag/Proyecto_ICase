@@ -15,7 +15,7 @@ services:
     volumes:
       - postgres_data:/var/lib/postgresql/data
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-icase_user} -d ${POSTGRES_DB:-icase_db}"]
+      test: [ "CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-icase_user} -d ${POSTGRES_DB:-icase_db}" ]
       interval: 5s
       timeout: 5s
       retries: 5
@@ -38,7 +38,7 @@ services:
     volumes:
       - postgres_codegen_data:/var/lib/postgresql/data
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U icase_user -d autron5_acceptance"]
+      test: [ "CMD-SHELL", "pg_isready -U icase_user -d autron5_acceptance" ]
       interval: 5s
       timeout: 5s
       retries: 5

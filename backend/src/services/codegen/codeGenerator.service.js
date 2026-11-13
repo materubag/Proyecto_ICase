@@ -194,7 +194,7 @@ class CodeGeneratorService {
     const { spec, diagnostics } = await this.getProjectArtifacts(projectId, { ...options, onTrace: event => { trace.push(event); options.onTrace?.(event); } });
 
     // If validation fails with blocking errors, return diagnostic report without generating broken code
-    const reviewableCodes = ['UNDEFINED_OPERATION_BEHAVIOR', 'UNRESOLVED_SCREEN_CONTRACT', 'UNRESOLVED_OPERATION_CONTRACT', 'UNRESOLVED_PROJECT_CONTRACT', 'UNRESOLVED_OPERATION_PERMISSION', 'MISSING_APPROVED_MOCKUP', 'UNIMPLEMENTED_REQUIREMENT_BEHAVIOR'];
+    const reviewableCodes = ['UNDEFINED_OPERATION_BEHAVIOR', 'UNRESOLVED_SCREEN_CONTRACT', 'UNRESOLVED_OPERATION_CONTRACT', 'UNRESOLVED_PROJECT_CONTRACT', 'UNRESOLVED_OPERATION_PERMISSION', 'MISSING_APPROVED_MOCKUP', 'UNIMPLEMENTED_REQUIREMENT_BEHAVIOR', 'MISSING_AUTH_MODEL_FIELDS'];
     const qualityOnly = (diagnostics.errors || []).length === 0 || diagnostics.errors.every(error => reviewableCodes.includes(error.code));
     const reviewable = options.reviewOnly === true && qualityOnly;
     const reviewOnly = options.reviewOnly === true && !diagnostics.ready;
@@ -227,15 +227,23 @@ class CodeGeneratorService {
     const safeDbName = projectName.toLowerCase().replace(/[^a-z0-9]/g, '_') + '_db';
 
     // 1. Root Configuration & Documentation
-    if (reviewOnly) addFile('REVIEW_STATUS.json', JSON.stringify({ ready: false, notForDeployment: true, diagnostics }, null, 2), 'json');
-    const readme = generateReadme(projectName, spec.entities);
-    addFile('README.md', reviewOnly ? '# Paquete de revisión — ready=false\n\nNo aprobado para despliegue. Consulte REVIEW_STATUS.json: las operaciones pendientes responden 501 y los permisos sin fuente explícita se rechazan.\n\n' + readme : readme, 'markdown');
+    if (reviewOnly && (!options.stageId || options.stageId === 7)) {
+      addFile('REVIEW_STATUS.json', JSON.stringify({ ready: false, notForDeployment: true, diagnostics }, null, 2), 'json');
+    }
+    const readme = generateReadme(projectName, spec.entities, options);
+    const showReviewBanner = reviewOnly && (!options.stageId || options.stageId === 7);
+    addFile('README.md', showReviewBanner ? '# Paquete de revisión — ready=false\n\nNo aprobado para despliegue. Consulte REVIEW_STATUS.json: las operaciones pendientes responden 501 y los permisos sin fuente explícita se rechazan.\n\n' + readme : readme, 'markdown');
     addFile('icase.spec.json', JSON.stringify(spec, null, 2), 'json');
     addFile('GENERATION_TRACE.json', JSON.stringify([...trace, { stage: 'CODE_EMISSION', mode: 'DETERMINISTIC', outcome: 'GENERATED', liveAiInvoked: false }], null, 2), 'json');
     addFile('SCREEN_BINDINGS.json', JSON.stringify((spec.screens || []).map(screen => ({ screenId: screen.id, route: screen.route, ...require('./screenBindingAudit').auditScreenBindings(screen) })), null, 2), 'json');
     addFile('GENERATOR_PROVENANCE.json', JSON.stringify(require('./exportIntegrity').generatorProvenance(spec, options), null, 2), 'json');
     for (const screen of spec.screens || []) if (screen.html) addFile('mockups/original/' + String(screen.id).replace(/[^a-zA-Z0-9_-]/g, '_') + '.html', screen.html, 'html');
     addFile('openapi.json', JSON.stringify(spec.apiContract || {}, null, 2), 'json');
+
+    const crypto = require('crypto');
+    const defaultDbPassword = 'pg_' + crypto.createHash('sha256').update(projectName + '_db_pwd_secure').digest('hex').slice(0, 24);
+    const defaultJwtSecret = 'sec_' + crypto.createHash('sha256').update(projectName + '_jwt_entropy_secure').digest('hex');
+    const defaultAdminPassword = 'adm_' + crypto.createHash('sha256').update(projectName + '_admin_pwd_secure').digest('hex').slice(0, 20);
 
     addFile('.env', `# Configuración de Puertos y Entorno para Docker Compose
 FRONTEND_PORT=3005
@@ -244,12 +252,16 @@ DB_PORT=5435
 
 DB_NAME=${safeDbName}
 DB_USER=postgres
-DB_PASSWORD=postgres123
+DB_PASSWORD=${defaultDbPassword}
 
-# Seguridad JWT
-JWT_SECRET=super_secret_jwt_key_change_in_production
+# Seguridad y Autenticación JWT
+JWT_SECRET=${defaultJwtSecret}
 JWT_EXPIRATION=8h
+INITIAL_ADMIN_PASSWORD=${defaultAdminPassword}
 `, 'shell');
+
+    addFile('.env.example', generateEnvExample(projectName), 'shell');
+    addFile('.gitignore', "node_modules\n.env\nbackend/.env\nfrontend/.env\ndist\nbuild\n*.log\n", 'text');
 
     if (includeDocker) {
       addFile('docker-compose.yml', generateDockerCompose(projectName), 'yaml');
@@ -260,6 +272,8 @@ JWT_EXPIRATION=8h
     addFile('backend/package.json', generatePackageJson(projectName), 'json');
     addFile('backend/.env.example', generateEnvExample(projectName), 'shell');
     addFile('backend/.env', generateEnvExample(projectName), 'shell');
+    addFile('backend/.dockerignore', generateDockerIgnore(), 'text');
+    addFile('backend/.gitignore', "node_modules\n.env\nnpm-debug.log\n", 'text');
     addFile('backend/.sequelizerc', generateSequelizercFile(), 'javascript');
     addFile('backend/src/migrate.js', generateMigrationRunnerFile(spec), 'javascript');
     addFile('backend/src/seed-account.js', require('./initialAccountGenerator').generateInitialAccountScript(spec), 'javascript');
@@ -513,6 +527,29 @@ compile().catch(error => { console.error(error.message); process.exitCode = 1; }
 
     const isApprovedSpec = Boolean(spec.approvedAt && spec.hash);
 
+    let effectiveFiles = files;
+    if (options.stageId) {
+      const currentStage = Number(options.stageId);
+      const isStageMatch = (p, targetStage) => {
+        if (targetStage === 1) return /icase\.spec\.json/i.test(p);
+        if (targetStage === 2) return /package\.json|Dockerfile|\.dockerignore|README\.md|GENERATION_TRACE\.json|docker-compose|\.env/i.test(p) && !p.startsWith('frontend/');
+        if (targetStage === 3) return /models\/|migrations\/|database\.js|migrate\.js|seed/i.test(p);
+        if (targetStage === 4) return /openapi\.json|SCREEN_BINDINGS\.json|routes\//i.test(p);
+        if (targetStage === 5) return /controllers\/|services\/|middleware\/|server\.js|app\.js|reviewed/i.test(p);
+        if (targetStage === 6) return p.startsWith('frontend/') || p.startsWith('mockups/');
+        return true;
+      };
+
+      if (currentStage < 7) {
+        effectiveFiles = files.filter(f => {
+          for (let s = 1; s <= currentStage; s++) {
+            if (isStageMatch(f.path, s)) return true;
+          }
+          return false;
+        });
+      }
+    }
+
     return {
       projectId: spec.project.id,
       projectName,
@@ -525,10 +562,10 @@ compile().catch(error => { console.error(error.message); process.exitCode = 1; }
         entitiesCount: spec.entities.length,
         relationshipsCount: spec.relationships.length,
         operationsCount: spec.operations.length,
-        filesCount: files.length,
+        filesCount: effectiveFiles.length,
         isApprovedOnly: isApprovedSpec
       },
-      files
+      files: effectiveFiles
     };
   }
 

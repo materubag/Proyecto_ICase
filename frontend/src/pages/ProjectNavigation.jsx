@@ -10,9 +10,10 @@ export default function ProjectNavigation({ project, onProjectUpdated }) {
   const requirements = project.requirements || [];
   const useCases = project.useCases || [];
   const navigationNodes = project.navigationNodes || [];
+  const actors = project.actors || [];
 
   // Local fallback generators
-  const localNavCode = useMemo(() => generateNavigationDiagram(navigationNodes, screens, project.name), [navigationNodes, screens, project.name]);
+  const localNavCode = useMemo(() => generateNavigationDiagram(navigationNodes, screens, project.name, actors), [navigationNodes, screens, project.name, actors]);
   const localFlowCode = useMemo(() => generateFlowchartDiagram(requirements, useCases, project.name), [requirements, useCases, project.name]);
 
   const NAV_GEN_KEY = `icase_nav_gen_${project.id}`;

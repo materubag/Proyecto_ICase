@@ -94,22 +94,44 @@ async function chat(projectId, input) {
     });
   }
 
-  // Detección contextual de errores de código, Sequelize o Docker
-  const isCodeOrErrorQuery = /(error|sequelize|docker|tabla|columna|codigo|código|terminal|falla|exception|bug|crash|fail)/i.test(messageText);
+  // Detección contextual de código, endpoints, rutas, OpenAPI, Sequelize o Docker
+  const isCodeOrErrorQuery = /(endpoint|ruta|rutas|route|routes|upload|subida|imagen|imagenes|imágenes|foto|fotos|multer|openapi|swagger|fase|archivo|controlador|servicio|middleware|error|sequelize|docker|tabla|columna|codigo|código|terminal|falla|exception|bug|crash|fail)/i.test(messageText);
   if (isCodeOrErrorQuery) {
     const entities = await d.prisma.entity.findMany({
       where: { projectId, isDeleted: false },
       include: { attributes: true },
-      take: 20
+      take: 25
     });
     const rels = await d.prisma.entityRelationship.findMany({
-      where: { projectId, isDeleted: false },
-      take: 20
+      where: { projectId },
+      take: 25
     });
-    context.push({
-      type: 'CODE_DIAGNOSTIC_CONTEXT',
-      entities: entities.map(e => ({ name: e.name, attributes: (e.attributes || []).map(a => `${a.name} (${a.type}${a.isPk ? ' PK' : ''})`) })),
-      relationships: rels.map(r => `${r.source} -> ${r.target} (${r.cardinality})`)
+    context.unshift({
+      type: 'CODEGEN_ARCHITECTURE_AND_ENDPOINTS',
+      description: 'Arquitectura de Código, Endpoints y Persistencia del Proyecto en ICASE',
+      fileUpload: {
+        endpoint: 'POST /api/upload',
+        status: 'IMPLEMENTADO',
+        middleware: 'backend/src/middleware/upload.middleware.js (Multer diskStorage hacia volumen persistente /uploads)',
+        routesFile: 'backend/src/routes/upload.routes.js',
+        storageService: 'backend/src/services/upload.storage.js',
+        contractResponse: '{ success: true, url: "/uploads/<filename>", filename, mimetype, size }',
+        purpose: 'Subida de fotografías, documentos y evidencias multimedia de recepción vehicular y diagnóstico'
+      },
+      stages: {
+        fase1: 'Stack Tecnológico: Node.js 20, Express, PostgreSQL 16, React 18, Docker',
+        fase2: 'Estructura e Infraestructura: Dockerfile, docker-compose.yml (backend:8085, frontend:3005, db:5435), .env',
+        fase3: 'Base de Datos & SQL: 29 tablas Sequelize relacionales validadas, semillas de usuarios y roles',
+        fase4: 'Endpoints & Swagger: openapi.json, rutas REST (/api/upload, /api/auth, /api/users, etc.), SCREEN_BINDINGS.json',
+        fase5: 'Backend Express: Controladores, middleware de autenticación JWT y autorización por roles',
+        fase6: 'Frontend React: Vistas interactivas conectadas a la API REST',
+        fase7: 'Integración Docker: Orquestación multi-contenedor y persistencia de volumen uploads_data'
+      },
+      database: {
+        totalTables: entities.length,
+        totalRelationships: rels.length,
+        models: entities.map(e => ({ name: e.name, fields: (e.attributes || []).map(a => `${a.name} (${a.type}${a.isPk ? ' [PK]' : ''})`) }))
+      }
     });
   }
 

@@ -99,20 +99,25 @@ function generateDatabaseConfig(projectName = 'app') {
   const dbName = projectName.toLowerCase().replace(/[^a-z0-9]/g, '_') + '_db';
 
   return `/**
- * Configuración de Conexión a Base de Datos PostgreSQL
+ * Configuración de Conexión a Base de Datos PostgreSQL 16
  * Generado automáticamente por ICASE Studio
  */
 
 const { Sequelize } = require('sequelize');
 
+if (!process.env.DB_PASSWORD) {
+  console.warn('[DB] Advertencia: DB_PASSWORD no está definida en las variables de entorno.');
+}
+
 const sequelize = new Sequelize(
   process.env.DB_NAME || '${dbName}',
   process.env.DB_USER || 'postgres',
-  process.env.DB_PASSWORD || 'postgres123',
+  process.env.DB_PASSWORD,
   {
     host: process.env.DB_HOST || 'localhost',
     port: Number(process.env.DB_PORT) || 5432,
     dialect: 'postgres',
+    logging: false,
     logging: process.env.NODE_ENV === 'development' ? false : false,
     pool: {
       max: 10,
@@ -167,77 +172,62 @@ function generatePackageJson(projectName = 'app') {
 
 function generateEnvExample(projectName = 'app') {
   const dbName = projectName.toLowerCase().replace(/[^a-z0-9]/g, '_') + '_db';
+  const cleanName = projectName.toLowerCase().replace(/[^a-z0-9]/g, '');
 
-  return `# Entorno y Configuración del Servidor
+  return `# Entorno y Configuración del Servidor (Plantilla de ejemplo sin secretos reales)
 PORT=8080
 NODE_ENV=development
 APP_NAME="${projectName}"
 AUTO_SYNC_DB=false
 
-# Conexión PostgreSQL
+# Conexión PostgreSQL 16
 DB_HOST=localhost
 DB_PORT=5432
 DB_NAME=${dbName}
 DB_USER=postgres
-DB_PASSWORD=postgres123
+DB_PASSWORD=CAMBIAR_POR_PASSWORD_SEGURO_EN_PRODUCCION
 
 # Seguridad y Autenticación
-JWT_SECRET=super_secret_jwt_key_change_in_production
+JWT_SECRET=CAMBIAR_POR_TOKEN_JWT_ALEATORIO_DE_MINIMO_32_BYTES
 JWT_EXPIRATION=8h
+INITIAL_ADMIN_USER=admin
+INITIAL_ADMIN_EMAIL=admin@${cleanName || 'app'}.com
+INITIAL_ADMIN_PASSWORD=CAMBIAR_POR_PASSWORD_ADMINISTRADOR_ROBUSTO
 `;
 }
 
-function generateReadme(projectName = 'app', entities = []) {
-  const entityList = entities.map(e => `- **${e.modelName || e.name}**: /api/${e.endpoint || e.name.toLowerCase()}`).join('\n');
+function generateReadme(projectName = 'app', entities = [], options = {}) {
+  const isStage2OrLess = options.stageId && Number(options.stageId) <= 2;
+  const entityList = (!isStage2OrLess && entities.length > 0)
+    ? entities.map(e => `- **${e.modelName || e.name}**: /api/${e.endpoint || e.name.toLowerCase()}`).join('\n')
+    : null;
 
   return `# ${projectName} — Sistema Full-Stack Generado por ICASE Studio
 
-Este proyecto se genera a partir de icase.spec.json. Consulte el estado de validación y aprobación de esa especificación antes de desplegarlo.
+Este proyecto se estructura a partir de la especificación técnica de ICASE Studio.
 
-## Arquitectura
+## Arquitectura del Proyecto
 
 - **Frontend:** React 18, Vite, Single Page Application (SPA), Fetch Client.
-- **Backend:** Node.js, Express, Rutas RESTful, Middlewares de validación.
-- **Base de Datos:** PostgreSQL con Sequelize ORM y migraciones versionadas.
-- **Contenedores:** Docker Compose con soporte multi-servicio y redes aisladas.
-
-## Módulos y Entidades de Datos
-
-${entityList || '- Sin entidades configuradas.'}
-
+- **Backend:** Node.js 20, Express, Rutas RESTful, Middlewares de validación y seguridad.
+- **Base de Datos:** PostgreSQL 16 con Sequelize ORM y migraciones versionadas.
+- **Contenedores:** Docker Compose con soporte multi-servicio y redes internas protegidas.
+${entityList ? `\n## Módulos y Entidades de Datos\n\n${entityList}\n` : ''}
 ## Instrucciones de Ejecución
 
 ### Opción 1: Con Docker Compose (Recomendado)
 
 \`\`\`bash
-docker compose up --build
+docker compose up --build -d
 \`\`\`
 
-- Frontend disponible en: \`http://localhost:3005\` (Nginx reenvía \`/api\` al backend)
+- Frontend disponible en: \`http://localhost:3005\`
 - Backend API disponible en: \`http://localhost:8085/api\`
-- PostgreSQL en puerto: \`5435\`
+- PostgreSQL en puerto: \`5435\` (enlace local a \`127.0.0.1\`)
 
-No uses el puerto 8080 del Studio iCASE: el API generado publica **8085** para no chocar con iCASE. Si corres el frontend con \`npm run dev\`, el proxy de Vite apunta a \`http://localhost:8085\`.
+### Opción 2: Variables de Entorno
 
-### Opción 2: Ejecución Local
-
-1. **Configurar la Base de Datos:**
-   Asegúrate de tener PostgreSQL corriendo y crea la base de datos indicada en \`backend/.env\`.
-
-2. **Iniciar el Backend:**
-   \`\`\`bash
-   cd backend
-   npm install
-   cp .env.example .env
-   npm run dev
-   \`\`\`
-
-3. **Iniciar el Frontend:**
-   \`\`\`bash
-   cd frontend
-   npm install
-   npm run dev
-   \`\`\`
+Consulte el archivo \`.env\` en la raíz y \`backend/.env.example\` para ajustar las credenciales antes del despliegue.
 `;
 }
 
