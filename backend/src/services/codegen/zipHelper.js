@@ -36,10 +36,18 @@ function getDosDateTime(date = new Date()) {
  */
 function createZipBuffer(files = []) {
   const seen = new Set();
+  const validFiles = [];
   for (const file of files) {
     const name = String(file.path).replace(/\\/g, '/');
-    if (!name || name.startsWith('/') || name.split('/').some(p => ['..', '.', ''].includes(p)) || /[:\x00]/.test(name) || seen.has(name.toLowerCase())) throw new Error('INVALID_OR_DUPLICATE_ZIP_PATH: ' + name);
-    seen.add(name.toLowerCase());
+    if (!name || name.startsWith('/') || name.split('/').some(p => ['..', '.', ''].includes(p)) || /[:\x00]/.test(name)) throw new Error('INVALID_OR_DUPLICATE_ZIP_PATH: ' + name);
+    const key = name.toLowerCase();
+    if (seen.has(key)) {
+      const idx = validFiles.findIndex(f => String(f.path).replace(/\\/g, '/').toLowerCase() === key);
+      if (idx >= 0) validFiles[idx] = file;
+      continue;
+    }
+    seen.add(key);
+    validFiles.push(file);
   }
   const localHeaders = [];
   const centralHeaders = [];
@@ -48,7 +56,7 @@ function createZipBuffer(files = []) {
   const now = new Date();
   const { time: dosTime, date: dosDate } = getDosDateTime(now);
 
-  for (const file of files) {
+  for (const file of validFiles) {
     // Normalize path separators to forward slashes
     const rawPath = file.path.replace(/\\/g, '/').replace(/^\/+/, '');
     const filenameBuf = Buffer.from(rawPath, 'utf8');

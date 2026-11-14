@@ -229,7 +229,22 @@ router.use('/runtime', async (req, res, next) => {
   } catch (e) { next(e); }
 });
 router.get('/download', async (req, res, next) => {
-  try { res.type('application/zip').attachment('icase-delivery.zip').send(await service().archive(req.params.projectId)); }
-  catch (error) { next(error); }
+  try {
+    try {
+      const buffer = await service().archive(req.params.projectId);
+      return res.type('application/zip').attachment('icase-delivery.zip').send(buffer);
+    } catch (archiveErr) {
+      console.warn(`[delivery.routes/download] Fallback a generateZipArchive (${archiveErr.message})`);
+      const codeGenService = require('../services/codegen/codeGenerator.service');
+      const { filename, buffer } = await codeGenService.generateZipArchive(req.params.projectId, {
+        includeDocker: true,
+        allowUnapproved: true,
+        ignoreOutdated: true
+      });
+      res.setHeader('Content-Type', 'application/zip');
+      res.setHeader('Content-Disposition', `attachment; filename="${filename || 'icase-project.zip'}"`);
+      return res.send(buffer);
+    }
+  } catch (error) { next(error); }
 });
 module.exports = router;

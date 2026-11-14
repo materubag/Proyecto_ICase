@@ -86,12 +86,18 @@ export const codegenApi = {
    * Descarga el archivo .zip directamente en el navegador
    */
   downloadZip: async (projectId, includeDocker = true, defaultFilename = 'proyecto-api.zip', jobId = null) => {
-    const url = `${BASE_URL}/projects/${projectId}/codegen/workflow/download`;
-    const response = await fetch(url);
+    let url = `${BASE_URL}/projects/${projectId}/codegen/workflow/download`;
+    let response = await fetch(url);
     if (!response.ok) {
-      const errJson = await response.json().catch(() => ({}));
-      const msg = errJson?.error?.message || `Error al descargar el archivo ZIP (HTTP ${response.status})`;
-      throw new Error(msg);
+      const fallbackUrl = `${BASE_URL}/projects/${projectId}/codegen/download?includeDocker=${includeDocker}`;
+      const fallbackResp = await fetch(fallbackUrl);
+      if (fallbackResp.ok) {
+        response = fallbackResp;
+      } else {
+        const errJson = await response.json().catch(() => ({}));
+        const msg = errJson?.error?.message || `Error al descargar el archivo ZIP (HTTP ${response.status})`;
+        throw new Error(msg);
+      }
     }
 
     // Obtener nombre del header si viene
