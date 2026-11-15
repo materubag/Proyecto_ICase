@@ -54,8 +54,21 @@ exports.getPreview = async (req, res) => {
 
 exports.downloadZip = async (req, res) => {
   try {
-    const buffer = await require('../services/codegen/deliveryWorkflow').service().archive(req.params.projectId);
-    res.type('application/zip').attachment('icase-delivery.zip').send(buffer);
+    const { projectId } = req.params;
+    try {
+      const buffer = await require('../services/codegen/deliveryWorkflow').service().archive(projectId);
+      return res.type('application/zip').attachment('icase-delivery.zip').send(buffer);
+    } catch (deliveryErr) {
+      console.warn(`[codegen.controller/downloadZip] Fallback a generateZipArchive (${deliveryErr.message})`);
+      const { filename, buffer } = await codeGeneratorService.generateZipArchive(projectId, {
+        includeDocker: req.query.includeDocker !== 'false',
+        allowUnapproved: true,
+        ignoreOutdated: true
+      });
+      res.setHeader('Content-Type', 'application/zip');
+      res.setHeader('Content-Disposition', `attachment; filename="${filename || 'icase-project.zip'}"`);
+      return res.send(buffer);
+    }
   } catch (error) {
     res.status(error.statusCode || 400).json({ success: false, error: { message: error.message } });
   }

@@ -38,7 +38,9 @@ CMD ["npm", "start"]
 function generateDockerCompose(projectName = 'app') {
   const safeName = projectName.toLowerCase().replace(/[^a-z0-9]/g, '_');
 
-  return `# Docker Compose Full-Stack para ${projectName}
+  return `name: ${safeName}
+
+# Docker Compose Full-Stack para ${projectName}
 # Generado y asegurado conforme a dictamen de auditoría ICASE Studio (PostgreSQL 16, Red Aislada, USER node)
 # Ejecutar: docker compose up --build -d
 
@@ -72,7 +74,7 @@ services:
       dockerfile: Dockerfile
     container_name: ${safeName}_backend
     restart: always
-    command: sh -c "node src/migrate.js && node src/server.js"
+    command: sh -c "node src/migrate.js && (node src/seed-demo-users.js || true) && node src/server.js"
     ports:
       - "127.0.0.1:\${BACKEND_PORT:-8085}:8080"
     environment:
@@ -107,7 +109,7 @@ services:
     build:
       context: ./frontend
       dockerfile: Dockerfile
-    container_name: ${safeName}_frontend
+    container_name: ${safeName}
     restart: always
     ports:
       - "\${FRONTEND_PORT:-3005}:80"

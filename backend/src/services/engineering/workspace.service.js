@@ -64,6 +64,42 @@ async function chat(projectId, input) {
 
   if (!project) d.fail('PROJECT_NOT_FOUND', undefined, 404);
 
+  // Aplicación directa en vivo de personalizaciones de pantallas/roles y síntesis con Claude para la Fase 6 (Frontend Conectado)
+  try {
+    const { applyChatCustomizationCommand } = require('../codegen/codegenCustomizationStore');
+    const customResult = applyChatCustomizationCommand(projectId, messageText, project);
+    if (customResult && customResult.matched) {
+      return {
+        answer: customResult.summary,
+        codegenUpdated: true,
+        roleUpdated: customResult.roleUpdated,
+        screens: customResult.screens,
+        context: []
+      };
+    }
+
+    if (/(rediseña|redisena|genera con claude|sintetiza|personaliza la vista|modifica el componente|cambia el diseño de la pantalla)/i.test(messageText)) {
+      const { buildProjectSpec } = require('../codegen/projectSpecBuilder');
+      const { synthesizeScreenWithClaude } = require('../codegen/claudeFrontendSynthesizer');
+      const spec = await buildProjectSpec(projectId, { allowUnapproved: true });
+      const normMsg = messageText.normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase();
+      const targetScreen = (spec.screens || []).find(s => {
+        const sName = String(s.name || s.title || '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase();
+        return sName && sName.split(/\s+/).filter(w => w.length > 3).some(w => normMsg.includes(w));
+      });
+      if (targetScreen) {
+        const synthResult = await synthesizeScreenWithClaude(projectId, targetScreen, spec, messageText);
+        return {
+          answer: `¡Componente React generado por **Claude** guiado por el mockup de **${targetScreen.name}**!\n\n${synthResult.summary}\n\nSe actualizó el archivo \`frontend/src/pages/mockups/${synthResult.compName}.jsx\` y la Vista Previa Interactiva.`,
+          codegenUpdated: true,
+          context: []
+        };
+      }
+    }
+  } catch (err) {
+    console.warn('[workspace.chat] Aviso en personalización de código:', err.message);
+  }
+
   // Retrieval stays local; bounded context may be passed to the existing provider explicitly.
   const terms = messageText.toLowerCase().match(/[\p{L}\p{N}-]{3,}/gu) || [];
   let requirements = await d.prisma.requirement.findMany({ where: { projectId, status: 'APPROVED', OR: terms.slice(0, 20).flatMap(term => [{ code: { contains: term, mode: 'insensitive' } }, { description: { contains: term, mode: 'insensitive' } }]) }, take: 12 });

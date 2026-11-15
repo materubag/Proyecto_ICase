@@ -40,6 +40,53 @@ app.use('/api', routes);
 ${options.serveFrontend ? `const frontendDist = path.resolve(__dirname, '../../frontend/dist');
 if (fs.existsSync(frontendDist)) { app.use(express.static(frontendDist)); app.get('*', (_req,res)=>res.sendFile(path.join(frontendDist,'index.html'))); }` : ''}
 
+// Documentación Swagger / OpenAPI interactiva
+const openApiPaths = [
+  path.join(__dirname, '../openapi.json'),
+  path.join(__dirname, '../../openapi.json'),
+  path.join(__dirname, './openapi.json')
+];
+app.get('/openapi.json', (req, res) => {
+  for (const p of openApiPaths) {
+    if (fs.existsSync(p)) return res.sendFile(p);
+  }
+  res.status(404).json({ success: false, message: 'openapi.json no encontrado' });
+});
+
+app.get(['/swagger', '/swagger/', '/api-docs', '/docs'], (req, res) => {
+  res.type('html').send(`<!doctype html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>${projectName} — Swagger API Explorer</title>
+  <link rel="stylesheet" href="https://unpkg.com/swagger-ui-dist@5/swagger-ui.css">
+  <style>
+    body { margin: 0; padding: 0; background: #fafafa; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; }
+    .topbar { display: none; }
+  </style>
+</head>
+<body>
+  <div id="swagger-ui"></div>
+  <script src="https://unpkg.com/swagger-ui-dist@5/swagger-ui-bundle.js"></script>
+  <script>
+    window.onload = function() {
+      SwaggerUIBundle({
+        url: '/openapi.json',
+        dom_id: '#swagger-ui',
+        deepLinking: true,
+        presets: [
+          SwaggerUIBundle.presets.apis,
+          SwaggerUIBundle.SwaggerUIStandalonePreset
+        ],
+        layout: "BaseLayout"
+      });
+    };
+  </script>
+</body>
+</html>`);
+});
+
 // Manejador de rutas no encontradas (404)
 app.use((req, res) => {
   res.status(404).json({
