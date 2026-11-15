@@ -74,7 +74,7 @@ services:
       dockerfile: Dockerfile
     container_name: ${safeName}_backend
     restart: always
-    command: sh -c "node src/migrate.js && node src/server.js"
+    command: sh -c "node src/migrate.js && (node src/seed-demo-users.js || true) && node src/server.js"
     ports:
       - "127.0.0.1:\${BACKEND_PORT:-8085}:8080"
     environment:
