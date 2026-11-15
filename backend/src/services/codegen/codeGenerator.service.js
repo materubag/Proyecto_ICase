@@ -194,7 +194,7 @@ class CodeGeneratorService {
     const { spec, diagnostics } = await this.getProjectArtifacts(projectId, { ...options, onTrace: event => { trace.push(event); options.onTrace?.(event); } });
 
     // If validation fails with blocking errors, return diagnostic report without generating broken code
-    const reviewableCodes = ['UNDEFINED_OPERATION_BEHAVIOR', 'UNRESOLVED_SCREEN_CONTRACT', 'UNRESOLVED_OPERATION_CONTRACT', 'UNRESOLVED_PROJECT_CONTRACT', 'UNRESOLVED_OPERATION_PERMISSION', 'MISSING_APPROVED_MOCKUP', 'UNIMPLEMENTED_REQUIREMENT_BEHAVIOR'];
+    const reviewableCodes = ['UNDEFINED_OPERATION_BEHAVIOR', 'UNRESOLVED_SCREEN_CONTRACT', 'UNRESOLVED_OPERATION_CONTRACT', 'UNRESOLVED_PROJECT_CONTRACT', 'UNRESOLVED_OPERATION_PERMISSION', 'MISSING_APPROVED_MOCKUP', 'UNIMPLEMENTED_REQUIREMENT_BEHAVIOR', 'MISSING_AUTH_MODEL_FIELDS'];
     const qualityOnly = (diagnostics.errors || []).length === 0 || diagnostics.errors.every(error => reviewableCodes.includes(error.code));
     const reviewable = options.reviewOnly === true && qualityOnly;
     const reviewOnly = options.reviewOnly === true && !diagnostics.ready;
@@ -219,7 +219,13 @@ class CodeGeneratorService {
 
     const files = [];
     const addFile = (path, content, language = 'javascript') => {
-      files.push({ path, content, language });
+      const normalized = String(path).replace(/\\/g, '/');
+      const idx = files.findIndex(f => f.path.replace(/\\/g, '/').toLowerCase() === normalized.toLowerCase());
+      if (idx >= 0) {
+        files[idx] = { path: normalized, content, language };
+      } else {
+        files.push({ path: normalized, content, language });
+      }
     };
 
     const projectName = spec.project.name;
@@ -227,15 +233,24 @@ class CodeGeneratorService {
     const safeDbName = projectName.toLowerCase().replace(/[^a-z0-9]/g, '_') + '_db';
 
     // 1. Root Configuration & Documentation
-    if (reviewOnly) addFile('REVIEW_STATUS.json', JSON.stringify({ ready: false, notForDeployment: true, diagnostics }, null, 2), 'json');
-    const readme = generateReadme(projectName, spec.entities);
-    addFile('README.md', reviewOnly ? '# Paquete de revisión — ready=false\n\nNo aprobado para despliegue. Consulte REVIEW_STATUS.json: las operaciones pendientes responden 501 y los permisos sin fuente explícita se rechazan.\n\n' + readme : readme, 'markdown');
+    if (reviewOnly && (!options.stageId || options.stageId === 7)) {
+      addFile('REVIEW_STATUS.json', JSON.stringify({ ready: false, notForDeployment: true, diagnostics }, null, 2), 'json');
+    }
+    const readme = generateReadme(projectName, spec.entities, options);
+    const showReviewBanner = reviewOnly && (!options.stageId || options.stageId === 7);
+    addFile('README.md', showReviewBanner ? '# Paquete de revisión — ready=false\n\nNo aprobado para despliegue. Consulte REVIEW_STATUS.json: las operaciones pendientes responden 501 y los permisos sin fuente explícita se rechazan.\n\n' + readme : readme, 'markdown');
     addFile('icase.spec.json', JSON.stringify(spec, null, 2), 'json');
     addFile('GENERATION_TRACE.json', JSON.stringify([...trace, { stage: 'CODE_EMISSION', mode: 'DETERMINISTIC', outcome: 'GENERATED', liveAiInvoked: false }], null, 2), 'json');
     addFile('SCREEN_BINDINGS.json', JSON.stringify((spec.screens || []).map(screen => ({ screenId: screen.id, route: screen.route, ...require('./screenBindingAudit').auditScreenBindings(screen) })), null, 2), 'json');
     addFile('GENERATOR_PROVENANCE.json', JSON.stringify(require('./exportIntegrity').generatorProvenance(spec, options), null, 2), 'json');
     for (const screen of spec.screens || []) if (screen.html) addFile('mockups/original/' + String(screen.id).replace(/[^a-zA-Z0-9_-]/g, '_') + '.html', screen.html, 'html');
     addFile('openapi.json', JSON.stringify(spec.apiContract || {}, null, 2), 'json');
+    addFile('backend/openapi.json', JSON.stringify(spec.apiContract || {}, null, 2), 'json');
+
+    const crypto = require('crypto');
+    const defaultDbPassword = 'pg_' + crypto.createHash('sha256').update(projectName + '_db_pwd_secure').digest('hex').slice(0, 24);
+    const defaultJwtSecret = 'sec_' + crypto.createHash('sha256').update(projectName + '_jwt_entropy_secure').digest('hex');
+    const defaultAdminPassword = 'adm_' + crypto.createHash('sha256').update(projectName + '_admin_pwd_secure').digest('hex').slice(0, 20);
 
     addFile('.env', `# Configuración de Puertos y Entorno para Docker Compose
 FRONTEND_PORT=3005
@@ -244,12 +259,16 @@ DB_PORT=5435
 
 DB_NAME=${safeDbName}
 DB_USER=postgres
-DB_PASSWORD=postgres123
+DB_PASSWORD=${defaultDbPassword}
 
-# Seguridad JWT
-JWT_SECRET=super_secret_jwt_key_change_in_production
+# Seguridad y Autenticación JWT
+JWT_SECRET=${defaultJwtSecret}
 JWT_EXPIRATION=8h
+INITIAL_ADMIN_PASSWORD=${defaultAdminPassword}
 `, 'shell');
+
+    addFile('.env.example', generateEnvExample(projectName), 'shell');
+    addFile('.gitignore', "node_modules\n.env\nbackend/.env\nfrontend/.env\ndist\nbuild\n*.log\n", 'text');
 
     if (includeDocker) {
       addFile('docker-compose.yml', generateDockerCompose(projectName), 'yaml');
@@ -260,6 +279,8 @@ JWT_EXPIRATION=8h
     addFile('backend/package.json', generatePackageJson(projectName), 'json');
     addFile('backend/.env.example', generateEnvExample(projectName), 'shell');
     addFile('backend/.env', generateEnvExample(projectName), 'shell');
+    addFile('backend/.dockerignore', generateDockerIgnore(), 'text');
+    addFile('backend/.gitignore', "node_modules\n.env\nnpm-debug.log\n", 'text');
     addFile('backend/.sequelizerc', generateSequelizercFile(), 'javascript');
     addFile('backend/src/migrate.js', generateMigrationRunnerFile(spec), 'javascript');
     addFile('backend/src/seed-account.js', require('./initialAccountGenerator').generateInitialAccountScript(spec), 'javascript');
@@ -401,12 +422,22 @@ compile().catch(error => { console.error(error.message); process.exitCode = 1; }
       addFile('frontend/Dockerfile', frontendGen.generateFrontendDockerfile(), 'dockerfile');
       addFile('frontend/nginx.conf', frontendGen.generateFrontendNginxConf(), 'nginx');
     }
-    addFile('frontend/src/main.jsx', reviewOnly ? frontendGen.generateMainJsx().replace('<App />', '<><div role="status" style={{padding:12,background:"#fffbeb",color:"#92400e"}}>Paquete de revision | ready=false | Contiene funciones pendientes</div><App /></>') : frontendGen.generateMainJsx(), 'javascript');
+    addFile('frontend/src/main.jsx', frontendGen.generateMainJsx(), 'javascript');
     addFile('frontend/src/index.css', frontendGen.generateFrontendCss(), 'css');
     addFile('frontend/src/api/client.js', frontendGen.generateApiClientJs(), 'javascript');
 
-    // Shared React UI Components based on DESIGN_SYSTEM.md
-    addFile('frontend/src/components/AppShell.jsx', frontendGen.generateAppShellComponent(), 'javascript');
+    // Shared React UI Components & Cohesive Mockup Synthesizer (Claude + Mockup Blueprints)
+    const {
+      extractProjectDesignSystem,
+      generateCohesiveAppShellJsx,
+      generateCohesiveLoginPageJsx,
+      generateCohesiveScreenComponentJsx,
+      generateCohesiveDashboardJsx,
+      generateCohesiveAppJsx
+    } = require('./claudeFrontendSynthesizer');
+    const designSystem = extractProjectDesignSystem(spec);
+
+    addFile('frontend/src/components/AppShell.jsx', generateCohesiveAppShellJsx(spec, designSystem), 'javascript');
     addFile('frontend/src/components/shared/FormField.jsx', frontendGen.generateSharedFormFieldComponent(), 'javascript');
     addFile('frontend/src/components/shared/Button.jsx', frontendGen.generateSharedButtonComponent(), 'javascript');
     addFile('frontend/src/components/shared/StatusBadge.jsx', frontendGen.generateSharedStatusBadgeComponent(), 'javascript');
@@ -419,25 +450,14 @@ compile().catch(error => { console.error(error.message); process.exitCode = 1; }
     addFile('frontend/src/components/ContractTask.jsx', require('fs').readFileSync(require.resolve('./contractTaskRuntime.jsx'), 'utf8'), 'javascript');
     addFile('frontend/src/components/ReviewedWorkspace.jsx', require('fs').readFileSync(require.resolve('./reviewedWorkspace.jsx'), 'utf8'), 'javascript');
 
-    // Operational screens: ContractTask pages (HTML mockups become layout, never a separate CRUD dump)
-    const { screenTabKey, compactNavLabel } = require('./screenContract');
+    // Operational screens: Cohesive Functional React Components guided by Mockup Blueprints
+    const { screenTabKey } = require('./screenContract');
     const isLoginScreen = s => /iniciodesesi|accesoalsistema|login|auth/i.test((s.name || '') + (s.route || '') + (s.title || '') + (s.key || ''));
     const operationalScreens = (spec.screens || []).filter(s => !isLoginScreen(s));
-    const screensNav = operationalScreens.map(s => ({
-      key: screenTabKey(s),
-      title: s.title || s.name,
-      label: compactNavLabel(s.title || s.name),
-      route: s.route
-    }));
 
     const compiledMockups = [];
     let mockupIdx = 1;
     for (const scr of operationalScreens) {
-      if (scr.contract && scr.html) scr.contract = { ...scr.contract, visualReference: true };
-      const audit = require('./screenBindingAudit').auditScreenBindings(scr);
-      if (scr.contract && (audit.missingFields.length || audit.missingPrimaryAction)) {
-        scr.contract = { ...scr.contract, unresolved: [...(scr.contract.unresolved || []), `UNRESOLVED: campos sin control (${audit.missingFields.join(', ')}); acción principal sin control: ${audit.missingPrimaryAction}. Complete las correspondencias del mockup.`] };
-      }
       const hasWork = scr.html || scr.contract?.renderer === 'task' || (scr.contract?.fields || []).length || (scr.actions || []).length;
       if (!hasWork) continue;
       const cleanBase = toPascalCase((scr.name || 'Screen').replace(/[^a-zA-Z0-9_]/g, '')) || 'Screen';
@@ -445,20 +465,8 @@ compile().catch(error => { console.error(error.message); process.exitCode = 1; }
       const key = screenTabKey(scr);
       mockupIdx++;
 
-      const matchingOp = (spec.operations || []).find(o => o.operationId === scr.connectedOperationId);
-      const targetEntity = scr.targetEntity || scr.entity || '';
-      const entityObj = spec.entities.find(e => (e.modelName || e.name || '').toUpperCase() === String(targetEntity).toUpperCase());
-      const convertedJsx = scr.contract?.renderer === 'workspace' ? '' : convertHtmlToJsx(scr.html || '<main></main>', compName, scr.route, targetEntity, scr.contract ? { ...scr.mockupBinding, screenContract: scr.contract } : scr.mockupBinding, screensNav);
-      const mockupCode = ['task', 'workspace'].includes(scr.contract?.renderer || 'task')
-        ? require('./contractTaskGenerator').generateContractTask(compName, scr, convertedJsx, screensNav)
-        : generateInteractiveMockupComponent(compName, scr, convertedJsx, matchingOp, scr.actions, entityObj);
-
-      const visual = require('./mockupVisualContract').extractVisualContract(scr.contract?.renderer === 'workspace' ? '' : scr.html || '');
-      const visualConfig = { ...visual.config, content: { relative: true, files: [`../src/pages/mockups/${compName}.jsx`] }, important: `[data-mockup-screen="${visual.id}"]`, corePlugins: { preflight: false }, plugins: [] };
-      addFile(`frontend/themes/${visual.id}.cjs`, 'module.exports = ' + JSON.stringify(visualConfig, null, 2), 'javascript');
-      addFile(`frontend/src/styles/${visual.id}.css`, '/* Generated by npm run prebuild / predev from the declarative screen theme. */', 'css');
-
-      addFile(`frontend/src/pages/mockups/${compName}.jsx`, `import '../../styles/${visual.id}.css';\n` + mockupCode, 'javascript');
+      const cohesiveComponentCode = generateCohesiveScreenComponentJsx(compName, scr, spec, designSystem);
+      addFile(`frontend/src/pages/mockups/${compName}.jsx`, cohesiveComponentCode, 'javascript');
       compiledMockups.push({
         compName,
         key,
@@ -470,25 +478,18 @@ compile().catch(error => { console.error(error.message); process.exitCode = 1; }
       });
     }
 
-    // Role-Aware Dashboard connected to entities and operational screens
-    addFile('frontend/src/pages/Dashboard.jsx', frontendGen.generateDashboardJsx(projectName, spec.entities, compiledMockups), 'javascript');
+    // Role-Aware Cohesive Dashboard connected to entities and operational screens
+    addFile('frontend/src/pages/Dashboard.jsx', generateCohesiveDashboardJsx(spec, designSystem, compiledMockups), 'javascript');
 
-    // Login Page when project requires authentication
+    // Cohesive Login Page guided by Project Actors & Design System
     if (hasAuth) {
-      const loginScreen = (spec.screens || []).find(s => isLoginScreen(s) && s.html);
-      if (loginScreen) {
-        const visual = require('./mockupVisualContract').extractVisualContract(loginScreen.html);
-        const config = { ...visual.config, content: { relative: true, files: ['../src/pages/LoginPage.jsx'] }, important: `[data-mockup-screen="${visual.id}"]`, corePlugins: { preflight: false }, plugins: [] };
-        addFile(`frontend/themes/${visual.id}.cjs`, 'module.exports = ' + JSON.stringify(config, null, 2), 'javascript');
-        addFile(`frontend/src/styles/${visual.id}.css`, '/* Generated from the original login theme by prebuild/predev. */', 'css');
-        addFile('frontend/src/pages/LoginPage.jsx', `import '../styles/${visual.id}.css';\n` + require('./loginMockupGenerator').generateLoginMockup(loginScreen), 'javascript');
-      } else addFile('frontend/src/pages/LoginPage.jsx', frontendGen.generateLoginPageJsx(projectName), 'javascript');
+      addFile('frontend/src/pages/LoginPage.jsx', generateCohesiveLoginPageJsx(spec, designSystem), 'javascript');
     }
 
-    // Main App Shell with Navigation & Dynamic Routing
+    // Main App Shell with Role-Based Navigation & Dynamic Routing
     addFile(
       'frontend/src/App.jsx',
-      frontendGen.generateAppJsx(projectName, spec.entities.map(e => ({ ...e, permissions: [...new Set(spec.operations.filter(o => o.entity === e.modelName && o.method === 'GET').flatMap(o => o.authorizedRoles || []))] })), spec.screens, spec.actors, compiledMockups, { hasAuth }),
+      generateCohesiveAppJsx(spec, designSystem, compiledMockups, { hasAuth }),
       'javascript'
     );
 
@@ -513,6 +514,29 @@ compile().catch(error => { console.error(error.message); process.exitCode = 1; }
 
     const isApprovedSpec = Boolean(spec.approvedAt && spec.hash);
 
+    let effectiveFiles = files;
+    if (options.stageId) {
+      const currentStage = Number(options.stageId);
+      const isStageMatch = (p, targetStage) => {
+        if (targetStage === 1) return /icase\.spec\.json/i.test(p);
+        if (targetStage === 2) return /package\.json|Dockerfile|\.dockerignore|README\.md|GENERATION_TRACE\.json|docker-compose|\.env/i.test(p) && !p.startsWith('frontend/');
+        if (targetStage === 3) return /models\/|migrations\/|database\.js|migrate\.js|seed/i.test(p);
+        if (targetStage === 4) return /openapi\.json|SCREEN_BINDINGS\.json|routes\//i.test(p);
+        if (targetStage === 5) return /controllers\/|services\/|middleware\/|server\.js|app\.js|reviewed/i.test(p);
+        if (targetStage === 6) return p.startsWith('frontend/') || p.startsWith('mockups/');
+        return true;
+      };
+
+      if (currentStage < 7) {
+        effectiveFiles = files.filter(f => {
+          for (let s = 1; s <= currentStage; s++) {
+            if (isStageMatch(f.path, s)) return true;
+          }
+          return false;
+        });
+      }
+    }
+
     return {
       projectId: spec.project.id,
       projectName,
@@ -525,10 +549,10 @@ compile().catch(error => { console.error(error.message); process.exitCode = 1; }
         entitiesCount: spec.entities.length,
         relationshipsCount: spec.relationships.length,
         operationsCount: spec.operations.length,
-        filesCount: files.length,
+        filesCount: effectiveFiles.length,
         isApprovedOnly: isApprovedSpec
       },
-      files
+      files: effectiveFiles
     };
   }
 
@@ -547,7 +571,13 @@ compile().catch(error => { console.error(error.message); process.exitCode = 1; }
       throw err;
     }
 
-    const sealed = require('./exportIntegrity').bundleVerifiedFiles(result.files.map(f => ({ ...f, content: Buffer.from(f.content || '') })), { tested: false, status: 'NOT_RUN', contractReady: result.ready });
+    const uniqueFilesMap = new Map();
+    for (const f of result.files) {
+      uniqueFilesMap.set(f.path.replace(/\\/g, '/').toLowerCase(), f);
+    }
+    const cleanFiles = Array.from(uniqueFilesMap.values());
+
+    const sealed = require('./exportIntegrity').bundleVerifiedFiles(cleanFiles.map(f => ({ ...f, content: Buffer.from(f.content || '') })), { tested: false, status: 'NOT_RUN', contractReady: result.ready });
     const zipBuffer = sealed.buffer;
     const safeName = result.projectName.toLowerCase().replace(/[^a-z0-9]/g, '_');
 

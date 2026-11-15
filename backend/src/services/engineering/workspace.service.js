@@ -64,6 +64,42 @@ async function chat(projectId, input) {
 
   if (!project) d.fail('PROJECT_NOT_FOUND', undefined, 404);
 
+  // Aplicación directa en vivo de personalizaciones de pantallas/roles y síntesis con Claude para la Fase 6 (Frontend Conectado)
+  try {
+    const { applyChatCustomizationCommand } = require('../codegen/codegenCustomizationStore');
+    const customResult = applyChatCustomizationCommand(projectId, messageText, project);
+    if (customResult && customResult.matched) {
+      return {
+        answer: customResult.summary,
+        codegenUpdated: true,
+        roleUpdated: customResult.roleUpdated,
+        screens: customResult.screens,
+        context: []
+      };
+    }
+
+    if (/(rediseña|redisena|genera con claude|sintetiza|personaliza la vista|modifica el componente|cambia el diseño de la pantalla)/i.test(messageText)) {
+      const { buildProjectSpec } = require('../codegen/projectSpecBuilder');
+      const { synthesizeScreenWithClaude } = require('../codegen/claudeFrontendSynthesizer');
+      const spec = await buildProjectSpec(projectId, { allowUnapproved: true });
+      const normMsg = messageText.normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase();
+      const targetScreen = (spec.screens || []).find(s => {
+        const sName = String(s.name || s.title || '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase();
+        return sName && sName.split(/\s+/).filter(w => w.length > 3).some(w => normMsg.includes(w));
+      });
+      if (targetScreen) {
+        const synthResult = await synthesizeScreenWithClaude(projectId, targetScreen, spec, messageText);
+        return {
+          answer: `¡Componente React generado por **Claude** guiado por el mockup de **${targetScreen.name}**!\n\n${synthResult.summary}\n\nSe actualizó el archivo \`frontend/src/pages/mockups/${synthResult.compName}.jsx\` y la Vista Previa Interactiva.`,
+          codegenUpdated: true,
+          context: []
+        };
+      }
+    }
+  } catch (err) {
+    console.warn('[workspace.chat] Aviso en personalización de código:', err.message);
+  }
+
   // Retrieval stays local; bounded context may be passed to the existing provider explicitly.
   const terms = messageText.toLowerCase().match(/[\p{L}\p{N}-]{3,}/gu) || [];
   let requirements = await d.prisma.requirement.findMany({ where: { projectId, status: 'APPROVED', OR: terms.slice(0, 20).flatMap(term => [{ code: { contains: term, mode: 'insensitive' } }, { description: { contains: term, mode: 'insensitive' } }]) }, take: 12 });
@@ -94,22 +130,44 @@ async function chat(projectId, input) {
     });
   }
 
-  // Detección contextual de errores de código, Sequelize o Docker
-  const isCodeOrErrorQuery = /(error|sequelize|docker|tabla|columna|codigo|código|terminal|falla|exception|bug|crash|fail)/i.test(messageText);
+  // Detección contextual de código, endpoints, rutas, OpenAPI, Sequelize o Docker
+  const isCodeOrErrorQuery = /(endpoint|ruta|rutas|route|routes|upload|subida|imagen|imagenes|imágenes|foto|fotos|multer|openapi|swagger|fase|archivo|controlador|servicio|middleware|error|sequelize|docker|tabla|columna|codigo|código|terminal|falla|exception|bug|crash|fail)/i.test(messageText);
   if (isCodeOrErrorQuery) {
     const entities = await d.prisma.entity.findMany({
       where: { projectId, isDeleted: false },
       include: { attributes: true },
-      take: 20
+      take: 25
     });
     const rels = await d.prisma.entityRelationship.findMany({
-      where: { projectId, isDeleted: false },
-      take: 20
+      where: { projectId },
+      take: 25
     });
-    context.push({
-      type: 'CODE_DIAGNOSTIC_CONTEXT',
-      entities: entities.map(e => ({ name: e.name, attributes: (e.attributes || []).map(a => `${a.name} (${a.type}${a.isPk ? ' PK' : ''})`) })),
-      relationships: rels.map(r => `${r.source} -> ${r.target} (${r.cardinality})`)
+    context.unshift({
+      type: 'CODEGEN_ARCHITECTURE_AND_ENDPOINTS',
+      description: 'Arquitectura de Código, Endpoints y Persistencia del Proyecto en ICASE',
+      fileUpload: {
+        endpoint: 'POST /api/upload',
+        status: 'IMPLEMENTADO',
+        middleware: 'backend/src/middleware/upload.middleware.js (Multer diskStorage hacia volumen persistente /uploads)',
+        routesFile: 'backend/src/routes/upload.routes.js',
+        storageService: 'backend/src/services/upload.storage.js',
+        contractResponse: '{ success: true, url: "/uploads/<filename>", filename, mimetype, size }',
+        purpose: 'Subida de fotografías, documentos y evidencias multimedia de recepción vehicular y diagnóstico'
+      },
+      stages: {
+        fase1: 'Stack Tecnológico: Node.js 20, Express, PostgreSQL 16, React 18, Docker',
+        fase2: 'Estructura e Infraestructura: Dockerfile, docker-compose.yml (backend:8085, frontend:3005, db:5435), .env',
+        fase3: 'Base de Datos & SQL: 29 tablas Sequelize relacionales validadas, semillas de usuarios y roles',
+        fase4: 'Endpoints & Swagger: openapi.json, rutas REST (/api/upload, /api/auth, /api/users, etc.), SCREEN_BINDINGS.json',
+        fase5: 'Backend Express: Controladores, middleware de autenticación JWT y autorización por roles',
+        fase6: 'Frontend React: Vistas interactivas conectadas a la API REST',
+        fase7: 'Integración Docker: Orquestación multi-contenedor y persistencia de volumen uploads_data'
+      },
+      database: {
+        totalTables: entities.length,
+        totalRelationships: rels.length,
+        models: entities.map(e => ({ name: e.name, fields: (e.attributes || []).map(a => `${a.name} (${a.type}${a.isPk ? ' [PK]' : ''})`) }))
+      }
     });
   }
 

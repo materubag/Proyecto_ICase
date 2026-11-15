@@ -29,10 +29,20 @@ class SourceController {
 
   async analyze(req, res, next) {
     try {
-      const source = await sourceService.getById(req.params.sourceId);
-      if (!source) throw Object.assign(new Error('Fuente inexistente'),{statusCode:404});
-      const result = await require('../services/analysis/documentWorkflow').service().run(source.projectId, 'context', 'prepare');
-      res.json({success:true,data:{workflow:true,stage:'context',...result}});
+      const options = {
+        sourceId: req.params.sourceId,
+        sourceVersionId: req.body?.sourceVersionId,
+        force: req.body?.force === true,
+        providerOverride: req.body?.providerOverride || req.body?.provider,
+        modelOverride: req.body?.modelOverride || req.body?.model
+      };
+      if (req.body?.async === true) {
+        const source = await sourceService.getById(req.params.sourceId);
+        if (!source) return res.status(404).json({ success: false, error: { message: 'Fuente no encontrada.' } });
+        return res.status(202).json({ success: true, data: require('../services/analysis/analysisJobs').start(options) });
+      }
+      const result = await analysisPipeline.run(options);
+      res.json({ success: true, data: result });
     } catch (error) {
       next(error);
     }

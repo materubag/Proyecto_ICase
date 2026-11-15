@@ -123,7 +123,7 @@ function deriveUserFieldMapping(userEntity) {
   const idField = pkAttr ? (pkAttr.fieldName || pkAttr.name) : 'id';
 
   // 2. Password field
-  const passAttr = attrs.find(a => /^(password_?hash|passwordhash|password|contrasena|contrase[ñn]a|clave|hash|secret)$/i.test(a.fieldName || a.name || ''));
+  const passAttr = attrs.find(a => /^(password_?hash|passwordhash|password|contrasena|contrase[ñn]a|clave|hash|secret|hash_?contrase[ñn]a|hash_?password)$/i.test(a.fieldName || a.name || ''));
   const passwordField = passAttr ? (passAttr.fieldName || passAttr.name) : 'password';
 
   // 3. Email field
@@ -529,11 +529,13 @@ function generateAuthRoutesFile() {
 const express = require('express');
 const router = express.Router();
 const authController = require('../controllers/auth.controller');
-const { authenticateToken } = require('../middleware/auth.middleware');
+const { authenticateToken, authorizeRoles } = require('../middleware/auth.middleware');
 
-// Registro y Login públicos
-router.post('/register', authController.register);
+// Login público con autenticación de credenciales
 router.post('/login', authController.login);
+
+// Registro de usuarios restringido a Administrador
+router.post('/register', authenticateToken, authorizeRoles('Administrador'), authController.register);
 
 // Consulta de perfil protegido por token
 router.get('/me', authenticateToken, authController.me);

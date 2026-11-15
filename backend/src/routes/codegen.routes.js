@@ -22,6 +22,15 @@ router.get('/stages/status', codegenController.getStagesStatus);
 // POST /api/projects/:projectId/codegen/stages/approve
 router.post('/stages/approve', codegenController.approveStage);
 
+// POST /api/projects/:projectId/codegen/stages/:stageId/audit
+router.post('/stages/:stageId/audit', codegenController.auditStageWithSonnet);
+
+// POST /api/projects/:projectId/codegen/stages/:stageId/apply-audit-fixes
+router.post('/stages/:stageId/apply-audit-fixes', codegenController.applyStageAuditFixes);
+
+// POST /api/projects/:projectId/codegen/stages/3/test-database
+router.post('/stages/3/test-database', codegenController.testDatabase);
+
 // POST /api/projects/:projectId/codegen/spec/validate
 router.post('/spec/validate', codegenController.validateSpecification);
 

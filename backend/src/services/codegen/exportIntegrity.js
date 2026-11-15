@@ -39,8 +39,13 @@ function readZip(buffer) {
 }
 
 function bundleVerifiedFiles(files, verification = {}) {
-  const manifest = { format: 1, verification, payloadHash: fingerprint(files), files: files.map(f => ({ path: f.path, bytes: f.content.length, sha256: sha256(f.content) })) };
-  const payload = [...files, { path: 'BUNDLE_MANIFEST.json', content: Buffer.from(JSON.stringify(manifest, null, 2)) }];
+  const uniqueMap = new Map();
+  for (const file of files) {
+    uniqueMap.set(String(file.path).replace(/\\/g, '/').toLowerCase(), file);
+  }
+  const cleanFiles = Array.from(uniqueMap.values());
+  const manifest = { format: 1, verification, payloadHash: fingerprint(cleanFiles), files: cleanFiles.map(f => ({ path: f.path, bytes: f.content.length, sha256: sha256(f.content) })) };
+  const payload = [...cleanFiles, { path: 'BUNDLE_MANIFEST.json', content: Buffer.from(JSON.stringify(manifest, null, 2)) }];
   const buffer = createZipBuffer(payload);
   const entries = readZip(buffer);
   if (entries.length !== payload.length || fingerprint(entries) !== fingerprint(payload)) throw new Error('ZIP_CONTENT_MISMATCH');

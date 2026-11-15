@@ -307,7 +307,7 @@ export default function DiagramViewport({
                 }}
               />
               <h4 style={{ margin: '0 0 6px 0', fontSize: '1rem', color: 'var(--on-surface)' }}>
-                Generando diagrama con Gemini…
+                Generando diagrama con IA…
               </h4>
               <p style={{ margin: 0, fontSize: '0.8125rem', color: 'var(--secondary)', maxWidth: '400px' }}>
                 Esto puede tardar unos segundos. El diagrama aparecerá aquí cuando esté listo.
@@ -324,7 +324,7 @@ export default function DiagramViewport({
               </h4>
               <p style={{ margin: '0 0 16px 0', fontSize: '0.8125rem', color: 'var(--secondary)', maxWidth: '440px' }}>
                 {canGenerate
-                  ? 'Puedes solicitar su generación inteligente con Gemini basada en el análisis documental del proyecto.'
+                  ? 'Puedes solicitar su generación inteligente con IA basada en el análisis documental del proyecto.'
                   : 'La información del proyecto es insuficiente para construir este diagrama de forma fiable.'}
               </p>
 
@@ -456,7 +456,7 @@ export default function DiagramViewport({
               />
               <div style={{ textAlign: 'center' }}>
                 <p style={{ margin: 0, fontSize: '0.9rem', fontWeight: 600, color: 'var(--on-surface)' }}>
-                  Generando diagrama con Gemini
+                  Generando diagrama con IA
                 </p>
                 <p style={{ margin: '4px 0 0', fontSize: '0.78rem', color: 'var(--secondary)' }}>
                   Esto puede tardar unos segundos…
@@ -566,7 +566,7 @@ export default function DiagramViewport({
               <h4 style={{ margin: 0, fontSize: '0.95rem', fontWeight: 600 }}>¿Regenerar diagrama?</h4>
             </div>
             <p style={{ margin: '0 0 16px', fontSize: '0.8125rem', color: 'var(--on-surface)', lineHeight: 1.45 }}>
-              Este diagrama ya existe. Regenerarlo construirá una nueva versión con Gemini reemplazando la versión actual.
+              Este diagrama ya existe. Regenerarlo construirá una nueva versión con IA reemplazando la versión actual.
             </p>
             <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '8px' }}>
               <button
