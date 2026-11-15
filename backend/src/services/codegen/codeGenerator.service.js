@@ -284,6 +284,7 @@ INITIAL_ADMIN_PASSWORD=${defaultAdminPassword}
     addFile('backend/.sequelizerc', generateSequelizercFile(), 'javascript');
     addFile('backend/src/migrate.js', generateMigrationRunnerFile(spec), 'javascript');
     addFile('backend/src/seed-account.js', require('./initialAccountGenerator').generateInitialAccountScript(spec), 'javascript');
+    addFile('backend/src/seed-demo-users.js', require('./demoUserGenerator').generateDemoUserSeedScript(spec), 'javascript');
     if (spec.permissionMatrix) addFile('backend/src/seed-permissions.js', `const models = require('./models');\nconst codes = ${JSON.stringify(Object.keys(spec.permissionMatrix))};\nexports.seed = async () => { await models.sequelize.transaction(async transaction => { for (const nombre of ${JSON.stringify(spec.security.roles)}) await models.ROL.findOrCreate({ where: { nombre }, transaction }); for (const codigo of codes) await models.PERMISO.findOrCreate({ where: { codigo }, defaults: { descripcion: codigo }, transaction }); }); };\n`, 'javascript');
     addFile('backend/demo-seeds.json', JSON.stringify(spec.demoSeeds || [], null, 2), 'json');
 
