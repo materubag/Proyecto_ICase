@@ -99,6 +99,9 @@ export default function ProjectCodeGen({ project, onNavigateTo }) {
   const [testingDb, setTestingDb] = useState(false);
   const [dbTestResult, setDbTestResult] = useState(null);
   const [showTablesModal, setShowTablesModal] = useState(false);
+  const [frontendViewMode, setFrontendViewMode] = useState('preview');
+  const [previewRefreshKey, setPreviewRefreshKey] = useState(0);
+  const [showStage7CodeFiles, setShowStage7CodeFiles] = useState(false);
   const quality = useMemo(() => groupQualityIssues(generatedData?.diagnostics?.errors || []), [generatedData]);
   const batchAnswers = completedBatchAnswers(activeJob?.questions, selectedOptions, customAnswers);
 
@@ -125,8 +128,20 @@ export default function ProjectCodeGen({ project, onNavigateTo }) {
       setAuditResult(null);
       setDbTestResult(null);
       setFixSuccessMessage(null);
+      if (activeStageId === 6) {
+        setFrontendViewMode('preview');
+      }
     }
   }, [project?.id, includeDocker, activeStageId]);
+
+  useEffect(() => {
+    function handleCodegenUpdated() {
+      loadPreview(activeStageId);
+      setPreviewRefreshKey(prev => prev + 1);
+    }
+    window.addEventListener('icase:codegen-updated', handleCodegenUpdated);
+    return () => window.removeEventListener('icase:codegen-updated', handleCodegenUpdated);
+  }, [project?.id, activeStageId]);
 
   useEffect(() => {
     if (!project?.id) return;
@@ -337,6 +352,15 @@ export default function ProjectCodeGen({ project, onNavigateTo }) {
     } finally {
       setBootingRuntime(false);
     }
+  }
+
+  function handleOpenFrontendPreview() {
+    if (activeStage.id === 7 || approvedStageIds.has(7)) {
+      window.open('http://localhost:3005', '_blank');
+      return;
+    }
+    if (!project?.id) return;
+    window.open(`/api/projects/${project.id}/codegen/workflow/frontend-preview`, '_blank');
   }
 
   async function handleAuditWithSonnet() {
@@ -1030,7 +1054,7 @@ export default function ProjectCodeGen({ project, onNavigateTo }) {
           </div>
 
           <div style={{ display: 'flex', alignItems: 'center', gap: '10px', flexWrap: 'wrap' }}>
-            {activeStage.id >= 4 && (
+            {(activeStage.id === 4 || activeStage.id === 5) && (
               <button
                 type="button"
                 onClick={handleOpenSwagger}
@@ -1053,6 +1077,31 @@ export default function ProjectCodeGen({ project, onNavigateTo }) {
               >
                 <span className="ms ms-xs" style={{ color: '#059669' }}>api</span>
                 <span>{bootingRuntime ? 'Iniciando servidor...' : 'Probar con Swagger ↗'}</span>
+              </button>
+            )}
+
+            {activeStage.id >= 6 && (
+              <button
+                type="button"
+                onClick={handleOpenFrontendPreview}
+                style={{
+                  display: 'inline-flex',
+                  alignItems: 'center',
+                  gap: '6px',
+                  background: activeStage.id === 7 ? '#10B981' : '#4F46E5',
+                  color: '#FFFFFF',
+                  border: activeStage.id === 7 ? '1px solid #059669' : '1px solid #4338CA',
+                  padding: '6px 14px',
+                  borderRadius: '8px',
+                  fontSize: '0.75rem',
+                  fontWeight: 600,
+                  cursor: 'pointer',
+                  boxShadow: activeStage.id === 7 ? '0 1px 3px rgba(16, 185, 129, 0.3)' : '0 1px 3px rgba(79, 70, 229, 0.25)'
+                }}
+                title={activeStage.id === 7 ? "Abre la aplicación directamente en Docker (http://localhost:3005)" : "Abre y prueba todas las pantallas del Frontend conectadas a los endpoints antes de aprobar"}
+              >
+                <span className="ms ms-xs" style={{ color: '#FFFFFF' }}>{activeStage.id === 7 ? 'rocket_launch' : 'devices'}</span>
+                <span>{activeStage.id === 7 ? 'Abrir en Docker (3005) ↗' : 'Probar Frontend ↗'}</span>
               </button>
             )}
 
@@ -1628,14 +1677,443 @@ export default function ProjectCodeGen({ project, onNavigateTo }) {
         </div>
       )}
 
-      {/* ── IDE WORKSPACE (Mockup Bicolumn) ─────────────────────────────── */}
-      <div style={{
-        display: 'flex',
-        gap: '24px',
-        flex: 1,
-        minHeight: '560px',
-        alignItems: 'stretch'
-      }}>
+      {/* ── STAGE 7: PRODUCTION DEPLOYMENT & LINKS DASHBOARD ────────────────── */}
+      {activeStage.id === 7 && approvedStageIds.has(7) && !showStage7CodeFiles ? (
+        <div style={{
+          width: '100%',
+          background: '#FFFFFF',
+          border: '1px solid #E2E8F0',
+          borderRadius: '20px',
+          padding: '32px',
+          boxShadow: '0 4px 20px -2px rgba(15, 23, 42, 0.05)',
+          display: 'flex',
+          flexDirection: 'column',
+          gap: '24px'
+        }}>
+          {/* Header de Estado */}
+          <div style={{
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'space-between',
+            paddingBottom: '20px',
+            borderBottom: '1px solid #F1F5F9',
+            flexWrap: 'wrap',
+            gap: '16px'
+          }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '14px' }}>
+              <div style={{
+                width: '46px',
+                height: '46px',
+                borderRadius: '12px',
+                background: 'linear-gradient(135deg, #10B981, #059669)',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                color: '#FFFFFF',
+                fontSize: '22px',
+                boxShadow: '0 4px 12px rgba(16, 185, 129, 0.3)'
+              }}>
+                🚀
+              </div>
+              <div>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+                  <h2 style={{ margin: 0, fontSize: '1.2rem', fontWeight: 700, color: '#0F172A' }}>
+                    Entorno Desplegado en Docker · Producción
+                  </h2>
+                  <span style={{
+                    display: 'inline-flex',
+                    alignItems: 'center',
+                    gap: '5px',
+                    padding: '3px 10px',
+                    borderRadius: '9999px',
+                    background: '#ECFDF5',
+                    border: '1px solid #A7F3D0',
+                    color: '#065F46',
+                    fontSize: '0.75rem',
+                    fontWeight: 600
+                  }}>
+                    <span style={{ width: '7px', height: '7px', borderRadius: '50%', background: '#10B981' }}></span>
+                    Contenedores Activos y Saludables
+                  </span>
+                </div>
+                <p style={{ margin: '3px 0 0 0', fontSize: '0.8125rem', color: '#64748B' }}>
+                  Tu sistema ha sido empaquetado y se encuentra en ejecución. Utiliza los enlaces directos a continuación o descarga el paquete completo.
+                </p>
+              </div>
+            </div>
+
+            <div style={{ display: 'flex', alignItems: 'center', gap: '10px', flexWrap: 'wrap' }}>
+              <button
+                type="button"
+                onClick={handleDownload}
+                disabled={downloading}
+                style={{
+                  background: '#0F172A',
+                  color: '#FFFFFF',
+                  border: 'none',
+                  borderRadius: '8px',
+                  padding: '9px 18px',
+                  fontSize: '0.8125rem',
+                  fontWeight: 600,
+                  cursor: downloading ? 'wait' : 'pointer',
+                  display: 'inline-flex',
+                  alignItems: 'center',
+                  gap: '8px',
+                  boxShadow: '0 2px 4px rgba(15, 23, 42, 0.25)'
+                }}
+                title="Descargar paquete completo .ZIP para producción"
+              >
+                <span className="ms ms-xs">download</span>
+                <span>{downloading ? 'Descargando...' : 'Descargar Proyecto .ZIP'}</span>
+              </button>
+
+              <button
+                type="button"
+                onClick={() => setShowStage7CodeFiles(true)}
+                style={{
+                  background: '#F8FAFC',
+                  border: '1px solid #CBD5E1',
+                  borderRadius: '8px',
+                  padding: '8px 14px',
+                  fontSize: '0.75rem',
+                  fontWeight: 600,
+                  color: '#475569',
+                  cursor: 'pointer',
+                  display: 'inline-flex',
+                  alignItems: 'center',
+                  gap: '6px'
+                }}
+                title="Ver explorador técnico de archivos"
+              >
+                <span>📁 Ver archivos del proyecto</span>
+              </button>
+            </div>
+          </div>
+
+          {/* Grid de Links de Producción */}
+          <div>
+            <div style={{
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'space-between',
+              marginBottom: '14px'
+            }}>
+              <strong style={{ fontSize: '0.875rem', color: '#0F172A', textTransform: 'uppercase', letterSpacing: '0.04em' }}>
+                LINKS DE PRODUCCIÓN
+              </strong>
+              <span style={{ fontSize: '0.75rem', color: '#64748B' }}>
+                Puertos y rutas mapeadas por Docker
+              </span>
+            </div>
+
+            <div style={{
+              display: 'grid',
+              gridTemplateColumns: 'repeat(auto-fit, minmax(320px, 1fr))',
+              gap: '16px'
+            }}>
+              {/* Tarjeta Frontend */}
+              <div style={{
+                background: '#F8FAFC',
+                border: '1px solid #E2E8F0',
+                borderRadius: '16px',
+                padding: '20px',
+                display: 'flex',
+                flexDirection: 'column',
+                justifyContent: 'space-between',
+                gap: '16px'
+              }}>
+                <div>
+                  <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '8px' }}>
+                    <span style={{
+                      background: '#EEF2FF',
+                      color: '#4F46E5',
+                      fontSize: '0.6875rem',
+                      fontWeight: 700,
+                      padding: '3px 8px',
+                      borderRadius: '5px'
+                    }}>
+                      FRONTEND SPA
+                    </span>
+                    <span style={{ fontSize: '0.6875rem', color: '#10B981', fontWeight: 600 }}>● Puerto 3005 / Nginx</span>
+                  </div>
+                  <h3 style={{ margin: '0 0 4px 0', fontSize: '1rem', fontWeight: 700, color: '#0F172A' }}>
+                    Aplicación Web del Sistema
+                  </h3>
+                  <p style={{ margin: 0, fontSize: '0.75rem', color: '#64748B', lineHeight: 1.4 }}>
+                    Interfaz gráfica completa: Recepción, Seguimiento en Vivo del Cliente, Inventario de Repuestos y Tablero de Control.
+                  </p>
+                </div>
+
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+                  <button
+                    type="button"
+                    onClick={() => window.open('http://localhost:3005', '_blank')}
+                    style={{
+                      width: '100%',
+                      padding: '10px 16px',
+                      borderRadius: '8px',
+                      background: '#4F46E5',
+                      color: '#FFFFFF',
+                      border: 'none',
+                      fontSize: '0.8125rem',
+                      fontWeight: 600,
+                      cursor: 'pointer',
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      gap: '8px',
+                      boxShadow: '0 2px 6px rgba(79, 70, 229, 0.25)'
+                    }}
+                  >
+                    <span>Abrir Aplicación en Docker (Puerto 3005)</span>
+                    <span className="ms ms-xs">open_in_new</span>
+                  </button>
+                  <a
+                    href="http://localhost:3005"
+                    target="_blank"
+                    rel="noreferrer"
+                    style={{
+                      fontSize: '0.75rem',
+                      color: '#4F46E5',
+                      textDecoration: 'none',
+                      textAlign: 'center',
+                      fontWeight: 600
+                    }}
+                  >
+                    http://localhost:3005
+                  </a>
+                </div>
+              </div>
+
+              {/* Tarjeta Backend / Swagger */}
+              <div style={{
+                background: '#F8FAFC',
+                border: '1px solid #E2E8F0',
+                borderRadius: '16px',
+                padding: '20px',
+                display: 'flex',
+                flexDirection: 'column',
+                justifyContent: 'space-between',
+                gap: '16px'
+              }}>
+                <div>
+                  <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '8px' }}>
+                    <span style={{
+                      background: '#F0FDF4',
+                      color: '#16A34A',
+                      fontSize: '0.6875rem',
+                      fontWeight: 700,
+                      padding: '3px 8px',
+                      borderRadius: '5px'
+                    }}>
+                      API REST & SWAGGER
+                    </span>
+                    <span style={{ fontSize: '0.6875rem', color: '#10B981', fontWeight: 600 }}>● Puerto 8085 / Express</span>
+                  </div>
+                  <h3 style={{ margin: '0 0 4px 0', fontSize: '1rem', fontWeight: 700, color: '#0F172A' }}>
+                    Servicios Backend y Swagger UI
+                  </h3>
+                  <p style={{ margin: 0, fontSize: '0.75rem', color: '#64748B', lineHeight: 1.4 }}>
+                    Documentación OpenAPI 3.0 interactiva para probar rutas REST, órdenes de trabajo, cotizaciones y JWT.
+                  </p>
+                </div>
+
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+                  <button
+                    type="button"
+                    onClick={() => window.open('http://localhost:8085/swagger', '_blank')}
+                    style={{
+                      width: '100%',
+                      padding: '10px 16px',
+                      borderRadius: '8px',
+                      background: '#0F172A',
+                      color: '#FFFFFF',
+                      border: 'none',
+                      fontSize: '0.8125rem',
+                      fontWeight: 600,
+                      cursor: 'pointer',
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      gap: '8px'
+                    }}
+                  >
+                    <span>Abrir Swagger en Docker (Puerto 8085)</span>
+                    <span className="ms ms-xs">open_in_new</span>
+                  </button>
+                  <a
+                    href="http://localhost:8085/swagger"
+                    target="_blank"
+                    rel="noreferrer"
+                    style={{
+                      fontSize: '0.75rem',
+                      color: '#0F172A',
+                      textDecoration: 'none',
+                      textAlign: 'center',
+                      fontWeight: 600
+                    }}
+                  >
+                    http://localhost:8085/swagger
+                  </a>
+                </div>
+              </div>
+
+              {/* Tarjeta Base de Datos */}
+              <div style={{
+                background: '#F8FAFC',
+                border: '1px solid #E2E8F0',
+                borderRadius: '16px',
+                padding: '20px',
+                display: 'flex',
+                flexDirection: 'column',
+                justifyContent: 'space-between',
+                gap: '16px'
+              }}>
+                <div>
+                  <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '8px' }}>
+                    <span style={{
+                      background: '#FEF3C7',
+                      color: '#D97706',
+                      fontSize: '0.6875rem',
+                      fontWeight: 700,
+                      padding: '3px 8px',
+                      borderRadius: '5px'
+                    }}>
+                      BASE DE DATOS
+                    </span>
+                    <span style={{ fontSize: '0.6875rem', color: '#10B981', fontWeight: 600 }}>● Puerto 5435</span>
+                  </div>
+                  <h3 style={{ margin: '0 0 4px 0', fontSize: '1rem', fontWeight: 700, color: '#0F172A' }}>
+                    PostgreSQL 16 Multi-tabla
+                  </h3>
+                  <p style={{ margin: 0, fontSize: '0.75rem', color: '#64748B', lineHeight: 1.4 }}>
+                    Base de datos aislada con el esquema relacional completo, llaves foráneas y datos iniciales cargados.
+                  </p>
+                </div>
+
+                <div style={{
+                  background: '#FFFFFF',
+                  border: '1px solid #E2E8F0',
+                  borderRadius: '8px',
+                  padding: '8px 12px',
+                  fontSize: '0.6875rem',
+                  color: '#334155',
+                  fontFamily: 'monospace',
+                  display: 'flex',
+                  flexDirection: 'column',
+                  gap: '2px'
+                }}>
+                  <div>Host: <strong>127.0.0.1:5435</strong></div>
+                  <div>Base de datos: <strong>autron_db</strong></div>
+                  <div>Usuario: <strong>postgres</strong></div>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          {/* Banner de Descarga Oficial del ZIP */}
+          <div style={{
+            background: 'linear-gradient(135deg, #0F172A 0%, #1E293B 100%)',
+            borderRadius: '16px',
+            padding: '22px 28px',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'space-between',
+            flexWrap: 'wrap',
+            gap: '16px',
+            color: '#FFFFFF'
+          }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '14px' }}>
+              <div style={{
+                width: '44px',
+                height: '44px',
+                borderRadius: '10px',
+                background: 'rgba(255, 255, 255, 0.1)',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                fontSize: '22px'
+              }}>
+                📦
+              </div>
+              <div>
+                <h4 style={{ margin: 0, fontSize: '1rem', fontWeight: 700, color: '#FFFFFF' }}>
+                  Descargar Paquete Completo (.ZIP)
+                </h4>
+                <p style={{ margin: '2px 0 0 0', fontSize: '0.75rem', color: '#94A3B8' }}>
+                  Contiene el código fuente completo, <code>docker-compose.yml</code>, archivos de entorno y documentación técnica.
+                </p>
+              </div>
+            </div>
+
+            <button
+              type="button"
+              onClick={handleDownload}
+              disabled={downloading}
+              style={{
+                background: '#4F46E5',
+                color: '#FFFFFF',
+                border: 'none',
+                borderRadius: '10px',
+                padding: '12px 24px',
+                fontSize: '0.875rem',
+                fontWeight: 600,
+                cursor: 'pointer',
+                display: 'inline-flex',
+                alignItems: 'center',
+                gap: '8px',
+                boxShadow: '0 4px 14px rgba(79, 70, 229, 0.35)',
+                transition: 'all 0.15s ease'
+              }}
+            >
+              <span className="ms ms-xs">download</span>
+              <span>{downloading ? 'Generando ZIP...' : 'Descargar Proyecto .ZIP'}</span>
+            </button>
+          </div>
+        </div>
+      ) : (
+        <>
+          {activeStage.id === 7 && approvedStageIds.has(7) && showStage7CodeFiles && (
+            <div style={{
+              marginBottom: '16px',
+              padding: '10px 16px',
+              background: '#EFF6FF',
+              border: '1px solid #BFDBFE',
+              borderRadius: '10px',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'space-between'
+            }}>
+              <span style={{ fontSize: '0.8125rem', color: '#1E40AF', fontWeight: 500 }}>
+                📁 Mostrando archivos fuente de Docker & Entrega.
+              </span>
+              <button
+                type="button"
+                onClick={() => setShowStage7CodeFiles(false)}
+                style={{
+                  background: '#1D4ED8',
+                  color: '#FFFFFF',
+                  border: 'none',
+                  borderRadius: '6px',
+                  padding: '5px 12px',
+                  fontSize: '0.75rem',
+                  fontWeight: 600,
+                  cursor: 'pointer'
+                }}
+              >
+                ← Volver a Links de Producción
+              </button>
+            </div>
+          )}
+
+          {/* ── IDE WORKSPACE (Mockup Bicolumn) ─────────────────────────────── */}
+          <div style={{
+            display: 'flex',
+            gap: '24px',
+            flex: 1,
+            minHeight: '560px',
+            alignItems: 'stretch'
+          }}>
         {/* Left: File Explorer Card */}
         <div style={{
           width: '320px',
@@ -1719,7 +2197,10 @@ export default function ProjectCodeGen({ project, onNavigateTo }) {
                 return (
                   <div
                     key={file.path}
-                    onClick={() => setSelectedFilePath(file.path)}
+                    onClick={() => {
+                      setSelectedFilePath(file.path);
+                      if (activeStage.id === 6) setFrontendViewMode('code');
+                    }}
                     style={{
                       display: 'flex',
                       alignItems: 'center',
@@ -1794,37 +2275,105 @@ export default function ProjectCodeGen({ project, onNavigateTo }) {
           </div>
         </div>
 
-        {/* Right: Code Viewer Card */}
+        {/* Right: Code Viewer / Interactive Frontend Preview Card */}
         <div style={{
           flex: 1,
           minWidth: 0,
           background: '#18181B',
           borderRadius: '20px',
-          padding: '24px',
+          padding: activeStage.id === 6 && frontendViewMode === 'preview' ? '14px' : '24px',
           display: 'flex',
           flexDirection: 'column',
           boxShadow: '0 4px 20px rgba(0, 0, 0, 0.15)',
           minHeight: '560px'
         }}>
-          {/* Code top bar */}
+          {/* Code / Preview top bar */}
           <div style={{
             display: 'flex',
             alignItems: 'center',
             justifyContent: 'space-between',
-            marginBottom: '16px',
-            paddingBottom: '12px',
-            borderBottom: '1px solid rgba(255, 255, 255, 0.08)'
+            marginBottom: '12px',
+            paddingBottom: '10px',
+            borderBottom: '1px solid rgba(255, 255, 255, 0.08)',
+            flexWrap: 'wrap',
+            gap: '10px'
           }}>
-            <span style={{
-              fontFamily: '"JetBrains Mono", Consolas, monospace',
-              fontSize: '0.875rem',
-              fontWeight: 600,
-              color: '#FFFFFF'
-            }}>
-              {selectedFile?.path || 'docker-compose.yml'}
-            </span>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+              {activeStage.id === 6 && (
+                <div style={{
+                  display: 'inline-flex',
+                  background: 'rgba(255, 255, 255, 0.07)',
+                  padding: '3px',
+                  borderRadius: '8px',
+                  border: '1px solid rgba(255, 255, 255, 0.12)'
+                }}>
+                  <button
+                    type="button"
+                    onClick={() => setFrontendViewMode('preview')}
+                    style={{
+                      background: frontendViewMode === 'preview' ? '#4F46E5' : 'transparent',
+                      color: frontendViewMode === 'preview' ? '#FFFFFF' : '#A1A1AA',
+                      border: 'none',
+                      borderRadius: '6px',
+                      padding: '5px 12px',
+                      fontSize: '0.75rem',
+                      fontWeight: 600,
+                      cursor: 'pointer'
+                    }}
+                  >
+                    🖥️ Vista Previa Interactiva
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setFrontendViewMode('code')}
+                    style={{
+                      background: frontendViewMode === 'code' ? '#4F46E5' : 'transparent',
+                      color: frontendViewMode === 'code' ? '#FFFFFF' : '#A1A1AA',
+                      border: 'none',
+                      borderRadius: '6px',
+                      padding: '5px 12px',
+                      fontSize: '0.75rem',
+                      fontWeight: 600,
+                      cursor: 'pointer'
+                    }}
+                  >
+                    💻 Código Fuente
+                  </button>
+                </div>
+              )}
+
+              <span style={{
+                fontFamily: '"JetBrains Mono", Consolas, monospace',
+                fontSize: '0.84rem',
+                fontWeight: 600,
+                color: '#FFFFFF'
+              }}>
+                {activeStage.id === 6 && frontendViewMode === 'preview'
+                  ? 'Entorno Interactivo Frontend + API Conectada'
+                  : (selectedFile?.path || 'docker-compose.yml')}
+              </span>
+            </div>
 
             <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+              {activeStage.id === 6 && (
+                <button
+                  type="button"
+                  onClick={handleOpenFrontendPreview}
+                  style={{
+                    background: 'rgba(79, 70, 229, 0.25)',
+                    border: '1px solid rgba(129, 140, 248, 0.4)',
+                    color: '#E0E7FF',
+                    borderRadius: '8px',
+                    padding: '6px 12px',
+                    fontSize: '0.75rem',
+                    fontWeight: 600,
+                    cursor: 'pointer'
+                  }}
+                >
+                  ↗ Abrir en Pantalla Completa
+                </button>
+              )}
+
               <button
                 type="button"
                 onClick={() => {
@@ -1846,35 +2395,51 @@ export default function ProjectCodeGen({ project, onNavigateTo }) {
                   gap: '4px',
                   transition: 'all 0.15s ease'
                 }}
-                title="Pedir cambios en este archivo con la IA"
+                title="Pedir cambios en este archivo o pantalla con la IA"
               >
                 <span className="ms ms-xs" style={{ color: '#818CF8' }}>edit</span>
                 <span>Cambiar</span>
               </button>
 
-              <button
-                type="button"
-                onClick={handleCopy}
-                style={{
-                  background: 'rgba(255, 255, 255, 0.06)',
-                  border: '1px solid rgba(255, 255, 255, 0.15)',
-                  color: copied ? '#4ADE80' : '#E4E4E7',
-                  borderRadius: '8px',
-                  padding: '6px 16px',
-                  fontSize: '0.75rem',
-                  fontWeight: 500,
-                  cursor: 'pointer',
-                  transition: 'all 0.15s ease'
-                }}
-              >
-                {copied ? '¡Copiado!' : 'Copiar'}
-              </button>
+              {!(activeStage.id === 6 && frontendViewMode === 'preview') && (
+                <button
+                  type="button"
+                  onClick={handleCopy}
+                  style={{
+                    background: 'rgba(255, 255, 255, 0.06)',
+                    border: '1px solid rgba(255, 255, 255, 0.15)',
+                    color: copied ? '#4ADE80' : '#E4E4E7',
+                    borderRadius: '8px',
+                    padding: '6px 16px',
+                    fontSize: '0.75rem',
+                    fontWeight: 500,
+                    cursor: 'pointer',
+                    transition: 'all 0.15s ease'
+                  }}
+                >
+                  {copied ? '¡Copiado!' : 'Copiar'}
+                </button>
+              )}
             </div>
           </div>
 
-          {/* Code pre */}
-          <div style={{ flex: 1, overflowY: 'auto' }}>
-            {loading ? (
+          {/* Code pre OR Interactive Frontend Preview iframe */}
+          <div style={{ flex: 1, overflowY: 'auto', display: 'flex', flexDirection: 'column' }}>
+            {activeStage.id === 6 && frontendViewMode === 'preview' ? (
+              <iframe
+                key={`${project?.id}-${previewRefreshKey}`}
+                src={`/api/projects/${project?.id}/codegen/workflow/frontend-preview?v=${previewRefreshKey}`}
+                title="Vista Previa Interactiva del Frontend"
+                style={{
+                  width: '100%',
+                  flex: 1,
+                  minHeight: '620px',
+                  border: '1px solid rgba(255, 255, 255, 0.1)',
+                  borderRadius: '12px',
+                  background: '#F6F7FB'
+                }}
+              />
+            ) : loading ? (
               <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', height: '100%', color: '#94A3B8', fontSize: '0.875rem' }}>
                 Cargando archivos...
               </div>
@@ -1896,6 +2461,8 @@ export default function ProjectCodeGen({ project, onNavigateTo }) {
           </div>
         </div>
       </div>
+    </>
+  )}
 
       {/* ── AI OPERATIONS MODAL ───────────────────────────────────────── */}
       {showAiModal && (

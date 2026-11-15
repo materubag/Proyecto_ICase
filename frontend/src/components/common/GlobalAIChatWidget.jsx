@@ -68,8 +68,9 @@ export default function GlobalAIChatWidget({ project, onProjectUpdated }) {
         }
       ]);
 
-      if (proposal || proposeChange) {
+      if (proposal || proposeChange || res?.codegenUpdated || res?.data?.codegenUpdated) {
         onProjectUpdated?.();
+        window.dispatchEvent(new CustomEvent('icase:codegen-updated', { detail: res?.data || res }));
       }
     } catch (err) {
       if (!activeRef.current) return;

@@ -144,88 +144,64 @@ router.get('/openapi.json', async (req, res, next) => {
 router.get('/swagger', (req, res) => {
   res.type('html').send(`<!doctype html><html><head><title>Swagger · backend real de pruebas</title><link rel="stylesheet" href="https://unpkg.com/swagger-ui-dist@5/swagger-ui.css"></head><body><p>Las solicitudes se envían al backend aislado realmente levantado. Los ejemplos de OpenAPI no son evidencias de ejecución.</p><div id="swagger"></div><script src="https://unpkg.com/swagger-ui-dist@5/swagger-ui-bundle.js"></script><script>SwaggerUIBundle({url: ${JSON.stringify(`/api/projects/${req.params.projectId}/codegen/workflow/openapi.json`)},dom_id:'#swagger',persistAuthorization:false});</script></body></html>`);
 });
+router.get('/frontend-preview', async (req, res, next) => {
+  try {
+    const { buildProjectSpec } = require('../services/codegen/projectSpecBuilder');
+    const { renderFrontendPreviewHtml } = require('../services/codegen/frontendPreviewRenderer');
+    const spec = await buildProjectSpec(req.params.projectId, { allowUnapproved: true });
+    res.setHeader('Cache-Control', 'no-store, no-cache, must-revalidate');
+    res.type('html').send(renderFrontendPreviewHtml(req.params.projectId, spec, req.query || {}));
+  } catch (error) {
+    next(error);
+  }
+});
+
+router.get('/frontend-preview/assets/live-bundle.js', async (req, res, next) => {
+  try {
+    const { buildLiveProjectFrontendBundle } = require('../services/codegen/liveFrontendBundler');
+    const bundleCode = await buildLiveProjectFrontendBundle(req.params.projectId);
+    res.setHeader('Cache-Control', 'no-store, no-cache, must-revalidate');
+    res.setHeader('Content-Type', 'application/javascript; charset=utf-8');
+    return res.send(bundleCode);
+  } catch (error) {
+    next(error);
+  }
+});
+
+router.get('/frontend-preview/assets/:assetFile', (req, res, next) => {
+  try {
+    const path = require('node:path');
+    const assetName = path.basename(String(req.params.assetFile || ''));
+    const assetPath = path.join(__dirname, '..', 'services', 'codegen', 'runtimeAssets', assetName);
+    if (!fs.existsSync(assetPath)) {
+      return res.status(404).send('Asset no encontrado');
+    }
+    res.setHeader('Cache-Control', 'no-store, no-cache, must-revalidate');
+    if (assetName.endsWith('.js')) res.setHeader('Content-Type', 'application/javascript; charset=utf-8');
+    else if (assetName.endsWith('.css')) res.setHeader('Content-Type', 'text/css; charset=utf-8');
+    return res.send(fs.readFileSync(assetPath));
+  } catch (error) {
+    next(error);
+  }
+});
+
+router.get('/frontend-preview/screen/:screenId', async (req, res, next) => {
+  try {
+    const { buildProjectSpec } = require('../services/codegen/projectSpecBuilder');
+    const { renderScreenPreviewHtml } = require('../services/codegen/frontendPreviewRenderer');
+    const spec = await buildProjectSpec(req.params.projectId, { allowUnapproved: true });
+    res.setHeader('Cache-Control', 'no-store, no-cache, must-revalidate');
+    res.type('html').send(renderScreenPreviewHtml(req.params.projectId, spec, req.params.screenId, req.query || {}));
+  } catch (error) {
+    next(error);
+  }
+});
+
+const { handleWorkshopRuntimeRequest } = require('../services/codegen/workshopFlowRuntime');
+
 router.use('/runtime', async (req, res, next) => {
   try {
-    let entry = service().runtime.servers.get(req.params.projectId);
-    if (!entry || entry.child.exitCode != null) {
-      try {
-        await service().preview(req.params.projectId);
-        entry = service().runtime.servers.get(req.params.projectId);
-      } catch (err) {
-        // En Fase 4 el servidor aún no tiene controladores integrados (se integran en Fase 5)
-      }
-    }
-
-    // Si el proceso de servidor real no está encendido, responder con simulación de contrato para Swagger
-    if (!entry || entry.child.exitCode != null) {
-      const cleanUrl = req.url.split('?')[0].replace(/^\/api/, '');
-
-      if (cleanUrl === '/health' || cleanUrl === '') {
-        return res.json({ status: 'OK', message: 'Servidor de contratos activo (Fase 4: Endpoints & Swagger)' });
-      }
-      if (cleanUrl === '/auth/login') {
-        return res.json({
-          success: true,
-          token: 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpZCI6MSwiZW1haWwiOiJhZG1pbkBhdXRyb24uY29tIiwicm9sZSI6IkFkbWluaXN0cmFkb3IifQ.mock_token',
-          user: { id: 1, email: 'admin@autron.com', nombre: 'Admin Autron', role: 'Administrador' }
-        });
-      }
-      if (cleanUrl === '/upload') {
-        return res.status(201).json({
-          success: true,
-          url: '/uploads/evidencia_autron_simulada.jpg',
-          filename: 'evidencia_autron_simulada.jpg',
-          mimetype: 'image/jpeg',
-          size: 2048500
-        });
-      }
-
-      const entityName = cleanUrl.replace(/^\//, '').split('/')[0] || 'recurso';
-      if (req.method === 'GET') {
-        return res.json({
-          success: true,
-          count: 2,
-          data: [
-            { id: 1, nombre: `${entityName.toUpperCase()} 1`, estado: 'ACTIVO', fechaCreacion: new Date().toISOString() },
-            { id: 2, nombre: `${entityName.toUpperCase()} 2`, estado: 'ACTIVO', fechaCreacion: new Date().toISOString() }
-          ]
-        });
-      }
-      if (req.method === 'POST') {
-        return res.status(201).json({
-          success: true,
-          message: `Recurso en '${entityName}' procesado con éxito conforme al contrato OpenAPI de Fase 4.`,
-          data: { id: 101, ...req.body, fechaCreacion: new Date().toISOString() }
-        });
-      }
-      if (req.method === 'PUT' || req.method === 'PATCH') {
-        return res.json({
-          success: true,
-          message: `Recurso en '${entityName}' actualizado con éxito.`,
-          data: { id: 1, ...req.body, fechaActualizacion: new Date().toISOString() }
-        });
-      }
-      if (req.method === 'DELETE') {
-        return res.json({
-          success: true,
-          message: `Recurso en '${entityName}' eliminado con éxito.`
-        });
-      }
-      return res.json({ success: true, message: 'Operación ejecutada con éxito conforme al contrato OpenAPI.' });
-    }
-
-    const state = await service().get(req.params.projectId);
-    if (entry.directory !== service().runtime.directory(req.params.projectId, state.workspace)) p.fail('Entorno desactualizado: vuelva a abrir la vista previa', 409);
-    if (p.hash(require('../services/codegen/deliveryRuntime').manifest(entry.directory)) !== p.hash(state.files)) p.fail('Los archivos cambiaron; vuelva a verificar el entorno', 409);
-    const headers = { ...(req.headers.authorization ? { Authorization: req.headers.authorization } : {}), ...(req.headers['content-type'] ? { 'Content-Type': req.headers['content-type'] } : {}) };
-    const response = await fetch(`http://127.0.0.1:${entry.port}${req.url}`, { method: req.method, headers, ...(req.method !== 'GET' && req.method !== 'HEAD' ? { body: JSON.stringify(req.body) } : {}), redirect: 'manual' });
-    res.status(response.status); const type=response.headers.get('content-type')||'application/octet-stream';res.setHeader('Content-Type',type);
-    if(type.includes('text/html')){
-      const prefix=`/api/projects/${req.params.projectId}/codegen/workflow/runtime`;
-      let html=await response.text();
-      html=html.replace(/((?:src|href)=["'])\/(assets\/)/g,`$1${prefix}/$2`).replace('</head>',`<script>window.__ICASE_PREVIEW_API_BASE__=${JSON.stringify(prefix+'/api')};</script></head>`);
-      res.send(html);
-    }else res.send(Buffer.from(await response.arrayBuffer()));
+    return handleWorkshopRuntimeRequest(req.params.projectId, req, res);
   } catch (e) { next(e); }
 });
 router.get('/download', async (req, res, next) => {
