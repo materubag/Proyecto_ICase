@@ -97,6 +97,9 @@ function generateFrontendNginxConf() {
     listen 80;
     server_name localhost;
 
+    # Resolver interno de Docker para resolucion dinamica (evita caidas al inicio si backend tarda en responder)
+    resolver 127.0.0.11 valid=30s ipv6=off;
+
     location / {
         root /usr/share/nginx/html;
         index index.html index.htm;
@@ -104,7 +107,8 @@ function generateFrontendNginxConf() {
     }
 
     location /api/ {
-        proxy_pass http://backend:8080/api/;
+        set $backend_upstream http://backend:8080;
+        proxy_pass $backend_upstream;
         proxy_http_version 1.1;
         proxy_set_header Upgrade $http_upgrade;
         proxy_set_header Connection 'upgrade';
