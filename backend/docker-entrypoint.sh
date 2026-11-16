@@ -2,6 +2,7 @@
 set -e
 
 echo "[Docker Entrypoint] Waiting for database to be ready..."
+node src/config/waitForDatabase.js
 # Run Prisma db push to ensure schema is synced with PostgreSQL
 echo "[Docker Entrypoint] Running Prisma DB Push..."
 npx prisma generate

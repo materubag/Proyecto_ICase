@@ -60,6 +60,8 @@ En Linux/macOS: `cp .env.example .env`. Completar la configuración antes del ar
 docker compose up --build -d
 ```
 
+Si después de reiniciar Docker Desktop PostgreSQL aparece saludable pero el backend falla con `P1001`, ejecute `powershell -File .\scripts\start-icase.ps1`. El script comprueba la conexión de los contenedores a la red y sus puertos; recrea los afectados conservando los volúmenes existentes. Para incorporar cambios en la imagen del backend, agregue `-BuildBackend`. El backend también espera una conexión TCP autenticada antes de ejecutar Prisma; los reintentos no reparan por sí solos una red perdida por Docker.
+
 Para iniciar la aplicación y documentación sin los servicios de modelos locales:
 
 ```sh
@@ -73,7 +75,7 @@ docker compose up --build -d postgres backend frontend mkdocs
 | Swagger del backend | http://localhost:8080/api/docs/ |
 | Contrato OpenAPI | http://localhost:8080/api/openapi.json |
 | MkDocs Material | http://localhost:8000 |
-| PostgreSQL desde el equipo | localhost:5433 |
+| PostgreSQL desde el equipo | localhost:55433 (configurable con `ICASE_POSTGRES_PORT`) |
 
 La comprobación de salud HTTP no verifica todos los proveedores. Entre contenedores PostgreSQL usa `postgres:5432`. El backend genera Prisma durante el build y arranca con `prisma db push --skip-generate`; revisar el esquema y respaldar datos antes de actualizar una instalación compartida.
 

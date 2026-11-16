@@ -1,0 +1,50 @@
+services:
+  db:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: ${AUTRON_FLOW_DB_PASSWORD:?Required isolated test password}
+      POSTGRES_DB: autron_flow_test
+    tmpfs:
+      - /var/lib/postgresql/data
+    healthcheck:
+      test: [CMD-SHELL, pg_isready -U postgres -d autron_flow_test]
+      interval: 2s
+      timeout: 3s
+      retries: 30
+    networks: [flow-test]
+  backend:
+    image: autron-backend-flow-tests:local
+    build:
+      context: ../backend
+    command: sh -c "node src/migrate.js && node src/seed-demo-users.js && node src/server.js"
+    environment:
+      NODE_ENV: test
+      NODE_PATH: /app/node_modules
+      PORT: 8080
+      DB_HOST: db
+      DB_PORT: 5432
+      DB_NAME: autron_flow_test
+      DB_USER: postgres
+      DB_PASSWORD: ${AUTRON_FLOW_DB_PASSWORD:?Required isolated test password}
+      JWT_SECRET: ${AUTRON_FLOW_JWT_SECRET:?Required isolated test secret}
+      AUTRON_FLOW_TEST: '1'
+      AUTRON_FLOW_RUN_ID: ${AUTRON_FLOW_RUN_ID:?Required test run ID}
+      AUTRON_FLOW_REPORT_DIR: /flow-results/${AUTRON_FLOW_RUN_ID}
+    volumes:
+      - ./flow:/flow-tests:ro
+      - ./results:/flow-results
+    tmpfs:
+      - /app/uploads:uid=1000,gid=1000,mode=0770
+    depends_on:
+      db:
+        condition: service_healthy
+    healthcheck:
+      test: [CMD, node, -e, "require('http').get('http://127.0.0.1:8080/api/health',r=>process.exit(r.statusCode===200?0:1)).on('error',()=>process.exit(1))"]
+      interval: 2s
+      timeout: 3s
+      retries: 40
+    networks: [flow-test]
+networks:
+  flow-test:
+    internal: true

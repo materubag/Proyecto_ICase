@@ -18,7 +18,7 @@ class ProjectSpecService {
     let spec = rawSpec;
     try {
       const { spec: mergedSpec } = applyApprovedProposals(projectId, rawSpec);
-      spec = mergedSpec;
+      spec = require('./workshopProfile').compile(mergedSpec);
     } catch (_) {}
     const diagnostics = validateProjectSpec(spec, options);
 

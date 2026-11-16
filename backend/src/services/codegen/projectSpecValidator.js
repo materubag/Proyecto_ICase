@@ -18,6 +18,7 @@ const { isAuthScreen } = require('./screenContract');
 const { executionProblems } = require('./executableContract');
 
 function describeOperationBehavior(op) {
+  if (op?.implementation?.runtime === 'workshop-v1' && require('./workshopProfile').HANDLERS.has(op.implementation.handler)) return { hasTarget: true, hasExecutableSteps: true, hasExplicitAction: false, effectiveAction: 'WORKSHOP' };
   const hasTarget = op.targetEntity || op.entity;
   const effectiveAction = (op.action || '').toUpperCase();
   const hasExecutableSteps = Array.isArray(op.steps) && op.steps.some(step => step && typeof step === 'object' && SUPPORTED_STEP_ACTIONS.includes(String(step.action || '').toUpperCase()));
@@ -26,6 +27,7 @@ function describeOperationBehavior(op) {
 }
 
 function operationNeedsExecutableBehavior(op, entities) {
+  if (require('./workshopProfile').executable(op, entities || [])) return false;
   if (!op || op.type !== 'BUSINESS_LOGIC') return false;
   if (Array.isArray(entities) && executionProblems(op, entities).length) return true;
   const { hasExecutableSteps, hasExplicitAction, hasTarget } = describeOperationBehavior(op);

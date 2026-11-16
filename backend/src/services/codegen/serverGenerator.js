@@ -54,7 +54,7 @@ app.get('/openapi.json', (req, res) => {
 });
 
 app.get(['/swagger', '/swagger/', '/api-docs', '/docs'], (req, res) => {
-  res.type('html').send(`<!doctype html>
+  res.type('html').send(\`<!doctype html>
 <html lang="es">
 <head>
   <meta charset="UTF-8">
@@ -84,7 +84,7 @@ app.get(['/swagger', '/swagger/', '/api-docs', '/docs'], (req, res) => {
     };
   </script>
 </body>
-</html>`);
+</html>\`);
 });
 
 // Manejador de rutas no encontradas (404)
@@ -126,6 +126,7 @@ async function startServer() {
     }
 
 ${options.systemOperations ? "    require('./services/system.scheduler').start();" : ''}
+${options.workshop ? "    await require('./services/workshop.runtime').start();" : ''}
     app.listen(PORT, () => {
       console.log(\`🚀 Servidor \${process.env.APP_NAME || '${projectName}'} ejecutándose en el puerto \${PORT}\`);
       console.log(\`📡 API disponible en: http://localhost:\${PORT}/api\`);

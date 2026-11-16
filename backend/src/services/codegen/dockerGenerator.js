@@ -74,7 +74,7 @@ services:
       dockerfile: Dockerfile
     container_name: ${safeName}_backend
     restart: always
-    command: sh -c "node src/migrate.js && (node src/seed-demo-users.js || true) && node src/server.js"
+    command: sh -c "node src/migrate.js && node src/seed-demo-users.js && node src/server.js"
     ports:
       - "127.0.0.1:\${BACKEND_PORT:-8085}:8080"
     environment:
@@ -87,6 +87,12 @@ services:
       DB_PASSWORD: \${DB_PASSWORD:?DB_PASSWORD es requerida en .env}
       JWT_SECRET: \${JWT_SECRET:?JWT_SECRET es requerida en .env}
       JWT_EXPIRATION: \${JWT_EXPIRATION:-8h}
+      SMTP_HOST: \${SMTP_HOST:-}
+      SMTP_PORT: \${SMTP_PORT:-587}
+      SMTP_SECURE: \${SMTP_SECURE:-false}
+      SMTP_USER: \${SMTP_USER:-}
+      SMTP_PASSWORD: \${SMTP_PASSWORD:-}
+      SMTP_FROM: \${SMTP_FROM:-}
       INITIAL_ADMIN_USER: \${INITIAL_ADMIN_USER:-admin}
       INITIAL_ADMIN_EMAIL: \${INITIAL_ADMIN_EMAIL:-admin@${safeName}.com}
       INITIAL_ADMIN_PASSWORD: \${INITIAL_ADMIN_PASSWORD:?INITIAL_ADMIN_PASSWORD es requerida en .env}

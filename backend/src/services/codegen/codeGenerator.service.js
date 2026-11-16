@@ -150,7 +150,7 @@ class CodeGeneratorService {
 
     // Apply any approved AI operation proposals and mockup bindings
     const { spec: mergedSpec, applications } = applyApprovedProposals(projectId, spec);
-    spec = mergedSpec;
+    spec = require('./workshopProfile').compile(mergedSpec);
     for (const application of applications) options.onTrace?.({ stage: 'PROPOSAL_APPLICATION', mode: 'DETERMINISTIC', ...application });
 
     let diagnostics = validateProjectSpec(spec, options);
@@ -228,6 +228,7 @@ class CodeGeneratorService {
       }
     };
 
+    const publicEntities = spec.entities.filter(entity => !entity.internal);
     const projectName = spec.project.name;
     if (require('./reviewedAcceptanceRegistry').resolve(spec)) addFile('backend/tests/reviewed.acceptance.cjs', require('./reviewedAcceptanceRegistry').source(), 'javascript');
     const safeDbName = projectName.toLowerCase().replace(/[^a-z0-9]/g, '_') + '_db';
@@ -276,7 +277,9 @@ INITIAL_ADMIN_PASSWORD=${defaultAdminPassword}
     }
 
     // 2. BACKEND: Express + Sequelize + PostgreSQL
-    addFile('backend/package.json', generatePackageJson(projectName), 'json');
+    const generatedPackage = JSON.parse(generatePackageJson(projectName));
+    if (spec.workshopProfile) Object.assign(generatedPackage.dependencies, {sharp:'^0.34.3', nodemailer:'^7.0.7'});
+    addFile('backend/package.json', JSON.stringify(generatedPackage,null,2), 'json');
     addFile('backend/.env.example', generateEnvExample(projectName), 'shell');
     addFile('backend/.env', generateEnvExample(projectName), 'shell');
     addFile('backend/.dockerignore', generateDockerIgnore(), 'text');
@@ -292,7 +295,7 @@ INITIAL_ADMIN_PASSWORD=${defaultAdminPassword}
       addFile('backend/Dockerfile', generateDockerfile(), 'dockerfile');
     }
     const systemOps = (spec.operations || []).filter(op => op.invocation === 'SYSTEM' && op.schedule);
-    addFile('backend/src/server.js', generateServerFile(projectName, { privateUploads: Boolean(spec.uploads?.private), systemOperations: systemOps.length > 0 }), 'javascript');
+    addFile('backend/src/server.js', generateServerFile(projectName, { privateUploads: Boolean(spec.uploads?.private), workshop: Boolean(spec.workshopProfile), systemOperations: systemOps.length > 0 }), 'javascript');
     addFile('backend/src/config/database.js', generateDatabaseConfig(projectName), 'javascript');
 
     // 2.3 Authentication and Authorization Layer setup
@@ -362,12 +365,19 @@ INITIAL_ADMIN_PASSWORD=${defaultAdminPassword}
       addFile('backend/src/middleware/auth.middleware.js', generateAuthMiddlewareFile(), 'javascript');
     }
 
+    if (spec.workshopProfile) {
+      addFile('backend/src/services/workshop.runtime.js', require('fs').readFileSync(require.resolve('./workshop/runtime'), 'utf8'));
+      addFile('backend/src/services/workshop.profile.json', JSON.stringify(spec.workshopProfile,null,2),'json');
+      addFile('backend/src/controllers/auth.controller.js', "module.exports = require('../services/workshop.runtime').auth;\n");
+      addFile('backend/src/middleware/auth.middleware.js', "const runtime=require('../services/workshop.runtime'); module.exports={authenticateToken:runtime.authenticateToken,authorizeRoles:runtime.authorizeRoles,JWT_SECRET:process.env.JWT_SECRET};\n");
+      addFile('backend/src/routes/auth.routes.js', "module.exports=require('../services/workshop.runtime').authRouter();\n");
+    }
     // Express REST Controllers and Routes
     addFile('backend/src/services/crud.runtime.js', require('fs').readFileSync(require.resolve('./crudRuntime'), 'utf8').replace("require('./operationRuntime')", "require('./operation.runtime')"), 'javascript');
     addFile('backend/src/services/operation.runtime.js', require('fs').readFileSync(require.resolve('./operationRuntime'), 'utf8'), 'javascript');
-    for (const entity of spec.entities) {
+    for (const entity of publicEntities) {
       const naming = deriveNaming(entity.name);
-      addFile(`backend/src/controllers/${naming.paramName}.controller.js`, generateControllerFile(entity), 'javascript');
+      addFile(`backend/src/controllers/${naming.paramName}.controller.js`, spec.workshopProfile ? "module.exports=require('../services/workshop.runtime').controller("+JSON.stringify(entity.modelName)+");\n" : generateControllerFile(entity), 'javascript');
       addFile(`backend/src/routes/${naming.paramName}.routes.js`, generateEntityRoutesFile(entity, { hasAuth, operations: spec.operations, defaultRoles: spec.security?.roles || spec.roles || [] }), 'javascript');
     }
 
@@ -387,13 +397,13 @@ INITIAL_ADMIN_PASSWORD=${defaultAdminPassword}
 
     // File & Image Upload Infrastructure (Multer)
     addFile('backend/src/middleware/upload.middleware.js', generateUploadMiddlewareFile(), 'javascript');
-    addFile('backend/src/routes/upload.routes.js', spec.credentialChangeContract ? require('fs').readFileSync(require.resolve('./reviewedUploadRoutes'), 'utf8') : generateUploadRoutesFile({ privateUploads: Boolean(spec.uploads?.private), roles: spec.uploads?.roles || [] }), 'javascript');
+    addFile('backend/src/routes/upload.routes.js', spec.workshopProfile ? "module.exports=require('../services/workshop.runtime').uploadRouter();\n" : spec.credentialChangeContract ? require('fs').readFileSync(require.resolve('./reviewedUploadRoutes'), 'utf8') : generateUploadRoutesFile({ privateUploads: Boolean(spec.uploads?.private), roles: spec.uploads?.roles || [] }), 'javascript');
     let uploadStorageSource = require('fs').readFileSync(require.resolve('./uploadStorageRuntime'), 'utf8');
     if (require('./reviewedAcceptanceRegistry').resolve(spec)) uploadStorageSource = uploadStorageSource.replace('  return { archivoId: upload.archivoId', "  if (context === 'recepcion' && upload.diagnosticoId) throw Object.assign(new Error('La carga pertenece a un diagnóstico'), { statusCode: 403 });\n  return { archivoId: upload.archivoId");
     addFile('backend/src/services/upload.storage.js', uploadStorageSource, 'javascript');
 
     // Central API Router index
-    addFile('backend/src/routes/index.js', generateMasterRoutesIndexFile(spec.entities, { hasOperations, hasAuth }), 'javascript');
+    addFile('backend/src/routes/index.js', generateMasterRoutesIndexFile(publicEntities, { hasOperations, hasAuth, workshop: Boolean(spec.workshopProfile) }), 'javascript');
 
     // 3. FRONTEND: React 18 + Vite SPA
     addFile('frontend/package.json', frontendGen.generateFrontendPackageJson(projectName), 'json');
@@ -444,7 +454,7 @@ compile().catch(error => { console.error(error.message); process.exitCode = 1; }
     addFile('frontend/src/components/shared/StatusBadge.jsx', frontendGen.generateSharedStatusBadgeComponent(), 'javascript');
 
     // Dynamic Entity CRUD Pages
-    for (const entity of spec.entities) {
+    for (const entity of publicEntities) {
       addFile(`frontend/src/pages/${entity.modelName}Page.jsx`, frontendGen.generateEntityViewPage(entity, spec.relationships, spec.entities, { hasAuth, operations: spec.operations }), 'javascript');
     }
 
@@ -493,6 +503,9 @@ compile().catch(error => { console.error(error.message); process.exitCode = 1; }
       generateCohesiveAppJsx(spec, designSystem, compiledMockups, { hasAuth }),
       'javascript'
     );
+
+    // Domain capabilities supply complete workflows even when the mockup set omits a required screen.
+    for (const file of require('./workshopFrontend').generate(spec)) addFile(file.path, file.content, file.language);
 
     // 4. Apply any verified persisted patches from decision/repair store so they survive clean regenerations
     let persistedExportPatchesApplied = 0;
@@ -583,7 +596,7 @@ compile().catch(error => { console.error(error.message); process.exitCode = 1; }
     const safeName = result.projectName.toLowerCase().replace(/[^a-z0-9]/g, '_');
 
     return {
-      filename: `${safeName}-fullstack.zip`,
+      filename: `${safeName}-${result.reviewOnly ? 'revision' : 'fullstack'}.zip`,
       buffer: zipBuffer,
       size: zipBuffer.length,
       ready: false,

@@ -408,7 +408,7 @@ export default function AppShell({
             </button>
           </div>
 
-          <nav className="hidden md:flex items-center gap-1 h-full overflow-x-auto scrollbar-none flex-1 justify-center">
+          <nav aria-label="Módulos" className="hidden md:flex items-center gap-1 h-full min-w-0 overflow-x-auto flex-1 justify-start">
             {navItems.map((item) => {
               const isActive = item.key === activeTab;
               return (
@@ -416,6 +416,7 @@ export default function AppShell({
                   key={item.key}
                   type="button"
                   data-screen-key={item.key}
+                  aria-label={item.label}
                   onClick={() => choose(item.key)}
                   style={isActive ? { borderBottomColor: '${primary}', color: '${primary}' } : undefined}
                   className={\`h-full px-3 py-2 text-xs font-semibold flex items-center gap-1.5 border-b-2 transition-all whitespace-nowrap \${
@@ -471,6 +472,7 @@ export default function AppShell({
                   onClick={onLogout}
                   className="p-1.5 text-slate-500 hover:text-rose-600 hover:bg-rose-50 rounded-xl transition-colors ml-1"
                   title="Cerrar sesión"
+                  aria-label="Cerrar sesión"
                 >
                   <span className="material-symbols-outlined text-[19px]">logout</span>
                 </button>
@@ -479,8 +481,8 @@ export default function AppShell({
 
             <button
               type="button"
-              className="md:hidden p-2 text-slate-600 hover:text-slate-900 hover:bg-slate-100 rounded-xl border border-slate-200"
-              aria-label="Abrir navegación móvil"
+              className="p-2 text-slate-600 hover:text-slate-900 hover:bg-slate-100 rounded-xl border border-slate-200"
+              aria-label="Abrir menú de módulos"
               onClick={() => setMenuOpen(!menuOpen)}
             >
               <span className="material-symbols-outlined text-[22px]">
@@ -491,7 +493,7 @@ export default function AppShell({
         </div>
 
         {menuOpen && (
-          <div className="md:hidden border-t border-slate-200 bg-white px-4 py-3 space-y-1 shadow-lg">
+          <div className="max-h-[70vh] overflow-y-auto border-t border-slate-200 bg-white px-4 py-3 space-y-1 shadow-lg">
             <div className="text-[11px] font-bold uppercase tracking-wider text-slate-500 px-3 py-1 flex items-center justify-between">
               <span>Pantallas de {currentRole}</span>
               <span>{navItems.length} vistas</span>
@@ -503,6 +505,7 @@ export default function AppShell({
                   key={item.key}
                   type="button"
                   onClick={() => choose(item.key)}
+                  aria-label={item.label}
                   className={\`w-full text-left px-3 py-2.5 rounded-xl text-xs font-semibold flex items-center gap-2.5 transition-colors \${
                     isActive ? 'bg-indigo-600 text-white' : 'text-slate-800 hover:bg-slate-50'
                   }\`}
@@ -579,8 +582,8 @@ export default function AppShell({
                   setPwdError('Por favor ingresa tu clave temporal recibida.');
                   return;
                 }
-                if (newPwd.length < 6) {
-                  setPwdError('La nueva contraseña debe tener al menos 6 caracteres.');
+                if (newPwd.length < 8) {
+                  setPwdError('La nueva contraseña debe tener al menos 8 caracteres.');
                   return;
                 }
                 if (newPwd !== confirmPwd) {
@@ -593,12 +596,13 @@ export default function AppShell({
                     await apiClient.post('/auth/change-password', {
                       claveActual: currentPwd,
                       nuevaClave: newPwd
-                    }).catch(() => {});
+                    });
                   }
                   setPwdSuccess('✓ ¡Contraseña actualizada exitosamente!');
                   setTimeout(() => {
                     setShowPwdModal(false);
                     setPwdSuccess('');
+                    onLogout?.();
                   }, 1800);
                 } catch (err) {
                   setPwdError(err.message || 'Error al actualizar la contraseña.');
@@ -1820,7 +1824,7 @@ function generateCohesiveAppJsx(spec = {}, design = {}, compiledMockups = [], op
 
   return `import React, { useState, useEffect } from 'react';
 import AppShell from './components/AppShell';
-import LoginPage from './pages/LoginPage';
+${spec.security?.authType === 'JWT' ? "import LoginPage from './pages/LoginPage';" : "const LoginPage = () => null;"}
 import Dashboard from './pages/Dashboard';
 import apiClient from './api/client';
 ${mockupImports}
@@ -2011,7 +2015,7 @@ export default function App() {
     setActiveTab('');
   };
 
-  if (!session || !session.token) {
+  if (${spec.security?.authType === 'JWT'} && (!session || !session.token)) {
     return (
       <LoginPage
         onLoginSuccess={(token, user) => {

@@ -11,7 +11,7 @@ services:
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-icase_password}
       POSTGRES_DB: ${POSTGRES_DB:-icase_db}
     ports:
-      - "5433:5432"
+      - "${ICASE_POSTGRES_PORT:-55433}:5432"
     volumes:
       - postgres_data:/var/lib/postgresql/data
     healthcheck:
@@ -26,7 +26,7 @@ services:
   # 1b. PostgreSQL aislada para verificación de código generado
   # ============================================================================
   # La generación ejecuta migraciones y pruebas contra esta instancia (puerto
-  # 55439). Nunca debe usarse icase_postgres / 5433 para eso.
+  # 55439). Nunca debe usarse icase_postgres / 55433 para eso.
   postgres_codegen:
     image: postgres:16-alpine
     container_name: icase_postgres_codegen

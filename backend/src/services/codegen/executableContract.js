@@ -1,5 +1,6 @@
 // Shared quality gate: validation and generation must reject the same contract.
 function executionProblems(operation, entities = []) {
+  if (require('./workshopProfile').executable(operation, entities)) return [];
   const problems = [];
   if ((operation.unresolved || []).length) problems.push(...operation.unresolved.map(issue => {
     if (typeof issue === 'string') return issue;

@@ -28,6 +28,7 @@ function generateEntityRoutesFile(entity, options = {}) {
 
   const permission = (method, item = false) => {
     const op = (options.operations || []).find(o => o.entity === modelName && o.method === method && !o.route.includes('/operations/') && (o.route.includes(':') === item));
+    if (!op && method !== 'GET' && (options.operations || []).some(operation => operation.type === 'BUSINESS_LOGIC' && mutates(operation.steps, modelName))) return "(req, res) => res.status(403).json({code:'BUSINESS_CONTRACT_REQUIRED'}), ";
 
     let roles = (op?.authorizedRoles && op.authorizedRoles.length > 0) ? [...op.authorizedRoles] : [];
     if (!roles.length) {
@@ -181,6 +182,7 @@ function generateMasterRoutesIndexFile(entities = [], options = {}) {
     mounts.push("router.use('/auth', authRoutes);");
   }
 
+  if(options.workshop) mounts.push("router.use(require('../services/workshop.runtime').router());");
   // Upload router for images and files
   imports.push("const uploadRoutes = require('./upload.routes');");
   mounts.push("router.use('/upload', uploadRoutes);");

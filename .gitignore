@@ -54,9 +54,14 @@ Analisis_*.md
 
 #proyecto generado
 /mecanica_autron*
+/autron-revision
 *.zip
 
 
 # Local generator verification downloads and artifacts
 .verification/
 .review-autron5-export/
+
+# AI Agent Context
+context/
+

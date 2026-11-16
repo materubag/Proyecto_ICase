@@ -208,15 +208,17 @@ router.get('/download', async (req, res, next) => {
   try {
     try {
       const buffer = await service().archive(req.params.projectId);
-      return res.type('application/zip').attachment('icase-delivery.zip').send(buffer);
+      return res.set('X-ICASE-Verification', 'VERIFIED').type('application/zip').attachment('icase-delivery.zip').send(buffer);
     } catch (archiveErr) {
       console.warn(`[delivery.routes/download] Fallback a generateZipArchive (${archiveErr.message})`);
       const codeGenService = require('../services/codegen/codeGenerator.service');
       const { filename, buffer } = await codeGenService.generateZipArchive(req.params.projectId, {
         includeDocker: true,
         allowUnapproved: true,
-        ignoreOutdated: true
+        ignoreOutdated: true,
+        reviewOnly: true
       });
+      res.setHeader('X-ICASE-Verification', 'NOT_RUN');
       res.setHeader('Content-Type', 'application/zip');
       res.setHeader('Content-Disposition', `attachment; filename="${filename || 'icase-project.zip'}"`);
       return res.send(buffer);

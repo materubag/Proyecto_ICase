@@ -1,0 +1,503 @@
+Código	Nombre	Descripción	Dependencias	Prioridad	Actores	Precondiciones	Postcondiciones	Acciones
+RF-01	Gestión de Acceso
+Funcional
+El sistema permitirá registrar usuarios, autenticar su identidad mediante credenciales y recuperar el acceso a la cuenta mediante un mecanismo de verificación. Las operaciones deberán respetar los controles de seguridad y los permisos configurados para cada usuario.	Ninguna	
+Media
+person
+Cliente, Administrador, Mecánico, Recepción
+Para registrar o recuperar una cuenta, el usuario debe proporcionar los datos requeridos por el sistema; para autenticar una cuenta, esta debe encontrarse registrada y habilitada.	La cuenta queda registrada o se inicia el proceso de recuperación solicitado; si la autenticación es válida, se establece una sesión asociada al usuario y sus permisos.	
+
+edit
+
+delete
+RF-02	Administración de Permisos
+Funcional
+El sistema permitirá configurar roles y permisos para los perfiles Cliente, Mecánico, Recepción y Administrador. Los permisos definidos determinarán las funcionalidades y los datos a los que puede acceder cada usuario.	Ninguna	
+Media
+person
+Administrador
+El Administrador debe haber iniciado sesión y contar con autorización para gestionar roles y permisos.	Los roles y permisos quedan registrados y se aplican al acceso de los usuarios correspondientes.	
+
+edit
+
+delete
+RF-03	Gestión de Clientes
+Funcional
+El sistema permitirá registrar y actualizar la información de los clientes, validando los campos obligatorios y evitando inconsistencias en los datos almacenados. La información quedará disponible para las operaciones del taller conforme a los permisos vigentes.	Ninguna	
+Media
+person
+Recepción, Administrador
+El actor debe haber iniciado sesión con permisos para gestionar información de clientes.	La información del cliente queda registrada o actualizada en el sistema y asociada a un identificador único.	
+
+edit
+
+delete
+RF-04	Registro de Vehículos
+Funcional
+El sistema permitirá registrar uno o varios vehículos y asociar cada uno con un cliente existente. Cada registro deberá conservar los datos identificativos del vehículo requeridos por la operación del taller.	Ninguna	
+Media
+person
+Cliente, Recepción
+El cliente debe estar registrado y el actor debe haber iniciado sesión con permisos para registrar vehículos.	Cada vehículo queda registrado con un identificador único y asociado al cliente correspondiente.	
+
+edit
+
+delete
+RF-05	Expediente Digital Vehicular
+Funcional
+El sistema mantendrá un expediente digital por vehículo que consolide la información operativa e histórica relacionada con sus ingresos, diagnósticos, servicios y trabajos realizados. El expediente deberá permitir consultar la información según los permisos del usuario.	Ninguna	
+Media
+person
+Mecánico, Recepción, Cliente
+El vehículo debe estar registrado y el actor debe haber iniciado sesión con permisos para consultar o actualizar su expediente.	La información vinculada al vehículo queda incorporada a su expediente y disponible para consulta autorizada.	
+
+edit
+
+delete
+RF-06	Gestión de Citas
+Funcional
+El sistema permitirá al cliente solicitar, consultar, reprogramar o cancelar citas, presentando la disponibilidad aplicable y validando que la operación sea compatible con la agenda. Las modificaciones deberán reflejarse en el estado y horario de la cita.	Ninguna	
+Media
+person
+Cliente, Recepción
+El cliente debe haber iniciado sesión y existir disponibilidad para la fecha y el horario solicitados; para modificar o cancelar, la cita debe estar registrada y ser elegible para dicha operación.	La cita queda registrada, consultada, reprogramada o cancelada según la solicitud, y la agenda refleja el estado resultante.	
+
+edit
+
+delete
+RF-07	Registro de Recepción Vehicular
+Funcional
+El sistema permitirá registrar la recepción de un vehículo, incluyendo kilometraje, nivel de combustible, motivo de ingreso, observaciones y evidencias asociadas. El registro deberá vincularse con el vehículo y, cuando corresponda, con su cita y expediente.	Ninguna	
+Media
+person
+Recepción, Cliente
+El vehículo debe estar identificado en el sistema y el actor debe haber iniciado sesión con permisos para registrar ingresos.	La recepción queda registrada con los datos y evidencias proporcionados, asociada al vehículo y disponible en su expediente.	
+
+edit
+
+delete
+RF-08	Registro de Diagnósticos
+Funcional
+El sistema permitirá crear diagnósticos asociados a un vehículo y registrar en cada diagnóstico una o varias fallas. Cada diagnóstico deberá quedar identificado y vinculado al expediente del vehículo correspondiente.	Ninguna	
+Media
+person
+Mecánico
+El vehículo debe estar registrado y el Mecánico debe haber iniciado sesión con permisos para documentar diagnósticos.	El diagnóstico y las fallas registradas quedan almacenados y asociados al vehículo.	
+
+edit
+
+delete
+RF-09	Clasificación de Fallas
+Funcional
+El sistema permitirá clasificar cada falla de un diagnóstico mediante su sistema, componente, descripción y nivel de severidad. La clasificación deberá conservarse como parte del registro del diagnóstico.	Ninguna	
+Media
+person
+Mecánico
+Debe existir un diagnóstico asociado a un vehículo y el Mecánico debe tener autorización para registrar o modificar sus fallas.	La falla queda registrada o actualizada con su clasificación y severidad dentro del diagnóstico correspondiente.	
+
+edit
+
+delete
+RF-10	Visualización de Zonas Vehiculares
+Funcional
+El sistema permitirá representar visualmente las zonas del vehículo y asignar a cada una uno de los estados normal, revisión, falla o falla crítica. La representación deberá asociarse al diagnóstico correspondiente.	Ninguna	
+Media
+person
+Mecánico
+Debe existir un diagnóstico asociado a un vehículo y el Mecánico debe haber iniciado sesión con permisos para documentar su estado.	Los estados asignados a las zonas quedan registrados en el diagnóstico y disponibles para consulta autorizada.	
+
+edit
+
+delete
+RF-11	Registro de Códigos OBD
+Funcional
+El sistema permitirá registrar uno o varios códigos de avería OBD y asociarlos con el diagnóstico del vehículo correspondiente. Los códigos quedarán disponibles para consulta como parte de la información diagnóstica.	Ninguna	
+Media
+person
+Mecánico
+Debe existir un diagnóstico asociado a un vehículo y el Mecánico debe tener autorización para documentar códigos de avería.	Los códigos OBD quedan almacenados y asociados al diagnóstico correspondiente.	
+
+edit
+
+delete
+RF-12	Evidencias del Diagnóstico
+Funcional
+El sistema permitirá adjuntar fotografías y observaciones a un diagnóstico existente, vinculando cada elemento con el vehículo y el diagnóstico correspondiente. El sistema deberá conservar la asociación entre las evidencias y los datos diagnósticos.	Ninguna	
+Media
+person
+Mecánico
+Debe existir un diagnóstico asociado a un vehículo y el Mecánico debe haber iniciado sesión con permisos para agregar evidencias.	Las fotografías y observaciones quedan almacenadas y vinculadas al diagnóstico correspondiente.	
+
+edit
+
+delete
+RF-13	Catálogo de Servicios
+Funcional
+El sistema permitirá mantener un catálogo de servicios con su descripción, precio de mano de obra y duración estimada. Los servicios activos del catálogo podrán utilizarse en la elaboración de cotizaciones.	Ninguna	
+Media
+person
+Administrador
+El Administrador debe haber iniciado sesión y contar con permisos para gestionar catálogos.	Los servicios quedan registrados o actualizados con sus datos y disponibles para las operaciones autorizadas.	
+
+edit
+
+delete
+RF-14	Generación de Cotizaciones
+Funcional
+El sistema permitirá generar cotizaciones que incluyan servicios, repuestos y materiales, junto con cantidades, precios, impuestos y total calculado. La cotización deberá asociarse al cliente y al vehículo correspondientes.	Ninguna	
+Media
+person
+Recepción, Mecánico, Cliente
+El cliente y el vehículo deben estar registrados; los conceptos cotizados deben estar disponibles y el actor debe contar con permisos para elaborar cotizaciones.	La cotización queda calculada, registrada y asociada al cliente y vehículo para su revisión y decisión.	
+
+edit
+
+delete
+RF-15	Decisión sobre Cotizaciones
+Funcional
+El sistema permitirá al cliente aprobar, aprobar parcialmente o rechazar una cotización presentada para su vehículo. En caso de aprobación parcial, la decisión deberá identificar los conceptos aceptados conforme a las opciones ofrecidas por el sistema.	Ninguna	
+Media
+person
+Cliente, Recepción
+El cliente debe haber iniciado sesión y tener acceso a una cotización vigente asociada a su vehículo.	La decisión del cliente y, cuando corresponda, los conceptos aceptados quedan registrados y reflejados en el estado de la cotización.	
+
+edit
+
+delete
+RF-16	Registro de Decisiones
+Funcional
+El sistema registrará para cada decisión sobre una cotización la fecha y hora, el estado resultante y el usuario responsable. La información deberá conservarse como parte del historial de la cotización.	Ninguna	
+Media
+person
+Cliente, Recepción
+Debe existir una cotización vigente y el usuario responsable debe estar autenticado y autorizado para emitir la decisión correspondiente.	La fecha, el estado de la decisión y la identidad del usuario responsable quedan registrados en el historial de la cotización.	
+
+edit
+
+delete
+RF-17	Generar Orden de Trabajo
+Funcional
+El sistema deberá generar una orden de trabajo a partir de los ítems de servicio previamente autorizados para el vehículo. La orden deberá quedar asociada al cliente y al vehículo correspondientes, e incluir los ítems autorizados y su estado inicial.	Ninguna	
+Media
+person
+Cliente, Recepción
+El usuario de Recepción debe haber iniciado sesión con permisos para gestionar órdenes y debe existir una autorización válida de los ítems asociados a un cliente y vehículo registrados.	La orden de trabajo queda registrada, asociada al cliente y vehículo correspondientes, con los ítems autorizados y un estado inicial.	
+
+edit
+
+delete
+RF-18	Asignar Mecánicos
+Funcional
+El sistema deberá permitir asignar uno o varios mecánicos a una orden de trabajo existente. Las asignaciones deberán quedar asociadas a la orden y disponibles para su consulta y seguimiento.	Ninguna	
+Media
+person
+Mecánico, Recepción
+El usuario de Recepción debe haber iniciado sesión con permisos para gestionar asignaciones y la orden de trabajo debe existir y encontrarse en un estado que permita su asignación.	Uno o varios mecánicos quedan asignados a la orden de trabajo y la asignación queda registrada en el sistema.	
+
+edit
+
+delete
+RF-19	Documentar Reparación
+Funcional
+El sistema deberá permitir al mecánico registrar en una orden de trabajo las actividades realizadas, los repuestos utilizados, las observaciones, las pruebas efectuadas y el estado de la reparación. Cada registro deberá quedar asociado a la orden y al usuario que lo documenta.	Ninguna	
+Media
+person
+Mecánico
+El mecánico debe haber iniciado sesión y tener acceso a una orden de trabajo existente que le haya sido asignada o que esté habilitada para su gestión.	Las actividades, repuestos, observaciones, pruebas y estado de la reparación quedan registrados y asociados a la orden de trabajo.	
+
+edit
+
+delete
+RF-20	Consultar Progreso Reparación
+Funcional
+El sistema deberá permitir al cliente consultar el progreso de la reparación de su vehículo mediante la información vigente de la orden de trabajo asociada. La consulta deberá limitarse a órdenes vinculadas al cliente autenticado.	Ninguna	
+Media
+person
+Cliente
+El cliente debe haber iniciado sesión y existir una orden de trabajo asociada a su cuenta y al vehículo correspondiente.	El cliente visualiza el estado y la información de progreso disponible para su orden de trabajo, sin modificar los datos registrados.	
+
+edit
+
+delete
+RF-21	Gestionar Catálogo de Productos
+Funcional
+El sistema deberá permitir registrar productos y repuestos con código, categoría, marca, costo, precio, existencias y stock mínimo. Los datos deberán validarse y mantenerse disponibles para las operaciones de inventario y venta.	Ninguna	
+Media
+person
+Administrador
+El Administrador debe haber iniciado sesión con permisos para gestionar el catálogo de productos.	El producto o repuesto queda registrado o actualizado con sus datos de identificación, clasificación, precio y control de existencias.	
+
+edit
+
+delete
+RF-22	Registrar Movimientos Inventario
+Funcional
+El sistema deberá permitir registrar entradas, salidas y ajustes de inventario para los productos y repuestos existentes. Cada movimiento deberá identificar el artículo, la cantidad, el tipo de movimiento y la fecha de registro, y actualizar las existencias correspondientes.	Ninguna	
+Media
+person
+Administrador
+El Administrador debe haber iniciado sesión con permisos de gestión de inventario y el producto o repuesto debe estar registrado.	El movimiento queda registrado y las existencias del producto se actualizan de acuerdo con el tipo y la cantidad del movimiento.	
+
+edit
+
+delete
+RF-23	Descontar Repuestos Automáticamente
+Funcional
+El sistema deberá descontar automáticamente de las existencias los repuestos registrados como consumidos en una orden de trabajo o incluidos en una venta. La operación deberá actualizar el inventario y generar el registro del movimiento correspondiente.	Ninguna	
+Media
+person
+Mecánico, Recepción
+El producto debe estar registrado en el inventario y la orden de trabajo o venta debe incluir una cantidad válida del repuesto.	Las existencias quedan descontadas según la cantidad consumida o vendida y el movimiento de salida queda registrado en el sistema.	
+
+edit
+
+delete
+RF-24	Generar Alertas Bajo Stock
+Funcional
+El sistema deberá generar una alerta cuando las existencias de un producto o repuesto alcancen o sean inferiores al stock mínimo configurado. La alerta deberá identificar el artículo y sus existencias actuales para facilitar su reposición.	Ninguna	
+Media
+person
+Administrador
+El producto debe estar registrado y tener definido un stock mínimo; el sistema debe disponer de las existencias vigentes.	La alerta de bajo stock queda generada y disponible para consulta por los usuarios autorizados.	
+
+edit
+
+delete
+RF-25	Registrar Venta Directa
+Funcional
+El sistema deberá permitir registrar la venta de repuestos sin asociarla a una orden de trabajo. La venta deberá incluir los productos, las cantidades y los importes correspondientes, y actualizar el inventario conforme a los artículos vendidos.	Ninguna	
+Media
+person
+Recepción
+El usuario de Recepción debe haber iniciado sesión con permisos para registrar ventas y los productos ofrecidos deben estar registrados y disponibles en el inventario.	La venta directa queda registrada sin orden de trabajo asociada y las existencias de los productos vendidos quedan actualizadas.	
+
+edit
+
+delete
+RF-26	Gestionar Proveedores y Compras
+Funcional
+El sistema deberá permitir registrar proveedores y compras básicas de inventario, incluyendo los productos y cantidades adquiridos. Al confirmarse una compra, las existencias de los productos correspondientes deberán actualizarse.	Ninguna	
+Media
+person
+Administrador
+El Administrador debe haber iniciado sesión con permisos para gestionar proveedores y compras, y los productos adquiridos deben estar registrados en el catálogo.	El proveedor y la compra quedan registrados, y las existencias se actualizan de acuerdo con las cantidades compradas.	
+
+edit
+
+delete
+RF-27	Mantener Historial Vehicular
+Funcional
+El sistema deberá mantener para cada vehículo el historial de reparaciones, mantenimientos, diagnósticos, repuestos utilizados y kilometraje registrado. Los registros deberán conservar su asociación con el vehículo y la orden de trabajo o atención correspondiente, cuando aplique.	Ninguna	
+Media
+person
+Mecánico, Recepción
+El vehículo debe estar registrado y el usuario autenticado debe tener permisos para registrar o gestionar la información de su atención.	La información registrada queda asociada al historial del vehículo y disponible para su consulta por usuarios autorizados.	
+
+edit
+
+delete
+RF-28	Configurar Mantenimientos Preventivos
+Funcional
+El sistema deberá permitir configurar criterios de mantenimiento preventivo basados en tiempo, kilometraje o ambos. Cada configuración deberá quedar asociada al vehículo o tipo de vehículo correspondiente y definir los parámetros aplicables para determinar su vencimiento.	Ninguna	
+Media
+person
+Administrador
+El Administrador debe haber iniciado sesión con permisos para configurar mantenimientos preventivos y debe existir la referencia de vehículo o tipo de vehículo a la que se aplicará la configuración.	Los criterios de mantenimiento preventivo quedan registrados y disponibles para la evaluación de vencimientos.	
+
+edit
+
+delete
+RF-29	Generar Avisos Mantenimiento
+Funcional
+El sistema deberá generar avisos de mantenimientos próximos cuando la fecha o el kilometraje registrado se aproxime al criterio preventivo configurado. Los avisos deberán identificar el mantenimiento y el vehículo correspondiente.	Ninguna	
+Media
+person
+Recepción
+Debe existir un mantenimiento preventivo configurado y el sistema debe disponer de la fecha o el kilometraje actualizado del vehículo para evaluar su proximidad al vencimiento.	El aviso de mantenimiento próximo queda generado y disponible para su seguimiento por los usuarios autorizados.	
+
+edit
+
+delete
+RF-30	Gestionar Base Conocimiento
+Funcional
+El sistema deberá permitir mantener una base de conocimiento con códigos OBD, síntomas, causas, soluciones y casos resueltos. Los registros deberán poder consultarse y actualizarse por usuarios autorizados.	Ninguna	
+Media
+person
+Mecánico, Administrador
+El usuario debe haber iniciado sesión y contar con permisos para crear o actualizar información de la base de conocimiento.	La información incorporada o modificada queda registrada en la base de conocimiento y disponible para su consulta autorizada.	
+
+edit
+
+delete
+RF-31	Buscar en Base Conocimiento
+Funcional
+El sistema deberá permitir buscar registros de la base de conocimiento mediante código OBD, síntoma, componente o descripción. Los resultados deberán corresponder a los criterios ingresados y presentar la información disponible para consulta.	Ninguna	
+Media
+person
+Mecánico
+El mecánico debe haber iniciado sesión y la base de conocimiento debe contener información consultable.	Los resultados coincidentes quedan presentados al usuario para consulta, sin alterar los registros de la base de conocimiento.	
+
+edit
+
+delete
+RF-32	Consultar Indicadores Operativos
+Funcional
+El sistema deberá presentar indicadores de citas, órdenes de trabajo, ingresos, servicios, inventario y fallas frecuentes, a partir de los datos operativos registrados. El acceso a los indicadores deberá estar restringido a usuarios autorizados.	Ninguna	
+Media
+person
+Administrador
+El Administrador debe haber iniciado sesión con permisos para consultar indicadores y el sistema debe disponer de datos operativos registrados.	Los indicadores solicitados quedan presentados al Administrador conforme a los datos disponibles, sin modificar los registros de origen.	
+
+edit
+
+delete
+RF-33	Generación de reportes
+Funcional
+El sistema debe permitir generar reportes operativos y administrativos aplicando filtros por período. Los resultados deben corresponder a los criterios seleccionados y presentarse de forma legible.	Ninguna	
+Media
+person
+Administrador
+El Administrador debe haber iniciado sesión y contar con permisos para consultar reportes; debe existir información registrada dentro del período seleccionado.	El sistema presenta el reporte correspondiente a los filtros aplicados sin modificar los datos de origen.	
+
+edit
+
+delete
+RF-34	Auditoría de operaciones críticas
+Funcional
+El sistema debe registrar las operaciones críticas realizadas, incluyendo la operación, la fecha y hora, el usuario responsable y el resultado, cuando esos datos estén disponibles. Los registros de auditoría deben conservarse para su consulta autorizada y no deben poder alterarse mediante las funciones operativas ordinarias.	Ninguna	
+Media
+settings
+Sistema (Funcionalidad Automática)
+Una operación clasificada como crítica debe ser ejecutada por un usuario autenticado.	La operación y sus datos de auditoría quedan registrados de forma persistente y disponibles para consulta autorizada.	
+
+edit
+
+delete
+RNF-01	Compatibilidad y diseño responsivo
+No Funcional
+La interfaz del sistema debe funcionar en navegadores web modernos y adaptar su presentación a distintos tamaños de pantalla. Las funciones disponibles deben conservar su operatividad en las resoluciones compatibles.	Ninguna	
+Media
+settings
+Sistema (RNF)
+El usuario accede al sistema desde un navegador web moderno y una resolución de pantalla compatible.	La interfaz se presenta y permite utilizar las funciones del sistema en el navegador y tamaño de pantalla empleados.	
+
+edit
+
+delete
+RNF-02	Tiempo de respuesta
+No Funcional
+En condiciones normales de operación, el sistema debe responder a las operaciones habituales en aproximadamente un segundo. La medición debe considerar el tiempo transcurrido desde que el usuario solicita una operación hasta que el sistema presenta su resultado.	Ninguna	
+Media
+settings
+Sistema (RNF)
+El sistema se encuentra disponible y opera bajo condiciones normales de carga y conectividad.	Las operaciones habituales completan y presentan su resultado en aproximadamente un segundo bajo las condiciones especificadas.	
+
+edit
+
+delete
+RNF-03	Almacenamiento seguro de contraseñas
+No Funcional
+El sistema debe almacenar las contraseñas mediante algoritmos criptográficos seguros de hashing, adecuados para la protección de credenciales. Las contraseñas no deben almacenarse ni exponerse en texto plano.	Ninguna	
+Media
+settings
+Sistema (RNF)
+El sistema procesa una contraseña durante el registro o la actualización de credenciales.	La contraseña queda almacenada únicamente como un valor derivado mediante hashing seguro y no es recuperable como texto plano.	
+
+edit
+
+delete
+RNF-04	Comunicación segura HTTPS
+No Funcional
+En el ambiente de producción, el sistema debe utilizar HTTPS para las comunicaciones entre el cliente y el servidor. Las conexiones no cifradas no deben utilizarse para transmitir información del sistema.	Ninguna	
+Media
+settings
+Sistema (RNF)
+El sistema está desplegado en el ambiente de producción y cuenta con una configuración válida de HTTPS.	La comunicación entre el cliente y el servidor se realiza mediante HTTPS.	
+
+edit
+
+delete
+RNF-05	Control de acceso por roles
+No Funcional
+El sistema debe restringir el acceso a funciones e información según los roles y permisos asignados a cada usuario. Las solicitudes no autorizadas deben rechazarse sin exponer información protegida.	Ninguna	
+Media
+person
+Administrador
+El Administrador debe haber iniciado sesión y contar con permisos para configurar usuarios, roles y permisos.	Los permisos quedan asociados a los roles o usuarios correspondientes y el sistema aplica las restricciones configuradas.	
+
+edit
+
+delete
+RNF-06	Validación de datos
+No Funcional
+El sistema debe validar los datos recibidos antes de almacenarlos, verificando los formatos, tipos, campos obligatorios y reglas de consistencia aplicables. Los datos que no cumplan las validaciones deben rechazarse y comunicarse al usuario de manera comprensible.	Ninguna	
+Media
+settings
+Sistema (RNF)
+El usuario ha ingresado o enviado datos para su registro o actualización.	Solo los datos que superan las validaciones aplicables quedan almacenados; los datos inválidos no modifican la información persistida.	
+
+edit
+
+delete
+RNF-07	Integridad de datos relacionados
+No Funcional
+El sistema debe preservar la integridad de las relaciones entre órdenes de trabajo, cotizaciones, inventario y vehículos. Las operaciones que creen o modifiquen estos datos deben mantener referencias válidas y evitar inconsistencias entre los registros relacionados.	Ninguna	
+Media
+settings
+Sistema (RNF)
+Se solicita una operación que crea, modifica o elimina información relacionada con órdenes, cotizaciones, inventario o vehículos.	Los datos relacionados conservan referencias válidas y consistencia entre las entidades afectadas.	
+
+edit
+
+delete
+RNF-08	Respaldos y recuperación
+No Funcional
+El sistema debe realizar respaldos periódicos de la información necesaria para su operación y contar con un procedimiento documentado para recuperarla. Los respaldos deben conservarse de forma que puedan utilizarse ante una pérdida o daño de datos.	Ninguna	
+Media
+settings
+Sistema (RNF)
+El sistema está configurado para operar con una política de respaldos y dispone de los recursos de almacenamiento necesarios.	Los respaldos se generan periódicamente y la información puede recuperarse mediante el procedimiento establecido.	
+
+edit
+
+delete
+RNF-09	Usabilidad de la interfaz
+No Funcional
+La interfaz debe presentar las funciones, instrucciones y mensajes de forma comprensible para usuarios sin conocimientos técnicos avanzados. Los elementos de interacción deben facilitar la identificación y ejecución de las tareas habituales.	Ninguna	
+Media
+settings
+Sistema (RNF)
+El usuario accede a la interfaz del sistema desde un dispositivo y navegador compatibles.	Las funciones y mensajes se presentan de manera comprensible y permiten al usuario realizar las tareas disponibles.	
+
+edit
+
+delete
+RNF-10	Arquitectura modular mantenible
+No Funcional
+La arquitectura del sistema debe organizar sus componentes en módulos con responsabilidades claramente delimitadas y dependencias controladas. El diseño debe facilitar el mantenimiento y la incorporación de nuevas capacidades sin afectar indebidamente los módulos existentes.	Ninguna	
+Media
+settings
+Sistema (RNF)
+El sistema se desarrolla o modifica conforme a una arquitectura y convenciones de diseño definidas.	Los componentes del sistema mantienen una estructura modular que permite su mantenimiento y evolución.	
+
+edit
+
+delete
+RNF-11	Protección de información
+No Funcional
+El sistema debe proteger la información personal y técnica contra accesos no autorizados mediante mecanismos de autenticación, autorización y salvaguardas de datos. El acceso a dicha información debe limitarse a usuarios con permisos vigentes.	Ninguna	
+Media
+settings
+Sistema (RNF)
+El usuario solicita acceder a información personal o técnica y el sistema puede verificar su identidad y permisos.	La información solo queda disponible para usuarios autenticados y autorizados conforme a los permisos asignados.	
+
+edit
+
+delete
+RNF-12	Optimización de recursos gráficos
+No Funcional
+El sistema debe optimizar las imágenes y demás recursos gráficos para reducir su tamaño y favorecer una carga eficiente, preservando una calidad adecuada para su uso. La optimización no debe impedir la correcta visualización de la interfaz.	Ninguna	
+Media
+settings
+Sistema (RNF)
+La interfaz incluye imágenes u otros recursos gráficos que deben entregarse al cliente.	Los recursos gráficos se presentan correctamente y se transmiten en formatos o tamaños optimizados.

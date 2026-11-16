@@ -92,6 +92,7 @@ async function seedDemoUsers() {
 
 seedDemoUsers()
   .catch(err => {
+    process.exitCode = 1;
     console.error('⚠️ No se pudieron aprovisionar cuentas demo:', err.message);
   })
   .finally(() => models.sequelize.close());

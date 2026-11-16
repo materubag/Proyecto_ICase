@@ -42,9 +42,7 @@ function createZipBuffer(files = []) {
     if (!name || name.startsWith('/') || name.split('/').some(p => ['..', '.', ''].includes(p)) || /[:\x00]/.test(name)) throw new Error('INVALID_OR_DUPLICATE_ZIP_PATH: ' + name);
     const key = name.toLowerCase();
     if (seen.has(key)) {
-      const idx = validFiles.findIndex(f => String(f.path).replace(/\\/g, '/').toLowerCase() === key);
-      if (idx >= 0) validFiles[idx] = file;
-      continue;
+      throw new Error('INVALID_OR_DUPLICATE_ZIP_PATH: ' + name);
     }
     seen.add(key);
     validFiles.push(file);

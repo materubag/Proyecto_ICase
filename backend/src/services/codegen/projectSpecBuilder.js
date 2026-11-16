@@ -1164,9 +1164,10 @@ async function buildProjectSpec(projectId, options = {}) {
     }
   };
 
-  const hash = computeCanonicalHash(rawSpec);
+  const compiledSpec = require('./workshopProfile').compile(rawSpec);
+  const hash = computeCanonicalHash(compiledSpec);
   return {
-    ...rawSpec,
+    ...compiledSpec,
     hash
   };
 }

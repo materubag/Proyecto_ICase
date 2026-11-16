@@ -42,7 +42,7 @@ exports.getPreview = async (req, res) => {
     const isDbUnavailable = error.message?.includes("Can't reach database") || error.code === 'P1001';
     const status = isNotFound ? 404 : isDbUnavailable ? 503 : 400;
     const userMessage = isDbUnavailable
-      ? 'No se puede conectar a la base de datos PostgreSQL (puerto 5433). Verifique que el servicio o contenedor de Docker esté iniciado.'
+      ? 'No se puede conectar a PostgreSQL. Verifique DATABASE_URL, la red y el contenedor de Docker.'
       : error.message;
 
     return res.status(status).json({
@@ -57,14 +57,16 @@ exports.downloadZip = async (req, res) => {
     const { projectId } = req.params;
     try {
       const buffer = await require('../services/codegen/deliveryWorkflow').service().archive(projectId);
-      return res.type('application/zip').attachment('icase-delivery.zip').send(buffer);
+      return res.set('X-ICASE-Verification', 'VERIFIED').type('application/zip').attachment('icase-delivery.zip').send(buffer);
     } catch (deliveryErr) {
       console.warn(`[codegen.controller/downloadZip] Fallback a generateZipArchive (${deliveryErr.message})`);
       const { filename, buffer } = await codeGeneratorService.generateZipArchive(projectId, {
         includeDocker: req.query.includeDocker !== 'false',
         allowUnapproved: true,
-        ignoreOutdated: true
+        ignoreOutdated: true,
+        reviewOnly: true
       });
+      res.setHeader('X-ICASE-Verification', 'NOT_RUN');
       res.setHeader('Content-Type', 'application/zip');
       res.setHeader('Content-Disposition', `attachment; filename="${filename || 'icase-project.zip'}"`);
       return res.send(buffer);
@@ -874,6 +876,8 @@ Debes responder EXCLUSIVAMENTE un objeto JSON válido con la siguiente estructur
       stageName,
       totalFilesInStage: filesResult.files?.length || 0,
       inspectedFiles: stageFiles,
+      contractDiagnostics: filesResult.diagnostics,
+      contractReady: filesResult.ready === true,
       requirementsSummary: (project.requirements || []).slice(0, 20).map(r => `${r.code}: ${r.name}`),
       systemActors: (project.actors || []).map(a => a.name)
     };
@@ -893,8 +897,10 @@ Debes responder EXCLUSIVAMENTE un objeto JSON válido con la siguiente estructur
         stageId: sId,
         stageName,
         model: auditResponse.model || modelToUse,
-        status: auditResponse.data?.status || 'APPROVED',
-        summary: auditResponse.data?.summary || 'Auditoría completada exitosamente sin observaciones críticas.',
+        status: auditResponse.data?.status || 'OBSERVATIONS',
+        contractReady: filesResult.ready === true,
+        blockingErrorsCount: filesResult.diagnostics?.errors?.length || 0,
+        summary: auditResponse.data?.summary || 'La auditoría no devolvió un resumen. Consulte los diagnósticos de la especificación.',
         observations: Array.isArray(auditResponse.data?.observations) ? auditResponse.data.observations : [],
         recommendations: Array.isArray(auditResponse.data?.recommendations) ? auditResponse.data.recommendations : [],
         usage: auditResponse.usage || null
@@ -925,49 +931,12 @@ exports.applyStageAuditFixes = async (req, res) => {
       return res.status(404).json({ success: false, error: { message: 'Proyecto no encontrado.' } });
     }
 
-    const appliedFixes = [];
-
-    if (sId === 2) {
-      appliedFixes.push(
-        "Aislamiento de PostgreSQL vinculado a loopback 127.0.0.1 en docker-compose.yml",
-        "Red dedicada aislada autron_network configurada para los 3 contenedores",
-        "Seguridad en Dockerfile: ejecución con 'USER node' sin privilegios de root y HEALTHCHECK",
-        "README.md enfocado exclusivamente en la infraestructura base sin advertencias de producción"
-      );
-    } else if (sId === 3) {
-      appliedFixes.push(
-        "Campos monetarios y de inventario normalizados a DataTypes.DECIMAL(12, 2)",
-        "Variables de aprovisionamiento alineadas (INITIAL_ADMIN_* y BOOTSTRAP_*) en seed-account.js",
-        "Contraseñas por defecto eliminadas en backend/src/config/database.js",
-        "Integridad referencial y validación de tipos asegurada en modelos Sequelize"
-      );
-    } else if (sId === 4) {
-      appliedFixes.push(
-        "Eliminación de 'hashContrasena' en esquemas de respuesta y sustitución por 'contrasena' obligatoria en altas de usuario",
-        "Sincronización total de crudContract con la matriz RBAC (authorizedRoles poblados y permissionSource resuelto)",
-        "Aplicación de principio de mínimo privilegio en ventas, compras, proveedores e inventario excluyendo roles no autorizados",
-        "Desbloqueo de UC-05 con authorizeRoles('Administrador') y blindaje de gestión de usuarios contra roles no autorizados"
-      );
-    } else {
-      appliedFixes.push(`Correcciones técnicas y estándares de calidad aplicados para la Fase ${sId}`);
-    }
-
-    // Regenerar archivos con los parches aplicados
-    const filesResult = await codeGeneratorService.generateProjectFiles(projectId, {
-      includeDocker: true,
-      allowUnapproved: true,
-      reviewOnly: true,
-      stageId: sId
-    });
-
-    return res.status(200).json({
-      success: true,
-      data: {
+    return res.status(409).json({
+      success: false,
+      error: {
+        code: 'AUDIT_FIXES_NOT_IMPLEMENTED',
         stageId: sId,
-        message: 'Correcciones de Sonnet aplicadas exitosamente.',
-        appliedFixes,
-        filesCount: filesResult.files?.length || 0,
-        files: filesResult.files
+        message: 'La auditoría de Sonnet emite recomendaciones, pero este botón no implementa su aplicación automática. No se modificó el proyecto. Resuelva los contratos pendientes mediante las propuestas de operaciones y vinculaciones, revíselas y vuelva a validar la especificación.'
       }
     });
   } catch (error) {

@@ -43,6 +43,7 @@ function generateOperationServiceFile(operations = [], entities = [], options = 
 
   const opFunctions = operations.map((op, idx) => {
     const fnName = nameMap.get(op.operationId || idx);
+    if (require('./workshopProfile').executable(op, entities)) return '  async ' + fnName + '(payload, user) { return require("./workshop.runtime").execute(' + JSON.stringify(op.operationId) + ', payload, user); },';
     
     // Explicit target entity without defaulting to entities[0]
     const targetModel = op.targetEntity || op.entity || null;
@@ -287,14 +288,8 @@ function generateOperationRoutesFile(operations = [], security = {}) {
     const middlewares = [];
     if (hasAuth) {
       let roles = [...(op.authorizedRoles || [])];
-      if (/auditoria/i.test(op.name || op.route) || /uc-05/i.test(op.operationId || '')) {
-        roles = ['Administrador'];
-      } else if (/usuario|seguridad/i.test(op.name || op.route) || /uc-10|uc-23/i.test(op.operationId || '')) {
-        roles = ['Administrador'];
-      }
-      roles = roles.map(r => r === 'Recepcionista' ? 'Recepción' : r);
       if (roles.length === 0) {
-        roles = ['Administrador'];
+        return `router.${method}('${endpoint}', authenticateToken, (req,res) => res.status(403).json({code:'UNRESOLVED_PERMISSION'}));`;
       }
       const rolesList = roles.map(r => `'${r}'`).join(', ');
       middlewares.push(`authenticateToken`, `authorizeRoles(${rolesList})`);

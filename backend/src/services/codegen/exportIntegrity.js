@@ -7,6 +7,8 @@ const sha256 = bytes => crypto.createHash('sha256').update(bytes).digest('hex');
 
 function generatorProvenance(spec, options = {}) {
   const files = fs.readdirSync(__dirname).filter(name => /\.(js|jsx)$/.test(name)).sort();
+  const domainTemplates = path.join(__dirname, 'workshop');
+  if (fs.existsSync(domainTemplates)) files.push(...fs.readdirSync(domainTemplates).filter(name => /\.(js|jsx|json)$/.test(name)).sort().map(name => 'workshop/' + name));
   const sources = Object.fromEntries(files.map(name => [name, sha256(fs.readFileSync(path.join(__dirname, name)))]));
   return { format: 1, generatorHash: sha256(JSON.stringify(sources)), sources,
     specHash: require('./projectSpecBuilder').computeCanonicalHash(spec), sourceFingerprint: spec.dependencyManifest?.sourceFingerprint,
@@ -41,7 +43,9 @@ function readZip(buffer) {
 function bundleVerifiedFiles(files, verification = {}) {
   const uniqueMap = new Map();
   for (const file of files) {
-    uniqueMap.set(String(file.path).replace(/\\/g, '/').toLowerCase(), file);
+    const key=String(file.path).replace(/\\/g, '/').toLowerCase();
+    if(uniqueMap.has(key))throw new Error('INVALID_OR_DUPLICATE_ZIP_PATH: '+file.path);
+    uniqueMap.set(key, file);
   }
   const cleanFiles = Array.from(uniqueMap.values());
   const manifest = { format: 1, verification, payloadHash: fingerprint(cleanFiles), files: cleanFiles.map(f => ({ path: f.path, bytes: f.content.length, sha256: sha256(f.content) })) };

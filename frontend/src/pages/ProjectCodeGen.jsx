@@ -308,24 +308,6 @@ export default function ProjectCodeGen({ project, onNavigateTo }) {
     try {
       setDownloading(true); setError(null);
       const safeName = (project.name || 'proyecto').toLowerCase().replace(/[^a-z0-9]/g, '_');
-      if (approvedStageIds.has(7)) {
-        try {
-          const verifiedUrl = `/api/projects/${project.id}/codegen/workflow/download`;
-          const resp = await fetch(verifiedUrl);
-          if (resp.ok) {
-            const blob = await resp.blob();
-            const blobUrl = window.URL.createObjectURL(blob);
-            const a = document.createElement('a');
-            a.href = blobUrl;
-            a.download = `${safeName}-entrega-verificada.zip`;
-            document.body.appendChild(a);
-            a.click();
-            document.body.removeChild(a);
-            window.URL.revokeObjectURL(blobUrl);
-            return;
-          }
-        } catch (_) {}
-      }
       await codegenApi.downloadZip(project.id, includeDocker, `${safeName}-fullstack.zip`, activeJob?.id || null);
     } catch (err) {
       setError(err.message || 'Error al descargar');
@@ -355,10 +337,6 @@ export default function ProjectCodeGen({ project, onNavigateTo }) {
   }
 
   function handleOpenFrontendPreview() {
-    if (activeStage.id === 7 || approvedStageIds.has(7)) {
-      window.open('http://localhost:3005', '_blank');
-      return;
-    }
     if (!project?.id) return;
     window.open(`/api/projects/${project.id}/codegen/workflow/frontend-preview`, '_blank');
   }
@@ -610,7 +588,7 @@ export default function ProjectCodeGen({ project, onNavigateTo }) {
               padding: '2px 10px',
               borderRadius: '9999px'
             }}>
-              Verificada
+              {generatedData?.ready ? 'Contratos completos' : 'En revisión'}
             </span>
           </div>
           <p style={{ fontSize: '0.875rem', color: '#64748B', margin: '6px 0 0 0' }}>
@@ -647,6 +625,15 @@ export default function ProjectCodeGen({ project, onNavigateTo }) {
       {error && (
         <div role="alert" className="alert alert-danger" style={{ marginBottom: '16px' }}>
           {error}
+        </div>
+      )}
+
+      {generatedData && !generatedData.ready && (
+        <div role="status" className="alert alert-warning" style={{ marginBottom: '16px' }}>
+          La especificación tiene {generatedData.diagnostics?.errors?.length || 0} errores pendientes.
+          La aprobación de etapas y la auditoría no los resuelven automáticamente.
+          Puede probar la vista previa y descargar un ZIP de revisión con los diagnósticos;
+          las operaciones sin contrato siguen pendientes de implementación.
         </div>
       )}
 
@@ -840,7 +827,7 @@ export default function ProjectCodeGen({ project, onNavigateTo }) {
                   color: auditResult.status === 'APPROVED' ? '#065F46' : auditResult.status === 'WARNINGS' ? '#991B1B' : '#92400E',
                   border: `1px solid ${auditResult.status === 'APPROVED' ? '#A7F3D0' : auditResult.status === 'WARNINGS' ? '#FECACA' : '#FDE68A'}`
                 }}>
-                  {auditResult.status === 'APPROVED' ? '✓ CONFORME / APROBADO' : auditResult.status === 'WARNINGS' ? '✕ ADVERTENCIAS CRÍTICAS' : '⚠️ CON OBSERVACIONES'}
+                  {auditResult.status === 'APPROVED' ? (auditResult.contractReady ? '✓ AUDITORÍA FAVORABLE' : 'CONTRATOS PENDIENTES') : auditResult.status === 'WARNINGS' ? '✕ ADVERTENCIAS CRÍTICAS' : '⚠️ CON OBSERVACIONES'}
                 </span>
                 <span style={{ fontSize: '0.6875rem', color: '#4338CA', background: '#EEF2FF', padding: '3px 8px', borderRadius: '6px', border: '1px solid #E0E7FF', fontWeight: 600 }}>
                   🤖 {auditResult.model || 'claude-sonnet-5-5'}
@@ -856,7 +843,7 @@ export default function ProjectCodeGen({ project, onNavigateTo }) {
                   <button
                     type="button"
                     onClick={handleApplyAuditFixes}
-                    disabled={applyingFixes}
+                    disabled
                     style={{
                       display: 'inline-flex',
                       alignItems: 'center',
@@ -871,9 +858,9 @@ export default function ProjectCodeGen({ project, onNavigateTo }) {
                       cursor: applyingFixes ? 'wait' : 'pointer',
                       boxShadow: '0 1px 2px rgba(67, 56, 202, 0.2)'
                     }}
-                    title="Aplica automáticamente las correcciones recomendadas por Sonnet en esta fase"
+                    title="La aplicación automática de recomendaciones no está implementada; revise las propuestas de operaciones y vinculaciones"
                   >
-                    <span>{applyingFixes ? 'Aplicando y Re-auditando...' : '🪄 Aplicar Correcciones de Sonnet'}</span>
+                    <span>Aplicación automática no disponible</span>
                   </button>
                 )}
                 <button
@@ -1098,7 +1085,7 @@ export default function ProjectCodeGen({ project, onNavigateTo }) {
                   cursor: 'pointer',
                   boxShadow: activeStage.id === 7 ? '0 1px 3px rgba(16, 185, 129, 0.3)' : '0 1px 3px rgba(79, 70, 229, 0.25)'
                 }}
-                title={activeStage.id === 7 ? "Abre la aplicación directamente en Docker (http://localhost:3005)" : "Abre y prueba todas las pantallas del Frontend conectadas a los endpoints antes de aprobar"}
+                title="Abre la vista previa del frontend dentro de ICASE"
               >
                 <span className="ms ms-xs" style={{ color: '#FFFFFF' }}>{activeStage.id === 7 ? 'rocket_launch' : 'devices'}</span>
                 <span>{activeStage.id === 7 ? 'Abrir en Docker (3005) ↗' : 'Probar Frontend ↗'}</span>
@@ -1659,15 +1646,7 @@ export default function ProjectCodeGen({ project, onNavigateTo }) {
                     ))
                   ) : (
                     <div>
-                      [OK] Pipeline de generación iniciado.
-
-                      [OK] 38 entidades validadas con Sequelize ORM.
-
-                      [OK] 66 relaciones comprobadas en integridad referencial.
-
-                      [OK] 8 pantallas vinculadas con contratos REST y Swagger.
-
-                      [OK] Verificación estática superada. Código listo para Docker.
+                      No hay registros de ejecución disponibles. Consulte los diagnósticos de la especificación.
                     </div>
                   )}
                 </div>
@@ -1718,7 +1697,7 @@ export default function ProjectCodeGen({ project, onNavigateTo }) {
               <div>
                 <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
                   <h2 style={{ margin: 0, fontSize: '1.2rem', fontWeight: 700, color: '#0F172A' }}>
-                    Entorno Desplegado en Docker · Producción
+                    Proyecto generado · Revisión y entrega
                   </h2>
                   <span style={{
                     display: 'inline-flex',
@@ -1733,11 +1712,11 @@ export default function ProjectCodeGen({ project, onNavigateTo }) {
                     fontWeight: 600
                   }}>
                     <span style={{ width: '7px', height: '7px', borderRadius: '50%', background: '#10B981' }}></span>
-                    Contenedores Activos y Saludables
+                    {generatedData?.ready ? 'Contratos completos' : 'Contratos pendientes'}
                   </span>
                 </div>
                 <p style={{ margin: '3px 0 0 0', fontSize: '0.8125rem', color: '#64748B' }}>
-                  Tu sistema ha sido empaquetado y se encuentra en ejecución. Utiliza los enlaces directos a continuación o descarga el paquete completo.
+                  Pruebe la vista previa o descargue los archivos. Aprobar las etapas no inicia los contenedores de la aplicación exportada.
                 </p>
               </div>
             </div>
@@ -1761,7 +1740,7 @@ export default function ProjectCodeGen({ project, onNavigateTo }) {
                   gap: '8px',
                   boxShadow: '0 2px 4px rgba(15, 23, 42, 0.25)'
                 }}
-                title="Descargar paquete completo .ZIP para producción"
+                title="Descargar el proyecto; si quedan contratos pendientes se incluye un informe de revisión"
               >
                 <span className="ms ms-xs">download</span>
                 <span>{downloading ? 'Descargando...' : 'Descargar Proyecto .ZIP'}</span>
@@ -1799,10 +1778,10 @@ export default function ProjectCodeGen({ project, onNavigateTo }) {
               marginBottom: '14px'
             }}>
               <strong style={{ fontSize: '0.875rem', color: '#0F172A', textTransform: 'uppercase', letterSpacing: '0.04em' }}>
-                LINKS DE PRODUCCIÓN
+                VISTA PREVIA DEL PROYECTO
               </strong>
               <span style={{ fontSize: '0.75rem', color: '#64748B' }}>
-                Puertos y rutas mapeadas por Docker
+                Pruebas dentro de ICASE; no equivalen a un despliegue verificado
               </span>
             </div>
 
@@ -1834,7 +1813,7 @@ export default function ProjectCodeGen({ project, onNavigateTo }) {
                     }}>
                       FRONTEND SPA
                     </span>
-                    <span style={{ fontSize: '0.6875rem', color: '#10B981', fontWeight: 600 }}>● Puerto 3005 / Nginx</span>
+                    <span style={{ fontSize: '0.6875rem', color: '#64748B', fontWeight: 600 }}>Vista previa interactiva</span>
                   </div>
                   <h3 style={{ margin: '0 0 4px 0', fontSize: '1rem', fontWeight: 700, color: '#0F172A' }}>
                     Aplicación Web del Sistema
@@ -1847,7 +1826,7 @@ export default function ProjectCodeGen({ project, onNavigateTo }) {
                 <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
                   <button
                     type="button"
-                    onClick={() => window.open('http://localhost:3005', '_blank')}
+                    onClick={handleOpenFrontendPreview}
                     style={{
                       width: '100%',
                       padding: '10px 16px',
@@ -1865,11 +1844,11 @@ export default function ProjectCodeGen({ project, onNavigateTo }) {
                       boxShadow: '0 2px 6px rgba(79, 70, 229, 0.25)'
                     }}
                   >
-                    <span>Abrir Aplicación en Docker (Puerto 3005)</span>
+                    <span>Probar frontend en ICASE</span>
                     <span className="ms ms-xs">open_in_new</span>
                   </button>
                   <a
-                    href="http://localhost:3005"
+                    href={`/api/projects/${project.id}/codegen/workflow/frontend-preview`}
                     target="_blank"
                     rel="noreferrer"
                     style={{
@@ -1880,7 +1859,7 @@ export default function ProjectCodeGen({ project, onNavigateTo }) {
                       fontWeight: 600
                     }}
                   >
-                    http://localhost:3005
+                    Abrir vista previa del frontend
                   </a>
                 </div>
               </div>
@@ -1908,7 +1887,7 @@ export default function ProjectCodeGen({ project, onNavigateTo }) {
                     }}>
                       API REST & SWAGGER
                     </span>
-                    <span style={{ fontSize: '0.6875rem', color: '#10B981', fontWeight: 600 }}>● Puerto 8085 / Express</span>
+                    <span style={{ fontSize: '0.6875rem', color: '#64748B', fontWeight: 600 }}>Runtime de pruebas</span>
                   </div>
                   <h3 style={{ margin: '0 0 4px 0', fontSize: '1rem', fontWeight: 700, color: '#0F172A' }}>
                     Servicios Backend y Swagger UI
@@ -1921,7 +1900,7 @@ export default function ProjectCodeGen({ project, onNavigateTo }) {
                 <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
                   <button
                     type="button"
-                    onClick={() => window.open('http://localhost:8085/swagger', '_blank')}
+                    onClick={handleOpenSwagger}
                     style={{
                       width: '100%',
                       padding: '10px 16px',
@@ -1938,11 +1917,11 @@ export default function ProjectCodeGen({ project, onNavigateTo }) {
                       gap: '8px'
                     }}
                   >
-                    <span>Abrir Swagger en Docker (Puerto 8085)</span>
+                    <span>Abrir Swagger de pruebas</span>
                     <span className="ms ms-xs">open_in_new</span>
                   </button>
                   <a
-                    href="http://localhost:8085/swagger"
+                    href={`/api/projects/${project.id}/codegen/workflow/swagger`}
                     target="_blank"
                     rel="noreferrer"
                     style={{
@@ -1953,7 +1932,7 @@ export default function ProjectCodeGen({ project, onNavigateTo }) {
                       fontWeight: 600
                     }}
                   >
-                    http://localhost:8085/swagger
+                    Abrir documentación de la API
                   </a>
                 </div>
               </div>
@@ -1981,13 +1960,13 @@ export default function ProjectCodeGen({ project, onNavigateTo }) {
                     }}>
                       BASE DE DATOS
                     </span>
-                    <span style={{ fontSize: '0.6875rem', color: '#10B981', fontWeight: 600 }}>● Puerto 5435</span>
+                    <span style={{ fontSize: '0.6875rem', color: '#64748B', fontWeight: 600 }}>Configuración de exportación</span>
                   </div>
                   <h3 style={{ margin: '0 0 4px 0', fontSize: '1rem', fontWeight: 700, color: '#0F172A' }}>
                     PostgreSQL 16 Multi-tabla
                   </h3>
                   <p style={{ margin: 0, fontSize: '0.75rem', color: '#64748B', lineHeight: 1.4 }}>
-                    Base de datos aislada con el esquema relacional completo, llaves foráneas y datos iniciales cargados.
+                    El ZIP incluye modelos, migraciones y configuración de PostgreSQL. La base de la aplicación exportada se crea al ejecutar el proyecto.
                   </p>
                 </div>
 

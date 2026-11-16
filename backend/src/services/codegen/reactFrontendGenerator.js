@@ -401,12 +401,13 @@ export async function apiRequest(endpoint, options = {}) {
   try {
     response = await fetch(url, config);
   } catch (err) {
-    throw new Error('No se pudo conectar con el API. Arranca backend y frontend con docker compose (puerto 3005).');
+    if (err.name === 'AbortError') throw err;
+    throw new Error('No se pudo conectar con el servidor. Compruebe la conexión y vuelva a intentarlo.');
   }
   const json = await response.json().catch(() => ({}));
 
   if (!response.ok || json.success === false) {
-    if (response.status === 401 && (json.code === 'TOKEN_EXPIRED' || json.code === 'UNAUTHENTICATED')) {
+    if (response.status === 401 || (response.status === 403 && json.code === 'ACCOUNT_DISABLED')) {
       if (typeof window !== 'undefined' && window.localStorage) {
         window.localStorage.removeItem('token');
         window.localStorage.removeItem('user');
@@ -424,6 +425,13 @@ export async function apiRequest(endpoint, options = {}) {
 }
 
 const apiClient = {
+  blob: async (endpoint, options = {}) => {
+    const clean = endpoint.startsWith('/api/') ? endpoint.slice(4) : endpoint;
+    const token = localStorage.getItem('token');
+    const response = await fetch(API_BASE + clean, { ...options, headers: { ...(token ? { Authorization: 'Bearer ' + token } : {}), ...options.headers } });
+    if (!response.ok) throw Object.assign(new Error('No se pudo abrir la evidencia.'), { status: response.status });
+    return response.blob();
+  },
   request: apiRequest,
   get: (endpoint, options = {}) => apiRequest(endpoint, { ...options, method: 'GET' }),
   post: (endpoint, body, options = {}) => apiRequest(endpoint, { ...options, method: 'POST', body }),
