@@ -32,6 +32,7 @@ export default function ProjectActors({ project, onProjectUpdated }) {
   const [diagramStatus, setDiagramStatus] = useState('idle'); // 'idle' | 'insufficient' | 'ready' | 'error'
   const [missingDetails, setMissingDetails] = useState([]);
   const [isOutdated, setIsOutdated] = useState(false);
+  const [showAllReqs, setShowAllReqs] = useState(false);
 
   const filtered = actors.filter(a =>
     !search ||
@@ -534,11 +535,31 @@ export default function ProjectActors({ project, onProjectUpdated }) {
                 {(() => {
                   const actorReqs = requirements.filter(r => (r.actorIds || []).includes(selected.id));
                   if (actorReqs.length === 0) return null;
+                  const displayedReqs = showAllReqs ? actorReqs : actorReqs.slice(0, 5);
                   return (
                     <div className="detail-section">
-                      <span className="detail-section-label">Requisitos Asociados ({actorReqs.length})</span>
-                      <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
-                        {actorReqs.slice(0, 5).map(req => (
+                      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '8px' }}>
+                        <span className="detail-section-label" style={{ margin: 0 }}>Requisitos Asociados ({actorReqs.length})</span>
+                        {actorReqs.length > 5 && (
+                          <button
+                            type="button"
+                            onClick={() => setShowAllReqs(!showAllReqs)}
+                            style={{
+                              background: 'none',
+                              border: 'none',
+                              color: 'var(--primary, #4F46E5)',
+                              fontSize: '0.78rem',
+                              fontWeight: 600,
+                              cursor: 'pointer',
+                              padding: '2px 6px'
+                            }}
+                          >
+                            {showAllReqs ? 'Ver menos' : `Ver todos (${actorReqs.length})`}
+                          </button>
+                        )}
+                      </div>
+                      <div style={{ display: 'flex', flexDirection: 'column', gap: '6px', maxHeight: showAllReqs ? '320px' : 'none', overflowY: showAllReqs ? 'auto' : 'visible' }}>
+                        {displayedReqs.map(req => (
                           <div key={req.id} className="trace-link">
                             <div style={{ display: 'flex', alignItems: 'center', gap: '10px', minWidth: 0 }}>
                               <span className="ms ms-sm" style={{ color: 'var(--secondary)' }}>checklist</span>
@@ -554,11 +575,6 @@ export default function ProjectActors({ project, onProjectUpdated }) {
                             <span className="ms ms-xs" style={{ color: 'var(--outline)', flexShrink: 0 }}>arrow_forward</span>
                           </div>
                         ))}
-                        {actorReqs.length > 5 && (
-                          <p style={{ fontSize: '0.75rem', color: 'var(--secondary)', textAlign: 'center', paddingTop: '4px' }}>
-                            +{actorReqs.length - 5} más
-                          </p>
-                        )}
                       </div>
                     </div>
                   );

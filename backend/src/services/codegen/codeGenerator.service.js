@@ -385,6 +385,24 @@ INITIAL_ADMIN_PASSWORD=${defaultAdminPassword}
       addFile('backend/src/routes/operation.routes.js', generateOperationRoutesFile(businessOps, spec.security), 'javascript');
     }
 
+    // Flujo operativo integral y rutas de taller (Workshop Flow Runtime)
+    try {
+      const fs = require('fs');
+      const wsPath = require('path').join(__dirname, 'workshopFlowRuntime.js');
+      if (fs.existsSync(wsPath)) {
+        addFile('backend/src/services/workshopFlowRuntime.js', fs.readFileSync(wsPath, 'utf8'), 'javascript');
+        addFile('backend/src/routes/workshopFlow.routes.js', `const express = require('express');
+const router = express.Router();
+const { handleWorkshopRuntimeRequest } = require('../services/workshopFlowRuntime');
+router.all('*', async (req, res, next) => {
+  try {
+    return await handleWorkshopRuntimeRequest('${spec.projectId || 'autron'}', req, res);
+  } catch (error) { next(error); }
+});
+module.exports = router;`, 'javascript');
+      }
+    } catch (_) {}
+
     // File & Image Upload Infrastructure (Multer)
     addFile('backend/src/middleware/upload.middleware.js', generateUploadMiddlewareFile(), 'javascript');
     addFile('backend/src/routes/upload.routes.js', spec.credentialChangeContract ? require('fs').readFileSync(require.resolve('./reviewedUploadRoutes'), 'utf8') : generateUploadRoutesFile({ privateUploads: Boolean(spec.uploads?.private), roles: spec.uploads?.roles || [] }), 'javascript');

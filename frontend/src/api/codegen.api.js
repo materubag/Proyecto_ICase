@@ -46,6 +46,31 @@ export const codegenApi = {
   },
 
   /**
+   * Obtiene el estado del contenedor Docker y detecta si hay cambios pendientes
+   */
+  getContainerStatus: (projectId) => {
+    return request(`/projects/${projectId}/codegen/stages/container-status`);
+  },
+
+  /**
+   * Despliega formalmente el entorno de contenedores Docker (Fase 7)
+   */
+  deployContainer: (projectId) => {
+    return request(`/projects/${projectId}/codegen/stages/deploy-container`, {
+      method: 'POST'
+    });
+  },
+
+  /**
+   * Sincroniza y actualiza los archivos modificados en el contenedor Docker
+   */
+  updateContainer: (projectId) => {
+    return request(`/projects/${projectId}/codegen/stages/update-container`, {
+      method: 'POST'
+    });
+  },
+
+  /**
    * Registra y persiste la aprobación formal de una fase en PostgreSQL
    */
   approveStage: (projectId, stageId, evidence = {}) => {

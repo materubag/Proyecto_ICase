@@ -102,6 +102,10 @@ export default function ProjectCodeGen({ project, onNavigateTo }) {
   const [frontendViewMode, setFrontendViewMode] = useState('preview');
   const [previewRefreshKey, setPreviewRefreshKey] = useState(0);
   const [showStage7CodeFiles, setShowStage7CodeFiles] = useState(false);
+  const [containerStatus, setContainerStatus] = useState(null);
+  const [deployingContainer, setDeployingContainer] = useState(false);
+  const [updatingContainer, setUpdatingContainer] = useState(false);
+  const [updateSuccessMessage, setUpdateSuccessMessage] = useState(null);
   const quality = useMemo(() => groupQualityIssues(generatedData?.diagnostics?.errors || []), [generatedData]);
   const batchAnswers = completedBatchAnswers(activeJob?.questions, selectedOptions, customAnswers);
 
@@ -119,9 +123,20 @@ export default function ProjectCodeGen({ project, onNavigateTo }) {
     } catch (_) {}
   }
 
+  async function loadContainerStatus() {
+    if (!project?.id) return;
+    try {
+      const res = await codegenApi.getContainerStatus(project.id);
+      if (res?.data) {
+        setContainerStatus(res.data);
+      }
+    } catch (_) {}
+  }
+
   useEffect(() => {
     if (project?.id) {
       loadStagesStatus();
+      loadContainerStatus();
       loadPreview(activeStageId);
       loadAiStatus();
       loadActiveJob();
@@ -464,9 +479,14 @@ export default function ProjectCodeGen({ project, onNavigateTo }) {
       setFixSuccessMessage(null);
       if (stageId === 7) {
         await codegenApi.approveSpecification(project.id).catch(() => {});
+        loadContainerStatus();
       }
-      if (stageId < 7) {
+      if (stageId < 6) {
         setActiveStageId(stageId + 1);
+      } else if (stageId === 6) {
+        setFixSuccessMessage('¡Fase 6 (Frontend React) aprobada con éxito! Haz clic en «Desplegar Docker y Entrega» para iniciar el contenedor.');
+        setTimeout(() => setFixSuccessMessage(null), 6000);
+        loadContainerStatus();
       }
     } catch (err) {
       console.error('Error al aprobar fase:', err);
@@ -474,6 +494,58 @@ export default function ProjectCodeGen({ project, onNavigateTo }) {
       setError(msg);
     } finally {
       setApprovingStageId(null);
+    }
+  }
+
+  async function handleDeployContainer() {
+    if (!project?.id || deployingContainer) return;
+    try {
+      setDeployingContainer(true);
+      setError(null);
+      const res = await codegenApi.deployContainer(project.id);
+      if (res && res.success === false) {
+        throw new Error(res.error?.message || 'Error al desplegar en Docker');
+      }
+      const newApprovedList = res?.data?.approvedStages;
+      if (Array.isArray(newApprovedList)) {
+        setApprovedStageIds(new Set(newApprovedList));
+      } else {
+        setApprovedStageIds(prev => new Set([...prev, 7]));
+      }
+      setActiveStageId(7);
+      await loadContainerStatus();
+      setFixSuccessMessage('¡Entorno Docker desplegado con éxito! Contenedores y puertos 3005 y 8085 activos.');
+      setTimeout(() => setFixSuccessMessage(null), 5000);
+    } catch (err) {
+      console.error('Error al desplegar contenedor:', err);
+      const msg = err.response?.data?.error?.message || err.message || 'No se pudo desplegar el contenedor Docker.';
+      setError(msg);
+    } finally {
+      setDeployingContainer(false);
+    }
+  }
+
+  async function handleUpdateContainer() {
+    if (!project?.id || updatingContainer) return;
+    try {
+      setUpdatingContainer(true);
+      setError(null);
+      const res = await codegenApi.updateContainer(project.id);
+      if (res && res.success === false) {
+        throw new Error(res.error?.message || 'Error al actualizar contenedor');
+      }
+      if (res?.data) {
+        setContainerStatus(res.data);
+      }
+      const count = res?.data?.updatedFilesCount || 0;
+      setUpdateSuccessMessage(`¡Contenedor actualizado y sincronizado exitosamente! (${count} archivos sincronizados)`);
+      setTimeout(() => setUpdateSuccessMessage(null), 6000);
+    } catch (err) {
+      console.error('Error al actualizar contenedor:', err);
+      const msg = err.response?.data?.error?.message || err.message || 'No se pudo actualizar el contenedor.';
+      setError(msg);
+    } finally {
+      setUpdatingContainer(false);
     }
   }
 
@@ -737,13 +809,13 @@ export default function ProjectCodeGen({ project, onNavigateTo }) {
                   </span>
                   <span style={{
                     fontSize: '0.6875rem',
-                    color: isApproved ? '#059669' : isUnlocked ? '#64748B' : '#94A3B8',
+                    color: (s.id === 7 && isApproved && containerStatus?.hasPendingChanges) ? '#B45309' : isApproved ? '#059669' : isUnlocked ? '#64748B' : '#94A3B8',
                     fontWeight: 600,
-                    background: isApproved ? '#ECFDF5' : '#F1F5F9',
+                    background: (s.id === 7 && isApproved && containerStatus?.hasPendingChanges) ? '#FEF3C7' : isApproved ? '#ECFDF5' : '#F1F5F9',
                     padding: '2px 6px',
                     borderRadius: '4px'
                   }}>
-                    {isApproved ? 'Aprobada' : isUnlocked ? `${count} arch.` : 'Bloqueada'}
+                    {(s.id === 7 && isApproved && containerStatus?.hasPendingChanges) ? '⚠️ Actualizar' : isApproved ? 'Aprobada' : isUnlocked ? `${count} arch.` : 'Bloqueada'}
                   </span>
                 </div>
                 <div style={{
@@ -1223,7 +1295,113 @@ export default function ProjectCodeGen({ project, onNavigateTo }) {
               </button>
             )}
 
-            {approvedStageIds.has(activeStage.id) ? (
+            {activeStage.id === 6 && approvedStageIds.has(6) ? (
+              <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                <div style={{
+                  display: 'inline-flex',
+                  alignItems: 'center',
+                  gap: '6px',
+                  background: '#ECFDF5',
+                  color: '#065F46',
+                  border: '1px solid #A7F3D0',
+                  padding: '6px 14px',
+                  borderRadius: '8px',
+                  fontSize: '0.75rem',
+                  fontWeight: 600
+                }}>
+                  ✓ Fase 6 Aprobada
+                </div>
+                <button
+                  type="button"
+                  onClick={handleDeployContainer}
+                  disabled={deployingContainer}
+                  style={{
+                    display: 'inline-flex',
+                    alignItems: 'center',
+                    gap: '6px',
+                    background: 'linear-gradient(135deg, #10B981, #059669)',
+                    color: '#FFFFFF',
+                    border: 'none',
+                    borderRadius: '8px',
+                    padding: '7px 18px',
+                    fontSize: '0.75rem',
+                    fontWeight: 700,
+                    cursor: deployingContainer ? 'wait' : 'pointer',
+                    boxShadow: '0 2px 6px rgba(16, 185, 129, 0.35)',
+                    transition: 'all 0.15s ease'
+                  }}
+                  title="Desplegar contenedores Docker y preparar entrega oficial"
+                >
+                  <span>🚀</span>
+                  <span>{deployingContainer ? 'Desplegando Docker...' : '🚀 Desplegar Docker y Entrega →'}</span>
+                </button>
+              </div>
+            ) : activeStage.id === 7 ? (
+              approvedStageIds.has(7) ? (
+                <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                  <div style={{
+                    display: 'inline-flex',
+                    alignItems: 'center',
+                    gap: '6px',
+                    background: '#ECFDF5',
+                    color: '#065F46',
+                    border: '1px solid #A7F3D0',
+                    padding: '6px 14px',
+                    borderRadius: '8px',
+                    fontSize: '0.75rem',
+                    fontWeight: 600
+                  }}>
+                    ✓ Fase Aprobada
+                  </div>
+                  <button
+                    type="button"
+                    onClick={handleUpdateContainer}
+                    disabled={updatingContainer}
+                    style={{
+                      display: 'inline-flex',
+                      alignItems: 'center',
+                      gap: '6px',
+                      background: containerStatus?.hasPendingChanges ? '#D97706' : '#FFFFFF',
+                      color: containerStatus?.hasPendingChanges ? '#FFFFFF' : '#334155',
+                      border: containerStatus?.hasPendingChanges ? 'none' : '1px solid #CBD5E1',
+                      borderRadius: '8px',
+                      padding: '7px 14px',
+                      fontSize: '0.75rem',
+                      fontWeight: 600,
+                      cursor: updatingContainer ? 'wait' : 'pointer',
+                      boxShadow: containerStatus?.hasPendingChanges ? '0 2px 6px rgba(217, 119, 6, 0.35)' : 'none'
+                    }}
+                    title={containerStatus?.hasPendingChanges ? `Se detectaron ${containerStatus.changedFilesCount} archivos modificados. Haz clic para actualizar el contenedor.` : "Re-sincronizar archivos y actualizar contenedor"}
+                  >
+                    <span className="ms ms-xs">sync</span>
+                    <span>{updatingContainer ? 'Actualizando...' : containerStatus?.hasPendingChanges ? '⚠️ Actualizar Contenedor' : 'Actualizar Contenedor'}</span>
+                  </button>
+                </div>
+              ) : (
+                <button
+                  type="button"
+                  onClick={handleDeployContainer}
+                  disabled={deployingContainer}
+                  style={{
+                    display: 'inline-flex',
+                    alignItems: 'center',
+                    gap: '6px',
+                    background: 'linear-gradient(135deg, #10B981, #059669)',
+                    color: '#FFFFFF',
+                    border: 'none',
+                    borderRadius: '8px',
+                    padding: '7px 18px',
+                    fontSize: '0.75rem',
+                    fontWeight: 700,
+                    cursor: deployingContainer ? 'wait' : 'pointer',
+                    boxShadow: '0 2px 6px rgba(16, 185, 129, 0.35)'
+                  }}
+                >
+                  <span>🚀</span>
+                  <span>{deployingContainer ? 'Desplegando en Docker...' : '🚀 Desplegar Contenedor Docker'}</span>
+                </button>
+              )
+            ) : approvedStageIds.has(activeStage.id) ? (
               <div style={{
                 display: 'inline-flex',
                 alignItems: 'center',
@@ -1673,6 +1851,68 @@ export default function ProjectCodeGen({ project, onNavigateTo }) {
                 </div>
               </div>
             </div>
+            {activeStage.id === 6 && approvedStageIds.has(6) && (
+              <div style={{
+                background: 'linear-gradient(135deg, #F0FDF4 0%, #ECFDF5 100%)',
+                border: '1px solid #A7F3D0',
+                borderRadius: '16px',
+                padding: '24px',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'space-between',
+                gap: '20px',
+                boxShadow: '0 4px 14px rgba(16, 185, 129, 0.1)',
+                marginTop: '12px'
+              }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '16px' }}>
+                  <div style={{
+                    width: '48px',
+                    height: '48px',
+                    borderRadius: '12px',
+                    background: '#10B981',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    fontSize: '24px',
+                    color: '#FFFFFF',
+                    boxShadow: '0 4px 12px rgba(16, 185, 129, 0.3)'
+                  }}>
+                    🚀
+                  </div>
+                  <div>
+                    <h3 style={{ margin: '0 0 4px 0', fontSize: '1rem', fontWeight: 700, color: '#065F46' }}>
+                      ¡Fase 6 (Frontend React) Aprobada!
+                    </h3>
+                    <p style={{ margin: 0, fontSize: '0.8125rem', color: '#047857' }}>
+                      El frontend interactivo está verificado. Haz clic en el botón para empaquetar la solución y desplegar los contenedores en Docker.
+                    </p>
+                  </div>
+                </div>
+                <button
+                  type="button"
+                  onClick={handleDeployContainer}
+                  disabled={deployingContainer}
+                  style={{
+                    background: 'linear-gradient(135deg, #10B981, #059669)',
+                    color: '#FFFFFF',
+                    border: 'none',
+                    borderRadius: '10px',
+                    padding: '12px 24px',
+                    fontSize: '0.875rem',
+                    fontWeight: 700,
+                    cursor: deployingContainer ? 'wait' : 'pointer',
+                    display: 'inline-flex',
+                    alignItems: 'center',
+                    gap: '8px',
+                    boxShadow: '0 4px 14px rgba(16, 185, 129, 0.35)',
+                    whiteSpace: 'nowrap'
+                  }}
+                >
+                  <span>🚀</span>
+                  <span>{deployingContainer ? 'Desplegando en Docker...' : '🚀 Desplegar Docker y Entrega →'}</span>
+                </button>
+              </div>
+            )}
           </div>
         </div>
       )}
@@ -1745,6 +1985,30 @@ export default function ProjectCodeGen({ project, onNavigateTo }) {
             <div style={{ display: 'flex', alignItems: 'center', gap: '10px', flexWrap: 'wrap' }}>
               <button
                 type="button"
+                onClick={handleUpdateContainer}
+                disabled={updatingContainer}
+                style={{
+                  background: containerStatus?.hasPendingChanges ? '#D97706' : '#FFFFFF',
+                  color: containerStatus?.hasPendingChanges ? '#FFFFFF' : '#334155',
+                  border: containerStatus?.hasPendingChanges ? 'none' : '1px solid #CBD5E1',
+                  borderRadius: '8px',
+                  padding: '9px 16px',
+                  fontSize: '0.8125rem',
+                  fontWeight: 600,
+                  cursor: updatingContainer ? 'wait' : 'pointer',
+                  display: 'inline-flex',
+                  alignItems: 'center',
+                  gap: '6px',
+                  boxShadow: containerStatus?.hasPendingChanges ? '0 2px 6px rgba(217, 119, 6, 0.35)' : 'none'
+                }}
+                title={containerStatus?.hasPendingChanges ? `Se detectaron ${containerStatus.changedFilesCount} archivos modificados. Haz clic para actualizar el contenedor.` : "Re-sincronizar archivos y actualizar contenedor"}
+              >
+                <span className="ms ms-xs">sync</span>
+                <span>{updatingContainer ? 'Actualizando...' : containerStatus?.hasPendingChanges ? '⚠️ Actualizar Contenedor' : '🔄 Actualizar Contenedor'}</span>
+              </button>
+
+              <button
+                type="button"
                 onClick={handleDownload}
                 disabled={downloading}
                 style={{
@@ -1789,6 +2053,80 @@ export default function ProjectCodeGen({ project, onNavigateTo }) {
               </button>
             </div>
           </div>
+
+          {/* Mensaje de confirmación al actualizar contenedor */}
+          {updateSuccessMessage && (
+            <div style={{
+              background: '#ECFDF5',
+              border: '1px solid #A7F3D0',
+              borderRadius: '12px',
+              padding: '12px 18px',
+              color: '#065F46',
+              fontSize: '0.8125rem',
+              fontWeight: 600,
+              display: 'flex',
+              alignItems: 'center',
+              gap: '10px'
+            }}>
+              <span>✓</span>
+              <span>{updateSuccessMessage}</span>
+            </div>
+          )}
+
+          {/* Alerta de cambios detectados en el proyecto */}
+          {containerStatus?.hasPendingChanges && (
+            <div style={{
+              background: '#FFFBEB',
+              border: '1px solid #FCD34D',
+              borderRadius: '14px',
+              padding: '16px 20px',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'space-between',
+              gap: '16px',
+              boxShadow: '0 2px 8px rgba(245, 158, 11, 0.1)'
+            }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '14px' }}>
+                <span style={{ fontSize: '26px' }}>⚠️</span>
+                <div>
+                  <div style={{ fontWeight: 700, fontSize: '0.875rem', color: '#92400E' }}>
+                    Se detectaron cambios en el código ({containerStatus.changedFilesCount} archivo{containerStatus.changedFilesCount > 1 ? 's' : ''} modificado{containerStatus.changedFilesCount > 1 ? 's' : ''})
+                  </div>
+                  <div style={{ fontSize: '0.75rem', color: '#B45309', marginTop: '2px' }}>
+                    El proyecto tiene modificaciones recientes que aún no están reflejadas en el contenedor Docker.
+                    {containerStatus.changedFiles?.length > 0 && (
+                      <span style={{ display: 'block', marginTop: '3px', fontFamily: 'monospace', fontSize: '0.7rem', color: '#78350F' }}>
+                        Modificados: {containerStatus.changedFiles.slice(0, 4).join(', ')}{containerStatus.changedFiles.length > 4 ? '...' : ''}
+                      </span>
+                    )}
+                  </div>
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={handleUpdateContainer}
+                disabled={updatingContainer}
+                style={{
+                  background: 'linear-gradient(135deg, #D97706, #B45309)',
+                  color: '#FFFFFF',
+                  border: 'none',
+                  borderRadius: '8px',
+                  padding: '10px 20px',
+                  fontSize: '0.8125rem',
+                  fontWeight: 700,
+                  cursor: updatingContainer ? 'wait' : 'pointer',
+                  display: 'inline-flex',
+                  alignItems: 'center',
+                  gap: '8px',
+                  boxShadow: '0 2px 6px rgba(217, 119, 6, 0.35)',
+                  whiteSpace: 'nowrap'
+                }}
+              >
+                <span className="ms ms-xs">sync</span>
+                <span>{updatingContainer ? 'Actualizando Contenedor...' : '🔄 Actualizar Contenedor'}</span>
+              </button>
+            </div>
+          )}
 
           {/* Grid de Links de Producción */}
           <div>
@@ -2073,6 +2411,92 @@ export default function ProjectCodeGen({ project, onNavigateTo }) {
         </div>
       ) : (
         <>
+          {activeStage.id === 7 && !approvedStageIds.has(7) && (
+            <div style={{
+              marginBottom: '20px',
+              padding: '28px',
+              background: '#FFFFFF',
+              border: '1px solid #E2E8F0',
+              borderRadius: '16px',
+              boxShadow: '0 4px 16px -2px rgba(15, 23, 42, 0.05)',
+              display: 'flex',
+              flexDirection: 'column',
+              gap: '18px'
+            }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '16px' }}>
+                <div style={{
+                  width: '50px',
+                  height: '50px',
+                  borderRadius: '14px',
+                  background: 'linear-gradient(135deg, #4F46E5, #3730A3)',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  color: '#FFFFFF',
+                  fontSize: '26px',
+                  boxShadow: '0 4px 12px rgba(79, 70, 229, 0.3)'
+                }}>
+                  🐳
+                </div>
+                <div>
+                  <h3 style={{ margin: 0, fontSize: '1.2rem', fontWeight: 700, color: '#0F172A' }}>
+                    Fase 7: Despliegue en Contenedores Docker & Entrega
+                  </h3>
+                  <p style={{ margin: '3px 0 0 0', fontSize: '0.8125rem', color: '#64748B' }}>
+                    El frontend, backend y base de datos están validados. Haz clic en Desplegar para empaquetar e inicializar los contenedores Docker en los puertos 3005 y 8085.
+                  </p>
+                </div>
+              </div>
+
+              <div style={{
+                display: 'grid',
+                gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))',
+                gap: '12px',
+                background: '#F8FAFC',
+                padding: '14px 18px',
+                borderRadius: '12px',
+                border: '1px solid #E2E8F0'
+              }}>
+                <div>
+                  <div style={{ fontSize: '0.6875rem', fontWeight: 700, color: '#4F46E5', textTransform: 'uppercase' }}>Frontend SPA</div>
+                  <div style={{ fontSize: '0.875rem', fontWeight: 600, color: '#0F172A', marginTop: '2px' }}>Puerto 3005 (Nginx)</div>
+                </div>
+                <div>
+                  <div style={{ fontSize: '0.6875rem', fontWeight: 700, color: '#16A34A', textTransform: 'uppercase' }}>Backend API & Swagger</div>
+                  <div style={{ fontSize: '0.875rem', fontWeight: 600, color: '#0F172A', marginTop: '2px' }}>Puerto 8085 (Express)</div>
+                </div>
+                <div>
+                  <div style={{ fontSize: '0.6875rem', fontWeight: 700, color: '#0284C7', textTransform: 'uppercase' }}>Base de Datos</div>
+                  <div style={{ fontSize: '0.875rem', fontWeight: 600, color: '#0F172A', marginTop: '2px' }}>PostgreSQL 16 Aislado</div>
+                </div>
+              </div>
+
+              <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+                <button
+                  type="button"
+                  onClick={handleDeployContainer}
+                  disabled={deployingContainer}
+                  style={{
+                    background: 'linear-gradient(135deg, #10B981, #059669)',
+                    color: '#FFFFFF',
+                    border: 'none',
+                    borderRadius: '10px',
+                    padding: '11px 26px',
+                    fontSize: '0.875rem',
+                    fontWeight: 700,
+                    cursor: deployingContainer ? 'wait' : 'pointer',
+                    display: 'inline-flex',
+                    alignItems: 'center',
+                    gap: '8px',
+                    boxShadow: '0 4px 14px rgba(16, 185, 129, 0.35)'
+                  }}
+                >
+                  <span>🚀</span>
+                  <span>{deployingContainer ? 'Desplegando en Docker...' : '🚀 Desplegar Contenedor Docker'}</span>
+                </button>
+              </div>
+            </div>
+          )}
           {activeStage.id === 7 && approvedStageIds.has(7) && showStage7CodeFiles && (
             <div style={{
               marginBottom: '16px',

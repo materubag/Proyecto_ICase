@@ -198,6 +198,18 @@ function generateMasterRoutesIndexFile(entities = [], options = {}) {
     mounts.push("router.use('/operations', operationRoutes);");
   }
 
+  // Workshop Flow y Diagnósticos Analíticos
+  imports.push("const workshopFlowRoutes = require('./workshopFlow.routes');");
+  imports.push("const { handleWorkshopRuntimeRequest } = require('../services/workshopFlowRuntime');");
+  mounts.push("router.use('/workshop-flow', workshopFlowRoutes);");
+  mounts.push(`router.all('/diagnostico-fallas*', async (req, res, next) => {
+  try {
+    return await handleWorkshopRuntimeRequest('autron', req, res);
+  } catch (err) {
+    next(err);
+  }
+});`);
+
   return `/**
  * Enrutador Central de la API
  * Generado automáticamente por ICASE Studio

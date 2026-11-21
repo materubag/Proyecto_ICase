@@ -289,35 +289,48 @@ export default function FileUploadQueue({
           {isProcessing && (
             <div
               style={{
-                padding: '10px 16px',
-                background: 'rgba(41, 82, 217, 0.08)',
+                padding: '12px 16px',
+                background: 'rgba(79, 70, 229, 0.08)',
                 borderBottom: '1px solid var(--border-default)',
                 display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'space-between',
-                gap: '12px'
+                flexDirection: 'column',
+                gap: '8px'
               }}
             >
-              <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
-                <RefreshCw size={16} className="spin" style={{ color: 'var(--primary)' }} />
-                <span style={{ fontSize: '0.8125rem', fontWeight: 500, color: 'var(--primary)' }}>
-                  {currentProcessingFile
-                    ? `Procesando "${currentProcessingFile}"...`
-                    : 'Procesando fuentes del proyecto...'}
+              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '12px' }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+                  <RefreshCw size={16} className="spin" style={{ color: 'var(--primary)' }} />
+                  <span style={{ fontSize: '0.8125rem', fontWeight: 600, color: 'var(--primary)' }}>
+                    {currentProcessingFile
+                      ? (currentProcessingFile.startsWith('Subiendo') || currentProcessingFile.startsWith('Transcribiendo') || currentProcessingFile.startsWith('Procesando')
+                          ? currentProcessingFile
+                          : `Procesando "${currentProcessingFile}"...`)
+                      : 'Procesando fuentes del proyecto...'}
+                  </span>
+                </div>
+                <span
+                  style={{
+                    fontSize: '0.75rem',
+                    fontWeight: 600,
+                    color: 'var(--primary)',
+                    background: 'var(--surface-container-lowest)',
+                    padding: '2px 8px',
+                    borderRadius: 'var(--radius-sm)'
+                  }}
+                >
+                  {processedCount} de {files.length} ({files.length > 0 ? Math.round((processedCount / files.length) * 100) : 0}%)
                 </span>
               </div>
-              <span
-                style={{
-                  fontSize: '0.75rem',
-                  fontWeight: 600,
-                  color: 'var(--primary)',
-                  background: 'var(--surface-container-lowest)',
-                  padding: '2px 8px',
-                  borderRadius: 'var(--radius-sm)'
-                }}
-              >
-                {processedCount} de {files.length} procesados
-              </span>
+              <div style={{ width: '100%', height: '6px', background: 'rgba(79, 70, 229, 0.15)', borderRadius: '3px', overflow: 'hidden' }}>
+                <div
+                  style={{
+                    width: `${files.length > 0 ? Math.max(8, Math.round((processedCount / files.length) * 100)) : 0}%`,
+                    height: '100%',
+                    background: 'var(--primary, #4F46E5)',
+                    transition: 'width 0.4s ease'
+                  }}
+                />
+              </div>
             </div>
           )}
 

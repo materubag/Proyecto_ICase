@@ -204,10 +204,10 @@ export default function ProjectSummary({ project, onProjectUpdated, onNavigateTo
       {/* 4 Metric Cards */}
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: '16px', marginBottom: '24px' }}>
         {[
-          { label: 'Requerimientos', count: reqCount || 47, sub: 'Funcionales & RNF', icon: 'checklist', tab: 'requirements' },
-          { label: 'Actores', count: actorCount || 3, sub: 'Roles identificados', icon: 'groups', tab: 'actors' },
-          { label: 'Entidades', count: entityCount || 38, sub: 'Modelo relacional', icon: 'account_tree', tab: 'modeling' },
-          { label: 'Pantallas UI', count: screenCount || 8, sub: 'Mockups y vistas', icon: 'devices', tab: 'mockups' }
+          { label: 'Requerimientos', count: reqCount || 0, sub: 'Funcionales & RNF', icon: 'checklist', tab: 'requirements' },
+          { label: 'Actores', count: actorCount || 0, sub: 'Roles identificados', icon: 'groups', tab: 'actors' },
+          { label: 'Entidades', count: entityCount || 0, sub: 'Modelo relacional', icon: 'account_tree', tab: 'modeling' },
+          { label: 'Pantallas UI', count: screenCount || 0, sub: 'Mockups y vistas', icon: 'devices', tab: 'mockups' }
         ].map(card => (
           <div
             key={card.label}

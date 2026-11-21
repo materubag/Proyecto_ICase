@@ -8,7 +8,7 @@ export default function Sidebar({
   pendingCandidatesCount = 0,
   activeActivity = null
 }) {
-  const reqCount = currentProject?.requirements?.length || (currentProject ? 47 : 0);
+  const reqCount = currentProject?.requirements?.length || 0;
 
   return (
     <aside className="sidebar">
