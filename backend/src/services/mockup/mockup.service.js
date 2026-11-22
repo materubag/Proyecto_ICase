@@ -86,7 +86,7 @@ class MockupService {
       '5. Respetar estrictamente los nombres y rutas de screens recibidos.'
     ].join('\n');
 
-    // 1. Conexión DIRECTA con Google Stitch API (Sin intermediarios de n8n ni ngrok)
+    // 1. Conexión DIRECTA con Google Stitch API (Con protección anti-timeout de 45s para Cloudflare)
     const mockupProvider = (env.MOCKUP_PROVIDER || 'stitch').toLowerCase();
     if (mockupProvider === 'stitch' && env.GOOGLE_STITCH_API_KEY) {
       try {
@@ -98,9 +98,16 @@ class MockupService {
           'Usa el menú, campos y datos de ejemplo de esa pantalla.',
           'No muestres códigos RF, hashes ni texto de requisitos técnicos.'
         ].join('\n');
-        return await stitchService.generateMockups(project, screens, relevantRequirements, visualRules);
+        
+        let stitchTimer;
+        const stitchPromise = stitchService.generateMockups(project, screens, relevantRequirements, visualRules);
+        const stitchTimeout = new Promise((_, reject) => {
+          stitchTimer = setTimeout(() => reject(new Error('Google Stitch superó el límite de 45s (protección Cloudflare 524)')), 45000);
+        });
+
+        return await Promise.race([stitchPromise.finally(() => clearTimeout(stitchTimer)), stitchTimeout]);
       } catch (stitchErr) {
-        console.warn(`[MockupService] Error en Google Stitch directo (${stitchErr.message}). Activando respaldo de IA...`);
+        console.warn(`[MockupService] Error o timeout en Google Stitch directo (${stitchErr.message}). Activando respaldo...`);
       }
     }
 

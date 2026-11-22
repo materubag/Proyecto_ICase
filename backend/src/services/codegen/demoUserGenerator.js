@@ -71,6 +71,9 @@ async function seedDemoUsers() {
         [EMAIL_FIELD]: acc.email,
         [NAME_FIELD]: acc.name,
         [PASS_FIELD]: hashedPassword,
+        contrasenaHash: hashedPassword,
+        password: hashedPassword,
+        activo: true,
         estado: 'ACTIVO'
       };
       if (roleId) userDefaults[ROLE_FK_FIELD] = roleId;
@@ -82,7 +85,15 @@ async function seedDemoUsers() {
       if (created) {
         console.log('✅ Cuenta demo creada: ' + acc.email + ' (' + acc.role + ')');
       } else {
-        console.log('ℹ️ Cuenta demo ya existente: ' + acc.email);
+        await userRec.update({
+          [PASS_FIELD]: hashedPassword,
+          contrasenaHash: hashedPassword,
+          password: hashedPassword,
+          activo: true,
+          estado: 'ACTIVO',
+          ...(roleId ? { [ROLE_FK_FIELD]: roleId } : {})
+        }).catch(() => {});
+        console.log('🔄 Cuenta demo actualizada con credenciales válidas: ' + acc.email);
       }
     }
   }

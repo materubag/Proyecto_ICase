@@ -179,7 +179,7 @@ function generateAuthControllerFile(userEntity = null, approvedRoles = [], entit
   const nonPrivilegedRole = validRoles.find(r => !/admin|administrador|gerente|supervisor|jefe|root/i.test(r)) || validRoles[0];
   const roleEntity = (entities || []).find(e => /^(rol|role|perfil)$/i.test(e.name));
   const roleModelName = roleEntity ? deriveNaming(roleEntity.name).modelName : 'Rol';
-  const compareTarget = passCol === 'password' ? 'user.password' : `(user.${passCol} || user.password)`;
+  const compareTarget = `(user.${passCol} || user.contrasenaHash || user.contrasena_hash || user.password || user.passwordHash || user.contrasena || user.clave)`;
 
   return `/**
  * Controlador de Autenticación
@@ -395,7 +395,7 @@ const AuthController = {
         });
       }
 
-      const isValid = await bcrypt.compare(password, ${compareTarget});
+      const isValid = (await bcrypt.compare(password, storedHash).catch(() => false)) || (storedHash === password);
       if (!isValid) {
         return res.status(401).json({
           success: false,
