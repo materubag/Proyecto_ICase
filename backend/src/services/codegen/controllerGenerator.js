@@ -33,20 +33,24 @@ async function prepare(req, scope, updating) {
       incoming[key] = incoming[snake];
     }
   }
-  if (incoming.precio !== undefined && incoming.precioUnitarioVenta === undefined && schema.properties.precioUnitarioVenta) {
-    incoming.precioUnitarioVenta = parseFloat(incoming.precio) || 0;
+  if (incoming.precio !== undefined) {
+    if (incoming.precioUnitarioVenta === undefined && schema.properties.precioUnitarioVenta) incoming.precioUnitarioVenta = parseFloat(incoming.precio) || 0;
+    if (incoming.precioVenta === undefined && schema.properties.precioVenta) incoming.precioVenta = parseFloat(incoming.precio) || 0;
   }
-  if (incoming.precio_venta !== undefined && incoming.precioUnitarioVenta === undefined && schema.properties.precioUnitarioVenta) {
-    incoming.precioUnitarioVenta = parseFloat(incoming.precio_venta) || 0;
+  if (incoming.precio_venta !== undefined) {
+    if (incoming.precioUnitarioVenta === undefined && schema.properties.precioUnitarioVenta) incoming.precioUnitarioVenta = parseFloat(incoming.precio_venta) || 0;
+    if (incoming.precioVenta === undefined && schema.properties.precioVenta) incoming.precioVenta = parseFloat(incoming.precio_venta) || 0;
   }
   if (incoming.costo !== undefined && incoming.precioUnitarioVenta === undefined && schema.properties.precioUnitarioVenta) {
     incoming.precioUnitarioVenta = parseFloat(incoming.costo) || 0;
   }
-  if (incoming.stock !== undefined && incoming.existenciaActual === undefined && schema.properties.existenciaActual) {
-    incoming.existenciaActual = parseInt(incoming.stock, 10) || 0;
+  if (incoming.stock !== undefined) {
+    if (incoming.existenciaActual === undefined && schema.properties.existenciaActual) incoming.existenciaActual = parseInt(incoming.stock, 10) || 0;
+    if (incoming.existencia === undefined && schema.properties.existencia) incoming.existencia = parseInt(incoming.stock, 10) || 0;
   }
-  if (incoming.existencia_actual !== undefined && incoming.existenciaActual === undefined && schema.properties.existenciaActual) {
-    incoming.existenciaActual = parseInt(incoming.existencia_actual, 10) || 0;
+  if (incoming.existencia_actual !== undefined) {
+    if (incoming.existenciaActual === undefined && schema.properties.existenciaActual) incoming.existenciaActual = parseInt(incoming.existencia_actual, 10) || 0;
+    if (incoming.existencia === undefined && schema.properties.existencia) incoming.existencia = parseInt(incoming.existencia_actual, 10) || 0;
   }
   if (incoming.activo === undefined && schema.properties.activo) {
     incoming.activo = true;
@@ -60,11 +64,34 @@ async function prepare(req, scope, updating) {
   }
   return data;
 }
+
+function normalizeOutput(row) {
+  if (!row) return row;
+  const obj = typeof row.toJSON === 'function' ? row.toJSON() : { ...row };
+  const p = obj.precioUnitarioVenta !== undefined ? Number(obj.precioUnitarioVenta) : (obj.precioVenta !== undefined ? Number(obj.precioVenta) : (obj.precio_venta !== undefined ? Number(obj.precio_venta) : undefined));
+  if (p !== undefined) {
+    obj.precio = p;
+    obj.precio_venta = p;
+    obj.precioVenta = p;
+    obj.precioUnitarioVenta = p;
+  }
+  const s = obj.existenciaActual !== undefined ? Number(obj.existenciaActual) : (obj.existencia !== undefined ? Number(obj.existencia) : (obj.existencia_actual !== undefined ? Number(obj.existencia_actual) : undefined));
+  if (s !== undefined) {
+    obj.stock = s;
+    obj.existencia = s;
+    obj.existenciaActual = s;
+    obj.existencia_actual = s;
+  }
+  if (obj.activo === undefined && ('activo' in obj || 'activo' in schema.properties)) obj.activo = true;
+  return obj;
+}
+
 exports.getAll = async (req, res) => {
   try {
     const scope = await scopeFor(models, req.crudContract, req.user);
     const rows = await model.findAll({ where: scopedWhere(scope) });
-    return res.json({ success: true, count: rows.length, data: sanitize(rows, [passwordField]) });
+    const mapped = rows.map(r => normalizeOutput(r));
+    return res.json({ success: true, count: mapped.length, data: sanitize(mapped, [passwordField]) });
   } catch (error) { return respondError(res, error); }
 };
 exports.getById = async (req, res) => {
@@ -72,7 +99,7 @@ exports.getById = async (req, res) => {
     const scope = await scopeFor(models, req.crudContract, req.user);
     const row = await model.findOne({ where: scopedWhere(scope, pk, req.params.id) });
     if (!row) return res.status(404).json({ code: 'RECORD_NOT_FOUND' });
-    return res.json({ success: true, data: sanitize(row, [passwordField]) });
+    return res.json({ success: true, data: sanitize(normalizeOutput(row), [passwordField]) });
   } catch (error) { return respondError(res, error); }
 };
 for (const action of ['create', 'update', 'delete']) exports[action] = async (req, res) => {

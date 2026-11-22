@@ -335,13 +335,21 @@ async function runMigrations() {
     console.log(\`[MIGRATE] OK: \${file}\`);
   }
 
-  // Sincronización de auto-recuperación de columnas en tablas existentes
+  // Sincronización y auto-recuperación de columnas en tablas de base de datos
   try {
     await sequelize.query('ALTER TABLE usuarios ADD COLUMN IF NOT EXISTS activo BOOLEAN DEFAULT true;');
-    await sequelize.query('ALTER TABLE productos ADD COLUMN IF NOT EXISTS precio_unitario_venta NUMERIC(12,2);');
-    await sequelize.query('ALTER TABLE productos ADD COLUMN IF NOT EXISTS precio_venta NUMERIC(12,2);');
-    await sequelize.query('UPDATE productos SET precio_unitario_venta = precio_venta WHERE precio_unitario_venta IS NULL;');
-    await sequelize.query('UPDATE productos SET precio_venta = precio_unitario_venta WHERE precio_venta IS NULL;');
+    await sequelize.query('ALTER TABLE usuarios ADD COLUMN IF NOT EXISTS contrasena_hash VARCHAR(255);');
+    await sequelize.query('ALTER TABLE roles ADD COLUMN IF NOT EXISTS descripcion VARCHAR(255);');
+    await sequelize.query('ALTER TABLE productos ADD COLUMN IF NOT EXISTS precio_unitario_venta NUMERIC(12,2) DEFAULT 0;');
+    await sequelize.query('ALTER TABLE productos ADD COLUMN IF NOT EXISTS precio_venta NUMERIC(12,2) DEFAULT 0;');
+    await sequelize.query('ALTER TABLE productos ADD COLUMN IF NOT EXISTS existencia_actual INTEGER DEFAULT 0;');
+    await sequelize.query('ALTER TABLE productos ADD COLUMN IF NOT EXISTS existencia INTEGER DEFAULT 0;');
+    await sequelize.query('ALTER TABLE productos ADD COLUMN IF NOT EXISTS activo BOOLEAN DEFAULT true;');
+    await sequelize.query('UPDATE productos SET precio_unitario_venta = COALESCE(precio_unitario_venta, precio_venta, 0);');
+    await sequelize.query('UPDATE productos SET precio_venta = COALESCE(precio_venta, precio_unitario_venta, 0);');
+    await sequelize.query('UPDATE productos SET existencia_actual = COALESCE(existencia_actual, existencia, 0);');
+    await sequelize.query('UPDATE productos SET existencia = COALESCE(existencia, existencia_actual, 0);');
+    await sequelize.query('UPDATE productos SET activo = true WHERE activo IS NULL;');
   } catch (_) {}
 
   ${spec.permissionMatrix ? "await require('./seed-permissions').seed();" : ''}

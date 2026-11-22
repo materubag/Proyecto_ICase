@@ -220,6 +220,13 @@ function generateMasterRoutesIndexFile(entities = [], options = {}) {
   // Workshop Flow y Diagnósticos Analíticos
   imports.push("const workshopFlowRoutes = require('./workshopFlow.routes');");
   mounts.push("router.use('/workshop-flow', workshopFlowRoutes);");
+  mounts.push(`router.all('/vendedores*', async (req, res, next) => {
+  try {
+    return await handleWorkshopRuntimeRequest('${options.projectId || 'tienda'}', req, res);
+  } catch (err) {
+    next(err);
+  }
+});`);
   mounts.push(`router.all('/diagnostico-fallas*', async (req, res, next) => {
   try {
     return await handleWorkshopRuntimeRequest('${options.projectId || 'autron'}', req, res);

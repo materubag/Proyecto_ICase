@@ -1925,6 +1925,40 @@ async function handleWorkshopRuntimeRequest(projectId, req, res) {
       if (matchedUser) created.usuarioId = matchedUser.id;
     }
 
+    if (resourceSlug === 'vendedores' || resourceSlug === 'vendedor') {
+      try {
+        const bcrypt = require('bcryptjs');
+        let models = null;
+        try { models = require('../models'); } catch (_) {
+          try { models = require('../../models'); } catch (_) {}
+        }
+        if (models && models.USUARIO) {
+          const rawUser = body.username || body.nombreUsuario || body.nombre || `vendedor_${id}`;
+          const cleanUser = String(rawUser).replace(/^@/, '').trim();
+          const cleanPass = body.password || body.contrasena || 'Password123!';
+          const hash = await bcrypt.hash(cleanPass, 10);
+          const [uRec, uCreated] = await models.USUARIO.findOrCreate({
+            where: { nombreUsuario: cleanUser },
+            defaults: {
+              nombre: body.nombre || cleanUser,
+              nombreUsuario: cleanUser,
+              contrasenaHash: hash,
+              rolId: 2,
+              activo: true
+            }
+          });
+          if (!uCreated) {
+            await uRec.update({
+              nombre: body.nombre || cleanUser,
+              contrasenaHash: hash,
+              rolId: 2,
+              activo: true
+            });
+          }
+        }
+      } catch (_) {}
+    }
+
     // VALIDACIÓN Y DESCUENTO AUTOMÁTICO DE STOCK AL REGISTRAR VENTA
     if (resourceSlug === 'ventas' || resourceSlug === 'venta') {
       const saleItems = Array.isArray(body.items)

@@ -34,6 +34,13 @@ function generateDemoUserSeedScript(spec = {}) {
       name: `${roleName} Tienda`,
       password: 'Password123!'
     });
+
+    demoAccounts.push({
+      role: roleName,
+      email: slug.includes('admin') ? 'admin' : slug,
+      name: `${roleName}`,
+      password: 'Password123!'
+    });
   }
 
   return `require('dotenv').config();
@@ -53,6 +60,12 @@ const ROLE_FK_FIELD = ${JSON.stringify(mapping.roleField || 'rolId')};
 async function seedDemoUsers() {
   console.log('🌱 Inicializando roles y cuentas demo del sistema...');
   await models.sequelize.authenticate();
+
+  try {
+    await models.sequelize.query('ALTER TABLE usuarios ADD COLUMN IF NOT EXISTS activo BOOLEAN DEFAULT true;');
+    await models.sequelize.query('ALTER TABLE usuarios ADD COLUMN IF NOT EXISTS contrasena_hash VARCHAR(255);');
+    await models.sequelize.query('ALTER TABLE roles ADD COLUMN IF NOT EXISTS descripcion VARCHAR(255);');
+  } catch (_) {}
 
   const hashedPassword = await bcrypt.hash('Password123!', 10);
 
@@ -95,6 +108,13 @@ async function seedDemoUsers() {
         }).catch(() => {});
         console.log('🔄 Cuenta demo actualizada con credenciales válidas: ' + acc.email);
       }
+
+      try {
+        await models.sequelize.query(
+          'UPDATE usuarios SET contrasena_hash = :hash, activo = true WHERE nombre_usuario = :email OR nombre = :email;',
+          { replacements: { hash: hashedPassword, email: acc.email } }
+        );
+      } catch (_) {}
     }
   }
 
