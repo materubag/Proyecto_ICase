@@ -188,7 +188,8 @@ const DEFAULT_SCREENS_BY_ROLE = {
     { key: 'productos', label: 'Gestión de Inventario', icon: 'inventory_2', endpoint: '/productos' },
     { key: 'vendedores', label: 'Gestión de Cuentas de Vendedores', icon: 'badge', endpoint: '/vendedores' },
     { key: 'ventas', label: 'Historial y Consulta de Ventas', icon: 'receipt_long', endpoint: '/ventas' },
-    { key: 'catalogo', label: 'Catálogo de Productos', icon: 'storefront', endpoint: '/catalogo' }
+    { key: 'catalogo', label: 'Catálogo de Productos', icon: 'storefront', endpoint: '/catalogo' },
+    { key: 'facturacion', label: 'Punto de Venta y Facturación', icon: 'point_of_sale', endpoint: '/facturacion' }
   ],
   Vendedor: [
     { key: 'facturacion', label: 'Punto de Venta y Facturación', icon: 'point_of_sale', endpoint: '/facturacion' },

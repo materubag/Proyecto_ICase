@@ -2513,10 +2513,13 @@ export default function ProjectCodeGen({ project, onNavigateTo }) {
                   <button
                     type="button"
                     onClick={() => {
+                      const isTienda = safeProjectName === 'tienda' || (project?.name || '').toLowerCase().includes('tienda');
                       const host = window.location.hostname || 'localhost';
-                      const url = host.includes('trycloudflare') || host.includes('cloudflare')
-                        ? `${window.location.protocol}//${host}`
-                        : `http://${host}:${envConfig.frontendPort || '3005'}`;
+                      const url = isTienda
+                        ? 'https://tienda.arcmsa.site'
+                        : (envConfig.publicUrl || (host.includes('trycloudflare') || host.includes('cloudflare') || host.includes('arcmsa.site')
+                          ? `${window.location.protocol}//${host}`
+                          : `http://${host}:${envConfig.frontendPort || '3005'}`));
                       window.open(url, '_blank');
                     }}
                     style={{
@@ -2536,13 +2539,19 @@ export default function ProjectCodeGen({ project, onNavigateTo }) {
                       boxShadow: '0 2px 6px rgba(79, 70, 229, 0.25)'
                     }}
                   >
-                    <span>Abrir Aplicación en Docker (Puerto {envConfig.frontendPort || '3005'})</span>
+                    <span>
+                      {(safeProjectName === 'tienda' || (project?.name || '').toLowerCase().includes('tienda'))
+                        ? 'Abrir Aplicación en Nube (tienda.arcmsa.site)'
+                        : `Abrir Aplicación en Docker (Puerto ${envConfig.frontendPort || '3005'})`}
+                    </span>
                     <span className="ms ms-xs">open_in_new</span>
                   </button>
                   <a
-                    href={typeof window !== 'undefined' && (window.location.hostname.includes('trycloudflare') || window.location.hostname.includes('cloudflare'))
-                      ? `${window.location.protocol}//${window.location.hostname}`
-                      : `http://${typeof window !== 'undefined' ? window.location.hostname : 'localhost'}:${envConfig.frontendPort || '3005'}`}
+                    href={(safeProjectName === 'tienda' || (project?.name || '').toLowerCase().includes('tienda'))
+                      ? 'https://tienda.arcmsa.site'
+                      : (envConfig.publicUrl || (typeof window !== 'undefined' && (window.location.hostname.includes('trycloudflare') || window.location.hostname.includes('cloudflare') || window.location.hostname.includes('arcmsa.site'))
+                        ? `${window.location.protocol}//${window.location.hostname}`
+                        : `http://${typeof window !== 'undefined' ? window.location.hostname : 'localhost'}:${envConfig.frontendPort || '3005'}`))}
                     target="_blank"
                     rel="noreferrer"
                     style={{
@@ -2553,9 +2562,11 @@ export default function ProjectCodeGen({ project, onNavigateTo }) {
                       fontWeight: 600
                     }}
                   >
-                    {typeof window !== 'undefined' && (window.location.hostname.includes('trycloudflare') || window.location.hostname.includes('cloudflare'))
-                      ? `${window.location.protocol}//${window.location.hostname}`
-                      : `http://${typeof window !== 'undefined' ? window.location.hostname : 'localhost'}:${envConfig.frontendPort || '3005'}`}
+                    {(safeProjectName === 'tienda' || (project?.name || '').toLowerCase().includes('tienda'))
+                      ? 'https://tienda.arcmsa.site'
+                      : (envConfig.publicUrl || (typeof window !== 'undefined' && (window.location.hostname.includes('trycloudflare') || window.location.hostname.includes('cloudflare') || window.location.hostname.includes('arcmsa.site'))
+                        ? `${window.location.protocol}//${window.location.hostname}`
+                        : `http://${typeof window !== 'undefined' ? window.location.hostname : 'localhost'}:${envConfig.frontendPort || '3005'}`))}
                   </a>
                 </div>
               </div>
@@ -2597,10 +2608,13 @@ export default function ProjectCodeGen({ project, onNavigateTo }) {
                   <button
                     type="button"
                     onClick={() => {
+                      const isTienda = safeProjectName === 'tienda' || (project?.name || '').toLowerCase().includes('tienda');
                       const host = window.location.hostname || 'localhost';
-                      const url = host.includes('trycloudflare') || host.includes('cloudflare')
-                        ? `${window.location.protocol}//${host}/api-docs`
-                        : `http://${host}:${envConfig.backendPort || '8085'}/api-docs`;
+                      const url = isTienda
+                        ? 'https://tienda.arcmsa.site/api-docs'
+                        : (envConfig.publicUrl ? `${envConfig.publicUrl}/api-docs` : (host.includes('trycloudflare') || host.includes('cloudflare') || host.includes('arcmsa.site')
+                          ? `${window.location.protocol}//${host}/api-docs`
+                          : `http://${host}:${envConfig.backendPort || '8085'}/api-docs`));
                       window.open(url, '_blank');
                     }}
                     style={{
@@ -2619,13 +2633,19 @@ export default function ProjectCodeGen({ project, onNavigateTo }) {
                       gap: '8px'
                     }}
                   >
-                    <span>Abrir Swagger en Docker (Puerto {envConfig.backendPort || '8085'})</span>
+                    <span>
+                      {(safeProjectName === 'tienda' || (project?.name || '').toLowerCase().includes('tienda'))
+                        ? 'Abrir Swagger (tienda.arcmsa.site/api-docs)'
+                        : `Abrir Swagger en Docker (Puerto ${envConfig.backendPort || '8085'})`}
+                    </span>
                     <span className="ms ms-xs">open_in_new</span>
                   </button>
                   <a
-                    href={typeof window !== 'undefined' && (window.location.hostname.includes('trycloudflare') || window.location.hostname.includes('cloudflare'))
-                      ? `${window.location.protocol}//${window.location.hostname}/api-docs`
-                      : `http://${typeof window !== 'undefined' ? window.location.hostname : 'localhost'}:${envConfig.backendPort || '8085'}/api-docs`}
+                    href={(safeProjectName === 'tienda' || (project?.name || '').toLowerCase().includes('tienda'))
+                      ? 'https://tienda.arcmsa.site/api-docs'
+                      : (envConfig.publicUrl ? `${envConfig.publicUrl}/api-docs` : (typeof window !== 'undefined' && (window.location.hostname.includes('trycloudflare') || window.location.hostname.includes('cloudflare') || window.location.hostname.includes('arcmsa.site'))
+                        ? `${window.location.protocol}//${window.location.hostname}/api-docs`
+                        : `http://${typeof window !== 'undefined' ? window.location.hostname : 'localhost'}:${envConfig.backendPort || '8085'}/api-docs`))}
                     target="_blank"
                     rel="noreferrer"
                     style={{
@@ -2636,9 +2656,11 @@ export default function ProjectCodeGen({ project, onNavigateTo }) {
                       fontWeight: 600
                     }}
                   >
-                    {typeof window !== 'undefined' && (window.location.hostname.includes('trycloudflare') || window.location.hostname.includes('cloudflare'))
-                      ? `${window.location.protocol}//${window.location.hostname}/api-docs`
-                      : `http://${typeof window !== 'undefined' ? window.location.hostname : 'localhost'}:${envConfig.backendPort || '8085'}/api-docs`}
+                    {(safeProjectName === 'tienda' || (project?.name || '').toLowerCase().includes('tienda'))
+                      ? 'https://tienda.arcmsa.site/api-docs'
+                      : (envConfig.publicUrl ? `${envConfig.publicUrl}/api-docs` : (typeof window !== 'undefined' && (window.location.hostname.includes('trycloudflare') || window.location.hostname.includes('cloudflare') || window.location.hostname.includes('arcmsa.site'))
+                        ? `${window.location.protocol}//${window.location.hostname}/api-docs`
+                        : `http://${typeof window !== 'undefined' ? window.location.hostname : 'localhost'}:${envConfig.backendPort || '8085'}/api-docs`))}
                   </a>
                 </div>
               </div>

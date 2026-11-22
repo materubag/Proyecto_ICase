@@ -335,6 +335,15 @@ async function runMigrations() {
     console.log(\`[MIGRATE] OK: \${file}\`);
   }
 
+  // Sincronización de auto-recuperación de columnas en tablas existentes
+  try {
+    await sequelize.query('ALTER TABLE usuarios ADD COLUMN IF NOT EXISTS activo BOOLEAN DEFAULT true;');
+    await sequelize.query('ALTER TABLE productos ADD COLUMN IF NOT EXISTS precio_unitario_venta NUMERIC(12,2);');
+    await sequelize.query('ALTER TABLE productos ADD COLUMN IF NOT EXISTS precio_venta NUMERIC(12,2);');
+    await sequelize.query('UPDATE productos SET precio_unitario_venta = precio_venta WHERE precio_unitario_venta IS NULL;');
+    await sequelize.query('UPDATE productos SET precio_venta = precio_unitario_venta WHERE precio_venta IS NULL;');
+  } catch (_) {}
+
   ${spec.permissionMatrix ? "await require('./seed-permissions').seed();" : ''}
   console.log('[MIGRATE] Migraciones completadas exitosamente.');
 
