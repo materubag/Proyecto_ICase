@@ -102,7 +102,7 @@ class MockupService {
         let stitchTimer;
         const stitchPromise = stitchService.generateMockups(project, screens, relevantRequirements, visualRules);
         const stitchTimeout = new Promise((_, reject) => {
-          stitchTimer = setTimeout(() => reject(new Error('Google Stitch superó el límite de 45s (protección Cloudflare 524)')), 45000);
+          stitchTimer = setTimeout(() => reject(new Error('Google Stitch superó el límite de tiempo de 180s')), 180000);
         });
 
         return await Promise.race([stitchPromise.finally(() => clearTimeout(stitchTimer)), stitchTimeout]);
@@ -180,7 +180,7 @@ class MockupService {
           success: true,
           screens: finalScreens
         });
-      }, 45000);
+      }, 180000);
     });
 
     return Promise.race([
