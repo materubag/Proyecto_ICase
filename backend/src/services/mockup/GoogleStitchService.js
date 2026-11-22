@@ -11,7 +11,7 @@ class GoogleStitchService {
   constructor() {
     this.apiUrl = 'https://stitch.googleapis.com/mcp';
     this.apiKey = env.GOOGLE_STITCH_API_KEY || '';
-    this.concurrency = parseInt(env.STITCH_CONCURRENCY || '6', 10);
+    this.concurrency = parseInt(env.STITCH_CONCURRENCY || '4', 10);
   }
 
   extractHtmlFromStitchDownload(raw) {
