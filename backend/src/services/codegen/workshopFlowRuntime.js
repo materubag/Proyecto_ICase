@@ -1929,9 +1929,7 @@ async function handleWorkshopRuntimeRequest(projectId, req, res) {
       try {
         const bcrypt = require('bcryptjs');
         let models = null;
-        try { models = require('../models'); } catch (_) {
-          try { models = require('../../models'); } catch (_) {}
-        }
+        try { models = require('../models'); } catch (_) {}
         if (models && models.USUARIO) {
           const rawUser = body.username || body.nombreUsuario || body.nombre || `vendedor_${id}`;
           const cleanUser = String(rawUser).replace(/^@/, '').trim();
