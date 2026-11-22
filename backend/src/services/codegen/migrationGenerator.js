@@ -339,6 +339,8 @@ async function runMigrations() {
   try {
     await sequelize.query('ALTER TABLE usuarios ADD COLUMN IF NOT EXISTS activo BOOLEAN DEFAULT true;');
     await sequelize.query('ALTER TABLE usuarios ADD COLUMN IF NOT EXISTS contrasena_hash VARCHAR(255);');
+    await sequelize.query('ALTER TABLE usuarios ADD COLUMN IF NOT EXISTS fecha_creacion TIMESTAMP WITH TIME ZONE DEFAULT NOW();');
+    await sequelize.query('ALTER TABLE usuarios ADD COLUMN IF NOT EXISTS creado_por_usuario_id INTEGER;');
     await sequelize.query('ALTER TABLE roles ADD COLUMN IF NOT EXISTS descripcion VARCHAR(255);');
     await sequelize.query('ALTER TABLE productos ADD COLUMN IF NOT EXISTS precio_unitario_venta NUMERIC(12,2) DEFAULT 0;');
     await sequelize.query('ALTER TABLE productos ADD COLUMN IF NOT EXISTS precio_venta NUMERIC(12,2) DEFAULT 0;');

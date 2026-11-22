@@ -64,6 +64,8 @@ async function seedDemoUsers() {
   try {
     await models.sequelize.query('ALTER TABLE usuarios ADD COLUMN IF NOT EXISTS activo BOOLEAN DEFAULT true;');
     await models.sequelize.query('ALTER TABLE usuarios ADD COLUMN IF NOT EXISTS contrasena_hash VARCHAR(255);');
+    await models.sequelize.query('ALTER TABLE usuarios ADD COLUMN IF NOT EXISTS fecha_creacion TIMESTAMP WITH TIME ZONE DEFAULT NOW();');
+    await models.sequelize.query('ALTER TABLE usuarios ADD COLUMN IF NOT EXISTS creado_por_usuario_id INTEGER;');
     await models.sequelize.query('ALTER TABLE roles ADD COLUMN IF NOT EXISTS descripcion VARCHAR(255);');
   } catch (_) {}
 

@@ -10,6 +10,8 @@ docker exec -i tienda_postgres psql -U postgres -d tienda_db << 'EOF'
 -- Columnas requeridas para USUARIOS
 ALTER TABLE usuarios ADD COLUMN IF NOT EXISTS activo BOOLEAN DEFAULT true;
 ALTER TABLE usuarios ADD COLUMN IF NOT EXISTS contrasena_hash VARCHAR(255);
+ALTER TABLE usuarios ADD COLUMN IF NOT EXISTS fecha_creacion TIMESTAMP WITH TIME ZONE DEFAULT NOW();
+ALTER TABLE usuarios ADD COLUMN IF NOT EXISTS creado_por_usuario_id INTEGER;
 ALTER TABLE roles ADD COLUMN IF NOT EXISTS descripcion VARCHAR(255);
 
 -- Columnas requeridas para PRODUCTOS
