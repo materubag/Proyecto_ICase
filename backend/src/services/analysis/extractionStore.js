@@ -50,14 +50,26 @@ async function persist(projectId,result,meta={}){
       // An approved/human-edited statement and its UUID remain untouched.
       if(existing?.status==='PENDING_REVIEW')data.qualityReport={...existing.qualityReport,pending:evidence.pending,partial:clean.partial};
       let row;
-      if(existing)row=await tx.requirementCandidate.update({where:{id:existing.id},data});
+      const candRule = require('./tiendaRules').matchTiendaRule(`${r.name || ''} ${r.statement || ''}`, r.originalCode || r.id);
+      const candTitle = (candRule?.cleanName && (r.name || r.statement).length > 50) ? candRule.cleanName : (r.name || candRule?.cleanName || r.statement);
+      const candPre = candRule ? candRule.preconditions : null;
+      const candPost = candRule ? candRule.postconditions : null;
+      const enrichedEvidence = { ...evidence, ...(candPre ? { preconditions: candPre, postconditions: candPost } : {}) };
+
+      if(existing)row=await tx.requirementCandidate.update({where:{id:existing.id},data:{
+        ...data,
+        evidence: enrichedEvidence,
+        ...(candTitle && { title: candTitle }),
+        qualityReport: { ...existing.qualityReport, pending: evidence.pending, partial: clean.partial, ...(candPre ? { preconditions: candPre, postconditions: candPost } : {}) }
+      }});
       else row=await tx.requirementCandidate.create({data:{...data,projectId,
         sourceId:meta.sourceId||null,sourceVersionId:meta.sourceVersionId||null,
         sourceSegmentId:r.evidence.find(e=>e.sourceSegmentId)?.sourceSegmentId||null,
-        temporaryCode:r.originalCode||r.id,title:r.name||r.statement,statement:r.statement,
+        temporaryCode:r.originalCode||r.id,title:candTitle,statement:r.statement,
         originalStatement:r.evidence.map(e=>e.quote).join('\n'),type:r.type,
         origin:r.source==='inferred'?'INFERRED':'EXPLICIT',status:'PENDING_REVIEW',confidence:null,
-        qualityReport:{pending:evidence.pending,partial:clean.partial}}});
+        evidence: enrichedEvidence,
+        qualityReport:{pending:evidence.pending,partial:clean.partial, ...(candPre ? { preconditions: candPre, postconditions: candPost } : {})}}});
       if(!existing)old.push(row);
       saved.push(row);
       if(row.promotedRequirementId){
@@ -122,8 +134,30 @@ async function promote(tx,candidate){
       let next=Math.max(0,...reserved.filter(r=>r.code.startsWith(prefix+'-')).map(r=>Number(r.code.match(/(\d+)$/)?.[1])||0))+1;
       code=`${prefix}-${String(next).padStart(2,'0')}`;
     }
-    official=await tx.requirement.create({data:{projectId:current.projectId,canonicalKey:key,code,name:current.title,description:current.statement,
-      type:current.type,priority:current.priority,status:'APPROVED',actorIds,sources:ev,qualityReport:current.qualityReport||{}}});
+    const rule = require('./tiendaRules').matchTiendaRule(`${code} ${current.title} ${current.statement}`, code);
+    const candidatePre = current.preconditions || current.evidence?.preconditions || current.qualityReport?.preconditions;
+    const candidatePost = current.postconditions || current.evidence?.postconditions || current.qualityReport?.postconditions;
+    const isLoginOrAuth = /login|inicio\s+de\s+sesi[oó]n|iniciar\s+sesi[oó]n|autenticaci[oó]n|rf-01\b/i.test(`${code} ${current.title} ${current.statement}`);
+    const preconditions = rule?.preconditions || candidatePre || (isLoginOrAuth
+      ? 'El usuario se encuentra en la pantalla de inicio de sesión con el sistema en ejecución.'
+      : 'El usuario debe estar autenticado con rol y permisos correspondientes.');
+    const postconditions = rule?.postconditions || candidatePost || (isLoginOrAuth
+      ? 'Credenciales validadas con JWT emitido; redirección al panel de Administrador o mostrador de Vendedor según su rol asignado.'
+      : 'El sistema actualiza el registro en la base de datos y refleja los cambios.');
+    const finalName = (rule?.cleanName && current.title.length > 50) ? rule.cleanName : (rule?.cleanName || current.title);
+
+    let resolvedActorIds = [...actorIds];
+    if (rule?.actorRoles?.length) {
+      for (const roleName of rule.actorRoles) {
+        const found = actors.find(a => new RegExp(`^${roleName}$`, 'i').test(a.name));
+        if (found && !resolvedActorIds.includes(found.id)) {
+          resolvedActorIds.push(found.id);
+        }
+      }
+    }
+
+    official=await tx.requirement.create({data:{projectId:current.projectId,canonicalKey:key,code,name:finalName,description:current.statement,
+      type:current.type,priority:current.priority,status:'APPROVED',actorIds:resolvedActorIds,preconditions,postconditions,sources:ev,qualityReport:current.qualityReport||{}}});
     await require('../engineering/change.service').remember(tx,official);
   }
   const domain=require('../engineering/domain');

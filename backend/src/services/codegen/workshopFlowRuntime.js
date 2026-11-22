@@ -200,6 +200,7 @@ function createInitialProjectState() {
     ordenMecanicos: [],
     actividades: [],
     ventas: [],
+    vendedores: [],
     compras: [],
     propuestaObdCodigos: [],
     programacionMantenimientos: [],
@@ -210,12 +211,54 @@ function createInitialProjectState() {
   };
 }
 
+const STORE_PRODUCTS_SEED = [
+  { id: 1, codigo: 'SKU-77210', nombre: 'Aceite de Oliva Extra Virgen 500ml', categoria: 'Abarrotes', precio_venta: 128.50, precio: 128.50, costo: 95.00, existencia_actual: 45, stock: 45, stockMinimo: 10, activo: true },
+  { id: 2, codigo: 'SKU-31094', nombre: 'Café Tostado en Grano Selección 1kg', categoria: 'Bebidas', precio_venta: 245.00, precio: 245.00, costo: 180.00, existencia_actual: 3, stock: 3, stockMinimo: 10, activo: true },
+  { id: 3, codigo: 'SKU-99412', nombre: 'Detergente Líquido Biodegradable 3L', categoria: 'Limpieza', precio_venta: 162.00, precio: 162.00, costo: 115.00, existencia_actual: 28, stock: 28, stockMinimo: 8, activo: true },
+  { id: 4, codigo: 'SKU-48190', nombre: 'Agua Mineral de Manantial Pack 6x500ml', categoria: 'Bebidas', precio_venta: 72.00, precio: 72.00, costo: 48.00, existencia_actual: 60, stock: 60, stockMinimo: 15, activo: true },
+  { id: 5, codigo: 'SKU-10245', nombre: 'Arroz Flor Extra Envejecido 1kg', categoria: 'Abarrotes', precio_venta: 38.00, precio: 38.00, costo: 25.00, existencia_actual: 40, stock: 40, stockMinimo: 10, activo: true },
+  { id: 6, codigo: 'SKU-55219', nombre: 'Atún Lomitos en Aceite de Girasol 140g', categoria: 'Enlatados', precio_venta: 45.00, precio: 45.00, costo: 32.00, existencia_actual: 50, stock: 50, stockMinimo: 12, activo: true },
+  { id: 7, codigo: 'SKU-88231', nombre: 'Leche Entera Larga Vida 1L', categoria: 'Lácteos', precio_venta: 28.00, precio: 28.00, costo: 19.00, existencia_actual: 35, stock: 35, stockMinimo: 10, activo: true },
+  { id: 8, codigo: 'SKU-66324', nombre: 'Fideos Spaghetti Clásico 400g', categoria: 'Pastas', precio_venta: 22.00, precio: 22.00, costo: 14.00, existencia_actual: 8, stock: 8, stockMinimo: 10, activo: true }
+];
+
+const STORE_VENDORS_SEED = [
+  { id: 1, nombre: 'Carlos Mendoza', username: 'cmendoza', rol: 'Vendedor', fechaAlta: '14 Oct 2024', activo: true },
+  { id: 2, nombre: 'Mariana Soto', username: 'msoto', rol: 'Vendedor', fechaAlta: '28 Sep 2024', activo: true },
+  { id: 3, nombre: 'Roberto Gómez', username: 'rgomez', rol: 'Vendedor', fechaAlta: '15 Ago 2024', activo: true },
+  { id: 4, nombre: 'Elena Castillo', username: 'ecastillo', rol: 'Vendedor', fechaAlta: '02 Jul 2024', activo: true }
+];
+
+const STORE_SALES_SEED = [
+  { id: 1, factura: 'FAC-001-0024', fecha: '21 Nov 2024 · 10:15', cliente: 'Consumidor Final', vendedor: 'Carlos Mendoza', productos: '2x Aceite de Oliva 500ml, 1x Café Tostado 1kg', total: 502.00, subtotal: 436.52, iva: 65.48, unidades: 3 },
+  { id: 2, factura: 'FAC-001-0023', fecha: '21 Nov 2024 · 09:42', cliente: 'Distribuidora San Juan', vendedor: 'Mariana Soto', productos: '5x Arroz Flor 1kg, 3x Atún Lomitos 140g', total: 325.00, subtotal: 282.61, iva: 42.39, unidades: 8 },
+  { id: 3, factura: 'FAC-001-0022', fecha: '21 Nov 2024 · 08:30', cliente: 'Juan Carlos Morales', vendedor: 'Carlos Mendoza', productos: '2x Detergente Líquido 3L', total: 324.00, subtotal: 281.74, iva: 42.26, unidades: 2 },
+  { id: 4, factura: 'FAC-001-0021', fecha: '20 Nov 2024 · 18:05', cliente: 'Consumidor Final', vendedor: 'Elena Castillo', productos: '6x Agua Mineral 500ml, 2x Fideos Spaghetti 400g', total: 116.00, subtotal: 100.87, iva: 15.13, unidades: 8 },
+  { id: 5, factura: 'FAC-001-0020', fecha: '20 Nov 2024 · 16:20', cliente: 'Restaurante El Criollo', vendedor: 'Roberto Gómez', productos: '10x Arroz Flor 1kg, 4x Aceite 1L', total: 492.00, subtotal: 427.83, iva: 64.17, unidades: 14 }
+];
+
 function getState(projectId) {
   const key = String(projectId || 'default');
   if (!projectStates.has(key)) {
     projectStates.set(key, createInitialProjectState());
   }
-  return projectStates.get(key);
+  const state = projectStates.get(key);
+  if (Array.isArray(state.productos) && state.productos.length === 0) {
+    state.productos = STORE_PRODUCTS_SEED.map(p => ({ ...p }));
+  }
+  if (!state.vendedores || state.vendedores.length === 0) {
+    state.vendedores = STORE_VENDORS_SEED.map(v => ({ ...v }));
+  }
+  if (!state.ventas || state.ventas.length === 0) {
+    state.ventas = STORE_SALES_SEED.map(s => ({ ...s }));
+  }
+  if (!state.usuarios.some(u => u.rol === 'Vendedor' || u.role === 'Vendedor')) {
+    state.usuarios.push(
+      { id: 10, nombre: 'Carlos Mendoza', correo: 'vendedor@tienda.com', email: 'vendedor@tienda.com', rolId: 10, role: 'Vendedor', rol: 'Vendedor', ROL: { id: 10, nombre: 'Vendedor' }, activo: true, cambioObligatorio: false, passwordPlain: 'Password123!' },
+      { id: 11, nombre: 'Laura Paredes', correo: 'admin@tienda.com', email: 'admin@tienda.com', rolId: 1, role: 'Administrador', rol: 'Administrador', ROL: { id: 1, nombre: 'Administrador' }, activo: true, cambioObligatorio: false, passwordPlain: 'Password123!' }
+    );
+  }
+  return state;
 }
 
 function nextId(list) {
@@ -1794,6 +1837,8 @@ function handleWorkshopRuntimeRequest(projectId, req, res) {
     'orden-trabajo-detalles': 'ordenTrabajos',
     'orden-mecanicos': 'ordenMecanicos',
     actividades: 'actividades',
+    vendedores: 'vendedores',
+    vendedor: 'vendedores',
     ventas: 'ventas',
     venta: 'ventas',
     compras: 'compras',
@@ -1879,6 +1924,70 @@ function handleWorkshopRuntimeRequest(projectId, req, res) {
       const matchedUser = state.usuarios.find(u => u.correo.toLowerCase() === String(created.correo).toLowerCase());
       if (matchedUser) created.usuarioId = matchedUser.id;
     }
+
+    // VALIDACIÓN Y DESCUENTO AUTOMÁTICO DE STOCK AL REGISTRAR VENTA
+    if (resourceSlug === 'ventas' || resourceSlug === 'venta') {
+      const saleItems = Array.isArray(body.items)
+        ? body.items
+        : (Array.isArray(body.detalles) ? body.detalles : (Array.isArray(body.detalle_venta) ? body.detalle_venta : []));
+
+      // 1. Validación previa estricta: ningún producto puede vender más de su stock disponible
+      for (const item of saleItems) {
+        const prodId = item.producto_id || item.productoId || item.id;
+        const prodCodigo = item.codigo;
+        const qty = Number(item.cantidad || 1);
+        const prod = (state.productos || []).find(p =>
+          (prodId && String(p.id) === String(prodId)) ||
+          (prodCodigo && String(p.codigo).toLowerCase() === String(prodCodigo).toLowerCase())
+        );
+
+        if (prod) {
+          const currentStock = Number(prod.existencia_actual != null ? prod.existencia_actual : (prod.stock || 0));
+          if (qty > currentStock) {
+            return res.status(400).json({
+              success: false,
+              error: {
+                message: `Stock insuficiente para "${prod.nombre}". Existencia disponible: ${currentStock}, Solicitado: ${qty}`
+              }
+            });
+          }
+        }
+      }
+
+      // 2. Descuento atómico si todos los productos tienen stock suficiente
+      for (const item of saleItems) {
+        const prodId = item.producto_id || item.productoId || item.id;
+        const prodCodigo = item.codigo;
+        const qty = Number(item.cantidad || 1);
+        const prod = (state.productos || []).find(p =>
+          (prodId && String(p.id) === String(prodId)) ||
+          (prodCodigo && String(p.codigo).toLowerCase() === String(prodCodigo).toLowerCase())
+        );
+
+        if (prod) {
+          const currentStock = Number(prod.existencia_actual != null ? prod.existencia_actual : (prod.stock || 0));
+          const newStock = Math.max(0, currentStock - qty);
+          prod.existencia_actual = newStock;
+          prod.stock = newStock;
+
+          // Registrar en kardex de movimientos de inventario
+          if (Array.isArray(state.movimientoInventarios)) {
+            state.movimientoInventarios.unshift({
+              id: nextId(state.movimientoInventarios),
+              productoId: prod.id,
+              productoNombre: prod.nombre,
+              tipoMovimiento: 'SALIDA_VENTA',
+              cantidad: qty,
+              saldoResultante: newStock,
+              fechaMovimiento: now,
+              referencia: `Factura ${body.numero_factura || id}`,
+              usuarioId: user?.id || null
+            });
+          }
+        }
+      }
+    }
+
     list.unshift(created);
     addAudit(state, user, resourceSlug.toUpperCase(), id, 'CREAR', created);
     return res.status(201).json({ success: true, data: created });

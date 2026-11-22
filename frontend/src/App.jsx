@@ -12,6 +12,52 @@ export default function App() {
   const [pendingCandidatesCount, setPendingCandidatesCount] = useState(0);
   const [activeActivity, setActiveActivity] = useState(null);
 
+  // Restore navigation from URL hash or localStorage on initial load
+  useEffect(() => {
+    try {
+      const hashParams = new URLSearchParams(window.location.hash.replace(/^#/, ''));
+      const savedProjectId = hashParams.get('project') || localStorage.getItem('icase_active_project');
+      const savedView = hashParams.get('view') || localStorage.getItem('icase_active_view') || 'summary';
+
+      if (savedProjectId) {
+        projectsApi.getById(savedProjectId)
+          .then(project => {
+            if (project) {
+              setCurrentProject(project);
+              setActiveView(savedView !== 'projects' ? savedView : 'summary');
+              refreshProjectStats(project.id);
+            }
+          })
+          .catch(err => {
+            console.warn('Could not restore saved project:', err);
+            localStorage.removeItem('icase_active_project');
+            localStorage.removeItem('icase_active_view');
+          });
+      }
+    } catch (err) {
+      console.warn('Error reading stored project route:', err);
+    }
+  }, []);
+
+  // Synchronize state with URL hash & localStorage
+  useEffect(() => {
+    if (currentProject) {
+      localStorage.setItem('icase_active_project', currentProject.id);
+      localStorage.setItem('icase_active_view', activeView);
+      window.location.hash = `project=${encodeURIComponent(currentProject.id)}&view=${encodeURIComponent(activeView)}`;
+    } else {
+      localStorage.removeItem('icase_active_project');
+      localStorage.removeItem('icase_active_view');
+      if (window.location.hash) {
+        try {
+          window.history.replaceState(null, '', window.location.pathname + window.location.search);
+        } catch {
+          window.location.hash = '';
+        }
+      }
+    }
+  }, [currentProject, activeView]);
+
   // Load pending candidates count whenever current project changes
   async function refreshProjectStats(projectId) {
     if (!projectId) {
@@ -49,16 +95,22 @@ export default function App() {
   }
 
   function handleBackToProjects() {
+    localStorage.removeItem('icase_active_project');
+    localStorage.removeItem('icase_active_view');
     setCurrentProject(null);
     setActiveView('projects');
     setPendingCandidatesCount(0);
     setActiveActivity(null);
+    try {
+      window.history.replaceState(null, '', window.location.pathname + window.location.search);
+    } catch {
+      window.location.hash = '';
+    }
   }
 
   function handleViewChange(viewName) {
     if (viewName === 'projects') {
-      setCurrentProject(null);
-      setActiveView('projects');
+      handleBackToProjects();
     } else {
       setActiveView(viewName);
     }

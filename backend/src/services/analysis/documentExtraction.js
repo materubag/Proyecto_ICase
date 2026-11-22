@@ -63,7 +63,7 @@ async function extract(text,options={}) {
   let requirements=identity.consolidate(local.map(r=>{
     const parts=segments.filter(s=>s.start<r.end&&s.end>r.start);
     return {id:stableId('REQ',[r.type,r.text]),code:r.originalCode,originalCode:r.originalCode,
-      name:r.text,description:r.text,statement:r.text,type:r.type,source:'explicit',extractionMethod:'LOCAL',section:r.section,context:{section:r.section,start:r.start,end:r.end},
+      name:r.name||r.text,description:r.description||r.text,statement:r.text,type:r.type,source:'explicit',extractionMethod:'LOCAL',section:r.section,context:{section:r.section,start:r.start,end:r.end},
       evidence:evidence({segmentIds:parts.map(s=>s.id),quote:r.sourceText}),segmentIds:parts.map(s=>s.id),
       associations:[],actorIds:[],pending:[],confidence:null,status:'PENDING_REVIEW'};
   }));

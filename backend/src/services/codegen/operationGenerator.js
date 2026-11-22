@@ -324,6 +324,16 @@ const operationController = require('../controllers/operation.controller');
 ${authImports}
 ${routeLines.join('\n')}
 
+// Fallback para operaciones UC del flujo de taller
+const { handleWorkshopRuntimeRequest } = require('../services/workshopFlowRuntime');
+router.all('*', async (req, res, next) => {
+  try {
+    return await handleWorkshopRuntimeRequest('autron', req, res);
+  } catch (error) {
+    next(error);
+  }
+});
+
 module.exports = router;
 `;
 }

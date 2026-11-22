@@ -1,0 +1,14 @@
+{
+  "envConfig": {
+    "backendPort": "8087",
+    "backendContainerPort": "8080",
+    "frontendPort": "3010",
+    "frontendContainerPort": "80",
+    "dbHostPort": "5438",
+    "dbContainerPort": "5432",
+    "dbName": "tienda_db",
+    "dbUser": "postgres",
+    "networkName": "tienda_network"
+  },
+  "updatedAt": "2026-11-22T04:23:08.366Z"
+}

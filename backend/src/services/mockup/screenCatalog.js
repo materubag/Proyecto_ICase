@@ -9,6 +9,32 @@ const SAMPLE = {
 };
 
 const SCREEN_CATALOG = [
+  // --- DOMINIO TIENDA / PUNTO DE VENTA ---
+  { key: 'vendedores', name: 'Gestión de Cuentas de Vendedores', route: '/vendedores', actorName: 'Administrador', archetype: 'B', primaryAction: 'Crear vendedor',
+    description: 'Creación y administración de cuentas de vendedores con nombre, usuario único y contraseña con rol Vendedor.',
+    fields: ['Nombre completo', 'Nombre de usuario', 'Contraseña inicial'],
+    tableHeaders: ['ID', 'Nombre', 'Usuario', 'Rol', 'Estado'],
+    sampleRows: [['VEN-01', 'Carlos Gómez', 'cgomez', 'Vendedor', 'Activo'], ['VEN-02', 'Laura Torres', 'ltorres', 'Vendedor', 'Activo']] },
+  { key: 'productos', name: 'Registro y Gestión de Inventario', route: '/productos', actorName: 'Administrador', archetype: 'C', primaryAction: 'Registrar producto',
+    description: 'Alta de productos en inventario con código único, nombre, precio unitario de venta y cantidad inicial en stock.',
+    fields: ['Código de producto', 'Nombre del producto', 'Precio unitario ($)', 'Stock inicial'],
+    tableHeaders: ['Código', 'Producto', 'Precio Unitario', 'Stock', 'Estado'],
+    sampleRows: [['PROD-001', 'Arroz Extra 1kg', '$1.80', '50', 'Disponible'], ['PROD-002', 'Aceite Vegetal 900ml', '$3.20', '35', 'Disponible'], ['PROD-003', 'Leche Entera 1L', '$1.50', '40', 'Disponible']] },
+  { key: 'catalogo', name: 'Catálogo de Productos para Venta', route: '/catalogo', actorName: 'Vendedor', archetype: 'C', primaryAction: 'Añadir al carrito',
+    description: 'Visualización de productos con existencias en tiempo real y precios para seleccionar y agregar al borrador de factura.',
+    tableHeaders: ['Código', 'Producto', 'Precio Unitario', 'Existencias', 'Acción'],
+    sampleRows: [['PROD-001', 'Arroz Extra 1kg', '$1.80', '50', 'Agregar al carrito'], ['PROD-002', 'Aceite Vegetal 900ml', '$3.20', '35', 'Agregar al carrito']] },
+  { key: 'facturacion', name: 'Punto de Venta y Facturación', route: '/facturacion', actorName: 'Vendedor', archetype: 'B', primaryAction: 'Facturar y Descontar Stock',
+    description: 'Mostrador de facturación interactivo: cálculo de líneas, subtotal, total general y emisión con descuento atómico de stock.',
+    fields: ['Producto', 'Cantidad', 'Precio unitario'],
+    tableHeaders: ['Ítem', 'Producto', 'Cantidad', 'P. Unitario', 'Subtotal'],
+    sampleRows: [['1', 'Arroz Extra 1kg', '2', '$1.80', '$3.60'], ['2', 'Aceite Vegetal 900ml', '1', '$3.20', '$3.20']] },
+  { key: 'ventas', name: 'Historial y Consulta de Ventas', route: '/ventas', actorName: 'Administrador', archetype: 'C', primaryAction: 'Ver Detalle',
+    description: 'Consulta cronológica de ventas: número de factura, fecha, vendedor responsable, detalle de productos y monto total.',
+    tableHeaders: ['Nº Factura', 'Fecha / Hora', 'Vendedor', 'Productos', 'Total ($)'],
+    sampleRows: [['FAC-0001', '2026-11-21 14:30', 'Carlos Gómez', 'Arroz (2), Aceite (1)', '$6.80'], ['FAC-0002', '2026-11-21 15:10', 'Carlos Gómez', 'Leche Entera (3)', '$4.50']] },
+
+  // --- ACCESO GLOBAL (SUELTO / PÚBLICO) ---
   { key: 'login', name: 'Inicio de Sesión y Acceso al Sistema', route: '/login', actorName: 'Público', archetype: 'A', primaryAction: 'Ingresar',
     description: 'Portal de autenticación: correo, contraseña y acceso según rol.',
     fields: ['Correo', 'Contraseña'], nav: [] },

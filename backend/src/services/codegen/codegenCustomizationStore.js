@@ -7,6 +7,41 @@ const STORE_DIR = path.join(__dirname, 'customizations');
 
 const SCREEN_CATALOG = [
   {
+    key: 'facturacion',
+    label: 'Punto de Venta y Facturación',
+    icon: 'point_of_sale',
+    endpoint: '/facturacion',
+    aliases: ['facturacion', 'punto de venta', 'punto de venta y facturacion', 'facturacion y cobro', 'caja', 'pos', 'cobro en caja', 'emitir factura']
+  },
+  {
+    key: 'catalogo',
+    label: 'Catálogo de Productos',
+    icon: 'storefront',
+    endpoint: '/catalogo',
+    aliases: ['catalogo', 'catalogo de productos', 'catalogo de productos para venta', 'catalogo general', 'catalogo general de productos', 'ver catalogo', 'productos para venta']
+  },
+  {
+    key: 'productos',
+    label: 'Gestión de Inventario',
+    icon: 'inventory_2',
+    endpoint: '/productos',
+    aliases: ['registro y gestion de inventario', 'gestion de inventario', 'inventario de productos', 'control de inventario', 'registro y actualizacion de productos', 'actualizacion de productos', 'inventario']
+  },
+  {
+    key: 'vendedores',
+    label: 'Gestión de Cuentas de Vendedores',
+    icon: 'badge',
+    endpoint: '/vendedores',
+    aliases: ['vendedores', 'cuentas de vendedores', 'gestion de cuentas de vendedores', 'registro de vendedores', 'usuarios vendedores', 'vendedor']
+  },
+  {
+    key: 'ventas',
+    label: 'Historial y Consulta de Ventas',
+    icon: 'receipt_long',
+    endpoint: '/ventas',
+    aliases: ['historial y consulta de ventas', 'consulta de ventas', 'historial de ventas', 'ventas registradas', 'reporte de ventas', 'ventas']
+  },
+  {
     key: 'reportes',
     label: 'Dashboard',
     icon: 'analytics',
@@ -150,13 +185,14 @@ const SCREEN_CATALOG = [
 
 const DEFAULT_SCREENS_BY_ROLE = {
   Administrador: [
-    { key: 'reportes', label: 'Dashboard', icon: 'analytics', endpoint: '/orden-trabajos' },
-    { key: 'inventario', label: 'Repuestos', icon: 'inventory_2', endpoint: '/productos' },
-    { key: 'clientes', label: 'Directorio de Clientes', icon: 'group', endpoint: '/clientes' },
-    { key: 'servicios', label: 'Catálogo de Servicios', icon: 'design_services', endpoint: '/servicios' },
-    { key: 'compras', label: 'Proveedores y Compras', icon: 'local_shipping', endpoint: '/compras' },
-    { key: 'conocimiento', label: 'Base de Conocimiento', icon: 'menu_book', endpoint: '/obd-codigos' },
-    { key: 'usuarios', label: 'Usuarios y Auditoría', icon: 'manage_accounts', endpoint: '/usuarios' }
+    { key: 'productos', label: 'Gestión de Inventario', icon: 'inventory_2', endpoint: '/productos' },
+    { key: 'vendedores', label: 'Gestión de Cuentas de Vendedores', icon: 'badge', endpoint: '/vendedores' },
+    { key: 'ventas', label: 'Historial y Consulta de Ventas', icon: 'receipt_long', endpoint: '/ventas' },
+    { key: 'catalogo', label: 'Catálogo de Productos', icon: 'storefront', endpoint: '/catalogo' }
+  ],
+  Vendedor: [
+    { key: 'facturacion', label: 'Punto de Venta y Facturación', icon: 'point_of_sale', endpoint: '/facturacion' },
+    { key: 'catalogo', label: 'Catálogo de Productos', icon: 'storefront', endpoint: '/catalogo' }
   ],
   Recepción: [
     { key: 'recepcion', label: 'Recepción', icon: 'fact_check', endpoint: '/recepciones' },
@@ -297,6 +333,30 @@ function saveProjectCustomizations(projectId, data) {
   };
   fs.writeFileSync(filePath, JSON.stringify(payload, null, 2), 'utf8');
   return payload;
+}
+
+function getProjectEnvConfig(projectId, projectName = 'app') {
+  const raw = readRawStore(projectId);
+  if (raw && raw.envConfig && typeof raw.envConfig === 'object') {
+    return raw.envConfig;
+  }
+  const safe = (projectName || 'app').toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/[^a-z0-9]/g, '_');
+  return {
+    backendPort: '8087',
+    backendContainerPort: '8080',
+    frontendPort: '3010',
+    frontendContainerPort: '80',
+    dbHostPort: '5438',
+    dbContainerPort: '5432',
+    dbName: `${safe}_db`,
+    dbUser: 'postgres',
+    networkName: `${safe}_network`
+  };
+}
+
+function saveProjectEnvConfig(projectId, envConfig) {
+  if (!projectId || !envConfig) return null;
+  return saveProjectCustomizations(projectId, { envConfig });
 }
 
 function getProjectScreenOverrides(projectId) {
@@ -693,6 +753,8 @@ module.exports = {
   matchMockupToCatalogEntry,
   getProjectCustomizations,
   saveProjectCustomizations,
+  getProjectEnvConfig,
+  saveProjectEnvConfig,
   getProjectScreenOverrides,
   saveProjectScreenOverride,
   getEffectiveScreensByRole,

@@ -580,6 +580,8 @@ async function buildProjectSpec(projectId, options = {}) {
       name: uc.name,
       useCaseId: uc.id,
       requirementIds: uc.requirementIds || [],
+      preconditions: uc.preconditions ? [uc.preconditions] : (uc.evidence?.executionContract?.preconditions || []),
+      postconditions: uc.postconditions ? [uc.postconditions] : (uc.evidence?.executionContract?.postconditions || []),
       processType: uc.processType || 'CORE_OPERATION',
       type: 'BUSINESS_LOGIC',
       route,

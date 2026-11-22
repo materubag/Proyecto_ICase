@@ -228,17 +228,21 @@ function generateMigrationForConstraints(relationships = [], entities = [], time
         allowNull: true
       });
     }
-    await queryInterface.addConstraint('${hostTable}', {
-      fields: ['${hostCol}'],
-      type: 'foreign key',
-      name: '${constraintName}',
-      references: {
-        table: '${refTable}',
-        field: '${refCol}'
-      },
-      onDelete: '${rel.onDelete || 'RESTRICT'}',
-      onUpdate: 'CASCADE'
-    });`);
+    try {
+      await queryInterface.addConstraint('${hostTable}', {
+        fields: ['${hostCol}'],
+        type: 'foreign key',
+        name: '${constraintName}',
+        references: {
+          table: '${refTable}',
+          field: '${refCol}'
+        },
+        onDelete: '${rel.onDelete || 'RESTRICT'}',
+        onUpdate: 'CASCADE'
+      });
+    } catch (err) {
+      if (!/already exists|duplicate/i.test(err.message)) throw err;
+    }`);
 
     removeConstraintLines.push(`    await queryInterface.removeConstraint('${hostTable}', '${constraintName}');`);
   }

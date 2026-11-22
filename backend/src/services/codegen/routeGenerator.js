@@ -44,6 +44,12 @@ function generateEntityRoutesFile(entity, options = {}) {
     // Least privilege: Clientes y Mecánicos no acceden a entidades financieras o proveedor
     if (isSensitiveEntity || isInventoryMove) {
       roles = roles.filter(r => r !== 'Cliente' && r !== 'Mecánico');
+      if (/venta|detalleventa/i.test(modelName) && !roles.includes('Vendedor')) {
+        roles.push('Vendedor');
+      }
+    }
+    if (isCatalog && !roles.includes('Vendedor')) {
+      roles.push('Vendedor');
     }
     // Mecánico no muta catálogo de productos ni proveedores
     if (['POST', 'PUT', 'DELETE'].includes(method) && isCatalog) {
@@ -185,6 +191,19 @@ function generateMasterRoutesIndexFile(entities = [], options = {}) {
   imports.push("const uploadRoutes = require('./upload.routes');");
   mounts.push("router.use('/upload', uploadRoutes);");
 
+  // Interceptor de operaciones de venta y flujo de caja con validación de stock atómica
+  imports.push("const { handleWorkshopRuntimeRequest } = require('../services/workshopFlowRuntime');");
+  mounts.push(`router.all('/ventas*', async (req, res, next) => {
+  if (req.method === 'POST') {
+    try {
+      return await handleWorkshopRuntimeRequest('${options.projectId || 'tienda'}', req, res);
+    } catch (err) {
+      return next(err);
+    }
+  }
+  next();
+});`);
+
   for (const entity of entities) {
     const naming = deriveNaming(entity.name);
     const varName = naming.paramName;
@@ -197,6 +216,17 @@ function generateMasterRoutesIndexFile(entities = [], options = {}) {
     imports.push("const operationRoutes = require('./operation.routes');");
     mounts.push("router.use('/operations', operationRoutes);");
   }
+
+  // Workshop Flow y Diagnósticos Analíticos
+  imports.push("const workshopFlowRoutes = require('./workshopFlow.routes');");
+  mounts.push("router.use('/workshop-flow', workshopFlowRoutes);");
+  mounts.push(`router.all('/diagnostico-fallas*', async (req, res, next) => {
+  try {
+    return await handleWorkshopRuntimeRequest('${options.projectId || 'autron'}', req, res);
+  } catch (err) {
+    next(err);
+  }
+});`);
 
   return `/**
  * Enrutador Central de la API

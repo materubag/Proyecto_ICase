@@ -96,12 +96,75 @@ export default function ProjectRequirements({ project, onProjectUpdated, initial
     return matchType && matchSearch;
   });
 
+  const TIENDA_RULES = [
+    {
+      match: /login|inicio\s+de\s+sesi[oó]n|iniciar\s+sesi[oó]n|autenticaci[oó]n|credenciales|rf-01\b/i,
+      pre: 'El usuario se encuentra en la pantalla de inicio de sesión con el sistema en ejecución.',
+      post: 'Credenciales validadas con JWT emitido; redirección al panel de Administrador o mostrador de Vendedor según su rol asignado.'
+    },
+    {
+      match: /crear\s+cuenta.*vendedor|cuenta.*vendedor|registrar\s+vendedor|nuevo\s+vendedor|rf-02\b/i,
+      pre: 'El Administrador debe estar autenticado en el sistema y el nombre de usuario propuesto no debe existir previamente.',
+      post: 'Nueva cuenta de usuario creada con rol Vendedor, contraseña cifrada con bcrypt y habilitada para iniciar sesión.'
+    },
+    {
+      match: /registrar\s+producto|alta.*producto|crear\s+producto|nuevo\s+producto|inventario.*inicial|rf-03\b/i,
+      pre: 'El Administrador debe estar autenticado y el código de producto no debe estar registrado en el inventario.',
+      post: 'Producto registrado en la base de datos con código, nombre, precio unitario y cantidad inicial reflejada en el stock.'
+    },
+    {
+      match: /cat[aá]logo|mostrar\s+los\s+productos|seleccionar\s+un\s+producto|agregar.*factura|ver\s+existencia|rf-04\b/i,
+      pre: 'El Vendedor debe estar autenticado y deben existir productos registrados en el inventario con existencias disponibles.',
+      post: 'Productos visibles en tiempo real con precio y stock; ítems seleccionados añadidos al borrador de la factura con opción de modificar o retirar.'
+    },
+    {
+      match: /c[aá]lculo.*importe|calcular.*importe|importe\s+de\s+cada\s+l[ií]nea|precio\s+unitario\s+por\s+cantidad|actualizar\s+el\s+total|rf-05\b/i,
+      pre: 'Debe existir al menos un ítem agregado al detalle de la factura con cantidad válida (mayor a 0).',
+      post: 'Importe por línea calculado (precio unitario × cantidad) y subtotal/total general de la factura actualizado dinámicamente.'
+    },
+    {
+      match: /facturar|facturaci[oó]n|descontar.*stock|descontar\s+las\s+unidades|registrar\s+la\s+venta|rf-06\b/i,
+      pre: 'El detalle de la factura debe tener al menos una línea y cada producto debe contar con stock suficiente (existencias >= cantidad solicitada).',
+      post: 'Venta registrada con factura emitida, número correlativo generado, total confirmado y unidades vendidas descontadas del inventario en transacción atómica.'
+    },
+    {
+      match: /consultar.*ventas|historial.*ventas|ventas\s+registradas|ver\s+el\s+n[uú]mero\s+de\s+factura|rf-07\b/i,
+      pre: 'El Administrador debe estar autenticado con permisos de visualización de historial general de ventas.',
+      post: 'Listado cronológico de ventas desplegado mostrando número de factura, fecha/hora, vendedor responsable, detalle de productos y monto total.'
+    },
+    {
+      match: /control\s+de\s+acceso|rechazar.*solicitudes|funciones\s+protegidas|sin\s+sesi[oó]n|rol\s+vendedor.*bloqueado|rnf-01\b/i,
+      pre: 'Toda petición HTTP debe incluir un token de autorización válido en las cabeceras (Authorization: Bearer <JWT>).',
+      post: 'El servidor restringe el 100% de operaciones no autorizadas; el rol Vendedor queda bloqueado de crear cuentas, registrar productos o consultar ventas globales con respuesta 403 Forbidden.'
+    }
+  ];
+
+  function resolvePreconditions(req) {
+    if (req?.preconditions) return req.preconditions;
+    if (req?.qualityReport?.preconditions) return req.qualityReport.preconditions;
+    const text = `${req?.code || ''} ${req?.name || ''} ${req?.description || ''}`.toLowerCase();
+    for (const rule of TIENDA_RULES) {
+      if (rule.match.test(text)) return rule.pre;
+    }
+    return 'El usuario debe estar autenticado con rol y permisos correspondientes.';
+  }
+
+  function resolvePostconditions(req) {
+    if (req?.postconditions) return req.postconditions;
+    if (req?.qualityReport?.postconditions) return req.qualityReport.postconditions;
+    const text = `${req?.code || ''} ${req?.name || ''} ${req?.description || ''}`.toLowerCase();
+    for (const rule of TIENDA_RULES) {
+      if (rule.match.test(text)) return rule.post;
+    }
+    return 'El sistema actualiza el registro en la base de datos y refleja los cambios.';
+  }
+
   function openNewModal() {
     setEditingReq(null);
     const n = requirements.length + 1;
     setCode(`RF-${n < 10 ? '0' + n : n}`);
     setName(''); setDescription('');
-    setType('FUNCTIONAL'); setPriority('MEDIUM'); setStatus('PENDING');
+    setType('FUNCTIONAL'); setPriority('MEDIUM'); setStatus('APPROVED');
     setActorIds([]); setDependencies([]);
     setPreconditions('El usuario debe estar autenticado con rol y permisos correspondientes.');
     setPostconditions('El sistema actualiza el registro en la base de datos y refleja los cambios.');
@@ -115,8 +178,8 @@ export default function ProjectRequirements({ project, onProjectUpdated, initial
     setType(req.type); setPriority(req.priority); setStatus(req.status);
     setActorIds(Array.isArray(req.actorIds) ? req.actorIds : []);
     setDependencies(Array.isArray(req.dependencies) ? req.dependencies : []);
-    setPreconditions(req.qualityReport?.preconditions || req.preconditions || 'El usuario debe estar autenticado con rol y permisos correspondientes.');
-    setPostconditions(req.qualityReport?.postconditions || req.postconditions || 'El sistema actualiza el registro en la base de datos y refleja los cambios.');
+    setPreconditions(resolvePreconditions(req));
+    setPostconditions(resolvePostconditions(req));
     setReqModalOpen(true);
   }
 
@@ -129,6 +192,8 @@ export default function ProjectRequirements({ project, onProjectUpdated, initial
         code, name, description, type, priority, status,
         actorIds: Array.isArray(actorIds) ? actorIds : [],
         dependencies: Array.isArray(dependencies) ? dependencies : [],
+        preconditions: preconditions ? preconditions.trim() : null,
+        postconditions: postconditions ? postconditions.trim() : null,
         qualityReport: {
           ...(editingReq?.qualityReport || {}),
           preconditions,
@@ -428,8 +493,8 @@ export default function ProjectRequirements({ project, onProjectUpdated, initial
               </thead>
               <tbody>
                 {filtered.map((req, idx) => {
-                  const pre = req.qualityReport?.preconditions || req.preconditions || 'El usuario debe estar autenticado con rol y permisos correspondientes.';
-                  const post = req.qualityReport?.postconditions || req.postconditions || 'El sistema actualiza el registro en la base de datos y refleja los cambios.';
+                  const pre = resolvePreconditions(req);
+                  const post = resolvePostconditions(req);
                   const hasActors = Array.isArray(req.actorIds) && req.actorIds.length > 0;
                   const actors = hasActors
                     ? req.actorIds.map(id => actorsMap.get(id) || id).join(', ')

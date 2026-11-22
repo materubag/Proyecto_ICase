@@ -242,6 +242,23 @@ class UseCaseService {
 
       const isPreviouslyApproved = approvedMap.has(ucName.toLowerCase().trim());
 
+      // Resolver precondiciones y postcondiciones desde los requisitos asociados
+      const reqPreconditions = cluster.requirements
+        .map(r => r.preconditions || (r.qualityReport && r.qualityReport.preconditions))
+        .filter(Boolean);
+      const resolvedPreconditions = reqPreconditions.length > 0
+        ? Array.from(new Set(reqPreconditions)).join('; ')
+        : (cluster.topic.toLowerCase().includes('login') || cluster.topic.toLowerCase().includes('acceso')
+            ? 'Ninguna (pantalla pública de acceso).'
+            : `El usuario con rol ${actorName} debe estar autenticado y activo en el sistema.`);
+
+      const reqPostconditions = cluster.requirements
+        .map(r => r.postconditions || (r.qualityReport && r.qualityReport.postconditions))
+        .filter(Boolean);
+      const resolvedPostconditions = reqPostconditions.length > 0
+        ? Array.from(new Set(reqPostconditions)).join('; ')
+        : `Las transacciones de ${cluster.topic.toLowerCase()} quedan registradas de manera consistente en la base de datos.`;
+
       const existing = existingUseCases.find(c => !c.isDeleted && JSON.stringify([...(c.requirementIds || [])].sort()) === JSON.stringify(cluster.requirements.map(r => r.id).sort()));
       const generatedData = {
           projectId,
@@ -252,8 +269,8 @@ class UseCaseService {
           primaryActorId: primaryActorCode,
           secondaryActorIds: cluster.linkedActors.slice(1),
           actorIds: cluster.linkedActors,
-          preconditions: null,
-          postconditions: `Las transacciones de ${cluster.topic.toLowerCase()} quedan registradas de manera consistente.`,
+          preconditions: resolvedPreconditions,
+          postconditions: resolvedPostconditions,
           mainFlow: cluster.requirements.slice(0, 4).map((r, idx) => ({
             step: idx + 1,
             action: `${actorName} ejecuta: ${r.name}`

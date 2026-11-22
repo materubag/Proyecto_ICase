@@ -252,13 +252,22 @@ class CodeGeneratorService {
     const defaultJwtSecret = 'sec_' + crypto.createHash('sha256').update(projectName + '_jwt_entropy_secure').digest('hex');
     const defaultAdminPassword = 'adm_' + crypto.createHash('sha256').update(projectName + '_admin_pwd_secure').digest('hex').slice(0, 20);
 
-    addFile('.env', `# Configuración de Puertos y Entorno para Docker Compose
-FRONTEND_PORT=3005
-BACKEND_PORT=8085
-DB_PORT=5435
+    const codegenCustomizationStore = require('./codegenCustomizationStore');
+    const envConfig = options.envConfig || (projectId ? codegenCustomizationStore.getProjectEnvConfig(projectId, projectName) : null);
+    const frontendPort = envConfig?.frontendPort || '3005';
+    const backendPort = envConfig?.backendPort || '8085';
+    const dbPort = envConfig?.dbHostPort || '5435';
+    const dbName = envConfig?.dbName || safeDbName;
+    const dbUser = envConfig?.dbUser || 'postgres';
+    const networkName = envConfig?.networkName || `${safeDbName}_network`;
 
-DB_NAME=${safeDbName}
-DB_USER=postgres
+    addFile('.env', `# Configuración de Puertos y Entorno para Docker Compose
+FRONTEND_PORT=${frontendPort}
+BACKEND_PORT=${backendPort}
+DB_PORT=${dbPort}
+
+DB_NAME=${dbName}
+DB_USER=${dbUser}
 DB_PASSWORD=${defaultDbPassword}
 
 # Seguridad y Autenticación JWT
@@ -271,14 +280,40 @@ INITIAL_ADMIN_PASSWORD=${defaultAdminPassword}
     addFile('.gitignore', "node_modules\n.env\nbackend/.env\nfrontend/.env\ndist\nbuild\n*.log\n", 'text');
 
     if (includeDocker) {
-      addFile('docker-compose.yml', generateDockerCompose(projectName), 'yaml');
+      addFile('docker-compose.yml', generateDockerCompose(projectName, {
+        dbHostPort: dbPort,
+        backendPort: backendPort,
+        frontendPort: frontendPort,
+        dbName: dbName,
+        dbUser: dbUser,
+        networkName: networkName
+      }), 'yaml');
       addFile('.dockerignore', generateDockerIgnore(), 'text');
     }
 
     // 2. BACKEND: Express + Sequelize + PostgreSQL
     addFile('backend/package.json', generatePackageJson(projectName), 'json');
     addFile('backend/.env.example', generateEnvExample(projectName), 'shell');
-    addFile('backend/.env', generateEnvExample(projectName), 'shell');
+    addFile('backend/.env', `# Entorno y Configuración del Servidor
+PORT=8080
+NODE_ENV=development
+APP_NAME="${projectName}"
+AUTO_SYNC_DB=false
+
+# Conexión PostgreSQL 16
+DB_HOST=localhost
+DB_PORT=5432
+DB_NAME=${dbName}
+DB_USER=${dbUser}
+DB_PASSWORD=${defaultDbPassword}
+
+# Seguridad y Autenticación
+JWT_SECRET=${defaultJwtSecret}
+JWT_EXPIRATION=8h
+INITIAL_ADMIN_USER=admin
+INITIAL_ADMIN_EMAIL=admin@${projectName.toLowerCase().replace(/[^a-z0-9]/g, '') || 'app'}.com
+INITIAL_ADMIN_PASSWORD=${defaultAdminPassword}
+`, 'shell');
     addFile('backend/.dockerignore', generateDockerIgnore(), 'text');
     addFile('backend/.gitignore', "node_modules\n.env\nnpm-debug.log\n", 'text');
     addFile('backend/.sequelizerc', generateSequelizercFile(), 'javascript');
@@ -385,6 +420,24 @@ INITIAL_ADMIN_PASSWORD=${defaultAdminPassword}
       addFile('backend/src/routes/operation.routes.js', generateOperationRoutesFile(businessOps, spec.security), 'javascript');
     }
 
+    // Flujo operativo integral y rutas de taller (Workshop Flow Runtime)
+    try {
+      const fs = require('fs');
+      const wsPath = require('path').join(__dirname, 'workshopFlowRuntime.js');
+      if (fs.existsSync(wsPath)) {
+        addFile('backend/src/services/workshopFlowRuntime.js', fs.readFileSync(wsPath, 'utf8'), 'javascript');
+        addFile('backend/src/routes/workshopFlow.routes.js', `const express = require('express');
+const router = express.Router();
+const { handleWorkshopRuntimeRequest } = require('../services/workshopFlowRuntime');
+router.all('*', async (req, res, next) => {
+  try {
+    return await handleWorkshopRuntimeRequest('${spec.projectId || 'autron'}', req, res);
+  } catch (error) { next(error); }
+});
+module.exports = router;`, 'javascript');
+      }
+    } catch (_) {}
+
     // File & Image Upload Infrastructure (Multer)
     addFile('backend/src/middleware/upload.middleware.js', generateUploadMiddlewareFile(), 'javascript');
     addFile('backend/src/routes/upload.routes.js', spec.credentialChangeContract ? require('fs').readFileSync(require.resolve('./reviewedUploadRoutes'), 'utf8') : generateUploadRoutesFile({ privateUploads: Boolean(spec.uploads?.private), roles: spec.uploads?.roles || [] }), 'javascript');
@@ -393,19 +446,26 @@ INITIAL_ADMIN_PASSWORD=${defaultAdminPassword}
     addFile('backend/src/services/upload.storage.js', uploadStorageSource, 'javascript');
 
     // Central API Router index
-    addFile('backend/src/routes/index.js', generateMasterRoutesIndexFile(spec.entities, { hasOperations, hasAuth }), 'javascript');
+    addFile('backend/src/routes/index.js', generateMasterRoutesIndexFile(spec.entities, { hasOperations, hasAuth, projectId: spec.projectId || projectName }), 'javascript');
 
     // 3. FRONTEND: React 18 + Vite SPA
     addFile('frontend/package.json', frontendGen.generateFrontendPackageJson(projectName), 'json');
     addFile('frontend/scripts/compile-mockup-themes.cjs', `const fs = require('fs');
 const path = require('path');
-const postcss = require('postcss');
-const tailwind = require('tailwindcss');
-const autoprefixer = require('autoprefixer');
 const root = path.resolve(__dirname, '..');
+const themes = path.join(root, 'themes');
+if (!fs.existsSync(themes)) {
+  process.exit(0);
+}
+let postcss, tailwind, autoprefixer;
+try {
+  postcss = require('postcss');
+  tailwind = require('tailwindcss');
+  autoprefixer = require('autoprefixer');
+} catch (e) {
+  process.exit(0);
+}
 async function compile() {
-  const themes = path.join(root, 'themes');
-  if (!fs.existsSync(themes)) return;
   fs.mkdirSync(path.join(root, 'src/styles'), { recursive: true });
   for (const file of fs.readdirSync(themes).filter(file => file.endsWith('.cjs'))) {
     const target = path.join(root, 'src/styles', file.replace(/\\.cjs$/, '.css'));
@@ -415,7 +475,7 @@ async function compile() {
 }
 compile().catch(error => { console.error(error.message); process.exitCode = 1; });
 `, 'javascript');
-    addFile('frontend/vite.config.js', frontendGen.generateViteConfig(), 'javascript');
+    addFile('frontend/vite.config.js', frontendGen.generateViteConfig({ backendPort }), 'javascript');
     addFile('frontend/tailwind.config.js', frontendGen.generateTailwindConfig(), 'javascript');
     addFile('frontend/postcss.config.js', frontendGen.generatePostcssConfig(), 'javascript');
     addFile('frontend/index.html', frontendGen.generateIndexHtml(projectName), 'html');

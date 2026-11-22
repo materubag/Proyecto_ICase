@@ -3,6 +3,11 @@
  * Organiza las pantallas por ACTORES y proporciona una pantalla independiente de Login.
  */
 
+export function isTiendaDomain(project) {
+  const text = `${project?.name || ''} ${project?.description || ''} ${(project?.requirements || []).map(r => (r.name || '') + ' ' + (r.description || '')).join(' ')}`.toLowerCase();
+  return /tienda|vendedor|factur|pos\b|caja\b|mostrador|comercio/i.test(text);
+}
+
 export function getScreenCategories(project) {
   const actors = (project?.actors || []).filter(a => !a.isDeleted);
   const publicCategory = { id: 'public', label: 'Acceso y Login', icon: 'login', color: '#0284c7' };
@@ -19,6 +24,7 @@ export function getScreenCategories(project) {
     const key = (a.name || '').toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '').trim();
     let icon = 'person';
     if (/admin|gerent/i.test(key)) icon = 'admin_panel_settings';
+    else if (/vendedor|ventas|cajer/i.test(key)) icon = 'point_of_sale';
     else if (/recep|ingres/i.test(key)) icon = 'directions_car';
     else if (/mecanic|tecnic|operad/i.test(key)) icon = 'build';
     else if (/client|usuari|estudiant/i.test(key)) icon = 'person';
@@ -40,10 +46,86 @@ export const SCREEN_CATEGORIES = [
   { id: 'recepcion', label: 'Recepción', icon: 'directions_car', color: '#2563eb' },
   { id: 'cliente', label: 'Cliente', icon: 'person', color: '#059669' },
   { id: 'mecanico', label: 'Mecánico', icon: 'build', color: '#d97706' },
-  { id: 'admin', label: 'Administrador', icon: 'admin_panel_settings', color: '#7c3aed' }
+  { id: 'admin', label: 'Administrador', icon: 'admin_panel_settings', color: '#7c3aed' },
+  { id: 'vendedor', label: 'Vendedor', icon: 'point_of_sale', color: '#059669' }
 ];
 
-export const SCREEN_CATALOG = [
+export const TIENDA_SCREEN_CATALOG = [
+  {
+    key: 'login',
+    name: 'Inicio de Sesión y Acceso al Sistema',
+    route: '/login',
+    category: 'public',
+    categoryName: 'Acceso y Login',
+    actorName: 'Público / Todos los Usuarios',
+    icon: 'login',
+    isCore: true,
+    description: 'Portal de autenticación transversal: ingreso mediante credenciales seguras, validación de roles y recuperación de acceso.',
+    match: /autenticar|iniciar sesion|login|recuperar el acceso|recuperar contrasena|credencial|rf-01|rf-1\b/i
+  },
+  {
+    key: 'vendedores',
+    name: 'Gestión de Cuentas de Vendedores',
+    route: '/vendedores',
+    category: 'admin',
+    categoryName: 'Administrador',
+    actorName: 'Administrador',
+    icon: 'person_add',
+    isCore: true,
+    description: 'Administración de vendedores: registro de nuevas cuentas con nombre, nombre de usuario único y contraseña inicial con rol Vendedor.',
+    match: /cuenta.*vendedor|crear.*vendedor|registrar.*vendedor|nuevo.*vendedor|rf-02|rf-2\b/i
+  },
+  {
+    key: 'productos',
+    name: 'Registro y Gestión de Inventario',
+    route: '/productos',
+    category: 'admin',
+    categoryName: 'Administrador',
+    actorName: 'Administrador',
+    icon: 'inventory_2',
+    isCore: true,
+    description: 'Alta y control de productos en inventario con código único, nombre, precio unitario de venta y cantidad inicial en existencia.',
+    match: /registrar.*producto|alta.*producto|crear.*producto|inventario.*stock|precio\s+unitario.*stock|rf-03|rf-3\b/i
+  },
+  {
+    key: 'catalogo',
+    name: 'Catálogo de Productos para Venta',
+    route: '/catalogo',
+    category: 'vendedor',
+    categoryName: 'Vendedor',
+    actorName: 'Vendedor',
+    icon: 'storefront',
+    isCore: true,
+    description: 'Visualización de productos en tiempo real con existencias y precios actualizados para seleccionar y añadir al borrador de factura.',
+    match: /cat[aá]logo|mostrar.*productos|seleccionar.*producto|ver.*existencia|rf-04|rf-4\b/i
+  },
+  {
+    key: 'facturacion',
+    name: 'Punto de Venta y Facturación',
+    route: '/facturacion',
+    category: 'vendedor',
+    categoryName: 'Vendedor',
+    actorName: 'Vendedor',
+    icon: 'point_of_sale',
+    isCore: true,
+    description: 'Mostrador de facturación: cálculo dinámico de importes por línea, subtotal, total general y emisión de factura con descuento automático de existencias.',
+    match: /facturar|facturaci[oó]n|c[aá]lculo.*importe|calcular.*importe|descontar.*stock|descontar.*unidades|rf-05|rf-06|rf-5|rf-6\b/i
+  },
+  {
+    key: 'ventas',
+    name: 'Historial y Consulta de Ventas',
+    route: '/ventas',
+    category: 'admin',
+    categoryName: 'Administrador',
+    actorName: 'Administrador',
+    icon: 'receipt_long',
+    isCore: true,
+    description: 'Consulta cronológica de ventas realizadas: número correlativo de factura, fecha/hora, vendedor responsable, detalle de productos y monto total.',
+    match: /consultar.*ventas|historial.*ventas|ventas\s+registradas|ver.*factura|rf-07|rf-7\b/i
+  }
+];
+
+export const WORKSHOP_SCREEN_CATALOG = [
   // --- ACCESO GLOBAL (SUELTO / PÚBLICO) ---
   {
     key: 'login',
@@ -290,6 +372,15 @@ function chooseIcon(name = '', actorName = '') {
   return 'monitor';
 }
 
+export function getCatalogForProject(project) {
+  if (isTiendaDomain(project)) {
+    return TIENDA_SCREEN_CATALOG;
+  }
+  return WORKSHOP_SCREEN_CATALOG;
+}
+
+export const SCREEN_CATALOG = [...TIENDA_SCREEN_CATALOG, ...WORKSHOP_SCREEN_CATALOG];
+
 export function screenOptions(project) {
   const functionalReqs = (project.requirements || []).filter(r => r.type === 'FUNCTIONAL' || !r.type);
   const existingNodes = (project.navigationNodes || []).filter(n => !n.isDeleted);
@@ -324,8 +415,9 @@ export function screenOptions(project) {
     });
   }
 
-  // 2. Si aún no se han persistido nodos, deducir la propuesta dinámica para cualquier aplicación:
-  const screens = SCREEN_CATALOG.map(def => {
+  // 2. Si aún no se han persistido nodos, deducir la propuesta dinámica según el catálogo del dominio:
+  const catalog = getCatalogForProject(project);
+  const screens = catalog.map(def => {
     const matched = functionalReqs.filter(r => {
       const text = ((r.description || r.name || '') + ' ' + (r.code || '')).normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase();
       return def.match.test(text);

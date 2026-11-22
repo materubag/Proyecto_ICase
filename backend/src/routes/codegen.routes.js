@@ -19,6 +19,21 @@ router.get('/spec', codegenController.getSpecification);
 // GET /api/projects/:projectId/codegen/stages/status
 router.get('/stages/status', codegenController.getStagesStatus);
 
+// GET /api/projects/:projectId/codegen/env-config
+router.get('/env-config', codegenController.getEnvConfig);
+
+// POST /api/projects/:projectId/codegen/env-config
+router.post('/env-config', codegenController.saveEnvConfig);
+
+// GET /api/projects/:projectId/codegen/stages/container-status
+router.get('/stages/container-status', codegenController.getContainerStatus);
+
+// POST /api/projects/:projectId/codegen/stages/deploy-container
+router.post('/stages/deploy-container', codegenController.deployContainer);
+
+// POST /api/projects/:projectId/codegen/stages/update-container
+router.post('/stages/update-container', codegenController.updateContainer);
+
 // POST /api/projects/:projectId/codegen/stages/approve
 router.post('/stages/approve', codegenController.approveStage);
 
