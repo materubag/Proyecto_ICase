@@ -423,7 +423,7 @@ function watchStock(state, product, user) {
   }
 }
 
-function handleWorkshopRuntimeRequest(projectId, req, res) {
+async function handleWorkshopRuntimeRequest(projectId, req, res) {
   const state = getState(projectId);
   const user = resolveCurrentUser(state, req);
   const rawUrl = req.url || '/';
@@ -1936,10 +1936,23 @@ function handleWorkshopRuntimeRequest(projectId, req, res) {
         const prodId = item.producto_id || item.productoId || item.id;
         const prodCodigo = item.codigo;
         const qty = Number(item.cantidad || 1);
-        const prod = (state.productos || []).find(p =>
+        let prod = (state.productos || []).find(p =>
           (prodId && String(p.id) === String(prodId)) ||
           (prodCodigo && String(p.codigo).toLowerCase() === String(prodCodigo).toLowerCase())
         );
+
+        if (!prod && prodId) {
+          try {
+            const models = require('../models');
+            if (models && models.PRODUCTO) {
+              const dbP = await models.PRODUCTO.findByPk(prodId);
+              if (dbP) {
+                prod = { id: dbP.id, codigo: dbP.codigo, nombre: dbP.nombre, existencia_actual: Number(dbP.existenciaActual || 0), stock: Number(dbP.existenciaActual || 0), precio: Number(dbP.precioUnitarioVenta || 0) };
+                state.productos.push(prod);
+              }
+            }
+          } catch (_) {}
+        }
 
         if (prod) {
           const currentStock = Number(prod.existencia_actual != null ? prod.existencia_actual : (prod.stock || 0));
@@ -1959,16 +1972,40 @@ function handleWorkshopRuntimeRequest(projectId, req, res) {
         const prodId = item.producto_id || item.productoId || item.id;
         const prodCodigo = item.codigo;
         const qty = Number(item.cantidad || 1);
-        const prod = (state.productos || []).find(p =>
+        let prod = (state.productos || []).find(p =>
           (prodId && String(p.id) === String(prodId)) ||
           (prodCodigo && String(p.codigo).toLowerCase() === String(prodCodigo).toLowerCase())
         );
+
+        if (!prod && prodId) {
+          try {
+            const models = require('../models');
+            if (models && models.PRODUCTO) {
+              const dbP = await models.PRODUCTO.findByPk(prodId);
+              if (dbP) {
+                prod = { id: dbP.id, codigo: dbP.codigo, nombre: dbP.nombre, existencia_actual: Number(dbP.existenciaActual || 0), stock: Number(dbP.existenciaActual || 0), precio: Number(dbP.precioUnitarioVenta || 0) };
+                state.productos.push(prod);
+              }
+            }
+          } catch (_) {}
+        }
 
         if (prod) {
           const currentStock = Number(prod.existencia_actual != null ? prod.existencia_actual : (prod.stock || 0));
           const newStock = Math.max(0, currentStock - qty);
           prod.existencia_actual = newStock;
           prod.stock = newStock;
+
+          // Sincronizar actualización en PostgreSQL
+          try {
+            const models = require('../models');
+            if (models && models.PRODUCTO) {
+              await models.PRODUCTO.update(
+                { existenciaActual: newStock },
+                { where: { id: prod.id } }
+              );
+            }
+          } catch (_) {}
 
           // Registrar en kardex de movimientos de inventario
           if (Array.isArray(state.movimientoInventarios)) {
