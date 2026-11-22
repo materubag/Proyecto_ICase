@@ -95,8 +95,8 @@ class NavigationDeductionService {
       {
         name: 'Historial y Consulta de Ventas',
         route: '/ventas',
-        actorIds: adminActor ? [adminActor.id] : [],
-        actorName: adminActor?.name || 'Administrador',
+        actorIds: [adminActor?.id, sellerActor?.id].filter(Boolean),
+        actorName: 'Administrador / Vendedor',
         from: '/facturacion',
         to: '/productos',
         action: 'Consultar Ventas'

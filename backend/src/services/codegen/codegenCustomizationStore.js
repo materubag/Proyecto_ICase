@@ -192,8 +192,9 @@ const DEFAULT_SCREENS_BY_ROLE = {
     { key: 'facturacion', label: 'Punto de Venta y Facturación', icon: 'point_of_sale', endpoint: '/facturacion' }
   ],
   Vendedor: [
+    { key: 'catalogo', label: 'Catálogo de Productos', icon: 'storefront', endpoint: '/catalogo' },
     { key: 'facturacion', label: 'Punto de Venta y Facturación', icon: 'point_of_sale', endpoint: '/facturacion' },
-    { key: 'catalogo', label: 'Catálogo de Productos', icon: 'storefront', endpoint: '/catalogo' }
+    { key: 'ventas', label: 'Historial y Consulta de Ventas', icon: 'receipt_long', endpoint: '/ventas' }
   ],
   Recepción: [
     { key: 'recepcion', label: 'Recepción', icon: 'fact_check', endpoint: '/recepciones' },

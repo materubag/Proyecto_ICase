@@ -33,27 +33,44 @@ async function prepare(req, scope, updating) {
       incoming[key] = incoming[snake];
     }
   }
-  if (incoming.precio !== undefined) {
-    if (incoming.precioUnitarioVenta === undefined && schema.properties.precioUnitarioVenta) incoming.precioUnitarioVenta = parseFloat(incoming.precio) || 0;
-    if (incoming.precioVenta === undefined && schema.properties.precioVenta) incoming.precioVenta = parseFloat(incoming.precio) || 0;
+  if (incoming.precio !== undefined || incoming.precio_venta !== undefined || incoming.precioVenta !== undefined || incoming.costo !== undefined || incoming.precioUnitario !== undefined) {
+    const pVal = parseFloat(incoming.precio ?? incoming.precio_venta ?? incoming.precioVenta ?? incoming.costo ?? incoming.precioUnitario) || 0;
+    if (schema.properties.precioUnitarioVenta && incoming.precioUnitarioVenta === undefined) incoming.precioUnitarioVenta = pVal;
+    if (schema.properties.precioVenta && incoming.precioVenta === undefined) incoming.precioVenta = pVal;
+    if (schema.properties.precioUnitario && incoming.precioUnitario === undefined) incoming.precioUnitario = pVal;
+    if (schema.properties.precio && incoming.precio === undefined) incoming.precio = pVal;
   }
-  if (incoming.precio_venta !== undefined) {
-    if (incoming.precioUnitarioVenta === undefined && schema.properties.precioUnitarioVenta) incoming.precioUnitarioVenta = parseFloat(incoming.precio_venta) || 0;
-    if (incoming.precioVenta === undefined && schema.properties.precioVenta) incoming.precioVenta = parseFloat(incoming.precio_venta) || 0;
-  }
-  if (incoming.costo !== undefined && incoming.precioUnitarioVenta === undefined && schema.properties.precioUnitarioVenta) {
-    incoming.precioUnitarioVenta = parseFloat(incoming.costo) || 0;
-  }
-  if (incoming.stock !== undefined) {
-    if (incoming.existenciaActual === undefined && schema.properties.existenciaActual) incoming.existenciaActual = parseInt(incoming.stock, 10) || 0;
-    if (incoming.existencia === undefined && schema.properties.existencia) incoming.existencia = parseInt(incoming.stock, 10) || 0;
-  }
-  if (incoming.existencia_actual !== undefined) {
-    if (incoming.existenciaActual === undefined && schema.properties.existenciaActual) incoming.existenciaActual = parseInt(incoming.existencia_actual, 10) || 0;
-    if (incoming.existencia === undefined && schema.properties.existencia) incoming.existencia = parseInt(incoming.existencia_actual, 10) || 0;
+  if (incoming.stock !== undefined || incoming.existencia !== undefined || incoming.existencia_actual !== undefined || incoming.existenciaActual !== undefined) {
+    const sVal = parseInt(incoming.stock ?? incoming.existencia ?? incoming.existencia_actual ?? incoming.existenciaActual, 10) || 0;
+    if (schema.properties.existenciaActual && incoming.existenciaActual === undefined) incoming.existenciaActual = sVal;
+    if (schema.properties.existencia && incoming.existencia === undefined) incoming.existencia = sVal;
   }
   if (incoming.activo === undefined && schema.properties.activo) {
     incoming.activo = true;
+  }
+  if (incoming.creadoPorUsuarioId === undefined && schema.properties.creadoPorUsuarioId) {
+    incoming.creadoPorUsuarioId = req.user?.id || 1;
+  }
+  if (incoming.creado_por_usuario_id === undefined && schema.properties.creado_por_usuario_id) {
+    incoming.creado_por_usuario_id = req.user?.id || 1;
+  }
+  if (incoming.usuarioId === undefined && schema.properties.usuarioId) {
+    incoming.usuarioId = req.user?.id || 1;
+  }
+  if (incoming.usuario_id === undefined && schema.properties.usuario_id) {
+    incoming.usuario_id = req.user?.id || 1;
+  }
+  if (incoming.vendedorId === undefined && schema.properties.vendedorId) {
+    incoming.vendedorId = req.user?.id || 1;
+  }
+  if (incoming.vendedor_id === undefined && schema.properties.vendedor_id) {
+    incoming.vendedor_id = req.user?.id || 1;
+  }
+  if ((!incoming.codigo || String(incoming.codigo).trim() === '') && schema.properties.codigo) {
+    incoming.codigo = 'PROD-' + Date.now().toString().slice(-6);
+  }
+  if ((!incoming.numeroFactura || String(incoming.numeroFactura).trim() === '') && schema.properties.numeroFactura) {
+    incoming.numeroFactura = 'FAC-' + Date.now().toString().slice(-6);
   }
   const cleanBody = Object.fromEntries(Object.entries(incoming).filter(([k]) => Object.hasOwn(validProps, k)));
   const properties = Object.fromEntries(Object.entries(schema.properties).map(([key, value]) => [key, { ...value, ...declared.properties?.[key] }]));
@@ -68,12 +85,13 @@ async function prepare(req, scope, updating) {
 function normalizeOutput(row) {
   if (!row) return row;
   const obj = typeof row.toJSON === 'function' ? row.toJSON() : { ...row };
-  const p = obj.precioUnitarioVenta !== undefined ? Number(obj.precioUnitarioVenta) : (obj.precioVenta !== undefined ? Number(obj.precioVenta) : (obj.precio_venta !== undefined ? Number(obj.precio_venta) : undefined));
+  const p = obj.precioUnitarioVenta !== undefined ? Number(obj.precioUnitarioVenta) : (obj.precioVenta !== undefined ? Number(obj.precioVenta) : (obj.precio_venta !== undefined ? Number(obj.precio_venta) : (obj.precioUnitario !== undefined ? Number(obj.precioUnitario) : undefined)));
   if (p !== undefined) {
     obj.precio = p;
     obj.precio_venta = p;
     obj.precioVenta = p;
     obj.precioUnitarioVenta = p;
+    obj.precioUnitario = p;
   }
   const s = obj.existenciaActual !== undefined ? Number(obj.existenciaActual) : (obj.existencia !== undefined ? Number(obj.existencia) : (obj.existencia_actual !== undefined ? Number(obj.existencia_actual) : undefined));
   if (s !== undefined) {

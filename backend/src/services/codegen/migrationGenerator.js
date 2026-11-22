@@ -344,14 +344,39 @@ async function runMigrations() {
     await sequelize.query('ALTER TABLE roles ADD COLUMN IF NOT EXISTS descripcion VARCHAR(255);');
     await sequelize.query('ALTER TABLE productos ADD COLUMN IF NOT EXISTS precio_unitario_venta NUMERIC(12,2) DEFAULT 0;');
     await sequelize.query('ALTER TABLE productos ADD COLUMN IF NOT EXISTS precio_venta NUMERIC(12,2) DEFAULT 0;');
+    await sequelize.query('ALTER TABLE productos ADD COLUMN IF NOT EXISTS precio_unitario NUMERIC(12,2) DEFAULT 0;');
     await sequelize.query('ALTER TABLE productos ADD COLUMN IF NOT EXISTS existencia_actual INTEGER DEFAULT 0;');
     await sequelize.query('ALTER TABLE productos ADD COLUMN IF NOT EXISTS existencia INTEGER DEFAULT 0;');
+    await sequelize.query('ALTER TABLE productos ADD COLUMN IF NOT EXISTS creado_por_usuario_id INTEGER;');
+    await sequelize.query('ALTER TABLE productos ADD COLUMN IF NOT EXISTS usuario_id INTEGER;');
+    await sequelize.query('ALTER TABLE productos ADD COLUMN IF NOT EXISTS fecha_creacion TIMESTAMP WITH TIME ZONE DEFAULT NOW();');
     await sequelize.query('ALTER TABLE productos ADD COLUMN IF NOT EXISTS activo BOOLEAN DEFAULT true;');
-    await sequelize.query('UPDATE productos SET precio_unitario_venta = COALESCE(precio_unitario_venta, precio_venta, 0);');
-    await sequelize.query('UPDATE productos SET precio_venta = COALESCE(precio_venta, precio_unitario_venta, 0);');
+    await sequelize.query('UPDATE productos SET precio_unitario_venta = COALESCE(precio_unitario_venta, precio_venta, precio_unitario, 0);');
+    await sequelize.query('UPDATE productos SET precio_venta = COALESCE(precio_venta, precio_unitario_venta, precio_unitario, 0);');
+    await sequelize.query('UPDATE productos SET precio_unitario = COALESCE(precio_unitario, precio_unitario_venta, precio_venta, 0);');
     await sequelize.query('UPDATE productos SET existencia_actual = COALESCE(existencia_actual, existencia, 0);');
     await sequelize.query('UPDATE productos SET existencia = COALESCE(existencia, existencia_actual, 0);');
+    await sequelize.query('UPDATE productos SET usuario_id = COALESCE(usuario_id, creado_por_usuario_id, 1);');
+    await sequelize.query('UPDATE productos SET creado_por_usuario_id = COALESCE(creado_por_usuario_id, usuario_id, 1);');
     await sequelize.query('UPDATE productos SET activo = true WHERE activo IS NULL;');
+
+    await sequelize.query('ALTER TABLE ventas ADD COLUMN IF NOT EXISTS fecha TIMESTAMP WITH TIME ZONE DEFAULT NOW();');
+    await sequelize.query('ALTER TABLE ventas ADD COLUMN IF NOT EXISTS fecha_venta TIMESTAMP WITH TIME ZONE DEFAULT NOW();');
+    await sequelize.query('ALTER TABLE ventas ADD COLUMN IF NOT EXISTS total NUMERIC(12,2) DEFAULT 0;');
+    await sequelize.query('ALTER TABLE ventas ADD COLUMN IF NOT EXISTS monto_total NUMERIC(12,2) DEFAULT 0;');
+    await sequelize.query('UPDATE ventas SET fecha_venta = COALESCE(fecha_venta, fecha, NOW());');
+    await sequelize.query('UPDATE ventas SET fecha = COALESCE(fecha, fecha_venta, NOW());');
+    await sequelize.query('UPDATE ventas SET total = COALESCE(total, monto_total, 0);');
+    await sequelize.query('UPDATE ventas SET monto_total = COALESCE(monto_total, total, 0);');
+
+    await sequelize.query('ALTER TABLE movimiento_inventarios ADD COLUMN IF NOT EXISTS fecha TIMESTAMP WITH TIME ZONE DEFAULT NOW();');
+    await sequelize.query('ALTER TABLE movimiento_inventarios ADD COLUMN IF NOT EXISTS fecha_movimiento TIMESTAMP WITH TIME ZONE DEFAULT NOW();');
+    await sequelize.query('UPDATE movimiento_inventarios SET fecha_movimiento = COALESCE(fecha_movimiento, fecha, NOW());');
+    await sequelize.query('UPDATE movimiento_inventarios SET fecha = COALESCE(fecha, fecha_movimiento, NOW());');
+
+    await sequelize.query('ALTER TABLE sesiones ADD COLUMN IF NOT EXISTS token_hash VARCHAR(255);');
+    await sequelize.query('ALTER TABLE sesiones ADD COLUMN IF NOT EXISTS fecha_expiracion TIMESTAMP WITH TIME ZONE;');
+    await sequelize.query('ALTER TABLE sesiones ADD COLUMN IF NOT EXISTS fecha_cierre TIMESTAMP WITH TIME ZONE;');
   } catch (_) {}
 
   ${spec.permissionMatrix ? "await require('./seed-permissions').seed();" : ''}
