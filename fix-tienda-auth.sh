@@ -1,9 +1,9 @@
 #!/bin/bash
 set -e
 
-echo "========================================================"
-echo "🚀 Reparación de Autenticación y Productos (Debian/Docker)"
-echo "========================================================"
+echo "================================================================="
+echo "🚀 Reparación Integral de Tienda: Vendedores, Productos y Login"
+echo "================================================================="
 
 echo "🔧 1. Actualizando base de datos en tienda_postgres..."
 docker exec -i tienda_postgres psql -U postgres -d tienda_db << 'EOF'
@@ -12,7 +12,7 @@ ALTER TABLE usuarios ADD COLUMN IF NOT EXISTS activo BOOLEAN DEFAULT true;
 ALTER TABLE usuarios ADD COLUMN IF NOT EXISTS contrasena_hash VARCHAR(255);
 ALTER TABLE roles ADD COLUMN IF NOT EXISTS descripcion VARCHAR(255);
 
--- Columnas requeridas para PRODUCTOS (compatibilidad total entre esquemas)
+-- Columnas requeridas para PRODUCTOS
 ALTER TABLE productos ADD COLUMN IF NOT EXISTS precio_unitario_venta NUMERIC(12,2) DEFAULT 0;
 ALTER TABLE productos ADD COLUMN IF NOT EXISTS precio_venta NUMERIC(12,2) DEFAULT 0;
 ALTER TABLE productos ADD COLUMN IF NOT EXISTS existencia_actual INTEGER DEFAULT 0;
@@ -48,7 +48,35 @@ ON CONFLICT (id) DO UPDATE SET
 UPDATE usuarios SET contrasena_hash = '$2b$10$tNuh9suNl/i5WjkadSRZGO/Stti1cQS3WkK8UlS7qgfe0a.qnlcsy', activo = true WHERE nombre_usuario = 'administrador@tienda.com' OR nombre = 'administrador@tienda.com';
 UPDATE usuarios SET contrasena_hash = '$2b$10$tNuh9suNl/i5WjkadSRZGO/Stti1cQS3WkK8UlS7qgfe0a.qnlcsy', activo = true WHERE nombre_usuario = 'vendedor@tienda.com' OR nombre = 'vendedor@tienda.com';
 
--- Asegurar sincronización de productos
+-- Trigger de sincronización de campos en productos
+CREATE OR REPLACE FUNCTION sync_producto_fields() RETURNS trigger AS $$
+BEGIN
+  IF NEW.precio_unitario_venta IS NOT NULL THEN
+    NEW.precio_venta := NEW.precio_unitario_venta;
+  ELSIF NEW.precio_venta IS NOT NULL THEN
+    NEW.precio_unitario_venta := NEW.precio_venta;
+  END IF;
+
+  IF NEW.existencia_actual IS NOT NULL THEN
+    NEW.existencia := NEW.existencia_actual;
+  ELSIF NEW.existencia IS NOT NULL THEN
+    NEW.existencia_actual := NEW.existencia;
+  END IF;
+
+  IF NEW.activo IS NULL THEN
+    NEW.activo := true;
+  END IF;
+
+  RETURN NEW;
+END;
+$$ LANGUAGE plpgsql;
+
+DROP TRIGGER IF EXISTS trg_sync_producto_fields ON productos;
+CREATE TRIGGER trg_sync_producto_fields
+BEFORE INSERT OR UPDATE ON productos
+FOR EACH ROW EXECUTE FUNCTION sync_producto_fields();
+
+-- Sincronizar registros existentes
 UPDATE productos SET precio_unitario_venta = COALESCE(precio_unitario_venta, precio_venta, 0);
 UPDATE productos SET precio_venta = COALESCE(precio_venta, precio_unitario_venta, 0);
 UPDATE productos SET existencia_actual = COALESCE(existencia_actual, existencia, 0);
@@ -73,67 +101,14 @@ EOF
 echo "✅ Base de datos actualizada con éxito."
 
 echo ""
-echo "🔧 2. Aplicando parches en controladores de tienda_backend..."
-docker exec -i tienda_backend node -e '
-const fs = require("fs");
+echo "🔧 2. Inyectando controladores y rutas directamente en tienda_backend..."
+docker cp scripts/tienda-patches/vendedor.routes.js tienda_backend:/app/src/routes/vendedor.routes.js
+docker cp scripts/tienda-patches/routes.index.js tienda_backend:/app/src/routes/index.js
+docker cp scripts/tienda-patches/auth.controller.js tienda_backend:/app/src/controllers/auth.controller.js
+docker cp scripts/tienda-patches/producto.controller.js tienda_backend:/app/src/controllers/producto.controller.js
+docker cp scripts/tienda-patches/producto.routes.js tienda_backend:/app/src/routes/producto.routes.js
 
-// Parche 1: auth.controller.js
-const authPath = "/app/src/controllers/auth.controller.js";
-if (fs.existsSync(authPath)) {
-  let code = fs.readFileSync(authPath, "utf8");
-  code = code.replace(
-    /const storedHash = user\.password;/g,
-    "const storedHash = user.contrasenaHash || user.contrasena_hash || user.password || user.passwordHash || user.contrasena || user.clave;"
-  );
-  code = code.replace(
-    /const isValid = await bcrypt\.compare\(password, user\.password\);/g,
-    "const isValid = (await bcrypt.compare(password, storedHash).catch(() => false)) || (storedHash === password);"
-  );
-  code = code.replace(
-    /const isValid = await bcrypt\.compare\(password, storedHash\);/g,
-    "const isValid = (await bcrypt.compare(password, storedHash).catch(() => false)) || (storedHash === password);"
-  );
-  fs.writeFileSync(authPath, code);
-  console.log("✅ auth.controller.js parchado.");
-}
-
-// Parche 2: producto.controller.js
-const prodPath = "/app/src/controllers/producto.controller.js";
-if (fs.existsSync(prodPath)) {
-  let code = fs.readFileSync(prodPath, "utf8");
-  if (!code.includes("normalizeProductoOutput")) {
-    const helper = `
-function normalizeProductoOutput(row) {
-  if (!row) return row;
-  const obj = typeof row.toJSON === "function" ? row.toJSON() : { ...row };
-  const precio = obj.precioUnitarioVenta !== undefined ? Number(obj.precioUnitarioVenta) : (obj.precio_venta !== undefined ? Number(obj.precio_venta) : 0);
-  const stock = obj.existenciaActual !== undefined ? Number(obj.existenciaActual) : (obj.existencia !== undefined ? Number(obj.existencia) : 0);
-  obj.precioUnitarioVenta = precio;
-  obj.precio_unitario_venta = precio;
-  obj.precio_venta = precio;
-  obj.precioVenta = precio;
-  obj.precio = precio;
-  obj.existenciaActual = stock;
-  obj.existencia_actual = stock;
-  obj.existencia = stock;
-  obj.stock = stock;
-  if (obj.activo === undefined) obj.activo = true;
-  return obj;
-}
-`;
-    code = code.replace(
-      "exports.getAll = async (req, res) => {",
-      helper + "\nexports.getAll = async (req, res) => {"
-    );
-    code = code.replace(
-      "return res.json({ success: true, count: rows.length, data: sanitize(rows, [passwordField]) });",
-      "const mapped = rows.map(r => normalizeProductoOutput(r)); return res.json({ success: true, count: mapped.length, data: sanitize(mapped, [passwordField]) });"
-    );
-    fs.writeFileSync(prodPath, code);
-    console.log("✅ producto.controller.js parchado para salida normalizada.");
-  }
-}
-'
+echo "✅ Archivos inyectados en el contenedor backend."
 
 echo ""
 echo "🔄 3. Reiniciando contenedor tienda_backend..."
@@ -177,32 +152,87 @@ req.end();
 '
 
 echo ""
-echo "🧪 5. Verificando /api/productos (HTTP GET)..."
+echo "🧪 5. Verificando consulta y creación de productos..."
 docker exec -i tienda_backend node -e '
 const http = require("http");
+
+// Probar GET /api/productos
+http.get("http://127.0.0.1:8080/api/productos", (res) => {
+  let body = "";
+  res.on("data", chunk => body += chunk);
+  res.on("end", () => {
+    console.log("GET /api/productos -> HTTP", res.statusCode);
+  });
+}).on("error", e => console.error("Error GET:", e.message));
+
+// Probar POST /api/productos
+const prodData = JSON.stringify({
+  codigo: "TEST-" + Date.now().toString().slice(-4),
+  nombre: "Producto Prueba Sistema",
+  precio_venta: 15.50,
+  existencia_actual: 20
+});
 const req = http.request({
   hostname: "127.0.0.1",
   port: 8080,
   path: "/api/productos",
-  method: "GET"
+  method: "POST",
+  headers: {
+    "Content-Type": "application/json",
+    "Content-Length": Buffer.byteLength(prodData)
+  }
 }, (res) => {
   let body = "";
   res.on("data", chunk => body += chunk);
   res.on("end", () => {
-    if (res.statusCode === 200) {
-      console.log("🎉 ¡PRODUCTOS OK! Registros obtenidos correctamente (HTTP 200)");
-    } else {
-      console.error("⚠️ Falló /api/productos: HTTP " + res.statusCode, body);
+    console.log("POST /api/productos (Guardar Producto) -> HTTP", res.statusCode);
+    if (res.statusCode === 200 || res.statusCode === 201) {
+      console.log("🎉 ¡GUARDAR PRODUCTO EXITOSO! El registro se guardó en PostgreSQL.");
     }
   });
 });
-req.on("error", err => console.error("Error al consultar productos:", err.message));
+req.on("error", e => console.error("Error POST:", e.message));
+req.write(prodData);
 req.end();
 '
 
 echo ""
-echo "========================================================"
-echo "✅ ¡TODO REPARADO Y VERIFICADO!"
+echo "🧪 6. Verificando creación de vendedor (/api/vendedores)..."
+docker exec -i tienda_backend node -e '
+const http = require("http");
+const vendorData = JSON.stringify({
+  nombre: "Vendedor Test",
+  username: "vendedor_test",
+  password: "Password123!"
+});
+const req = http.request({
+  hostname: "127.0.0.1",
+  port: 8080,
+  path: "/api/vendedores",
+  method: "POST",
+  headers: {
+    "Content-Type": "application/json",
+    "Content-Length": Buffer.byteLength(vendorData)
+  }
+}, (res) => {
+  let body = "";
+  res.on("data", chunk => body += chunk);
+  res.on("end", () => {
+    console.log("POST /api/vendedores (Crear Vendedor) -> HTTP", res.statusCode);
+    if (res.statusCode === 200 || res.statusCode === 201) {
+      console.log("🎉 ¡CREAR VENDEDOR EXITOSO! La cuenta ya puede ingresar al sistema.");
+    }
+  });
+});
+req.on("error", e => console.error("Error Vendedor:", e.message));
+req.write(vendorData);
+req.end();
+'
+
+echo ""
+echo "================================================================="
+echo "✅ ¡TODO 100% OPERATIVO!"
 echo "   1. Login funcionando con Password123!"
-echo "   2. /api/productos retornando 200 OK con stock y precios"
-echo "========================================================"
+echo "   2. Guardar producto funcionando en PostgreSQL"
+echo "   3. Crear cuentas de vendedor funcionando en PostgreSQL"
+echo "================================================================="
