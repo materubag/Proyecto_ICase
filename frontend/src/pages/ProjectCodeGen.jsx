@@ -2512,7 +2512,13 @@ export default function ProjectCodeGen({ project, onNavigateTo }) {
                 <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
                   <button
                     type="button"
-                    onClick={() => window.open(`http://localhost:${envConfig.frontendPort || '3005'}`, '_blank')}
+                    onClick={() => {
+                      const host = window.location.hostname || 'localhost';
+                      const url = host.includes('trycloudflare') || host.includes('cloudflare')
+                        ? `${window.location.protocol}//${host}`
+                        : `http://${host}:${envConfig.frontendPort || '3005'}`;
+                      window.open(url, '_blank');
+                    }}
                     style={{
                       width: '100%',
                       padding: '10px 16px',
@@ -2534,7 +2540,9 @@ export default function ProjectCodeGen({ project, onNavigateTo }) {
                     <span className="ms ms-xs">open_in_new</span>
                   </button>
                   <a
-                    href={`http://localhost:${envConfig.frontendPort || '3005'}`}
+                    href={typeof window !== 'undefined' && (window.location.hostname.includes('trycloudflare') || window.location.hostname.includes('cloudflare'))
+                      ? `${window.location.protocol}//${window.location.hostname}`
+                      : `http://${typeof window !== 'undefined' ? window.location.hostname : 'localhost'}:${envConfig.frontendPort || '3005'}`}
                     target="_blank"
                     rel="noreferrer"
                     style={{
@@ -2545,7 +2553,9 @@ export default function ProjectCodeGen({ project, onNavigateTo }) {
                       fontWeight: 600
                     }}
                   >
-                    http://localhost:{envConfig.frontendPort || '3005'}
+                    {typeof window !== 'undefined' && (window.location.hostname.includes('trycloudflare') || window.location.hostname.includes('cloudflare'))
+                      ? `${window.location.protocol}//${window.location.hostname}`
+                      : `http://${typeof window !== 'undefined' ? window.location.hostname : 'localhost'}:${envConfig.frontendPort || '3005'}`}
                   </a>
                 </div>
               </div>
@@ -2586,7 +2596,13 @@ export default function ProjectCodeGen({ project, onNavigateTo }) {
                 <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
                   <button
                     type="button"
-                    onClick={() => window.open(`http://localhost:${envConfig.backendPort || '8085'}/api-docs`, '_blank')}
+                    onClick={() => {
+                      const host = window.location.hostname || 'localhost';
+                      const url = host.includes('trycloudflare') || host.includes('cloudflare')
+                        ? `${window.location.protocol}//${host}/api-docs`
+                        : `http://${host}:${envConfig.backendPort || '8085'}/api-docs`;
+                      window.open(url, '_blank');
+                    }}
                     style={{
                       width: '100%',
                       padding: '10px 16px',
@@ -2607,7 +2623,9 @@ export default function ProjectCodeGen({ project, onNavigateTo }) {
                     <span className="ms ms-xs">open_in_new</span>
                   </button>
                   <a
-                    href={`http://localhost:${envConfig.backendPort || '8085'}/api-docs`}
+                    href={typeof window !== 'undefined' && (window.location.hostname.includes('trycloudflare') || window.location.hostname.includes('cloudflare'))
+                      ? `${window.location.protocol}//${window.location.hostname}/api-docs`
+                      : `http://${typeof window !== 'undefined' ? window.location.hostname : 'localhost'}:${envConfig.backendPort || '8085'}/api-docs`}
                     target="_blank"
                     rel="noreferrer"
                     style={{
@@ -2618,7 +2636,9 @@ export default function ProjectCodeGen({ project, onNavigateTo }) {
                       fontWeight: 600
                     }}
                   >
-                    http://localhost:{envConfig.backendPort || '8085'}/api-docs
+                    {typeof window !== 'undefined' && (window.location.hostname.includes('trycloudflare') || window.location.hostname.includes('cloudflare'))
+                      ? `${window.location.protocol}//${window.location.hostname}/api-docs`
+                      : `http://${typeof window !== 'undefined' ? window.location.hostname : 'localhost'}:${envConfig.backendPort || '8085'}/api-docs`}
                   </a>
                 </div>
               </div>

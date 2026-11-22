@@ -25,8 +25,35 @@ function respondError(res, error) {
 }
 async function prepare(req, scope, updating) {
   const declared = req.crudContract?.input?.bodySchema || {};
+  const validProps = { ...schema.properties, ...(declared.properties || {}) };
+  const incoming = { ...req.body };
+  for (const key of Object.keys(schema.properties)) {
+    const snake = key.replace(/[A-Z]/g, letter => '_' + letter.toLowerCase());
+    if (incoming[snake] !== undefined && incoming[key] === undefined) {
+      incoming[key] = incoming[snake];
+    }
+  }
+  if (incoming.precio !== undefined && incoming.precioUnitarioVenta === undefined && schema.properties.precioUnitarioVenta) {
+    incoming.precioUnitarioVenta = parseFloat(incoming.precio) || 0;
+  }
+  if (incoming.precio_venta !== undefined && incoming.precioUnitarioVenta === undefined && schema.properties.precioUnitarioVenta) {
+    incoming.precioUnitarioVenta = parseFloat(incoming.precio_venta) || 0;
+  }
+  if (incoming.costo !== undefined && incoming.precioUnitarioVenta === undefined && schema.properties.precioUnitarioVenta) {
+    incoming.precioUnitarioVenta = parseFloat(incoming.costo) || 0;
+  }
+  if (incoming.stock !== undefined && incoming.existenciaActual === undefined && schema.properties.existenciaActual) {
+    incoming.existenciaActual = parseInt(incoming.stock, 10) || 0;
+  }
+  if (incoming.existencia_actual !== undefined && incoming.existenciaActual === undefined && schema.properties.existenciaActual) {
+    incoming.existenciaActual = parseInt(incoming.existencia_actual, 10) || 0;
+  }
+  if (incoming.activo === undefined && schema.properties.activo) {
+    incoming.activo = true;
+  }
+  const cleanBody = Object.fromEntries(Object.entries(incoming).filter(([k]) => Object.hasOwn(validProps, k)));
   const properties = Object.fromEntries(Object.entries(schema.properties).map(([key, value]) => [key, { ...value, ...declared.properties?.[key] }]));
-  const data = inputFor(req.body, { ...schema, ...declared, properties, additionalProperties: false, required: [...new Set([...(schema.required || []), ...(declared.required || [])])] }, scope, updating);
+  const data = inputFor(cleanBody, { ...schema, ...declared, properties, additionalProperties: true, required: [...new Set([...(schema.required || []), ...(declared.required || [])])] }, scope, updating);
   if (passwordField && Object.hasOwn(data, passwordField)) {
     if (typeof data[passwordField] !== 'string' || /^\\$2[aby]\\$/.test(data[passwordField])) throw Object.assign(new Error('INVALID_PASSWORD'), { statusCode: 400 });
     data[passwordField] = await require('bcryptjs').hash(data[passwordField], 12);
