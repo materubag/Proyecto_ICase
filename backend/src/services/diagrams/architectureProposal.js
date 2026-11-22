@@ -28,39 +28,75 @@ function generate(project) {
   const beName = cleanTech(stack('backend') || 'Node.js + Express');
   const dbName = cleanTech(stack('database') || 'PostgreSQL');
 
+  const isTienda = /tienda|vendedor|factur|pos\b|caja\b|mostrador/i.test(
+    `${project.name || ''} ${project.description || ''} ${functional.map(r => (r.name || '') + ' ' + (r.description || '')).join(' ')}`
+  );
+
   const lines = [
     'flowchart LR',
     '  subgraph COL1 ["COLS. 1: USUARIOS (Hardware / Dispositivos)"]',
-    '    direction TB',
-    '    U_REC["Recepción (PC / Laptop)"]',
-    '    U_MEC["Mecánico (Tablet / Móvil)"]',
-    '    U_CLI["Cliente (Smartphone)"]',
-    '    U_ADM["Admin (PC Escritorio)"]',
-    '  end',
-    '',
-    '  subgraph COL2 ["COLS. 2: INTERFAZ (Presentación)"]',
-    '    direction TB',
-    '    UI_APP["APP WEB (' + feName + ')"]',
-    '    UI_ROUTER["Router y Vistas SPA"]',
-    '    UI_APP --> UI_ROUTER',
-    '  end',
-    '',
-    '  subgraph COL3 ["COLS. 3: MÓDULOS API (Lógica / ' + beName + ')"]',
     '    direction TB'
   ];
 
+  const actors = (project.actors || []).filter(a => !a.isDeleted);
+  const actorNodes = [];
+  if (actors.length > 0) {
+    for (let idx = 0; idx < actors.length; idx++) {
+      const a = actors[idx];
+      const name = a.name.trim();
+      let device = 'PC / Laptop';
+      if (/vendedor|cajer/i.test(name)) device = 'Terminal POS / Mostrador';
+      else if (/admin|gerent/i.test(name)) device = 'PC Escritorio';
+      else if (/client|usuari/i.test(name)) device = 'Smartphone / Web';
+      else if (/mecanic|tecnic/i.test(name)) device = 'Tablet / Móvil';
+      else if (/recep/i.test(name)) device = 'PC / Laptop';
+
+      const nodeId = `U_ACT_${idx + 1}`;
+      lines.push(`    ${nodeId}["${name} (${device})"]`);
+      actorNodes.push(nodeId);
+    }
+  } else if (isTienda) {
+    lines.push('    U_ACT_1["Administrador (PC Escritorio)"]');
+    lines.push('    U_ACT_2["Vendedor (Terminal POS / Mostrador)"]');
+    actorNodes.push('U_ACT_1', 'U_ACT_2');
+  } else {
+    lines.push('    U_REC["Recepción (PC / Laptop)"]');
+    lines.push('    U_MEC["Mecánico (Tablet / Móvil)"]');
+    lines.push('    U_CLI["Cliente (Smartphone)"]');
+    lines.push('    U_ADM["Admin (PC Escritorio)"]');
+    actorNodes.push('U_REC', 'U_MEC', 'U_CLI', 'U_ADM');
+  }
+
+  lines.push('  end');
+  lines.push('');
+  lines.push('  subgraph COL2 ["COLS. 2: INTERFAZ (Presentación)"]');
+  lines.push('    direction TB');
+  lines.push('    UI_APP["APP WEB (' + feName + ')"]');
+  lines.push('    UI_ROUTER["Router y Vistas SPA"]');
+  lines.push('    UI_APP --> UI_ROUTER');
+  lines.push('  end');
+  lines.push('');
+  lines.push('  subgraph COL3 ["COLS. 3: MÓDULOS API (Lógica / ' + beName + ')"]');
+  lines.push('    direction TB');
+
   const groups = new Map();
-  const patterns = [
-    ['Autenticación y Acceso', /roles|permisos|autentica|usuarios/],
-    ['Clientes y Vehículos', /clientes|vehiculos|expediente|historial/],
-    ['Atención y Citas', /citas|recepcion/],
-    ['Diagnóstico OBD', /fallas|diagnostico|obd/],
-    ['Cotizaciones y Presupuestos', /cotizacion|items autorizados|catalogo de servicios/],
-    ['Órdenes de Trabajo y Taller', /mecanicos|reparacion|actividades/],
-    ['Inventario y Repuestos', /inventario|repuestos|productos|stock|ventas|proveedores/],
-    ['Mantenimiento Preventivo', /mantenimientos|mantenimiento/],
-    ['Base de Conocimiento', /conocimiento/],
-    ['Reportes y Control', /indicadores|reportes|auditoria|solicitudes de cambio/]
+  const patterns = isTienda ? [
+    ['Autenticación y Control de Acceso', /login|inicio\s+de\s+sesi[oó]n|credencial|autentica|rol|permiso|rf-01\b/i],
+    ['Gestión de Cuentas de Vendedores', /vendedor|cuenta.*vendedor|usuario|rf-02\b/i],
+    ['Catálogo e Inventario de Productos', /producto|cat[aá]logo|stock|inventario|rf-03|rf-04\b/i],
+    ['Punto de Venta y Facturación', /factur|importe|caja|descontar.*stock|rf-05|rf-06\b/i],
+    ['Historial y Consulta de Ventas', /consultar.*venta|historial.*venta|ventas\s+registradas|rf-07\b/i]
+  ] : [
+    ['Autenticación y Acceso', /roles|permisos|autentica|usuarios/i],
+    ['Clientes y Vehículos', /clientes|vehiculos|expediente|historial/i],
+    ['Atención y Citas', /citas|recepcion/i],
+    ['Diagnóstico OBD', /fallas|diagnostico|obd/i],
+    ['Cotizaciones y Presupuestos', /cotizacion|items autorizados|catalogo de servicios/i],
+    ['Órdenes de Trabajo y Taller', /mecanicos|reparacion|actividades/i],
+    ['Inventario y Repuestos', /inventario|repuestos|productos|stock|ventas|proveedores/i],
+    ['Mantenimiento Preventivo', /mantenimientos|mantenimiento/i],
+    ['Base de Conocimiento', /conocimiento/i],
+    ['Reportes y Control', /indicadores|reportes|auditoria|solicitudes de cambio/i]
   ];
 
   for (const r of functional) {
@@ -70,7 +106,7 @@ function generate(project) {
     groups.get(group).push(r.id);
   }
 
-  // Ordenar módulos lógicamente según los patrones para que Autenticación y Vehículos queden arriba
+  // Ordenar módulos lógicamente según los patrones para que Autenticación y Módulos Core queden arriba
   const sortedModuleNames = [
     ...patterns.map(p => p[0]).filter(name => groups.has(name)),
     ...Array.from(groups.keys()).filter(name => !patterns.some(p => p[0] === name))
@@ -87,27 +123,31 @@ function generate(project) {
 
   lines.push('  end');
   lines.push('');
+  const hasObjStore = !isTienda && (functional.some(r => /foto|evidencia|adjunto|diagnostico|obd/i.test((r.name || '') + ' ' + (r.description || ''))));
   lines.push('  subgraph COL4 ["COLS. 4: PERSISTENCIA Y RESPALDOS (Datos & RNF-08)"]');
   lines.push('    direction TB');
   lines.push('    STORE[("' + dbName + ' (Base de Datos Relacional)")]');
-  lines.push('    OBJ_STORE[("Almacén de Evidencias (Fotos y Diagnósticos)")]');
+  if (hasObjStore) {
+    lines.push('    OBJ_STORE[("Almacén de Evidencias (Fotos y Diagnósticos)")]');
+  }
   if (hasBackups) {
     lines.push('    BACKUP_SVC["Servicio de Respaldos (RNF-08: Backup & Recovery Daemon)"]');
     lines.push('    STORE -.->|Respaldos programados| BACKUP_SVC');
-    lines.push('    OBJ_STORE -.->|Copias de seguridad| BACKUP_SVC');
+    if (hasObjStore) {
+      lines.push('    OBJ_STORE -.->|Copias de seguridad| BACKUP_SVC');
+    }
   }
   lines.push('  end');
   lines.push('');
-  lines.push('  U_REC --> UI_APP');
-  lines.push('  U_MEC --> UI_APP');
-  lines.push('  U_CLI --> UI_APP');
-  lines.push('  U_ADM --> UI_APP');
+  for (const nodeId of actorNodes) {
+    lines.push(`  ${nodeId} --> UI_APP`);
+  }
   lines.push('');
 
   for (const m of modules) {
     lines.push('  UI_ROUTER --> ' + m.id);
     lines.push('  ' + m.id + ' --> STORE');
-    if (m.name.includes('Diagnóstico') || m.name.includes('Evidencias')) {
+    if (hasObjStore && (m.name.includes('Diagnóstico') || m.name.includes('Evidencias'))) {
       lines.push('  ' + m.id + ' --> OBJ_STORE');
     }
   }

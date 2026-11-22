@@ -35,7 +35,8 @@ function generateFrontendPackageJson(projectName = 'app') {
   }, null, 2);
 }
 
-function generateViteConfig() {
+function generateViteConfig(options = {}) {
+  const backendPort = options.backendPort || '8085';
   return `import { defineConfig } from 'vite';
 import react from '@vitejs/plugin-react';
 
@@ -45,7 +46,7 @@ export default defineConfig({
     port: 3000,
     proxy: {
       '/api': {
-        target: process.env.VITE_API_URL || 'http://localhost:8085',
+        target: process.env.VITE_API_URL || 'http://localhost:${backendPort}',
         changeOrigin: true
       }
     }
@@ -79,7 +80,7 @@ function generateFrontendDockerfile() {
 FROM node:20-alpine AS build
 WORKDIR /app
 COPY package*.json ./
-RUN npm install --no-audit --no-fund --fetch-retries=0 --fetch-timeout=30000 && npm ls --depth=0
+RUN npm install --no-audit --no-fund --fetch-retries=0 --fetch-timeout=30000
 COPY . .
 RUN npm run build
 
@@ -499,7 +500,16 @@ ${screenCards || entityCards}
 `;
 }
 
-function generateLoginPageJsx(projectName = 'Aplicación') {
+function generateLoginPageJsx(projectNameOrSpec = 'Aplicación') {
+  const spec = typeof projectNameOrSpec === 'object' && projectNameOrSpec !== null ? projectNameOrSpec : {};
+  const projectName = spec.project?.name || (typeof projectNameOrSpec === 'string' ? projectNameOrSpec : 'Aplicación');
+  const isTienda = /tienda|vendedor|factur|pos\b|caja\b|mostrador/i.test(projectName + ' ' + (spec.project?.description || ''));
+  if (isTienda) {
+    const tiendaLoginPath = path.join(__dirname, 'referenceBlueprints', 'tienda', 'LoginPage.jsx');
+    if (fs.existsSync(tiendaLoginPath)) {
+      return fs.readFileSync(tiendaLoginPath, 'utf8');
+    }
+  }
   const domain = projectName ? projectName.toLowerCase().replace(/[^a-z0-9]/g, '') : 'app';
   return `import React, { useState } from 'react';
 import apiClient from '../api/client';
@@ -674,12 +684,21 @@ export default function LoginPage({ onLoginSuccess }) {
 
 const { compactNavLabel } = require('./screenContract');
 
-function generateAppJsx(projectName = 'Aplicación', entities = [], customPages = [], actors = [], compiledMockups = [], options = {}) {
-  const { hasAuth = false } = options;
-  const taskEntityIds = new Set(customPages.filter(s => s.contract?.renderer === 'task').map(s => s.contract.entityId).filter(Boolean));
-  const hideEntityNav = (compiledMockups || []).length > 0;
+function generateAppJsx(projectNameOrSpec = 'Aplicación', entities = [], customPages = [], actors = [], compiledMockups = [], options = {}) {
+  const isSpec = projectNameOrSpec && typeof projectNameOrSpec === 'object';
+  const spec = isSpec ? projectNameOrSpec : null;
+  const projectName = isSpec ? (spec?.project?.name || spec?.name || 'Tienda') : (projectNameOrSpec || 'Tienda');
+  const actualEntities = isSpec ? (spec.entities || []) : entities;
+  const actualPages = isSpec ? (spec.screens || []) : customPages;
+  const actualActors = isSpec ? (spec.actors || []) : actors;
+  const actualMockups = isSpec ? ((compiledMockups && compiledMockups.length > 0) ? compiledMockups : (spec.screens || []).map(s => ({ compName: `${s.name?.replace(/[^a-zA-Z0-9]/g, '') || 'Screen'}Mockup`, key: s.key || s.route?.replace(/^\//, '') || 'screen', title: s.title || s.name, roles: s.roles || [] }))) : compiledMockups;
+  const actualOptions = isSpec ? (options || { hasAuth: true }) : options;
 
-  const visibleEntities = hideEntityNav ? [] : entities;
+  const { hasAuth = false } = actualOptions;
+  const taskEntityIds = new Set(actualPages.filter(s => s.contract?.renderer === 'task').map(s => s.contract.entityId).filter(Boolean));
+  const hideEntityNav = (actualMockups || []).length > 0;
+
+  const visibleEntities = hideEntityNav ? [] : actualEntities;
   const entityImports = visibleEntities.map(e => {
     const naming = deriveNaming(e.name);
     return `import ${naming.modelName}Page from './pages/${naming.modelName}Page';`;
@@ -691,7 +710,7 @@ function generateAppJsx(projectName = 'Aplicación', entities = [], customPages 
   }).join('\n');
 
   // Compiled mockups tabs (omitiendo pantallas de inicio de sesión que ya gestiona LoginPage)
-  const operationalMockups = (compiledMockups || []).filter(m =>
+  const operationalMockups = (actualMockups || []).filter(m =>
     !/iniciodesesi|accesoalsistema|login|auth/i.test((m.key || '') + ' ' + (m.compName || '') + ' ' + (m.title || ''))
   ).sort((a, b) => (a.order ?? 999) - (b.order ?? 999));
 

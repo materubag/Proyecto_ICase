@@ -324,7 +324,7 @@ Analiza la siguiente especificación de sistema y responde ÚNICAMENTE con un ob
 {
   "project": { "name": "${input.name}", "description": "${cleanDescription.slice(0, 500)}" },
   "actors": [{ "id": "ACT-01", "name": "", "description": "" }],
-  "requirements": [{ "code": "RF-01 o RNF-01", "name": "", "description": "", "type": "FUNCIONAL o NO_FUNCIONAL", "priority": "ALTA" | "MEDIA" | "BAJA", "actorIds": ["ACT-01"], "dependencies": [] }],
+  "requirements": [{ "code": "RF-01 o RNF-01", "name": "", "description": "", "type": "FUNCIONAL o NO_FUNCIONAL", "priority": "ALTA" | "MEDIA" | "BAJA", "actorIds": ["ACT-01"], "dependencies": [], "preconditions": "Condiciones del sistema previas a la ejecución del requerimiento", "postconditions": "Estado final del sistema tras la ejecución exitosa" }],
   "entities": [{ "id": "ENT-01", "name": "", "description": "", "attributes": [{ "name": "id", "type": "Int" }] }],
   "relationships": [{ "id": "REL-01", "source": "", "target": "", "cardinality": "1:N", "description": "" }],
   "screens": [{ "id": "SCR-01", "name": "NombrePantalla", "description": "", "route": "/ruta", "purpose": "", "components": [] }],

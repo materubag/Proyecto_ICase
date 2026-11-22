@@ -123,7 +123,7 @@ function deriveUserFieldMapping(userEntity) {
   const idField = pkAttr ? (pkAttr.fieldName || pkAttr.name) : 'id';
 
   // 2. Password field
-  const passAttr = attrs.find(a => /^(password_?hash|passwordhash|password|contrasena|contrase[ñn]a|clave|hash|secret|hash_?contrase[ñn]a|hash_?password)$/i.test(a.fieldName || a.name || ''));
+  const passAttr = attrs.find(a => /^(password_?hash|passwordhash|password|contrasena|contrase[ñn]a|contrase[ñn]a_?hash|contrasena_?hash|clave|clave_?hash|hash|secret|hash_?contrase[ñn]a|hash_?password)$/i.test(a.fieldName || a.name || ''));
   const passwordField = passAttr ? (passAttr.fieldName || passAttr.name) : 'password';
 
   // 3. Email field
@@ -281,7 +281,7 @@ const AuthController = {
         ${roleCol}: roleValue
       };
       if ('${userCol}' && '${userCol}' !== '${passCol}') createData.${userCol} = rawIdentifier;
-      if ('${emailCol}' && '${emailCol}' !== '${userCol}' && '${emailCol}' !== '${passCol}') createData.${emailCol} = email || correo || rawIdentifier;
+      ${emailCol && emailCol !== userCol && emailCol !== passCol ? `createData.${emailCol} = email || correo || rawIdentifier;` : ''}
       if ('${nameCol}' && '${nameCol}' !== '${userCol}' && '${nameCol}' !== '${emailCol}') createData.${nameCol} = nombre || rawIdentifier;
 
       const user = await models.${modelName}.create(createData);
@@ -347,21 +347,23 @@ const AuthController = {
         Object.values(models.${modelName}.associations).find(a => (a.target?.name || '').toLowerCase() === '${roleModelName}'.toLowerCase())
       );
       const searchConditions = [];
-      if ('${userCol}') {
-        searchConditions.push({ ${userCol}: identifier });
+      if (${JSON.stringify(userCol)}) {
+        searchConditions.push({ [${JSON.stringify(userCol)}]: identifier });
       }
-      if ('${emailCol}' && '${emailCol}' !== '${userCol}') {
-        searchConditions.push({ ${emailCol}: identifier });
-      }
-      if ('${nameCol}' && '${nameCol}' !== '${userCol}' && '${nameCol}' !== '${emailCol}') {
-        searchConditions.push({ ${nameCol}: identifier });
-      }
-      if ('${emailCol}' && !identifier.includes('@')) {
+      ${emailCol && emailCol !== userCol ? `
+      searchConditions.push({ [${JSON.stringify(emailCol)}]: identifier });
+      ` : ''}
+      ${nameCol && nameCol !== userCol && nameCol !== emailCol ? `
+      searchConditions.push({ [${JSON.stringify(nameCol)}]: identifier });
+      ` : ''}
+      ${emailCol ? `
+      if (!identifier.includes('@')) {
         const likeOp = models.${modelName}.sequelize?.getDialect() === 'postgres' ? Op.iLike : Op.like;
         searchConditions.push({
-          ${emailCol}: { [likeOp]: \`\${identifier}@%\` }
+          [${JSON.stringify(emailCol)}]: { [likeOp]: \`\${identifier}@%\` }
         });
       }
+      ` : ''}
 
       const queryOptions = {
         where: {

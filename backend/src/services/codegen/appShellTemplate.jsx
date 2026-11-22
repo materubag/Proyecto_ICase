@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 
 function roleBadge(role) {
   const value = String(role || '');
+  if (/vendedor/i.test(value)) return 'Punto de Venta';
   if (/mecanic|t[eé]cnic/i.test(value)) return 'Taller Mecánico';
   if (/recep|operativ/i.test(value)) return 'Taller Operativo';
   if (/client/i.test(value)) return 'Portal Cliente';

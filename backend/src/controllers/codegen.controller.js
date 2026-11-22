@@ -12,6 +12,7 @@ const { synthesizeMockupBindings } = require('../services/codegen/aiMockupSynthe
 const aiProposalStore = require('../services/codegen/aiProposalStore');
 const codegenJobService = require('../services/codegen/codegenJob.service');
 const codegenDecisionService = require('../services/codegen/codegenDecision.service');
+const codegenCustomizationStore = require('../services/codegen/codegenCustomizationStore');
 const prisma = require('../config/prisma');
 const crypto = require('crypto');
 
@@ -605,6 +606,38 @@ exports.submitDecision = async (req, res) => {
 };
 
 /**
+ * Retrieves the environment and port configuration for Docker Compose.
+ */
+exports.getEnvConfig = async (req, res) => {
+  try {
+    const { projectId } = req.params;
+    const project = await prisma.project.findUnique({ where: { id: projectId } });
+    if (!project) return res.status(404).json({ success: false, error: { message: 'Proyecto no encontrado' } });
+    const config = codegenCustomizationStore.getProjectEnvConfig(projectId, project.name);
+    return res.status(200).json({ success: true, data: config });
+  } catch (error) {
+    console.error('Error en codegen.getEnvConfig:', error);
+    return res.status(500).json({ success: false, error: { message: error.message } });
+  }
+};
+
+/**
+ * Persists the environment and port configuration for Docker Compose.
+ */
+exports.saveEnvConfig = async (req, res) => {
+  try {
+    const { projectId } = req.params;
+    const project = await prisma.project.findUnique({ where: { id: projectId } });
+    if (!project) return res.status(404).json({ success: false, error: { message: 'Proyecto no encontrado' } });
+    const saved = codegenCustomizationStore.saveProjectEnvConfig(projectId, req.body);
+    return res.status(200).json({ success: true, data: saved });
+  } catch (error) {
+    console.error('Error en codegen.saveEnvConfig:', error);
+    return res.status(500).json({ success: false, error: { message: error.message } });
+  }
+};
+
+/**
  * Retrieves the list of approved stage IDs for progressive codegen workflow.
  */
 exports.getStagesStatus = async (req, res) => {
@@ -738,22 +771,59 @@ exports.deployContainer = async (req, res) => {
     state.approvedStageIds = Array.from(currentApproved).sort((a, b) => a - b);
 
     // Sync all files into delivery workspace
-    const { DeliveryRuntime, safeFile } = require('../services/codegen/deliveryRuntime');
+    const { DeliveryRuntime, writeFiles } = require('../services/codegen/deliveryRuntime');
     const runtime = new DeliveryRuntime();
     state.workspace = state.workspace || 'working';
     const directory = runtime.directory(projectId, state.workspace);
 
+    const envConfig = codegenCustomizationStore.getProjectEnvConfig(projectId, project.name);
+
     const gen = await codeGeneratorService.generateProjectFiles(projectId, {
       includeDocker: true,
       allowUnapproved: true,
-      reviewOnly: true
+      reviewOnly: true,
+      envConfig
     });
 
     if (Array.isArray(gen?.files)) {
-      for (const file of gen.files) {
-        if (!file?.path || typeof file?.content !== 'string') continue;
-        safeFile(directory, file.path, file.content);
+      writeFiles(directory, gen.files, {}, { preserveMigrations: false });
+      const envFile = gen.files.find(f => f.path === '.env');
+      if (envFile) {
+        const fs = require('fs');
+        const path = require('path');
+        fs.writeFileSync(path.join(directory, '.env'), envFile.content, 'utf8');
       }
+    }
+
+    // Ejecutar despliegue real con Docker Compose
+    const { exec } = require('child_process');
+    let dockerOutput = '';
+    let dockerDeployError = null;
+
+    try {
+      await new Promise((resolve, reject) => {
+        exec('docker compose up --build -d', { cwd: directory, maxBuffer: 10 * 1024 * 1024, timeout: 300000 }, (error, stdout, stderr) => {
+          dockerOutput = (stdout || '') + '\n' + (stderr || '');
+          if (error) {
+            return reject(new Error(stderr || stdout || error.message));
+          }
+          resolve();
+        });
+      });
+    } catch (dErr) {
+      dockerDeployError = dErr.message;
+      console.error('Error al desplegar con docker compose:', dErr);
+    }
+
+    if (dockerDeployError) {
+      let friendlyMsg = dockerDeployError;
+      if (dockerDeployError.includes('port is already allocated')) {
+        friendlyMsg = `Conflicto de puerto: Uno de los puertos configurados (Frontend: ${envConfig.frontendPort}, Backend: ${envConfig.backendPort}, BD: ${envConfig.dbHostPort}) ya está en uso en Docker. Si el puerto ${envConfig.frontendPort} está ocupado por otro contenedor (como 'hermes'), cámbialo en 'Parámetros de Entorno y Puertos' a un puerto libre (ej. 3011) o detén el contenedor conflictivo con 'docker stop hermes'.`;
+      }
+      return res.status(400).json({
+        success: false,
+        error: { message: friendlyMsg, raw: dockerDeployError }
+      });
     }
 
     const currentManifest = computeManifest(gen?.files || []);
@@ -829,24 +899,29 @@ exports.updateContainer = async (req, res) => {
     let state = row?.state ? (typeof row.state === 'string' ? JSON.parse(row.state) : row.state) : {};
 
     // Generate latest project files
+    const envConfig = codegenCustomizationStore.getProjectEnvConfig(projectId, project.name);
     const gen = await codeGeneratorService.generateProjectFiles(projectId, {
       includeDocker: true,
       allowUnapproved: true,
-      reviewOnly: true
+      reviewOnly: true,
+      envConfig
     });
 
-    const { DeliveryRuntime, safeFile } = require('../services/codegen/deliveryRuntime');
+    const { DeliveryRuntime, writeFiles } = require('../services/codegen/deliveryRuntime');
     const runtime = new DeliveryRuntime();
     state.workspace = state.workspace || 'working';
     const directory = runtime.directory(projectId, state.workspace);
 
     let updatedFilesCount = 0;
     if (Array.isArray(gen?.files)) {
-      for (const file of gen.files) {
-        if (!file?.path || typeof file?.content !== 'string') continue;
-        safeFile(directory, file.path, file.content);
-        updatedFilesCount++;
+      writeFiles(directory, gen.files, {}, { preserveMigrations: false });
+      const envFile = gen.files.find(f => f.path === '.env');
+      if (envFile) {
+        const fs = require('fs');
+        const path = require('path');
+        fs.writeFileSync(path.join(directory, '.env'), envFile.content, 'utf8');
       }
+      updatedFilesCount = gen.files.length;
     }
 
     const currentManifest = computeManifest(gen?.files || []);

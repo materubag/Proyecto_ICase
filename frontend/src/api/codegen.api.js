@@ -46,6 +46,23 @@ export const codegenApi = {
   },
 
   /**
+   * Obtiene la configuración de puertos y variables de entorno Docker persistidas
+   */
+  getEnvConfig: (projectId) => {
+    return request(`/projects/${projectId}/codegen/env-config`);
+  },
+
+  /**
+   * Guarda y persiste la configuración de puertos y variables de entorno Docker
+   */
+  saveEnvConfig: (projectId, config) => {
+    return request(`/projects/${projectId}/codegen/env-config`, {
+      method: 'POST',
+      body: config
+    });
+  },
+
+  /**
    * Obtiene el estado del contenedor Docker y detecta si hay cambios pendientes
    */
   getContainerStatus: (projectId) => {

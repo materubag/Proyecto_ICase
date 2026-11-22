@@ -3,6 +3,7 @@ import DiagramViewport from '../components/common/DiagramViewport';
 import Modal from '../components/common/Modal';
 import { generateArchitectureDiagram } from '../utils/mermaidGenerators';
 import { diagramsApi } from '../api/diagrams.api';
+import { isTiendaDomain } from '../utils/mockupScreenOptions';
 
 export default function ProjectArchitecture({ project, onProjectUpdated }) {
   const [archType, setArchType] = useState('software'); // 'software' | 'system'
@@ -151,52 +152,86 @@ export default function ProjectArchitecture({ project, onProjectUpdated }) {
     const be = effectiveBackend || 'Node.js + Express';
     const db = effectiveDatabase || 'PostgreSQL';
 
+    const isTienda = isTiendaDomain(project);
+    const actors = (project?.actors || []).filter(a => !a.isDeleted);
+
     let code = `flowchart LR\n`;
-    code += `  subgraph COL1 ["USUARIOS"]\n`;
+    code += `  subgraph COL1 ["USUARIOS (Hardware / Dispositivos)"]\n`;
     code += `    direction TB\n`;
-    code += `    U_REC["Recepción (PC / Laptop)"]\n`;
+
+    let actorNodes = [];
+    if (actors.length > 0) {
+      actors.forEach((a, idx) => {
+        const name = a.name.trim();
+        let device = 'PC / Laptop';
+        if (/vendedor|cajer/i.test(name)) device = 'Terminal POS / Mostrador';
+        else if (/admin|gerent/i.test(name)) device = 'PC Escritorio';
+        else if (/client|usuari/i.test(name)) device = 'Smartphone / Web';
+        const id = `U_ACT_${idx + 1}`;
+        code += `    ${id}["${name} (${device})"]\n`;
+        actorNodes.push(id);
+      });
+    } else if (isTienda) {
+      code += `    U_VEN["Vendedor (Terminal POS / Mostrador)"]\n`;
+      code += `    U_ADM["Administrador (PC Escritorio)"]\n`;
+      actorNodes = ['U_VEN', 'U_ADM'];
+    } else {
+      code += `    U_REC["Recepción (PC / Laptop)"]\n`;
+      actorNodes = ['U_REC'];
+    }
     code += `  end\n\n`;
 
-    code += `  subgraph COL2 ["INTERFAZ"]\n`;
+    code += `  subgraph COL2 ["INTERFAZ (Presentación)"]\n`;
     code += `    direction TB\n`;
-    code += `    UI_APP["Interfaz web (${fe})"]\n`;
+    code += `    UI_APP["APP WEB (${fe})"]\n`;
+    code += `    UI_ROUTER["Router y Vistas SPA"]\n`;
+    code += `    UI_APP --> UI_ROUTER\n`;
     code += `  end\n\n`;
 
-    code += `  subgraph COL3 ["API · MÓDULOS"]\n`;
+    code += `  subgraph COL3 ["MÓDULOS API (Lógica / ${be})"]\n`;
     code += `    direction TB\n`;
-    code += `    API_AUTH["Autenticación y Acceso"]\n`;
-    code += `    API_VEH["Clientes y Vehículos"]\n`;
-    code += `    API_CITAS["Atención y Citas"]\n`;
-    code += `    API_DIAG["Diagnóstico OBD"]\n`;
-    code += `    API_COT["Cotizaciones y Presupuestos"]\n`;
+    let modNodes = [];
+    if (isTienda) {
+      code += `    MOD_1["Autenticación y Control de Acceso"]\n`;
+      code += `    MOD_2["Gestión de Cuentas de Vendedores"]\n`;
+      code += `    MOD_3["Catálogo e Inventario de Productos"]\n`;
+      code += `    MOD_4["Punto de Venta y Facturación"]\n`;
+      modNodes = ['MOD_1', 'MOD_2', 'MOD_3', 'MOD_4'];
+    } else {
+      code += `    API_AUTH["Autenticación y Acceso"]\n`;
+      code += `    API_VEH["Clientes y Vehículos"]\n`;
+      code += `    API_CITAS["Atención y Citas"]\n`;
+      code += `    API_DIAG["Diagnóstico OBD"]\n`;
+      code += `    API_COT["Cotizaciones y Presupuestos"]\n`;
+      modNodes = ['API_AUTH', 'API_VEH', 'API_CITAS', 'API_DIAG', 'API_COT'];
+    }
     code += `  end\n\n`;
 
-    code += `  subgraph COL4 ["DATOS"]\n`;
+    code += `  subgraph COL4 ["PERSISTENCIA Y RESPALDOS (Datos & RNF-08)"]\n`;
     code += `    direction TB\n`;
-    code += `    DB_STORE["${db}"]\n`;
-    code += `    OBJ_STORE["Almacén de evidencias"]\n`;
+    code += `    STORE[("${db} (Base de Datos Relacional)")]\n`;
+    if (!isTienda) {
+      code += `    OBJ_STORE[("Almacén de evidencias")]\n`;
+    }
     code += `    SVC_BACKUP["Servicio de respaldos"]\n`;
-    code += `    DB_STORE -.->|copias de seguridad| SVC_BACKUP\n`;
-    code += `    OBJ_STORE -.->|copias de seguridad| SVC_BACKUP\n`;
+    code += `    STORE -.->|copias de seguridad| SVC_BACKUP\n`;
+    if (!isTienda) {
+      code += `    OBJ_STORE -.->|copias de seguridad| SVC_BACKUP\n`;
+    }
     code += `  end\n\n`;
 
-    code += `  U_REC --> UI_APP\n\n`;
+    actorNodes.forEach(id => {
+      code += `  ${id} --> UI_APP\n`;
+    });
+    code += `\n`;
 
-    code += `  UI_APP --> API_AUTH\n`;
-    code += `  UI_APP --> API_VEH\n`;
-    code += `  UI_APP --> API_CITAS\n`;
-    code += `  UI_APP --> API_DIAG\n`;
-    code += `  UI_APP --> API_COT\n\n`;
-
-    code += `  API_AUTH --> DB_STORE\n`;
-    code += `  API_VEH --> DB_STORE\n`;
-    code += `  API_CITAS --> DB_STORE\n`;
-    code += `  API_DIAG --> DB_STORE\n`;
-    code += `  API_DIAG --> OBJ_STORE\n`;
-    code += `  API_COT --> DB_STORE\n`;
+    modNodes.forEach(id => {
+      code += `  UI_ROUTER --> ${id}\n`;
+      code += `  ${id} --> STORE\n`;
+    });
 
     return code;
-  }, [currentArch, effectiveFrontend, effectiveBackend, effectiveDatabase]);
+  }, [currentArch, effectiveFrontend, effectiveBackend, effectiveDatabase, project]);
 
   // System Architecture Diagram (Physical deployment of the analyzed project)
   const systemArchCode = useMemo(() => {

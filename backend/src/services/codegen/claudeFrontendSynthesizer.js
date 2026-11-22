@@ -342,6 +342,14 @@ function extractMockupBlueprint(scr = {}, spec = {}) {
  * Genera el componente AppShell.jsx unificado con el sistema de diseño del proyecto.
  */
 function generateCohesiveAppShellJsx(spec = {}, design = {}) {
+  const isTienda = /tienda|vendedor|factur|pos\b|caja\b|mostrador/i.test((spec?.project?.name || '') + ' ' + (spec?.project?.description || ''));
+  if (isTienda) {
+    const tiendaShellPath = path.join(__dirname, 'referenceBlueprints', 'tienda', 'AppShell.jsx');
+    if (fs.existsSync(tiendaShellPath)) {
+      return fs.readFileSync(tiendaShellPath, 'utf8');
+    }
+  }
+
   const projectId = spec?.project?.id;
   const projectName = design.projectName || spec?.project?.name || 'Aplicación';
   const primary = design.primary || '#3525cd';
@@ -693,6 +701,14 @@ export default function AppShell({
  * Genera LoginPage.jsx dinámico basado en los Actores reales del proyecto en ICASE.
  */
 function generateCohesiveLoginPageJsx(spec = {}, design = {}) {
+  const isTienda = /tienda|vendedor|factur|pos\b|caja\b|mostrador/i.test((spec?.project?.name || '') + ' ' + (spec?.project?.description || ''));
+  if (isTienda) {
+    const tiendaLoginPath = path.join(__dirname, 'referenceBlueprints', 'tienda', 'LoginPage.jsx');
+    if (fs.existsSync(tiendaLoginPath)) {
+      return fs.readFileSync(tiendaLoginPath, 'utf8');
+    }
+  }
+
   const projectName = design.projectName || spec?.project?.name || 'Aplicación';
   const primary = design.primary || '#3525cd';
   const actors = Array.isArray(spec.actors) && spec.actors.length > 0
@@ -882,6 +898,25 @@ function generateCohesiveScreenComponentJsx(compName, scr = {}, spec = {}, desig
   const overrides = getProjectScreenOverrides(projectId);
   if (overrides && overrides[screenKey] && typeof overrides[screenKey].code === 'string') {
     return overrides[screenKey].code;
+  }
+
+  // Guía funcional por referencia de dominio para Tienda con componentes POS e Inventario modernos
+  const isTienda = /tienda|vendedor|factur|pos\b|caja\b|mostrador/i.test((spec?.project?.name || '') + ' ' + (spec?.project?.description || ''));
+  if (isTienda) {
+    const refDir = path.join(__dirname, 'referenceBlueprints', 'tienda');
+    const possibleFiles = [
+      `${compName}.jsx`,
+      `${compName.replace(/[0-9]+Mockup$/, 'Mockup')}.jsx`,
+      `${compName.replace(/Mockup$/, '')}.jsx`
+    ];
+    for (const pf of possibleFiles) {
+      const fullP = path.join(refDir, pf);
+      if (fs.existsSync(fullP)) {
+        let code = fs.readFileSync(fullP, 'utf-8');
+        code = code.replace(/export\s+default\s+function\s+([A-Za-z0-9_]+)/, `export default function ${compName}`);
+        return code;
+      }
+    }
   }
 
   // Guía funcional por referencia de dominio para Autron con estilos modernos de Tailwind

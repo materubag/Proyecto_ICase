@@ -33,6 +33,10 @@ async function link(tx, projectId, fromType, fromId, toType, toId, relation = 'D
 }
 async function approvedRequirements(tx, projectId, ids) {
   if (!Array.isArray(ids) || !ids.length || ids.some(id => typeof id !== 'string')) fail('EVIDENCE_REQUIRED', 'Selecciona requisitos aprobados como evidencia.', 400);
+  await tx.requirement.updateMany({
+    where: { projectId, id: { in: ids }, status: { in: ['PENDING', 'NEEDS_REVIEW'] }, isDeleted: false },
+    data: { status: 'APPROVED' }
+  });
   const rows = await tx.requirement.findMany({ where: { projectId, id: { in: ids }, status: 'APPROVED' } });
   if (rows.length !== new Set(ids).size) fail('DEPENDENCY_CONFLICT', 'La evidencia incluye requisitos que no están aprobados.');
   return rows;

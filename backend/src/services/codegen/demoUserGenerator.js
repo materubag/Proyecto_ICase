@@ -13,28 +13,28 @@ function generateDemoUserSeedScript(spec = {}) {
     ? spec.actors.map(a => a.name || a)
     : (spec.security?.roles || ['Administrador', 'Cliente']);
 
-  const demoAccounts = actors.map(roleName => {
+  const demoAccounts = [];
+  for (const roleName of actors) {
     const slug = String(roleName)
       .normalize('NFD')
       .replace(/[\u0300-\u036f]/g, '')
       .toLowerCase()
       .replace(/[^a-z0-9]/g, '');
-    const email = slug.includes('admin')
-      ? 'admin@nexora.ec'
-      : slug.includes('recep')
-        ? 'recepcion@nexora.ec'
-        : slug.includes('mecanic')
-        ? 'mecanico@nexora.ec'
-        : slug.includes('client')
-        ? 'cliente@nexora.ec'
-        : `${slug}@nexora.ec`;
-    return {
+
+    demoAccounts.push({
       role: roleName,
-      email,
+      email: slug.includes('admin') ? 'admin@nexora.ec' : `${slug}@nexora.ec`,
       name: `${roleName} Nexora`,
       password: 'Password123!'
-    };
-  });
+    });
+
+    demoAccounts.push({
+      role: roleName,
+      email: slug.includes('admin') ? 'administrador@tienda.com' : `${slug}@tienda.com`,
+      name: `${roleName} Tienda`,
+      password: 'Password123!'
+    });
+  }
 
   return `require('dotenv').config();
 const bcrypt = require('bcryptjs');

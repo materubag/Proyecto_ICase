@@ -28,7 +28,14 @@ class RequirementService {
 
     await require('./analysis/documentWorkflow').service().get(projectId);
     await validateActors(projectId, data.actorIds || []);
-    const { code, name, description, type, priority, status, actorIds, dependencies, preconditions, postconditions } = data;
+    const { code, name, description, type, priority, status, actorIds, dependencies, preconditions, postconditions, qualityReport } = data;
+    const rule = require('./analysis/tiendaRules').matchTiendaRule(`${code || ''} ${name || ''} ${description || ''}`, code);
+    const resolvedPre = (preconditions !== undefined && preconditions !== null && preconditions !== '')
+      ? preconditions
+      : (qualityReport?.preconditions || rule?.preconditions || null);
+    const resolvedPost = (postconditions !== undefined && postconditions !== null && postconditions !== '')
+      ? postconditions
+      : (qualityReport?.postconditions || rule?.postconditions || null);
     if (!code || !name || !description) {
       const error = new Error('Código, nombre y descripción son campos obligatorios');
       error.statusCode = 400;
@@ -46,8 +53,9 @@ class RequirementService {
         status: status || 'PENDING',
         actorIds: Array.isArray(actorIds) ? actorIds : [],
         dependencies: Array.isArray(dependencies) ? dependencies : [],
-        preconditions: preconditions ? preconditions.trim() : null,
-        postconditions: postconditions ? postconditions.trim() : null,
+        preconditions: resolvedPre ? String(resolvedPre).trim() : null,
+        postconditions: resolvedPost ? String(resolvedPost).trim() : null,
+        qualityReport: qualityReport || null,
         isDeleted: false
       }
     });
@@ -76,7 +84,14 @@ class RequirementService {
     await require('./analysis/documentWorkflow').service().get(existing.projectId);
     if (['APPROVED', 'IMPLEMENTED'].includes(data.status)) await require('./analysis/documentWorkflow').assertLegacyApproval(existing.projectId, data.actorIds || existing.actorIds || []);
     await validateActors(existing.projectId, data.actorIds || []);
-    const { code, name, description, type, priority, status, actorIds, dependencies, preconditions, postconditions } = data;
+    const { code, name, description, type, priority, status, actorIds, dependencies, preconditions, postconditions, qualityReport } = data;
+    const rule = require('./analysis/tiendaRules').matchTiendaRule(`${code || existing.code || ''} ${name || existing.name || ''} ${description || existing.description || ''}`, code || existing.code);
+    const resolvedPre = (preconditions !== undefined && preconditions !== null && preconditions !== '')
+      ? preconditions
+      : (qualityReport?.preconditions !== undefined ? qualityReport.preconditions : (rule ? rule.preconditions : undefined));
+    const resolvedPost = (postconditions !== undefined && postconditions !== null && postconditions !== '')
+      ? postconditions
+      : (qualityReport?.postconditions !== undefined ? qualityReport.postconditions : (rule ? rule.postconditions : undefined));
     
     // Si cambia el código, actualizar en cascada referencias en otros requisitos, casos de uso y pantallas
     const oldCode = existing.code;
@@ -103,8 +118,9 @@ class RequirementService {
         status: nextStatus,
         ...(actorIds !== undefined && { actorIds: Array.isArray(actorIds) ? actorIds : [] }),
         ...(dependencies !== undefined && { dependencies: Array.isArray(dependencies) ? dependencies : [] }),
-        ...(preconditions !== undefined && { preconditions: preconditions ? preconditions.trim() : null }),
-        ...(postconditions !== undefined && { postconditions: postconditions ? postconditions.trim() : null })
+        ...(resolvedPre !== undefined && { preconditions: resolvedPre ? String(resolvedPre).trim() : null }),
+        ...(resolvedPost !== undefined && { postconditions: resolvedPost ? String(resolvedPost).trim() : null }),
+        ...(qualityReport !== undefined && { qualityReport })
       }
     });
 

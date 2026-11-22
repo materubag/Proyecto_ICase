@@ -42,8 +42,66 @@ class NavigationDeductionService {
     const clientActor = actorByName('client') || actors.find(a => a.id !== adminActor?.id);
     const mechActor = actorByName('mecan') || actors.find(a => a.id !== adminActor?.id && a.id !== clientActor?.id);
     const recepActor = actorByName('recep') || actors.find(a => a.id !== adminActor?.id && a.id !== clientActor?.id && a.id !== mechActor?.id);
+    const sellerActor = actorByName('vendedor') || actorByName('ventas') || actors.find(a => a.id !== adminActor?.id);
 
-    const screenDefinitions = [
+    const isTienda = /tienda|vendedor|factur|pos\b|caja\b|mostrador/i.test(`${project.name} ${project.description || ''} ${requirements.map(r => r.name + ' ' + r.description).join(' ')}`);
+
+    const screenDefinitions = isTienda ? [
+      {
+        name: 'Inicio de Sesión y Portal de Acceso',
+        route: '/login',
+        actorIds: actors.map(a => a.id),
+        actorName: 'Público / Todos los Usuarios',
+        from: 'Sistema',
+        to: '/catalogo',
+        action: 'Autenticar'
+      },
+      {
+        name: 'Gestión de Cuentas de Vendedores',
+        route: '/vendedores',
+        actorIds: adminActor ? [adminActor.id] : [],
+        actorName: adminActor?.name || 'Administrador',
+        from: '/login',
+        to: '/productos',
+        action: 'Administrar Vendedores'
+      },
+      {
+        name: 'Registro y Gestión de Inventario',
+        route: '/productos',
+        actorIds: adminActor ? [adminActor.id] : [],
+        actorName: adminActor?.name || 'Administrador',
+        from: '/vendedores',
+        to: '/ventas',
+        action: 'Gestionar Productos'
+      },
+      {
+        name: 'Catálogo de Productos para Venta',
+        route: '/catalogo',
+        actorIds: sellerActor ? [sellerActor.id] : (adminActor ? [adminActor.id] : []),
+        actorName: sellerActor?.name || 'Vendedor',
+        from: '/login',
+        to: '/facturacion',
+        action: 'Seleccionar Productos'
+      },
+      {
+        name: 'Punto de Venta y Facturación',
+        route: '/facturacion',
+        actorIds: sellerActor ? [sellerActor.id] : (adminActor ? [adminActor.id] : []),
+        actorName: sellerActor?.name || 'Vendedor',
+        from: '/catalogo',
+        to: '/ventas',
+        action: 'Cobrar y Facturar'
+      },
+      {
+        name: 'Historial y Consulta de Ventas',
+        route: '/ventas',
+        actorIds: adminActor ? [adminActor.id] : [],
+        actorName: adminActor?.name || 'Administrador',
+        from: '/facturacion',
+        to: '/productos',
+        action: 'Consultar Ventas'
+      }
+    ] : [
       {
         name: 'Inicio de Sesión y Portal de Acceso',
         route: '/login',

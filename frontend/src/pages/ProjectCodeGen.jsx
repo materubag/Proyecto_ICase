@@ -109,15 +109,91 @@ export default function ProjectCodeGen({ project, onNavigateTo }) {
   const quality = useMemo(() => groupQualityIssues(generatedData?.diagnostics?.errors || []), [generatedData]);
   const batchAnswers = completedBatchAnswers(activeJob?.questions, selectedOptions, customAnswers);
 
+  const safeProjectName = useMemo(() => {
+    return (project?.name || 'app').toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/[^a-z0-9]/g, '_');
+  }, [project?.name]);
+
+  const [envConfig, setEnvConfig] = useState(() => {
+    const saved = localStorage.getItem(`icase_env_config_${project?.id}`);
+    if (saved) {
+      try { return JSON.parse(saved); } catch (_) {}
+    }
+    const safe = (project?.name || 'app').toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/[^a-z0-9]/g, '_');
+    return {
+      backendPort: '8085',
+      backendContainerPort: '8080',
+      frontendPort: '3005',
+      frontendContainerPort: '80',
+      dbHostPort: '5435',
+      dbContainerPort: '5432',
+      dbName: `${safe}_db`,
+      dbUser: 'postgres',
+      networkName: `${safe}_network`
+    };
+  });
+
+  const [showEnvEditModal, setShowEnvEditModal] = useState(false);
+  const [editingEnvForm, setEditingEnvForm] = useState(null);
+
+  const openEditEnvModal = () => {
+    setEditingEnvForm({ ...envConfig });
+    setShowEnvEditModal(true);
+  };
+
+  const handleSaveEnvConfig = async (e) => {
+    if (e) e.preventDefault();
+    if (!editingEnvForm) return;
+    setEnvConfig(editingEnvForm);
+    localStorage.setItem(`icase_env_config_${project?.id}`, JSON.stringify(editingEnvForm));
+    setShowEnvEditModal(false);
+
+    try {
+      if (project?.id) {
+        await codegenApi.saveEnvConfig(project.id, editingEnvForm);
+        await loadPreview(activeStageId);
+      }
+    } catch (err) {
+      console.warn('Error guardando configuración de entorno en backend:', err);
+    }
+  };
+
+  const handleResetEnvConfig = () => {
+    setEditingEnvForm({
+      backendPort: '8085',
+      backendContainerPort: '8080',
+      frontendPort: '3005',
+      frontendContainerPort: '80',
+      dbHostPort: '5435',
+      dbContainerPort: '5432',
+      dbName: `${safeProjectName}_db`,
+      dbUser: 'postgres',
+      networkName: `${safeProjectName}_network`
+    });
+  };
+
   async function loadStagesStatus() {
     if (!project?.id) return;
     try {
-      const res = await codegenApi.getStagesStatus(project.id);
-      const data = res?.data || res;
-      if (Array.isArray(data?.approvedStages)) {
-        setApprovedStageIds(new Set(data.approvedStages));
-        if (data.activeStage && !data.approvedStages.includes(data.activeStage)) {
-          setActiveStageId(data.activeStage);
+      const [stagesRes, envRes] = await Promise.allSettled([
+        codegenApi.getStagesStatus(project.id),
+        codegenApi.getEnvConfig(project.id)
+      ]);
+      if (stagesRes.status === 'fulfilled') {
+        const data = stagesRes.value?.data || stagesRes.value;
+        if (Array.isArray(data?.approvedStages)) {
+          setApprovedStageIds(new Set(data.approvedStages));
+          if (data.activeStage && !data.approvedStages.includes(data.activeStage)) {
+            setActiveStageId(data.activeStage);
+          }
+        }
+      }
+      if (envRes.status === 'fulfilled') {
+        const envData = envRes.value?.data || envRes.value;
+        if (envData && envData.frontendPort) {
+          setEnvConfig(envData);
+          if (project?.id) {
+            localStorage.setItem(`icase_env_config_${project.id}`, JSON.stringify(envData));
+          }
         }
       }
     } catch (_) {}
@@ -371,7 +447,7 @@ export default function ProjectCodeGen({ project, onNavigateTo }) {
 
   function handleOpenFrontendPreview() {
     if (activeStage.id === 7 || approvedStageIds.has(7)) {
-      window.open('http://localhost:3005', '_blank');
+      window.open(`http://localhost:${envConfig.frontendPort || 3005}`, '_blank');
       return;
     }
     if (!project?.id) return;
@@ -514,7 +590,7 @@ export default function ProjectCodeGen({ project, onNavigateTo }) {
       }
       setActiveStageId(7);
       await loadContainerStatus();
-      setFixSuccessMessage('¡Entorno Docker desplegado con éxito! Contenedores y puertos 3005 y 8085 activos.');
+      setFixSuccessMessage(`¡Entorno Docker desplegado con éxito! Contenedores y puertos ${envConfig.frontendPort || 3005} y ${envConfig.backendPort || 8085} activos.`);
       setTimeout(() => setFixSuccessMessage(null), 5000);
     } catch (err) {
       console.error('Error al desplegar contenedor:', err);
@@ -1031,7 +1107,7 @@ export default function ProjectCodeGen({ project, onNavigateTo }) {
                 ✓ PostgreSQL 16 ({dbTestResult.connection?.latencyMs || 4}ms)
               </span>
               <span style={{ color: '#475569', fontSize: '0.78125rem' }}>
-                Base de datos <strong>{dbTestResult.connection?.database || 'autron_db'}</strong>: <strong>{dbTestResult.metrics?.tablesCount || 29}</strong> tablas, <strong>{dbTestResult.metrics?.relationshipsCount || 53}</strong> relaciones FK y <strong>{dbTestResult.metrics?.fieldsCount || 232}</strong> columnas verificadas.
+                Base de datos <strong>{dbTestResult.connection?.database || envConfig.dbName || `${safeProjectName}_db`}</strong>: <strong>{dbTestResult.metrics?.tablesCount || 29}</strong> tablas, <strong>{dbTestResult.metrics?.relationshipsCount || 53}</strong> relaciones FK y <strong>{dbTestResult.metrics?.fieldsCount || 232}</strong> columnas verificadas.
               </span>
             </div>
 
@@ -1170,10 +1246,10 @@ export default function ProjectCodeGen({ project, onNavigateTo }) {
                   cursor: 'pointer',
                   boxShadow: activeStage.id === 7 ? '0 1px 3px rgba(16, 185, 129, 0.3)' : '0 1px 3px rgba(79, 70, 229, 0.25)'
                 }}
-                title={activeStage.id === 7 ? "Abre la aplicación directamente en Docker (http://localhost:3005)" : "Abre y prueba todas las pantallas del Frontend conectadas a los endpoints antes de aprobar"}
+                title={activeStage.id === 7 ? `Abre la aplicación directamente en Docker (http://localhost:${envConfig.frontendPort || 3005})` : "Abre y prueba todas las pantallas del Frontend conectadas a los endpoints antes de aprobar"}
               >
                 <span className="ms ms-xs" style={{ color: '#FFFFFF' }}>{activeStage.id === 7 ? 'rocket_launch' : 'devices'}</span>
-                <span>{activeStage.id === 7 ? 'Abrir en Docker (3005) ↗' : 'Probar Frontend ↗'}</span>
+                <span>{activeStage.id === 7 ? `Abrir en Docker (${envConfig.frontendPort || 3005}) ↗` : 'Probar Frontend ↗'}</span>
               </button>
             )}
 
@@ -1222,10 +1298,14 @@ export default function ProjectCodeGen({ project, onNavigateTo }) {
               <span>Filtrar explorador a esta fase</span>
             </label>
 
-            {/* Botón Cambiar asistido por IA */}
+            {/* Botón Cambiar asistido por IA o directo */}
             <button
               type="button"
               onClick={() => {
+                if (activeStage.id === 2) {
+                  openEditEnvModal();
+                  return;
+                }
                 window.dispatchEvent(new CustomEvent('icase:open-ai-chat', {
                   detail: { initialPrompt: `Quiero cambiar o ajustar algo en la etapa ${activeStage.title}: ` }
                 }));
@@ -1245,7 +1325,7 @@ export default function ProjectCodeGen({ project, onNavigateTo }) {
                 boxShadow: '0 1px 2px rgba(15, 23, 42, 0.04)',
                 transition: 'all 0.15s ease'
               }}
-              title="Pedir ajustes, cambios o eliminaciones a la IA"
+              title={activeStage.id === 2 ? "Editar parámetros de entorno y puertos directamente" : "Pedir ajustes, cambios o eliminaciones a la IA"}
             >
               <span className="ms ms-xs" style={{ color: '#6366F1' }}>edit</span>
               <span>Cambiar</span>
@@ -1641,7 +1721,7 @@ export default function ProjectCodeGen({ project, onNavigateTo }) {
                 color: '#1E293B'
               }}>
                 <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '10px', paddingBottom: '8px', borderBottom: '1px solid #E2E8F0', fontFamily: 'inherit' }}>
-                  <span style={{ fontWeight: 700, color: '#0F172A' }}>📂 autron/</span>
+                  <span style={{ fontWeight: 700, color: '#0F172A' }}>📂 {safeProjectName || 'app'}/</span>
                   <span style={{ fontSize: '0.6875rem', color: '#64748B' }}>Estructura de carpetas del proyecto</span>
                 </div>
 
@@ -1691,26 +1771,62 @@ export default function ProjectCodeGen({ project, onNavigateTo }) {
                 <div>
                   <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '12px' }}>
                     <strong style={{ fontSize: '0.8125rem', color: '#0F172A' }}>Parámetros de Entorno y Puertos</strong>
-                    <span style={{ fontSize: '0.6875rem', background: '#ECFDF5', color: '#065F46', padding: '2px 6px', borderRadius: '4px', fontWeight: 600 }}>
-                      ✓ Configurado
-                    </span>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                      <button
+                        type="button"
+                        onClick={openEditEnvModal}
+                        style={{
+                          display: 'inline-flex',
+                          alignItems: 'center',
+                          gap: '4px',
+                          padding: '3px 8px',
+                          background: '#EEF2FF',
+                          color: '#4338CA',
+                          border: '1px solid #C7D2FE',
+                          borderRadius: '5px',
+                          fontSize: '0.6875rem',
+                          fontWeight: 600,
+                          cursor: 'pointer',
+                          transition: 'all 0.15s ease'
+                        }}
+                        title="Editar parámetros directamente sin usar Chat IA"
+                      >
+                        <span className="ms ms-xs" style={{ fontSize: '13px' }}>edit</span>
+                        Editar
+                      </button>
+                      <span style={{ fontSize: '0.6875rem', background: '#ECFDF5', color: '#065F46', padding: '2px 6px', borderRadius: '4px', fontWeight: 600 }}>
+                        ✓ Configurado
+                      </span>
+                    </div>
                   </div>
 
                   <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
                     {[
-                      { label: 'Puerto Backend (Host -> Contenedor)', val: '8085 -> 8080', role: 'API REST Express' },
-                      { label: 'Puerto Frontend (Host -> Contenedor)', val: '3005 -> 80', role: 'React 18 / Vite' },
-                      { label: 'Base de Datos (Host -> Contenedor)', val: '127.0.0.1:5435 -> 5432', role: 'PostgreSQL 16 Aislado' },
-                      { label: 'Nombre BD (DB_NAME)', val: 'autron_db', role: 'Esquema relacional' },
-                      { label: 'Usuario BD (DB_USER)', val: 'postgres', role: 'Credenciales Docker' },
-                      { label: 'Red Multi-contenedor', val: 'autron_network', role: 'Bridge aislada' }
+                      { key: 'backendPort', label: 'Puerto Backend (Host -> Contenedor)', val: `${envConfig.backendPort} -> ${envConfig.backendContainerPort}`, role: 'API REST Express' },
+                      { key: 'frontendPort', label: 'Puerto Frontend (Host -> Contenedor)', val: `${envConfig.frontendPort} -> ${envConfig.frontendContainerPort}`, role: 'React 18 / Vite' },
+                      { key: 'dbHostPort', label: 'Base de Datos (Host -> Contenedor)', val: `127.0.0.1:${envConfig.dbHostPort} -> ${envConfig.dbContainerPort}`, role: 'PostgreSQL 16 Aislado' },
+                      { key: 'dbName', label: 'Nombre BD (DB_NAME)', val: envConfig.dbName, role: 'Esquema relacional' },
+                      { key: 'dbUser', label: 'Usuario BD (DB_USER)', val: envConfig.dbUser, role: 'Credenciales Docker' },
+                      { key: 'networkName', label: 'Red Multi-contenedor', val: envConfig.networkName, role: 'Bridge aislada' }
                     ].map(row => (
-                      <div key={row.label} style={{
-                        display: 'flex', alignItems: 'center', justifyContent: 'space-between',
-                        padding: '6px 10px', background: '#F8FAFC', borderRadius: '6px', border: '1px solid #F1F5F9'
-                      }}>
+                      <div
+                        key={row.label}
+                        onClick={openEditEnvModal}
+                        style={{
+                          display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+                          padding: '6px 10px', background: '#F8FAFC', borderRadius: '6px', border: '1px solid #F1F5F9',
+                          cursor: 'pointer',
+                          transition: 'background 0.15s ease'
+                        }}
+                        onMouseEnter={e => e.currentTarget.style.background = '#F1F5F9'}
+                        onMouseLeave={e => e.currentTarget.style.background = '#F8FAFC'}
+                        title="Clic para editar este parámetro directamente"
+                      >
                         <div>
-                          <div style={{ fontSize: '0.75rem', fontWeight: 600, color: '#334155' }}>{row.label}</div>
+                          <div style={{ fontSize: '0.75rem', fontWeight: 600, color: '#334155', display: 'flex', alignItems: 'center', gap: '4px' }}>
+                            {row.label}
+                            <span className="ms ms-xs" style={{ fontSize: '11px', color: '#94A3B8' }}>edit</span>
+                          </div>
                           <div style={{ fontSize: '0.6875rem', color: '#94A3B8' }}>{row.role}</div>
                         </div>
                         <span style={{
@@ -1728,12 +1844,223 @@ export default function ProjectCodeGen({ project, onNavigateTo }) {
                   <span style={{ fontSize: '0.6875rem', color: '#64748B' }}>
                     Estado: Estructura base validada
                   </span>
+                  <button
+                    type="button"
+                    onClick={openEditEnvModal}
+                    style={{
+                      background: 'none',
+                      border: 'none',
+                      color: '#4F46E5',
+                      fontSize: '0.6875rem',
+                      fontWeight: 600,
+                      cursor: 'pointer',
+                      padding: 0,
+                      textDecoration: 'underline'
+                    }}
+                  >
+                    Modificar puertos y variables
+                  </button>
                 </div>
               </div>
             </div>
           </div>
         )}
       </div>
+
+      {/* ── MODAL DE EDICIÓN DIRECTA DE PARÁMETROS DE ENTORNO ──────────── */}
+      {showEnvEditModal && editingEnvForm && (
+        <div style={{
+          position: 'fixed', inset: 0,
+          background: 'rgba(15, 23, 42, 0.5)', backdropFilter: 'blur(4px)',
+          display: 'flex', alignItems: 'center', justifyContent: 'center',
+          zIndex: 10000, padding: '20px'
+        }}>
+          <div style={{
+            background: '#FFFFFF', borderRadius: '16px',
+            width: '100%', maxWidth: '580px', maxHeight: '90vh',
+            display: 'flex', flexDirection: 'column',
+            boxShadow: '0 25px 50px -12px rgba(0, 0, 0, 0.25)',
+            border: '1px solid #E2E8F0', overflow: 'hidden'
+          }}>
+            <div style={{
+              padding: '16px 20px', borderBottom: '1px solid #E2E8F0',
+              display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+              background: '#F8FAFC'
+            }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                <span className="ms ms-sm" style={{ color: '#4F46E5', fontSize: '20px' }}>tune</span>
+                <div>
+                  <h3 style={{ margin: 0, fontSize: '0.9375rem', fontWeight: 700, color: '#0F172A' }}>
+                    Editar Parámetros de Entorno y Puertos
+                  </h3>
+                  <p style={{ margin: '2px 0 0', fontSize: '0.6875rem', color: '#64748B' }}>
+                    Modifica los puertos locales, base de datos y red para el despliegue Docker
+                  </p>
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={() => setShowEnvEditModal(false)}
+                style={{
+                  background: 'none', border: 'none', color: '#94A3B8',
+                  cursor: 'pointer', fontSize: '1.25rem', padding: '4px'
+                }}
+              >
+                ✕
+              </button>
+            </div>
+
+            <form onSubmit={handleSaveEnvConfig} style={{ padding: '20px', overflowY: 'auto' }}>
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '14px' }}>
+                <div>
+                  <label style={{ display: 'block', fontSize: '0.75rem', fontWeight: 600, color: '#334155', marginBottom: '4px' }}>
+                    Puerto Backend (Host)
+                  </label>
+                  <input
+                    type="number"
+                    min="1024"
+                    max="65535"
+                    value={editingEnvForm.backendPort}
+                    onChange={e => setEditingEnvForm(prev => ({ ...prev, backendPort: e.target.value }))}
+                    style={{
+                      width: '100%', padding: '7px 10px', fontSize: '0.8125rem',
+                      border: '1px solid #CBD5E1', borderRadius: '6px', fontFamily: 'monospace'
+                    }}
+                    required
+                  />
+                  <span style={{ fontSize: '0.6875rem', color: '#94A3B8' }}>Expone hacia 8080 en contenedor</span>
+                </div>
+
+                <div>
+                  <label style={{ display: 'block', fontSize: '0.75rem', fontWeight: 600, color: '#334155', marginBottom: '4px' }}>
+                    Puerto Frontend (Host)
+                  </label>
+                  <input
+                    type="number"
+                    min="1024"
+                    max="65535"
+                    value={editingEnvForm.frontendPort}
+                    onChange={e => setEditingEnvForm(prev => ({ ...prev, frontendPort: e.target.value }))}
+                    style={{
+                      width: '100%', padding: '7px 10px', fontSize: '0.8125rem',
+                      border: '1px solid #CBD5E1', borderRadius: '6px', fontFamily: 'monospace'
+                    }}
+                    required
+                  />
+                  <span style={{ fontSize: '0.6875rem', color: '#94A3B8' }}>Expone hacia 80 en contenedor</span>
+                </div>
+
+                <div>
+                  <label style={{ display: 'block', fontSize: '0.75rem', fontWeight: 600, color: '#334155', marginBottom: '4px' }}>
+                    Puerto Base de Datos (Host)
+                  </label>
+                  <input
+                    type="number"
+                    min="1024"
+                    max="65535"
+                    value={editingEnvForm.dbHostPort}
+                    onChange={e => setEditingEnvForm(prev => ({ ...prev, dbHostPort: e.target.value }))}
+                    style={{
+                      width: '100%', padding: '7px 10px', fontSize: '0.8125rem',
+                      border: '1px solid #CBD5E1', borderRadius: '6px', fontFamily: 'monospace'
+                    }}
+                    required
+                  />
+                  <span style={{ fontSize: '0.6875rem', color: '#94A3B8' }}>127.0.0.1 (PostgreSQL 16)</span>
+                </div>
+
+                <div>
+                  <label style={{ display: 'block', fontSize: '0.75rem', fontWeight: 600, color: '#334155', marginBottom: '4px' }}>
+                    Usuario BD (DB_USER)
+                  </label>
+                  <input
+                    type="text"
+                    value={editingEnvForm.dbUser}
+                    onChange={e => setEditingEnvForm(prev => ({ ...prev, dbUser: e.target.value }))}
+                    style={{
+                      width: '100%', padding: '7px 10px', fontSize: '0.8125rem',
+                      border: '1px solid #CBD5E1', borderRadius: '6px', fontFamily: 'monospace'
+                    }}
+                    required
+                  />
+                  <span style={{ fontSize: '0.6875rem', color: '#94A3B8' }}>Por defecto: postgres</span>
+                </div>
+
+                <div style={{ gridColumn: 'span 2' }}>
+                  <label style={{ display: 'block', fontSize: '0.75rem', fontWeight: 600, color: '#334155', marginBottom: '4px' }}>
+                    Nombre de Base de Datos (DB_NAME)
+                  </label>
+                  <input
+                    type="text"
+                    value={editingEnvForm.dbName}
+                    onChange={e => setEditingEnvForm(prev => ({ ...prev, dbName: e.target.value }))}
+                    style={{
+                      width: '100%', padding: '7px 10px', fontSize: '0.8125rem',
+                      border: '1px solid #CBD5E1', borderRadius: '6px', fontFamily: 'monospace'
+                    }}
+                    required
+                  />
+                  <span style={{ fontSize: '0.6875rem', color: '#94A3B8' }}>Base de datos que creará Docker (ej. tienda_db)</span>
+                </div>
+
+                <div style={{ gridColumn: 'span 2' }}>
+                  <label style={{ display: 'block', fontSize: '0.75rem', fontWeight: 600, color: '#334155', marginBottom: '4px' }}>
+                    Red Multi-contenedor (Network)
+                  </label>
+                  <input
+                    type="text"
+                    value={editingEnvForm.networkName}
+                    onChange={e => setEditingEnvForm(prev => ({ ...prev, networkName: e.target.value }))}
+                    style={{
+                      width: '100%', padding: '7px 10px', fontSize: '0.8125rem',
+                      border: '1px solid #CBD5E1', borderRadius: '6px', fontFamily: 'monospace'
+                    }}
+                    required
+                  />
+                  <span style={{ fontSize: '0.6875rem', color: '#94A3B8' }}>Red bridge aislada para interconexión de contenedores</span>
+                </div>
+              </div>
+
+              <div style={{
+                marginTop: '20px', paddingTop: '14px', borderTop: '1px solid #E2E8F0',
+                display: 'flex', alignItems: 'center', justifyContent: 'space-between'
+              }}>
+                <button
+                  type="button"
+                  onClick={handleResetEnvConfig}
+                  style={{
+                    background: 'none', border: '1px solid #E2E8F0', borderRadius: '6px',
+                    padding: '6px 12px', fontSize: '0.75rem', color: '#64748B', cursor: 'pointer'
+                  }}
+                >
+                  Valores por defecto
+                </button>
+                <div style={{ display: 'flex', gap: '8px' }}>
+                  <button
+                    type="button"
+                    onClick={() => setShowEnvEditModal(false)}
+                    style={{
+                      background: '#F1F5F9', border: '1px solid #CBD5E1', borderRadius: '6px',
+                      padding: '6px 14px', fontSize: '0.75rem', color: '#475569', fontWeight: 600, cursor: 'pointer'
+                    }}
+                  >
+                    Cancelar
+                  </button>
+                  <button
+                    type="submit"
+                    style={{
+                      background: '#4F46E5', border: 'none', borderRadius: '6px',
+                      padding: '6px 16px', fontSize: '0.75rem', color: '#FFFFFF', fontWeight: 600, cursor: 'pointer'
+                    }}
+                  >
+                    Guardar Parámetros
+                  </button>
+                </div>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
 
       {/* ── BITACORA & AUDITORIA MODAL ────────────────────────────── */}
       {showLogs && (
@@ -2172,7 +2499,7 @@ export default function ProjectCodeGen({ project, onNavigateTo }) {
                     }}>
                       FRONTEND SPA
                     </span>
-                    <span style={{ fontSize: '0.6875rem', color: '#10B981', fontWeight: 600 }}>● Puerto 3005 / Nginx</span>
+                    <span style={{ fontSize: '0.6875rem', color: '#10B981', fontWeight: 600 }}>● Puerto {envConfig.frontendPort || '3005'} / Nginx</span>
                   </div>
                   <h3 style={{ margin: '0 0 4px 0', fontSize: '1rem', fontWeight: 700, color: '#0F172A' }}>
                     Aplicación Web del Sistema
@@ -2185,7 +2512,7 @@ export default function ProjectCodeGen({ project, onNavigateTo }) {
                 <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
                   <button
                     type="button"
-                    onClick={() => window.open('http://localhost:3005', '_blank')}
+                    onClick={() => window.open(`http://localhost:${envConfig.frontendPort || '3005'}`, '_blank')}
                     style={{
                       width: '100%',
                       padding: '10px 16px',
@@ -2203,11 +2530,11 @@ export default function ProjectCodeGen({ project, onNavigateTo }) {
                       boxShadow: '0 2px 6px rgba(79, 70, 229, 0.25)'
                     }}
                   >
-                    <span>Abrir Aplicación en Docker (Puerto 3005)</span>
+                    <span>Abrir Aplicación en Docker (Puerto {envConfig.frontendPort || '3005'})</span>
                     <span className="ms ms-xs">open_in_new</span>
                   </button>
                   <a
-                    href="http://localhost:3005"
+                    href={`http://localhost:${envConfig.frontendPort || '3005'}`}
                     target="_blank"
                     rel="noreferrer"
                     style={{
@@ -2218,7 +2545,7 @@ export default function ProjectCodeGen({ project, onNavigateTo }) {
                       fontWeight: 600
                     }}
                   >
-                    http://localhost:3005
+                    http://localhost:{envConfig.frontendPort || '3005'}
                   </a>
                 </div>
               </div>
@@ -2246,7 +2573,7 @@ export default function ProjectCodeGen({ project, onNavigateTo }) {
                     }}>
                       API REST & SWAGGER
                     </span>
-                    <span style={{ fontSize: '0.6875rem', color: '#10B981', fontWeight: 600 }}>● Puerto 8085 / Express</span>
+                    <span style={{ fontSize: '0.6875rem', color: '#10B981', fontWeight: 600 }}>● Puerto {envConfig.backendPort || '8085'} / Express</span>
                   </div>
                   <h3 style={{ margin: '0 0 4px 0', fontSize: '1rem', fontWeight: 700, color: '#0F172A' }}>
                     Servicios Backend y Swagger UI
@@ -2259,7 +2586,7 @@ export default function ProjectCodeGen({ project, onNavigateTo }) {
                 <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
                   <button
                     type="button"
-                    onClick={() => window.open('http://localhost:8085/swagger', '_blank')}
+                    onClick={() => window.open(`http://localhost:${envConfig.backendPort || '8085'}/api-docs`, '_blank')}
                     style={{
                       width: '100%',
                       padding: '10px 16px',
@@ -2276,11 +2603,11 @@ export default function ProjectCodeGen({ project, onNavigateTo }) {
                       gap: '8px'
                     }}
                   >
-                    <span>Abrir Swagger en Docker (Puerto 8085)</span>
+                    <span>Abrir Swagger en Docker (Puerto {envConfig.backendPort || '8085'})</span>
                     <span className="ms ms-xs">open_in_new</span>
                   </button>
                   <a
-                    href="http://localhost:8085/swagger"
+                    href={`http://localhost:${envConfig.backendPort || '8085'}/api-docs`}
                     target="_blank"
                     rel="noreferrer"
                     style={{
@@ -2291,7 +2618,7 @@ export default function ProjectCodeGen({ project, onNavigateTo }) {
                       fontWeight: 600
                     }}
                   >
-                    http://localhost:8085/swagger
+                    http://localhost:{envConfig.backendPort || '8085'}/api-docs
                   </a>
                 </div>
               </div>
@@ -2319,7 +2646,7 @@ export default function ProjectCodeGen({ project, onNavigateTo }) {
                     }}>
                       BASE DE DATOS
                     </span>
-                    <span style={{ fontSize: '0.6875rem', color: '#10B981', fontWeight: 600 }}>● Puerto 5435</span>
+                    <span style={{ fontSize: '0.6875rem', color: '#10B981', fontWeight: 600 }}>● Puerto {envConfig.dbHostPort || '5435'}</span>
                   </div>
                   <h3 style={{ margin: '0 0 4px 0', fontSize: '1rem', fontWeight: 700, color: '#0F172A' }}>
                     PostgreSQL 16 Multi-tabla
@@ -2341,9 +2668,9 @@ export default function ProjectCodeGen({ project, onNavigateTo }) {
                   flexDirection: 'column',
                   gap: '2px'
                 }}>
-                  <div>Host: <strong>127.0.0.1:5435</strong></div>
-                  <div>Base de datos: <strong>autron_db</strong></div>
-                  <div>Usuario: <strong>postgres</strong></div>
+                  <div>Host: <strong>127.0.0.1:{envConfig.dbHostPort || '5435'}</strong></div>
+                  <div>Base de datos: <strong>{envConfig.dbName || `${safeProjectName}_db`}</strong></div>
+                  <div>Usuario: <strong>{envConfig.dbUser || 'postgres'}</strong></div>
                 </div>
               </div>
             </div>
@@ -3087,7 +3414,7 @@ export default function ProjectCodeGen({ project, onNavigateTo }) {
                 <span className="ms ms-sm" style={{ color: '#4338CA' }}>table_view</span>
                 <div>
                   <h3 style={{ margin: 0, fontSize: '1rem', fontWeight: 700, color: '#0F172A' }}>
-                    Tablas y Modelos Relacionales — {dbTestResult.connection?.database || 'autron_db'}
+                    Tablas y Modelos Relacionales — {dbTestResult.connection?.database || envConfig.dbName || `${safeProjectName}_db`}
                   </h3>
                   <span style={{ fontSize: '0.75rem', color: '#64748B' }}>
                     PostgreSQL 16 (Alpine) · {dbTestResult.metrics?.tablesCount || 38} tablas validadas con Sequelize ORM · {dbTestResult.metrics?.relationshipsCount || 42} asociaciones íntegras

@@ -144,14 +144,45 @@ class RuleBasedExtractor {
       const start = rows[i].index + first.indexOf(m[1]);
       const code = `${prefix}-${String(Number(m[3])).padStart(2, '0')}`;
       const sourceText = text.substring(start, end);
-      const name = description.replace(/\s+/g, ' ').trim();
+      
+      // Limpiar prefijo de actor concatenado de la tabla (ej. "Ambos", "Administrador", "Vendedor")
+      let cleanDesc = description.replace(/^[ \t|]+/, '');
+      const actorPrefixRegex = /^(?:Ambos|Todos|Administrador(?:a)?|Vendedor(?:a)?|Usuario(?:s)?|Cliente(?:s)?|Operador(?:a)?|Cajero(?:a)?)\b[\s:|.–-]*/i;
+      cleanDesc = cleanDesc.replace(actorPrefixRegex, '').trim();
+      if (!cleanDesc) cleanDesc = description.trim();
+
+      const name = this.synthesizeRequirementName(cleanDesc, code);
       const pages = [...text.substring(0, start).matchAll(/\[PÁGINA\s+(\d+)\]/gi)];
-      out.push({ id: code, code, originalCode: m[1], name, text: name, description: name, type,
+      out.push({ id: code, code, originalCode: m[1], name, text: cleanDesc, description: cleanDesc, type,
         source: 'explicit', extractionMethod: 'LOCAL', section: this.findSectionForOffset(start, sections),
         sourceText, start, end, page: pages.length ? Number(pages.at(-1)[1]) : null });
     }
     // Same code with different text is not silently discarded.
     return out;
+  }
+
+  synthesizeRequirementName(desc = '', code = '') {
+    const clean = desc.replace(/\s+/g, ' ').trim();
+    if (/inicio\s+de\s+sesi[oó]n|iniciar\s+sesi[oó]n|login|autenticaci[oó]n/i.test(clean)) return 'Inicio de sesión';
+    if (/crear(?:\s+una)?\s+cuenta(?:\s+de\s+vendedor)?/i.test(clean)) return 'Crear cuenta de vendedor';
+    if (/registrar(?:\s+un)?\s+producto/i.test(clean)) return 'Registrar producto';
+    if (/mostrar(?:\s+los)?\s+productos|cat[aá]logo/i.test(clean)) return 'Catálogo de productos';
+    if (/calcular(?:\s+el)?\s+importe/i.test(clean)) return 'Cálculo de importes de factura';
+    if (/(?:pulsar\s+)?facturar|registrar\s+la\s+venta/i.test(clean)) return 'Facturación y descuento de stock';
+    if (/consultar(?:\s+las)?\s+ventas/i.test(clean)) return 'Consultar ventas registradas';
+    if (/control\s+de\s+acceso/i.test(clean)) return 'Control de acceso y permisos';
+
+    const actionMatch = clean.match(/(?:debe(?:r[aá])?\s+(?:permitir\s+)?|permite\s+)([\wáéíóúñ]+(?:\s+[\wáéíóúñ]+){1,4})/i);
+    if (actionMatch && actionMatch[1]) {
+      const phrase = actionMatch[1].trim();
+      return phrase.charAt(0).toUpperCase() + phrase.slice(1);
+    }
+
+    const firstClause = clean.split(/[.;,\n]/)[0].replace(/^(?:El sistema|La aplicación|La plataforma)\s+(?:debe(?:r[aá])?\s+)?/i, '').trim();
+    if (firstClause && firstClause.length <= 50) {
+      return firstClause.charAt(0).toUpperCase() + firstClause.slice(1);
+    }
+    return clean.slice(0, 45).trim() + (clean.length > 45 ? '...' : '');
   }
 
   /**
