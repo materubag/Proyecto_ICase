@@ -142,8 +142,44 @@ class MockupService {
       }
     }
 
-    // 3. Generación asistida por IA derivada de los requisitos aprobados (OpenAI o Gemini)
-    return this.generateWithAI(project, screens, relevantRequirements, prompt);
+    // 3. Generación asistida por IA con protección anti-timeout (45s para evitar error 524 de Cloudflare)
+    const aiPromise = this.generateWithAI(project, screens, relevantRequirements, prompt);
+    let timer;
+    const timeoutPromise = new Promise((resolve) => {
+      timer = setTimeout(() => {
+        console.warn('[MockupService] Tiempo límite de 45s alcanzado para evitar timeout 524 de Cloudflare. Retornando mockups estructurados inmediatos...');
+        const { generateHtmlMockup } = require('./mockupGenerator');
+        const finalScreens = screens.map(requested => {
+          const components = [
+            { type: 'navbar', label: `${project.name} - ${requested.name}` },
+            { type: 'heading', label: requested.name, description: requested.description || 'Módulo principal del sistema' },
+            { type: 'card', label: requested.name, description: 'Operación principal respaldada por los requisitos funcionales del sistema.' },
+            { type: 'form', label: 'Datos de Registro', meta: { fields: [{ label: 'Código / Identificador', type: 'text', placeholder: 'Ej: REG-001' }, { label: 'Descripción', type: 'text', placeholder: 'Detalle...' }] } },
+            { type: 'table', label: 'Registros Activos', meta: { headers: ['Código', 'Concepto', 'Responsable', 'Estado'], rows: [['REG-001', 'Atención registrada', 'Administrador', 'Completado'], ['REG-002', 'En revisión', 'Recepción', 'En Proceso']] } }
+          ];
+          const screenObj = {
+            id: requested.id,
+            name: requested.name,
+            route: requested.route,
+            description: requested.description,
+            components,
+            layout: { type: 'grid' }
+          };
+          screenObj.html = generateHtmlMockup(screenObj);
+          return screenObj;
+        });
+        resolve({
+          provider: 'fast-safe-fallback',
+          success: true,
+          screens: finalScreens
+        });
+      }, 45000);
+    });
+
+    return Promise.race([
+      aiPromise.finally(() => clearTimeout(timer)),
+      timeoutPromise
+    ]);
   }
 
   /**
