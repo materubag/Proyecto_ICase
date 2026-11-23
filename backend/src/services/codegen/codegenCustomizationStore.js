@@ -442,6 +442,12 @@ function getEffectiveScreensByRoleForSpec(projectId, spec = {}, operationalMocku
       const assigned = projectScreens.filter(ps =>
         ps.roles.some(r => normalizeText(r) === normRole || normalizeText(r).includes(normRole) || normRole.includes(normalizeText(r)))
       );
+      if (/vendedor/.test(normRole)) {
+        const ventasScreen = projectScreens.find(ps => ps.aliasKey === 'ventas' || ps.key === 'ventas' || /historial.*ventas|consulta.*ventas/i.test(ps.label));
+        if (ventasScreen && !assigned.some(a => a.key === ventasScreen.key || a.aliasKey === 'ventas')) {
+          assigned.push(ventasScreen);
+        }
+      }
       if (assigned.length > 0) {
         result[role] = assigned.map(ps => ({
           key: ps.key,
@@ -507,6 +513,7 @@ function detectTargetRole(text, customRoles = []) {
     if (nr && norm.includes(nr)) return r;
   }
   if (/\b(administrador|admin)\b/.test(norm)) return 'Administrador';
+  if (/\b(vendedor|cajero|ventas)\b/.test(norm)) return 'Vendedor';
   if (/\b(recepcion|recepcionista|asesor)\b/.test(norm)) return 'Recepción';
   if (/\b(mecanico|tecnico)\b/.test(norm)) return 'Mecánico';
   if (/\b(cliente|portal cliente)\b/.test(norm)) return 'Cliente';
@@ -582,7 +589,7 @@ function extractScreenListFromMessage(messageText, targetRole) {
       .replace(/^.*?(?:pantallas?|pestanas?|modulos?|vistas?|tenga|deja\s+solo|deja|agrega|anade|añade|aumenta|incluye|quita|elimina|borra|remueve)\s+/i, '');
   }
 
-  listText = listText.replace(/\s+(?:en|para|del|al)\s+(?:el\s+rol\s+|rol\s+)?(?:administrador|admin|recepci[oó]n|mec[aá]nico|cliente)\s*$/i, '');
+  listText = listText.replace(/\s+(?:en|para|del|al)\s+(?:el\s+rol\s+|rol\s+)?(?:administrador|admin|recepci[oó]n|mec[aá]nico|cliente|vendedor|cajero)\s*$/i, '');
 
   const rawParts = listText
     .split(/(?:,|;|\n|\s+y\s+|\s+e\s+)/i)

@@ -364,10 +364,14 @@ async function runMigrations() {
     await sequelize.query('ALTER TABLE ventas ADD COLUMN IF NOT EXISTS fecha_venta TIMESTAMP WITH TIME ZONE DEFAULT NOW();');
     await sequelize.query('ALTER TABLE ventas ADD COLUMN IF NOT EXISTS total NUMERIC(12,2) DEFAULT 0;');
     await sequelize.query('ALTER TABLE ventas ADD COLUMN IF NOT EXISTS monto_total NUMERIC(12,2) DEFAULT 0;');
+    await sequelize.query('ALTER TABLE ventas ADD COLUMN IF NOT EXISTS usuario_id INTEGER;');
+    await sequelize.query('ALTER TABLE ventas ADD COLUMN IF NOT EXISTS vendedor_id INTEGER;');
     await sequelize.query('UPDATE ventas SET fecha_venta = COALESCE(fecha_venta, fecha, NOW());');
     await sequelize.query('UPDATE ventas SET fecha = COALESCE(fecha, fecha_venta, NOW());');
     await sequelize.query('UPDATE ventas SET total = COALESCE(total, monto_total, 0);');
     await sequelize.query('UPDATE ventas SET monto_total = COALESCE(monto_total, total, 0);');
+    await sequelize.query('UPDATE ventas SET vendedor_id = COALESCE(vendedor_id, usuario_id, 1);');
+    await sequelize.query('UPDATE ventas SET usuario_id = COALESCE(usuario_id, vendedor_id, 1);');
 
     await sequelize.query('ALTER TABLE movimiento_inventarios ADD COLUMN IF NOT EXISTS fecha TIMESTAMP WITH TIME ZONE DEFAULT NOW();');
     await sequelize.query('ALTER TABLE movimiento_inventarios ADD COLUMN IF NOT EXISTS fecha_movimiento TIMESTAMP WITH TIME ZONE DEFAULT NOW();');

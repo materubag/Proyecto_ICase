@@ -194,14 +194,11 @@ function generateMasterRoutesIndexFile(entities = [], options = {}) {
   // Interceptor de operaciones de venta y flujo de caja con validación de stock atómica
   imports.push("const { handleWorkshopRuntimeRequest } = require('../services/workshopFlowRuntime');");
   mounts.push(`router.all('/ventas*', async (req, res, next) => {
-  if (req.method === 'POST') {
-    try {
-      return await handleWorkshopRuntimeRequest('${options.projectId || 'tienda'}', req, res);
-    } catch (err) {
-      return next(err);
-    }
+  try {
+    return await handleWorkshopRuntimeRequest('${options.projectId || 'tienda'}', req, res);
+  } catch (err) {
+    next(err);
   }
-  next();
 });`);
 
   for (const entity of entities) {

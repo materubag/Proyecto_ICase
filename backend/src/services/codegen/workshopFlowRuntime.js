@@ -1881,6 +1881,36 @@ async function handleWorkshopRuntimeRequest(projectId, req, res) {
 
   if (method === 'GET') {
     let scopedList = list;
+    if (resourceSlug === 'ventas' || resourceSlug === 'venta') {
+      try {
+        let models = null;
+        try { models = require('../models'); } catch (_) {}
+        if (models && models.VENTA) {
+          const dbVentas = await models.VENTA.findAll({ order: [['id', 'DESC']] });
+          if (dbVentas && dbVentas.length > 0) {
+            const mapped = dbVentas.map(v => {
+              const obj = v.toJSON ? v.toJSON() : { ...v };
+              return {
+                id: obj.id,
+                factura: obj.numeroFactura || obj.numero_factura || `FAC-${obj.id}`,
+                numeroFactura: obj.numeroFactura || obj.numero_factura || `FAC-${obj.id}`,
+                fecha: obj.fechaVenta || obj.fecha || obj.createdAt,
+                fechaVenta: obj.fechaVenta || obj.fecha || obj.createdAt,
+                total: Number(obj.total || obj.montoTotal || 0),
+                subtotal: Number(obj.subtotal || obj.total || 0),
+                iva: Number(obj.iva || 0),
+                cliente: obj.cliente || 'Consumidor Final',
+                vendedorId: obj.vendedorId || obj.vendedor_id || 1,
+                usuarioId: obj.usuarioId || obj.usuario_id || 1
+              };
+            });
+            const existingIds = new Set(mapped.map(m => String(m.id)));
+            const extra = list.filter(item => !existingIds.has(String(item.id)));
+            scopedList = [...mapped, ...extra];
+          }
+        }
+      } catch (_) {}
+    }
     // Filtrado estricto por Rol para Cliente y Mecánico
     if (role === 'Cliente') {
       const clientIds = getClientIdsForUser(state, user);
@@ -2054,6 +2084,48 @@ async function handleWorkshopRuntimeRequest(projectId, req, res) {
             });
           }
         }
+      }
+    }
+
+    if (resourceSlug === 'ventas' || resourceSlug === 'venta') {
+      try {
+        let models = null;
+        try { models = require('../models'); } catch (_) {}
+        if (models && models.VENTA) {
+          const invNum = body.numeroFactura || body.factura || created.numeroFactura || ('FAC-' + Date.now().toString().slice(-6));
+          const totalVal = Number(body.total || body.montoTotal || created.total || 0);
+          const vData = {
+            numeroFactura: invNum,
+            montoTotal: totalVal,
+            total: totalVal,
+            vendedorId: body.vendedorId || user?.id || 1,
+            usuarioId: user?.id || 1,
+            fechaVenta: new Date(),
+            fecha: new Date()
+          };
+          const dbVenta = await models.VENTA.create(vData);
+          if (dbVenta && dbVenta.id) {
+            created.id = dbVenta.id;
+          }
+          if (models.DETALLEVENTA && Array.isArray(saleItems)) {
+            for (const item of saleItems) {
+              const pId = item.producto_id || item.productoId || item.id;
+              const qty = Number(item.cantidad || 1);
+              const pr = Number(item.precio || item.precioUnitario || 0);
+              if (pId) {
+                await models.DETALLEVENTA.create({
+                  ventaId: created.id,
+                  productoId: pId,
+                  cantidad: qty,
+                  precioUnitario: pr,
+                  subtotal: qty * pr
+                }).catch(() => {});
+              }
+            }
+          }
+        }
+      } catch (err) {
+        console.warn('Persistencia de venta en PostgreSQL:', err.message);
       }
     }
 

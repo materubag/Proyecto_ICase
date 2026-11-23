@@ -54,17 +54,47 @@ async function prepare(req, scope, updating) {
   if (incoming.creado_por_usuario_id === undefined && schema.properties.creado_por_usuario_id) {
     incoming.creado_por_usuario_id = req.user?.id || 1;
   }
-  if (incoming.usuarioId === undefined && schema.properties.usuarioId) {
+  if (incoming.usuarioId === undefined && (schema.properties.usuarioId || declared.properties?.usuarioId)) {
     incoming.usuarioId = req.user?.id || 1;
   }
-  if (incoming.usuario_id === undefined && schema.properties.usuario_id) {
+  if (incoming.usuario_id === undefined && (schema.properties.usuario_id || declared.properties?.usuario_id)) {
     incoming.usuario_id = req.user?.id || 1;
   }
-  if (incoming.vendedorId === undefined && schema.properties.vendedorId) {
+  if (incoming.vendedorId === undefined && (schema.properties.vendedorId || declared.properties?.vendedorId)) {
     incoming.vendedorId = req.user?.id || 1;
   }
-  if (incoming.vendedor_id === undefined && schema.properties.vendedor_id) {
+  if (incoming.vendedor_id === undefined && (schema.properties.vendedor_id || declared.properties?.vendedor_id)) {
     incoming.vendedor_id = req.user?.id || 1;
+  }
+  if (incoming.total !== undefined || incoming.montoTotal !== undefined || incoming.monto_total !== undefined) {
+    const tVal = parseFloat(incoming.total ?? incoming.montoTotal ?? incoming.monto_total) || 0;
+    if (schema.properties.total && incoming.total === undefined) incoming.total = tVal;
+    if (schema.properties.montoTotal && incoming.montoTotal === undefined) incoming.montoTotal = tVal;
+    if (schema.properties.monto_total && incoming.monto_total === undefined) incoming.monto_total = tVal;
+  }
+  if (schema.properties.fechaVenta && incoming.fechaVenta === undefined) {
+    incoming.fechaVenta = new Date().toISOString();
+  }
+  if (schema.properties.fecha && incoming.fecha === undefined) {
+    incoming.fecha = new Date().toISOString();
+  }
+  if (incoming.password !== undefined || incoming.contrasena !== undefined || incoming.clave !== undefined) {
+    const rawPwd = String(incoming.password ?? incoming.contrasena ?? incoming.clave);
+    if (schema.properties.contrasenaHash && incoming.contrasenaHash === undefined) incoming.contrasenaHash = rawPwd;
+    if (schema.properties.password && incoming.password === undefined) incoming.password = rawPwd;
+    if (schema.properties.contrasena && incoming.contrasena === undefined) incoming.contrasena = rawPwd;
+    if (schema.properties.clave && incoming.clave === undefined) incoming.clave = rawPwd;
+  }
+  if (incoming.username !== undefined || incoming.usuario !== undefined || incoming.email !== undefined || incoming.correo !== undefined) {
+    const uVal = String(incoming.username ?? incoming.usuario ?? incoming.email ?? incoming.correo);
+    if (schema.properties.nombreUsuario && incoming.nombreUsuario === undefined) incoming.nombreUsuario = uVal;
+    if (schema.properties.username && incoming.username === undefined) incoming.username = uVal;
+    if (schema.properties.usuario && incoming.usuario === undefined) incoming.usuario = uVal;
+    if (schema.properties.email && incoming.email === undefined) incoming.email = uVal;
+    if (schema.properties.correo && incoming.correo === undefined) incoming.correo = uVal;
+  }
+  if (schema.properties.rolId && incoming.rolId === undefined) {
+    incoming.rolId = incoming.roleId || incoming.idRol || 2;
   }
   if ((!incoming.codigo || String(incoming.codigo).trim() === '') && schema.properties.codigo) {
     incoming.codigo = 'PROD-' + Date.now().toString().slice(-6);
