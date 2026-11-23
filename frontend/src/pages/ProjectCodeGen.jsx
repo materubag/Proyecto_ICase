@@ -16,9 +16,9 @@ const CODEGEN_STAGES = [
     id: 2,
     title: '2. Estructura del Proyecto',
     shortTitle: 'Estructura',
-    description: 'Árbol de carpetas del proyecto, Dockerfile base, dependencias raíz y configuración .env',
+    description: 'Árbol de carpetas del proyecto, Dockerfile base, dependencias raíz, configuración .env y documentación técnica (README, CONTRIBUTING, manuales)',
     category: 'Infraestructura',
-    matcher: (p) => /package\.json|Dockerfile|\.dockerignore|\.gitignore|README\.md|GENERATION_TRACE\.json|docker-compose|\.env/i.test(p) && !p.startsWith('frontend/')
+    matcher: (p) => /package\.json|Dockerfile|\.dockerignore|\.gitignore|README\.md|CONTRIBUTING\.md|docs\/|GENERATION_TRACE\.json|docker-compose|\.env/i.test(p) && !p.startsWith('frontend/')
   },
   {
     id: 3,
@@ -56,11 +56,108 @@ const CODEGEN_STAGES = [
     id: 7,
     title: '7. Docker & Entrega',
     shortTitle: 'Docker y Entrega',
-    description: 'docker-compose.yml multipuerto, verificación de integridad y descarga del paquete .ZIP',
+    description: 'docker-compose.yml multipuerto, verificación de integridad, documentación completa y descarga del paquete .ZIP',
     category: 'Entrega Final',
-    matcher: (p) => /docker-compose\.yml|\.env|README\.md/i.test(p)
+    matcher: (p) => /docker-compose\.yml|\.env|README\.md|CONTRIBUTING\.md|docs\//i.test(p)
   }
 ];
+
+function MarkdownDocumentView({ content }) {
+  if (!content) return <div style={{ color: '#94A3B8', padding: '32px', textAlign: 'center' }}>Documento vacío</div>;
+  const lines = content.split('\n');
+  const elements = [];
+  let inCodeBlock = false;
+  let codeBlockLines = [];
+  let tableLines = [];
+
+  const flushTable = () => {
+    if (tableLines.length === 0) return;
+    const rows = tableLines.map(l => l.trim().replace(/^\||\|$/g, '').split('|').map(c => c.trim()));
+    const isHeaderSeparator = rows[1] && rows[1].every(c => /^:?-+:?$/.test(c));
+    const headerRow = rows[0];
+    const bodyRows = isHeaderSeparator ? rows.slice(2) : rows.slice(1);
+
+    elements.push(
+      <div key={`table-${elements.length}`} style={{ overflowX: 'auto', margin: '16px 0', borderRadius: '8px', border: '1px solid #334155' }}>
+        <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '0.8125rem' }}>
+          {headerRow && (
+            <thead>
+              <tr style={{ background: '#1E293B' }}>
+                {headerRow.map((cell, idx) => (
+                  <th key={idx} style={{ padding: '10px 14px', textAlign: 'left', borderBottom: '2px solid #4F46E5', color: '#F8FAFC', fontWeight: 700 }}>{cell}</th>
+                ))}
+              </tr>
+            </thead>
+          )}
+          <tbody>
+            {bodyRows.map((row, rIdx) => (
+              <tr key={rIdx} style={{ background: rIdx % 2 === 0 ? '#0B0F19' : '#111827', borderBottom: '1px solid #1E293B' }}>
+                {row.map((cell, cIdx) => (
+                  <td key={cIdx} style={{ padding: '8px 14px', color: '#CBD5E1' }}>{cell}</td>
+                ))}
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+    );
+    tableLines = [];
+  };
+
+  for (let i = 0; i < lines.length; i++) {
+    const line = lines[i];
+
+    if (line.startsWith('```')) {
+      if (inCodeBlock) {
+        elements.push(
+          <pre key={`code-${elements.length}`} style={{ background: '#090D16', border: '1px solid #1E293B', padding: '14px', borderRadius: '8px', color: '#A5B4FC', fontFamily: 'monospace', fontSize: '0.8125rem', overflowX: 'auto', margin: '14px 0' }}>
+            <code>{codeBlockLines.join('\n')}</code>
+          </pre>
+        );
+        codeBlockLines = [];
+        inCodeBlock = false;
+      } else {
+        flushTable();
+        inCodeBlock = true;
+      }
+      continue;
+    }
+    if (inCodeBlock) {
+      codeBlockLines.push(line);
+      continue;
+    }
+
+    if (line.trim().startsWith('|')) {
+      tableLines.push(line);
+      continue;
+    } else {
+      flushTable();
+    }
+
+    if (line.startsWith('# ')) {
+      elements.push(<h1 key={`h1-${elements.length}`} style={{ fontSize: '1.45rem', fontWeight: 800, color: '#FFFFFF', margin: '24px 0 12px 0', borderBottom: '2px solid #4F46E5', paddingBottom: '8px' }}>{line.slice(2)}</h1>);
+    } else if (line.startsWith('## ')) {
+      elements.push(<h2 key={`h2-${elements.length}`} style={{ fontSize: '1.2rem', fontWeight: 700, color: '#E0E7FF', margin: '20px 0 10px 0', borderBottom: '1px solid #334155', paddingBottom: '6px' }}>{line.slice(3)}</h2>);
+    } else if (line.startsWith('### ')) {
+      elements.push(<h3 key={`h3-${elements.length}`} style={{ fontSize: '0.98rem', fontWeight: 600, color: '#C7D2FE', margin: '16px 0 8px 0' }}>{line.slice(4)}</h3>);
+    } else if (line.startsWith('---')) {
+      elements.push(<hr key={`hr-${elements.length}`} style={{ border: 'none', borderTop: '1px solid #334155', margin: '20px 0' }} />);
+    } else if (line.startsWith('> ')) {
+      elements.push(<div key={`quote-${elements.length}`} style={{ borderLeft: '4px solid #6366F1', padding: '10px 14px', margin: '12px 0', color: '#C7D2FE', background: 'rgba(99, 102, 241, 0.1)', borderRadius: '0 8px 8px 0', fontSize: '0.8125rem' }}>{line.slice(2)}</div>);
+    } else if (line.trim().startsWith('- ') || line.trim().startsWith('* ')) {
+      elements.push(<div key={`li-${elements.length}`} style={{ paddingLeft: '16px', margin: '5px 0', color: '#E2E8F0', fontSize: '0.8125rem', lineHeight: 1.6 }}>• {line.trim().slice(2)}</div>);
+    } else if (line.trim() !== '') {
+      elements.push(<p key={`p-${elements.length}`} style={{ margin: '8px 0', color: '#CBD5E1', fontSize: '0.8125rem', lineHeight: 1.65 }}>{line}</p>);
+    }
+  }
+  flushTable();
+
+  return (
+    <div style={{ padding: '24px 32px', maxWidth: '960px', margin: '0 auto', width: '100%', boxSizing: 'border-box' }}>
+      {elements}
+    </div>
+  );
+}
 
 export default function ProjectCodeGen({ project, onNavigateTo }) {
   const [includeDocker, setIncludeDocker] = useState(true);
@@ -70,6 +167,7 @@ export default function ProjectCodeGen({ project, onNavigateTo }) {
   const [error, setError] = useState(null);
   const [generatedData, setGeneratedData] = useState(null);
   const [selectedFilePath, setSelectedFilePath] = useState('docker-compose.yml');
+  const [markdownViewMode, setMarkdownViewMode] = useState('formatted');
   const [copied, setCopied] = useState(false);
   const [searchFilter, setSearchFilter] = useState('');
   const [stackFilter, setStackFilter] = useState('all');
@@ -1753,7 +1851,22 @@ export default function ProjectCodeGen({ project, onNavigateTo }) {
                     ├── 📄 <span style={{ cursor: 'pointer', color: '#4338CA', textDecoration: 'underline', fontWeight: 600 }} onClick={() => setSelectedFilePath('docker-compose.yml')}>docker-compose.yml</span> <span style={{ color: '#64748B' }}>── Orquestador 3 contenedores</span>
                   </div>
                   <div>
-                    └── 📄 <span style={{ cursor: 'pointer', color: '#4338CA', textDecoration: 'underline', fontWeight: 600 }} onClick={() => setSelectedFilePath('.env')}>.env</span> <span style={{ color: '#64748B' }}>── Parámetros y puertos del sistema</span>
+                    ├── 📄 <span style={{ cursor: 'pointer', color: '#4338CA', textDecoration: 'underline', fontWeight: 600 }} onClick={() => setSelectedFilePath('.env')}>.env</span> <span style={{ color: '#64748B' }}>── Parámetros y puertos del sistema</span>
+                  </div>
+                  <div>
+                    ├── 📖 <span style={{ cursor: 'pointer', color: '#4338CA', textDecoration: 'underline', fontWeight: 600 }} onClick={() => setSelectedFilePath('README.md')}>README.md</span> <span style={{ color: '#64748B' }}>── Guía de inicio y credenciales demo</span>
+                  </div>
+                  <div>
+                    ├── 🤝 <span style={{ cursor: 'pointer', color: '#4338CA', textDecoration: 'underline', fontWeight: 600 }} onClick={() => setSelectedFilePath('CONTRIBUTING.md')}>CONTRIBUTING.md</span> <span style={{ color: '#64748B' }}>── Estándares Git y colaboración</span>
+                  </div>
+                  <div>
+                    └── 📁 <strong>docs/</strong> <span style={{ color: '#64748B' }}>── Manuales del Sistema</span>
+                  </div>
+                  <div style={{ paddingLeft: '20px' }}>
+                    ├── 👤 <span style={{ cursor: 'pointer', color: '#4338CA', textDecoration: 'underline', fontWeight: 600 }} onClick={() => setSelectedFilePath('docs/MANUAL_USUARIO.md')}>MANUAL_USUARIO.md</span> <span style={{ color: '#94A3B8' }}>(guía de uso por roles)</span>
+                  </div>
+                  <div style={{ paddingLeft: '20px' }}>
+                    └── 💻 <span style={{ cursor: 'pointer', color: '#4338CA', textDecoration: 'underline', fontWeight: 600 }} onClick={() => setSelectedFilePath('docs/MANUAL_DESARROLLADOR.md')}>MANUAL_DESARROLLADOR.md</span> <span style={{ color: '#94A3B8' }}>(DER, arquitectura, API REST)</span>
                   </div>
                 </div>
               </div>
@@ -3127,9 +3240,113 @@ export default function ProjectCodeGen({ project, onNavigateTo }) {
                   ? 'Entorno Interactivo Frontend + API Conectada'
                   : (selectedFile?.path || 'docker-compose.yml')}
               </span>
+
+              {/* Acceso directo a documentos técnicos y READMEs */}
+              {files.some(f => /readme\.md|contributing\.md|manual_usuario|manual_desarrollador/i.test(f.path)) && (
+                <div style={{ display: 'inline-flex', alignItems: 'center', gap: '6px', marginLeft: '14px', flexWrap: 'wrap' }}>
+                  {files.some(f => /readme\.md$/i.test(f.path)) && (
+                    <button
+                      type="button"
+                      onClick={() => setSelectedFilePath(files.find(f => /readme\.md$/i.test(f.path))?.path || 'README.md')}
+                      style={{
+                        background: selectedFile?.path?.toLowerCase().includes('readme') ? '#4F46E5' : 'rgba(255, 255, 255, 0.08)',
+                        color: '#FFFFFF',
+                        border: '1px solid rgba(255, 255, 255, 0.15)',
+                        borderRadius: '6px',
+                        padding: '4px 8px',
+                        fontSize: '0.6875rem',
+                        fontWeight: 600,
+                        cursor: 'pointer'
+                      }}
+                      title="Ver README del proyecto"
+                    >
+                      📖 README
+                    </button>
+                  )}
+                  {files.some(f => /contributing\.md$/i.test(f.path)) && (
+                    <button
+                      type="button"
+                      onClick={() => setSelectedFilePath(files.find(f => /contributing\.md$/i.test(f.path))?.path || 'CONTRIBUTING.md')}
+                      style={{
+                        background: selectedFile?.path?.toLowerCase().includes('contributing') ? '#4F46E5' : 'rgba(255, 255, 255, 0.08)',
+                        color: '#FFFFFF',
+                        border: '1px solid rgba(255, 255, 255, 0.15)',
+                        borderRadius: '6px',
+                        padding: '4px 8px',
+                        fontSize: '0.6875rem',
+                        fontWeight: 600,
+                        cursor: 'pointer'
+                      }}
+                      title="Ver guía de contribución"
+                    >
+                      🤝 Contributing
+                    </button>
+                  )}
+                  {files.some(f => /manual_usuario\.md$/i.test(f.path)) && (
+                    <button
+                      type="button"
+                      onClick={() => setSelectedFilePath(files.find(f => /manual_usuario\.md$/i.test(f.path))?.path || 'docs/MANUAL_USUARIO.md')}
+                      style={{
+                        background: selectedFile?.path?.toLowerCase().includes('manual_usuario') ? '#4F46E5' : 'rgba(255, 255, 255, 0.08)',
+                        color: '#FFFFFF',
+                        border: '1px solid rgba(255, 255, 255, 0.15)',
+                        borderRadius: '6px',
+                        padding: '4px 8px',
+                        fontSize: '0.6875rem',
+                        fontWeight: 600,
+                        cursor: 'pointer'
+                      }}
+                      title="Ver manual de usuario final"
+                    >
+                      👤 Manual Usuario
+                    </button>
+                  )}
+                  {files.some(f => /manual_desarrollador\.md$/i.test(f.path)) && (
+                    <button
+                      type="button"
+                      onClick={() => setSelectedFilePath(files.find(f => /manual_desarrollador\.md$/i.test(f.path))?.path || 'docs/MANUAL_DESARROLLADOR.md')}
+                      style={{
+                        background: selectedFile?.path?.toLowerCase().includes('manual_desarrollador') ? '#4F46E5' : 'rgba(255, 255, 255, 0.08)',
+                        color: '#FFFFFF',
+                        border: '1px solid rgba(255, 255, 255, 0.15)',
+                        borderRadius: '6px',
+                        padding: '4px 8px',
+                        fontSize: '0.6875rem',
+                        fontWeight: 600,
+                        cursor: 'pointer'
+                      }}
+                      title="Ver manual de desarrollador (DER y arquitectura)"
+                    >
+                      💻 Manual Desarrollador
+                    </button>
+                  )}
+                </div>
+              )}
             </div>
 
             <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+              {selectedFile?.path?.endsWith('.md') && (
+                <button
+                  type="button"
+                  onClick={() => setMarkdownViewMode(prev => prev === 'formatted' ? 'raw' : 'formatted')}
+                  style={{
+                    background: 'rgba(79, 70, 229, 0.25)',
+                    border: '1px solid rgba(129, 140, 248, 0.4)',
+                    color: '#E0E7FF',
+                    borderRadius: '8px',
+                    padding: '6px 14px',
+                    fontSize: '0.75rem',
+                    fontWeight: 600,
+                    cursor: 'pointer',
+                    display: 'inline-flex',
+                    alignItems: 'center',
+                    gap: '5px'
+                  }}
+                  title="Alternar entre lectura formateada y código markdown"
+                >
+                  <span>{markdownViewMode === 'formatted' ? '📝 Modo Código' : '📖 Vista Documento'}</span>
+                </button>
+              )}
               {activeStage.id === 6 && (
                 <button
                   type="button"

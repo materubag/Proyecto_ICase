@@ -59,6 +59,9 @@ nav:
   - Configuración y operación: operations.md
   - Pruebas: testing.md
   - Mantenimiento de documentación: documentation.md
+  - Manuales del Sistema:
+      - Manual de Usuario: MANUAL_USUARIO.md
+      - Manual del Desarrollador: MANUAL_DESARROLLADOR.md
   - Proyecto y colaboración:
       - README del proyecto: project-readme.md
       - Cómo contribuir: contributing.md

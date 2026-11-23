@@ -236,9 +236,26 @@ class CodeGeneratorService {
     if (reviewOnly && (!options.stageId || options.stageId === 7)) {
       addFile('REVIEW_STATUS.json', JSON.stringify({ ready: false, notForDeployment: true, diagnostics }, null, 2), 'json');
     }
-    const readme = generateReadme(projectName, spec.entities, options);
+    const docGen = require('./documentationGenerator');
+    const codegenCustomizationStore = require('./codegenCustomizationStore');
+    const envConfig = options.envConfig || (projectId ? codegenCustomizationStore.getProjectEnvConfig(projectId, projectName) : null);
+    const frontendPort = envConfig?.frontendPort || '3005';
+    const backendPort = envConfig?.backendPort || '8085';
+    const dbPort = envConfig?.dbHostPort || '5435';
+    const dbName = envConfig?.dbName || safeDbName;
+    const dbUser = envConfig?.dbUser || 'postgres';
+    const networkName = envConfig?.networkName || `${safeDbName}_network`;
+
+    const readme = docGen.generateReadme(projectName, spec.entities, { frontendPort, backendPort, dbPort, ...options });
+    const contributing = docGen.generateContributing(projectName);
+    const userManual = docGen.generateUserManual(projectName);
+    const devManual = docGen.generateDeveloperManual(projectName);
+
     const showReviewBanner = reviewOnly && (!options.stageId || options.stageId === 7);
     addFile('README.md', showReviewBanner ? '# Paquete de revisión — ready=false\n\nNo aprobado para despliegue. Consulte REVIEW_STATUS.json: las operaciones pendientes responden 501 y los permisos sin fuente explícita se rechazan.\n\n' + readme : readme, 'markdown');
+    addFile('CONTRIBUTING.md', contributing, 'markdown');
+    addFile('docs/MANUAL_USUARIO.md', userManual, 'markdown');
+    addFile('docs/MANUAL_DESARROLLADOR.md', devManual, 'markdown');
     addFile('icase.spec.json', JSON.stringify(spec, null, 2), 'json');
     addFile('GENERATION_TRACE.json', JSON.stringify([...trace, { stage: 'CODE_EMISSION', mode: 'DETERMINISTIC', outcome: 'GENERATED', liveAiInvoked: false }], null, 2), 'json');
     addFile('SCREEN_BINDINGS.json', JSON.stringify((spec.screens || []).map(screen => ({ screenId: screen.id, route: screen.route, ...require('./screenBindingAudit').auditScreenBindings(screen) })), null, 2), 'json');
@@ -251,15 +268,6 @@ class CodeGeneratorService {
     const defaultDbPassword = 'pg_' + crypto.createHash('sha256').update(projectName + '_db_pwd_secure').digest('hex').slice(0, 24);
     const defaultJwtSecret = 'sec_' + crypto.createHash('sha256').update(projectName + '_jwt_entropy_secure').digest('hex');
     const defaultAdminPassword = 'adm_' + crypto.createHash('sha256').update(projectName + '_admin_pwd_secure').digest('hex').slice(0, 20);
-
-    const codegenCustomizationStore = require('./codegenCustomizationStore');
-    const envConfig = options.envConfig || (projectId ? codegenCustomizationStore.getProjectEnvConfig(projectId, projectName) : null);
-    const frontendPort = envConfig?.frontendPort || '3005';
-    const backendPort = envConfig?.backendPort || '8085';
-    const dbPort = envConfig?.dbHostPort || '5435';
-    const dbName = envConfig?.dbName || safeDbName;
-    const dbUser = envConfig?.dbUser || 'postgres';
-    const networkName = envConfig?.networkName || `${safeDbName}_network`;
 
     addFile('.env', `# Configuración de Puertos y Entorno para Docker Compose
 FRONTEND_PORT=${frontendPort}
@@ -580,7 +588,7 @@ compile().catch(error => { console.error(error.message); process.exitCode = 1; }
       const currentStage = Number(options.stageId);
       const isStageMatch = (p, targetStage) => {
         if (targetStage === 1) return /icase\.spec\.json/i.test(p);
-        if (targetStage === 2) return /package\.json|Dockerfile|\.dockerignore|README\.md|GENERATION_TRACE\.json|docker-compose|\.env/i.test(p) && !p.startsWith('frontend/');
+        if (targetStage === 2) return /package\.json|Dockerfile|\.dockerignore|README\.md|CONTRIBUTING\.md|docs\/|GENERATION_TRACE\.json|docker-compose|\.env/i.test(p) && !p.startsWith('frontend/');
         if (targetStage === 3) return /models\/|migrations\/|database\.js|migrate\.js|seed/i.test(p);
         if (targetStage === 4) return /openapi\.json|SCREEN_BINDINGS\.json|routes\//i.test(p);
         if (targetStage === 5) return /controllers\/|services\/|middleware\/|server\.js|app\.js|reviewed/i.test(p);
