@@ -545,6 +545,29 @@ async function main() {
     console.log('Created Screen:', s.name, '->', s.route);
   }
 
+  // 5b. Nodos de Navegación Aprobados
+  await prisma.navigationNode.deleteMany({ where: { projectId } });
+  for (const s of screensData) {
+    await prisma.navigationNode.create({
+      data: {
+        projectId,
+        name: s.name,
+        route: s.route,
+        platform: 'WEB',
+        from: s.route === '/login' ? 'Root' : '/herramientas',
+        to: s.route,
+        action: 'Navegar',
+        actorIds: s.actorIds,
+        requirementIds: [],
+        status: 'APPROVED',
+        reviewStatus: 'APPROVED',
+        revision: 1,
+        isDeleted: false
+      }
+    });
+    console.log('Created NavigationNode:', s.name, '->', s.route);
+  }
+
   // 6. Diagramas Mermaid Pre-renderizados y Aprobados
   const useCaseMermaid = `flowchart LR
     subgraph Actores

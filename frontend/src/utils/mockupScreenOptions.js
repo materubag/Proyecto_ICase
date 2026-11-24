@@ -8,6 +8,11 @@ export function isTiendaDomain(project) {
   return /tienda|vendedor|factur|pos\b|caja\b|mostrador|comercio/i.test(text);
 }
 
+export function isTallerHerramientasDomain(project) {
+  const text = `${project?.name || ''} ${project?.description || ''} ${(project?.requirements || []).map(r => (r.name || '') + ' ' + (r.description || '')).join(' ')}`.toLowerCase();
+  return /herramienta|prestamo.*taller|taller.*herramienta|encargado.*estudiante|estudiante.*encargado|devolucion.*herramienta/i.test(text);
+}
+
 export function getScreenCategories(project) {
   const actors = (project?.actors || []).filter(a => !a.isDeleted);
   const publicCategory = { id: 'public', label: 'Acceso y Login', icon: 'login', color: '#0284c7' };
@@ -122,6 +127,93 @@ export const TIENDA_SCREEN_CATALOG = [
     isCore: true,
     description: 'Consulta cronológica de ventas realizadas: número correlativo de factura, fecha/hora, vendedor responsable, detalle de productos y monto total.',
     match: /consultar.*ventas|historial.*ventas|ventas\s+registradas|ver.*factura|rf-07|rf-7\b/i
+  }
+];
+
+export const TALLER_HERRAMIENTAS_SCREEN_CATALOG = [
+  {
+    key: 'login',
+    name: 'Inicio de Sesión y Acceso al Sistema',
+    route: '/login',
+    category: 'public',
+    categoryName: 'Acceso y Login',
+    actorName: 'Público / Todos los Usuarios',
+    icon: 'login',
+    isCore: true,
+    description: 'Portal de autenticación transversal: ingreso mediante credenciales institucionales, validación de roles y control de sesión.',
+    match: /autenticar|iniciar sesion|login|recuperar el acceso|credencial|rf-09|rf-11/i
+  },
+  {
+    key: 'herramientas',
+    name: 'Catálogo y Gestión de Herramientas',
+    route: '/herramientas',
+    category: 'encargado',
+    categoryName: 'Encargado',
+    actorName: 'Encargado',
+    icon: 'build',
+    isCore: true,
+    description: 'Catálogo de herramientas con existencias en tiempo real y registro de nuevas herramientas (nombre, categoría y cantidad disponible inicial).',
+    match: /registrar.*herramienta|consultar.*herramienta|catalogo.*herramienta|cantidad disponible|rf-01|rf-02/i
+  },
+  {
+    key: 'solicitar',
+    name: 'Solicitud de Préstamo',
+    route: '/solicitar',
+    category: 'estudiante',
+    categoryName: 'Estudiante',
+    actorName: 'Estudiante',
+    icon: 'assignment',
+    isCore: true,
+    description: 'Formulario para que el Estudiante seleccione una herramienta e indique el plazo en días (1, 2 o 3 días) cumpliendo reglas de negocio.',
+    match: /solicitar.*prestamo|solicitar.*unidad|plazo.*dias|rf-03/i
+  },
+  {
+    key: 'solicitudes',
+    name: 'Bandeja de Solicitudes',
+    route: '/solicitudes',
+    category: 'encargado',
+    categoryName: 'Encargado',
+    actorName: 'Encargado',
+    icon: 'pending_actions',
+    isCore: true,
+    description: 'Bandeja de solicitudes pendientes para que el Encargado las evalúe y decida aprobarlas o rechazarlas.',
+    match: /resolver.*solicitud|solicitudes pendientes|aprobar.*rechazar|rf-04/i
+  },
+  {
+    key: 'entregas',
+    name: 'Entregas y Devoluciones',
+    route: '/entregas',
+    category: 'encargado',
+    categoryName: 'Encargado',
+    actorName: 'Encargado',
+    icon: 'swap_horiz',
+    isCore: true,
+    description: 'Control físico de entrega de herramientas aprobadas (descuento de inventario) y recepción de devoluciones (reposición de inventario).',
+    match: /registrar.*entrega|registrar.*devolucion|entrega.*solicitud|fecha y hora de entrega|rf-05|rf-06/i
+  },
+  {
+    key: 'mis_solicitudes',
+    name: 'Mis Solicitudes',
+    route: '/mis-solicitudes',
+    category: 'estudiante',
+    categoryName: 'Estudiante',
+    actorName: 'Estudiante',
+    icon: 'history',
+    isCore: true,
+    description: 'Historial y seguimiento de estados de solicitudes del Estudiante (Pendiente, Aprobada, Entregada, Devuelta o Vencida).',
+    match: /solicitudes propias|mis solicitudes|estado de cada una|rf-07/i
+  },
+  {
+    key: 'vencidos',
+    name: 'Préstamos Vencidos',
+    route: '/vencidos',
+    category: 'encargado',
+    categoryName: 'Encargado',
+    actorName: 'Encargado',
+    icon: 'alarm',
+    isCore: true,
+    description: 'Auditoría y supervisión de préstamos cuya fecha y hora límite expiró sin haberse registrado la devolución.',
+    match: /prestamos vencidos|consultar.*vencidos|limite de devolucion|fecha y hora limite|rf-08/i
   }
 ];
 
@@ -376,21 +468,25 @@ export function getCatalogForProject(project) {
   if (isTiendaDomain(project)) {
     return TIENDA_SCREEN_CATALOG;
   }
+  if (isTallerHerramientasDomain(project)) {
+    return TALLER_HERRAMIENTAS_SCREEN_CATALOG;
+  }
   return WORKSHOP_SCREEN_CATALOG;
 }
 
-export const SCREEN_CATALOG = [...TIENDA_SCREEN_CATALOG, ...WORKSHOP_SCREEN_CATALOG];
+export const SCREEN_CATALOG = [...TIENDA_SCREEN_CATALOG, ...TALLER_HERRAMIENTAS_SCREEN_CATALOG, ...WORKSHOP_SCREEN_CATALOG];
 
 export function screenOptions(project) {
   const functionalReqs = (project.requirements || []).filter(r => r.type === 'FUNCTIONAL' || !r.type);
   const existingNodes = (project.navigationNodes || []).filter(n => !n.isDeleted);
+  const existingScreens = (project.screens || []).filter(s => !s.isDeleted);
   const projectActors = (project.actors || []).filter(a => !a.isDeleted);
 
   // 1. Si existen nodos de navegación registrados en la BD, usarlos directamente de forma dinámica:
   if (existingNodes.length > 0) {
     return existingNodes.map(node => {
       const actor = projectActors.find(a => (node.actorIds || []).includes(a.id));
-      const isPublic = /login|acceso|autentic/i.test(node.route + ' ' + node.name);
+      const isPublic = /login|acceso|autentic/i.test((node.route || '') + ' ' + (node.name || ''));
       const combinedReqIds = Array.isArray(node.requirementIds) ? node.requirementIds : [];
       const functionalities = combinedReqIds
         .map(id => functionalReqs.find(r => r.id === id || r.code === id))
@@ -415,7 +511,36 @@ export function screenOptions(project) {
     });
   }
 
-  // 2. Si aún no se han persistido nodos, deducir la propuesta dinámica según el catálogo del dominio:
+  // 2. Si no hay nodos pero sí pantallas de prototipo registradas en la BD:
+  if (existingScreens.length > 0) {
+    return existingScreens.map(scr => {
+      const actor = projectActors.find(a => (scr.actorIds || []).includes(a.id));
+      const isPublic = /login|acceso|autentic/i.test((scr.route || '') + ' ' + (scr.name || ''));
+      const combinedReqIds = Array.isArray(scr.requirementIds) ? scr.requirementIds : [];
+      const functionalities = combinedReqIds
+        .map(id => functionalReqs.find(r => r.id === id || r.code === id))
+        .filter(Boolean)
+        .map(r => ({ id: r.id, code: r.code, text: r.description || r.name }));
+
+      return {
+        id: scr.id,
+        name: scr.name,
+        route: scr.route || `/${scr.name.toLowerCase().replace(/[^a-z0-9]/g, '-')}`,
+        platform: 'WEB',
+        category: isPublic ? 'public' : (actor?.id || 'general'),
+        categoryName: isPublic ? 'Acceso y Login' : (actor?.name || 'General'),
+        actorName: isPublic ? 'Público / Todos los Usuarios' : (actor?.name || 'Sistema'),
+        icon: chooseIcon(scr.name, actor?.name),
+        isCore: true,
+        description: scr.description || `Pantalla de ${scr.name} del sistema.`,
+        proposed: false,
+        requirementIds: combinedReqIds,
+        functionalities
+      };
+    });
+  }
+
+  // 3. Si aún no se han persistido pantallas ni nodos, deducir la propuesta dinámica según el catálogo del dominio:
   const catalog = getCatalogForProject(project);
   const screens = catalog.map(def => {
     const matched = functionalReqs.filter(r => {
