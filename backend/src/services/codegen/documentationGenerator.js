@@ -219,6 +219,121 @@ Antes de solicitar la revisión de su PR, asegúrese de:
 
 function generateUserManual(projectName = 'Tienda') {
   const safeName = projectName || 'Tienda';
+  const isTaller = /herramienta|taller|prestamo/i.test(safeName);
+
+  if (isTaller) {
+    return `# Manual de Usuario del Sistema — ${safeName}
+
+Manual operativo dirigido a usuarios finales del sistema de préstamo de herramientas: **Encargado** y **Estudiante**.
+
+---
+
+## 1. Introducción y Acceso al Sistema
+
+El sistema **${safeName}** es una solución integral para la gestión ágil de solicitudes, entregas físicas, devoluciones y control de existencias de herramientas de taller técnico institucional.
+
+### Cuentas de Acceso y Roles
+| Rol | Correo Institucional | Contraseña | Responsabilidad Principal |
+| :--- | :--- | :--- | :--- |
+| **Encargado** | \`encargado@taller.edu.ec\` | \`Password123!\` | Catálogo de herramientas, resolución de solicitudes, registro de entregas, devoluciones y supervisión de préstamos vencidos. |
+| **Estudiante** | \`estudiante@taller.edu.ec\` | \`Password123!\` | Consulta de catálogo, solicitud de herramientas en préstamo (1 a 3 días) y seguimiento de sus solicitudes. |
+
+### Acceso a la Plataforma
+1. Abra su navegador web (Google Chrome, Firefox o Edge).
+2. Ingrese a la dirección configurada de la aplicación web.
+3. En la pantalla de **Inicio de Sesión** (\`/login\`), ingrese su correo institucional y contraseña.
+
+---
+
+## 2. Guía Operativa para el Rol: ESTUDIANTE
+
+El rol **Estudiante** dispone de módulos dedicados a la autogestión de préstamos:
+
+\`\`\`
+[Catálogo de Herramientas] ──> [Solicitud de Préstamo] ──> [Historial: Mis Solicitudes]
+\`\`\`
+
+### 2.1. Catálogo de Herramientas (\`/herramientas\`) (RF-02)
+- **Objetivo:** Consultar herramientas activas, su categoría y cantidad de unidades disponibles en tiempo real.
+- **Operaciones:**
+  1. Revise el listado de herramientas disponibles (taladros, multímetros, llaves, etc.).
+  2. Compruebe la columna **Disponibles**. Si el stock es 0, el sistema indicará visualmente que no es posible solicitarla.
+  3. Presione el botón **"Solicitar Préstamo"** sobre la herramienta requerida para abrir el formulario de solicitud.
+
+### 2.2. Solicitud de Préstamo (\`/solicitar\`) (RF-03)
+- **Objetivo:** Solicitar formalmente una unidad de una herramienta indicando el plazo en días.
+- **Reglas de Negocio Validadas:**
+  - **RN-01:** Cada solicitud corresponde a exactamente **1 unidad**. El plazo permitido es de **1, 2 o 3 días**.
+  - **RN-02:** Con cero unidades disponibles, el sistema impide registrar la solicitud.
+  - **RN-03:** Si el estudiante tiene al menos un préstamo vencido sin devolver, el sistema bloquea nuevas solicitudes.
+- **Paso a Paso:**
+  1. Seleccione la herramienta y el plazo requerido (1, 2 o 3 días).
+  2. Presione **"Confirmar Solicitud"**.
+  3. La solicitud quedará registrada en estado **Pendiente** y se redirigirá a la vista de seguimiento.
+  4. Si desea desistir, presione **"Cancelar"** para regresar al catálogo sin registrar cambios.
+
+### 2.3. Mis Solicitudes (\`/mis-solicitudes\`) (RF-07)
+- **Objetivo:** Monitorear el estado cronológico de cada una de sus solicitudes.
+- **Estados Visibles:**
+  - **Pendiente:** Solicitud recibida, a la espera de resolución por el Encargado.
+  - **Aprobada:** Solicitud aprobada, lista para retiro físico en el taller.
+  - **Entregada:** Herramienta en posesión del estudiante; muestra fecha y hora límite de devolución.
+  - **Devuelta:** Préstamo finalizado con retorno físico completado.
+  - **Vencida:** Préstamo que superó la fecha límite sin devolución (bloquea nuevas solicitudes).
+  - **Rechazada:** Solicitud denegada por el Encargado.
+
+---
+
+## 3. Guía Operativa para el Rol: ENCARGADO
+
+El rol **Encargado** tiene control total de inventario y supervisión de préstamos:
+
+\`\`\`
+[Gestión de Herramientas] ──> [Bandeja de Solicitudes] ──> [Entregas y Devoluciones] ──> [Préstamos Vencidos]
+\`\`\`
+
+### 3.1. Registro y Catálogo de Herramientas (\`/herramientas\`) (RF-01)
+- **Objetivo:** Dar de alta nuevas herramientas y supervisar el inventario total.
+- **Paso a Paso:**
+  1. Presione el botón **"Nueva Herramienta"**.
+  2. Ingrese el nombre de la herramienta, categoría (Eléctrica, Manual, Medición, etc.) y cantidad inicial disponible (entero >= 0).
+  3. Presione **"Registrar Herramienta"**. El nuevo ítem quedará disponible en el catálogo.
+
+### 3.2. Bandeja de Solicitudes Pendientes (\`/solicitudes\`) (RF-04)
+- **Objetivo:** Evaluar las solicitudes enviadas por estudiantes.
+- **Operaciones:**
+  - **Aprobar Solicitud:** Cambia el estado a **Aprobada** (lista para entrega). No descuenta stock hasta la entrega física (**RN-05**).
+  - **Rechazar Solicitud:** Cambia el estado a **Rechazada**, registrando el motivo.
+
+### 3.3. Control de Entregas y Devoluciones (\`/entregas\`) (RF-05, RF-06)
+- **Confirmar Entrega Física (RF-05):**
+  1. Localice la solicitud en estado *Aprobada* cuando el estudiante se presente físicamente.
+  2. Presione **"Confirmar Entrega"**.
+  3. El sistema registra fecha y hora exacta de entrega, calcula el vencimiento (**24 horas por día**, **RN-04**) y descuenta atómicamente **1 unidad** de inventario (**RN-05**).
+- **Registrar Devolución Física (RF-06):**
+  1. Verifique el retorno de la herramienta en buen estado.
+  2. Presione **"Registrar Devolución"**.
+  3. El estado cambia a **Devuelta**, se suma **1 unidad** al inventario (**RN-05**) y el estudiante queda rehabilitado si no tiene otras moras (**RN-03**).
+
+### 3.4. Auditoría de Préstamos Vencidos (\`/vencidos\`) (RF-08)
+- **Objetivo:** Auditar préstamos cuya fecha y hora límite expiró sin haberse devuelto (**RN-04**).
+- **Datos mostrados:** Nombre del estudiante, herramienta retenida, fecha/hora límite y horas de retraso.
+- **Acción:** Enlace directo a registrar la devolución en cuanto se recupere la herramienta.
+
+---
+
+## 4. Resumen de Reglas de Negocio del Sistema
+
+| Regla | Descripción Operativa |
+| :--- | :--- |
+| **RN-01** | Cada solicitud corresponde a 1 unidad. Plazos válidos: 1, 2 o 3 días. |
+| **RN-02** | Con cero unidades disponibles, el sistema bloquea solicitud, aprobación y entrega. |
+| **RN-03** | Un estudiante con al menos un préstamo vencido sin devolver no puede crear solicitudes. Al registrar la devolución queda rehabilitado. |
+| **RN-04** | El plazo cuenta desde la fecha y hora de entrega física (24 horas por día). Al rebasar el límite sin devolución, se marca Vencido. |
+| **RN-05** | La aprobación deja la solicitud lista para entrega. El inventario se descuenta al entregar y se repone al devolver (movimiento único e indivisible). |
+`;
+  }
+
   return `# Manual de Usuario del Sistema — ${safeName}
 
 Manual operativo dirigido a usuarios finales del sistema: **Administradores** y **Vendedores**.
@@ -310,6 +425,124 @@ El rol **Administrador** cuenta con control total del sistema, incluyendo módul
 
 function generateDeveloperManual(projectName = 'Tienda') {
   const safeName = projectName || 'Tienda';
+  const isTaller = /herramienta|taller|prestamo/i.test(safeName);
+
+  if (isTaller) {
+    return `# Manual del Desarrollador — ${safeName}
+
+Documentación técnica, arquitectura de software, especificación de API y guía de mantenimiento para **${safeName}**.
+
+---
+
+## 1. Arquitectura General del Sistema
+
+El sistema implementa una arquitectura cliente-servidor desacoplada basada en microservicios contenerizados mediante Docker:
+
+\`\`\`mermaid
+flowchart LR
+    Browser["Navegador Web\n(Cliente SPA React + Vite)"] -- "HTTP :3012" --> Nginx["Contenedor: taller\n(Nginx 1.25)"]
+    Nginx -- "Proxy Reverse\n/api/*" --> Express["Contenedor: taller_backend\n(Node.js 20 Express)"]
+    Express -- "Sequelize ORM\nPuerto 5432" --> Postgres["Contenedor: taller_postgres\n(PostgreSQL 16)"]
+\`\`\`
+
+### Componentes:
+1. **Frontend (Contenedor \`taller\`):**
+   - Single Page Application construida con React 18, Vite y TailwindCSS.
+   - Navegación protegida con Contexto de Autenticación y token JWT.
+   - Rutas operativas: \`/login\`, \`/herramientas\`, \`/solicitar\`, \`/solicitudes\`, \`/entregas\`, \`/mis-solicitudes\`, \`/vencidos\`.
+2. **Backend (Contenedor \`taller_backend\`):**
+   - Servidor Express en Node.js 20 con Sequelize ORM.
+   - Middlewares de validación de esquemas y protección con JSON Web Tokens.
+   - Implementación atómica de reglas de negocio RN-01 a RN-05.
+3. **Base de Datos (Contenedor \`taller_postgres\`):**
+   - PostgreSQL 16 con volumen persistente y claves foráneas con integridad referencial.
+
+---
+
+## 2. Modelo Relacional de Base de Datos (DER)
+
+\`\`\`mermaid
+erDiagram
+    USUARIO ||--o{ PRESTAMO : realiza
+    HERRAMIENTA ||--o{ PRESTAMO : incluye
+
+    USUARIO {
+        int id PK
+        string nombre
+        string correo
+        string contrasenaHash
+        string rol
+        boolean activo
+    }
+    HERRAMIENTA {
+        int id PK
+        string nombre
+        string categoria
+        int cantidadDisponible
+        boolean activo
+    }
+    PRESTAMO {
+        int id PK
+        int estudianteId FK
+        int herramientaId FK
+        int plazoDias
+        string estado
+        datetime fechaSolicitud
+        datetime fechaEntrega
+        datetime fechaVencimiento
+        datetime fechaDevolucion
+        string observaciones
+    }
+\`\`\`
+
+---
+
+## 3. Catálogo de la API REST
+
+Todos los endpoints protegidos requieren cabecera:
+\`Authorization: Bearer <token_jwt>\`
+
+### 3.1. Autenticación (\`/api/auth\`)
+- \`POST /api/auth/login\`
+  - Valida credenciales contra hash bcrypt y emite JWT con el rol asignado (\`Encargado\` o \`Estudiante\`).
+- \`GET /api/auth/me\`
+  - Retorna el perfil y rol del usuario en sesión.
+
+### 3.2. Herramientas (\`/api/herramientas\`)
+- \`GET /api/herramientas\` (Público / Autenticado)
+  - Lista catálogo completo con cantidad disponible en tiempo real (RF-02).
+- \`POST /api/herramientas\` (Rol: Encargado)
+  - Da de alta nueva herramienta con nombre, categoría y existencias iniciales (RF-01).
+- \`PUT /api/herramientas/:id\` (Rol: Encargado)
+  - Actualiza datos o disponibilidad de la herramienta.
+
+### 3.3. Préstamos (\`/api/prestamos\`)
+- \`GET /api/prestamos\` (Roles: Encargado, Estudiante)
+  - Si es Estudiante: filtra automáticamente por su propio ID (RF-07).
+  - Si es Encargado: permite listar todas las solicitudes y filtrar pendientes o entregadas.
+- \`POST /api/prestamos\` (Rol: Estudiante)
+  - Registra solicitud en estado \`Pendiente\` validando plazo de 1 a 3 días (RN-01), stock > 0 (RN-02) y ausencia de préstamos vencidos (RN-03).
+- \`POST /api/prestamos/:id/resolver\` (Rol: Encargado)
+  - Aprueba (\`Aprobada\`) o rechaza (\`Rechazada\`) la solicitud (RF-04).
+- \`POST /api/prestamos/:id/entregar\` (Rol: Encargado)
+  - Registra entrega física, fija vencimiento (24h/día, RN-04) y descuenta atómicamente 1 unidad de inventario (RN-05).
+- \`POST /api/prestamos/:id/devolver\` (Rol: Encargado)
+  - Registra devolución, repone 1 unidad al stock (RN-05) y rehabilita al estudiante (RN-03).
+- \`GET /api/prestamos/vencidos\` (Rol: Encargado)
+  - Lista préstamos cuya fecha límite expiró sin devolución registrada (RF-08).
+
+---
+
+## 4. Pruebas y Verificación de Integridad
+
+El backend incluye suite de pruebas de aceptación y reglas de negocio ejecutables:
+\`\`\`bash
+# Ejecutar verificación dentro del contenedor backend
+docker exec -it taller_backend npm test
+\`\`\`
+`;
+  }
+
   return `# Manual del Desarrollador — ${safeName}
 
 Documentación técnica, arquitectura de software, especificación de API y guía de mantenimiento para **${safeName}**.
