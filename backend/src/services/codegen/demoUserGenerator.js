@@ -23,6 +23,13 @@ function generateDemoUserSeedScript(spec = {}) {
 
     demoAccounts.push({
       role: roleName,
+      email: `${slug || 'usuario'}@sistema.ec`,
+      name: `${roleName}`,
+      password: 'Password123!'
+    });
+
+    demoAccounts.push({
+      role: roleName,
       email: slug.includes('admin') ? 'admin@nexora.ec' : `${slug}@nexora.ec`,
       name: `${roleName} Nexora`,
       password: 'Password123!'
@@ -89,7 +96,9 @@ async function seedDemoUsers() {
         contrasenaHash: hashedPassword,
         password: hashedPassword,
         activo: true,
-        estado: 'ACTIVO'
+        estado: 'ACTIVO',
+        rol: acc.role,
+        role: acc.role
       };
       if (roleId) userDefaults[ROLE_FK_FIELD] = roleId;
 
@@ -106,6 +115,8 @@ async function seedDemoUsers() {
           password: hashedPassword,
           activo: true,
           estado: 'ACTIVO',
+          rol: acc.role,
+          role: acc.role,
           ...(roleId ? { [ROLE_FK_FIELD]: roleId } : {})
         }).catch(() => {});
         console.log('🔄 Cuenta demo actualizada con credenciales válidas: ' + acc.email);
@@ -113,8 +124,8 @@ async function seedDemoUsers() {
 
       try {
         await models.sequelize.query(
-          'UPDATE usuarios SET contrasena_hash = :hash, activo = true WHERE nombre_usuario = :email OR nombre = :email;',
-          { replacements: { hash: hashedPassword, email: acc.email } }
+          'UPDATE usuarios SET contrasena_hash = :hash, activo = true, rol = :rol WHERE nombre_usuario = :email OR nombre = :email OR correo = :email;',
+          { replacements: { hash: hashedPassword, email: acc.email, rol: acc.role } }
         );
       } catch (_) {}
     }
