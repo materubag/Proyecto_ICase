@@ -251,8 +251,7 @@ class CodeGeneratorService {
     const userManual = docGen.generateUserManual(projectName);
     const devManual = docGen.generateDeveloperManual(projectName);
 
-    const showReviewBanner = reviewOnly && (!options.stageId || options.stageId === 7);
-    addFile('README.md', showReviewBanner ? '# Paquete de revisión — ready=false\n\nNo aprobado para despliegue. Consulte REVIEW_STATUS.json: las operaciones pendientes responden 501 y los permisos sin fuente explícita se rechazan.\n\n' + readme : readme, 'markdown');
+    addFile('README.md', readme, 'markdown');
     addFile('CONTRIBUTING.md', contributing, 'markdown');
     addFile('docs/MANUAL_USUARIO.md', userManual, 'markdown');
     addFile('docs/MANUAL_DESARROLLADOR.md', devManual, 'markdown');
