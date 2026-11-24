@@ -11,20 +11,46 @@
 
 function generateReadme(projectName = 'Tienda', entities = [], options = {}) {
   const safeName = projectName || 'Tienda';
-  const frontPort = options.frontendPort || '3010';
-  const backPort = options.backendPort || '8087';
-  const dbPort = options.dbPort || '5438';
+  const isTaller = /herramienta|taller|prestamo/i.test(safeName);
+  const frontPort = options.frontendPort || (isTaller ? '3012' : '3010');
+  const backPort = options.backendPort || (isTaller ? '8088' : '8087');
+  const dbPort = options.dbPort || (isTaller ? '5439' : '5438');
 
-  const entityLines = (entities && entities.length > 0)
-    ? entities.map(e => `- **${e.modelName || e.name}**: \`/api/${(e.endpoint || e.name).toLowerCase()}\``).join('\n')
-    : `- **PRODUCTO**: Catálogo e inventario de productos
+  let entityLines;
+  if (entities && entities.length > 0) {
+    entityLines = entities.map(e => `- **${e.modelName || e.name}**: \`/api/${(e.endpoint || e.name).toLowerCase()}\``).join('\n');
+  } else if (isTaller) {
+    entityLines = `- **HERRAMIENTA**: Catálogo e inventario de herramientas del taller (\`/api/herramientas\`)
+- **PRESTAMO**: Solicitudes, entregas y devoluciones con control de vencimiento (\`/api/prestamos\`)
+- **USUARIO**: Cuentas con roles Encargado y Estudiante (\`/api/usuarios\`)`;
+  } else {
+    entityLines = `- **PRODUCTO**: Catálogo e inventario de productos
 - **VENTA**: Emisión de facturas y registro de ventas
 - **USUARIO**: Gestión de usuarios y credenciales de acceso
 - **ROL**: Matriz de permisos y perfiles (Administrador, Vendedor)`;
+  }
 
-  return `# ${safeName} — Sistema de Punto de Venta y Gestión de Inventario
+  const systemTitle = isTaller
+    ? `# ${safeName} — Sistema de Préstamo y Control de Herramientas de Taller`
+    : `# ${safeName} — Sistema de Punto de Venta y Gestión de Inventario`;
 
-Sistema full-stack modular para la gestión comercial, control de inventario en tiempo real, facturación ágil de mostrador y administración de cuentas de vendedores. Generado automáticamente por **ICASE Studio**.
+  const systemDescription = isTaller
+    ? `Sistema full-stack modular para la gestión de solicitudes, entregas, devoluciones y control de inventario de herramientas de taller. Incorpora reglas de negocio formales (plazos de 1 a 3 días, bloqueo por mora o stock cero y reposición atómica de inventario). Generado automáticamente por **ICASE Studio**.`
+    : `Sistema full-stack modular para la gestión comercial, control de inventario en tiempo real, facturación ágil de mostrador y administración de cuentas de vendedores. Generado automáticamente por **ICASE Studio**.`;
+
+  const accountsTable = isTaller
+    ? `| Rol | Correo / Identificador | Contraseña | Pantallas Asignadas |
+| :--- | :--- | :--- | :--- |
+| **Encargado** | \`encargado@taller.edu.ec\` | \`Password123!\` | Catálogo y Registro de Herramientas, Bandeja de Solicitudes, Entregas y Devoluciones, Préstamos Vencidos |
+| **Estudiante** | \`estudiante@taller.edu.ec\` | \`Password123!\` | Catálogo de Herramientas, Solicitud de Préstamo, Historial de Mis Solicitudes |`
+    : `| Rol | Correo / Identificador | Contraseña | Pantallas Asignadas |
+| :--- | :--- | :--- | :--- |
+| **Administrador** | \`admin@nexora.ec\` | \`Password123!\` | Gestión de Inventario, Gestión de Vendedores, Historial de Ventas, Catálogo, Punto de Venta |
+| **Vendedor** | \`vendedor@nexora.ec\` | \`Password123!\` | Catálogo de Productos, Punto de Venta y Facturación, Historial y Consulta de Ventas |`;
+
+  return `${systemTitle}
+
+${systemDescription}
 
 ---
 
@@ -56,10 +82,7 @@ Una vez iniciado el entorno Docker, los servicios están disponibles en:
 
 El sistema se inicializa con cuentas demo para facilitar pruebas y evaluación:
 
-| Rol | Correo / Identificador | Contraseña | Pantallas Asignadas |
-| :--- | :--- | :--- | :--- |
-| **Administrador** | \`admin@nexora.ec\` | \`Password123!\` | Gestión de Inventario, Gestión de Vendedores, Historial de Ventas, Catálogo, Punto de Venta |
-| **Vendedor** | \`vendedor@nexora.ec\` | \`Password123!\` | Catálogo de Productos, Punto de Venta y Facturación, Historial y Consulta de Ventas |
+${accountsTable}
 
 ---
 
@@ -74,7 +97,7 @@ El sistema se inicializa con cuentas demo para facilitar pruebas y evaluación:
 1. Clonar el repositorio y ubicarse en la carpeta raíz:
    \`\`\`bash
    git clone <url-del-repositorio>
-   cd ${safeName.toLowerCase()}
+   cd ${safeName.toLowerCase().replace(/[^a-z0-9]/g, '') || 'app'}
    \`\`\`
 
 2. Iniciar todos los contenedores con reconstrucción limpia:
@@ -106,7 +129,7 @@ docker compose up --build -d
 
 Consulte los manuales detallados incluidos en el repositorio:
 - [Guía de Contribución](CONTRIBUTING.md): Flujo de Git, estándares de código y pruebas.
-- [Manual de Usuario](docs/MANUAL_USUARIO.md): Guía paso a paso ilustrada para Administrador y Vendedor.
+- [Manual de Usuario](docs/MANUAL_USUARIO.md): Guía paso a paso ilustrada según el perfil asignado.
 - [Manual de Desarrollador](docs/MANUAL_DESARROLLADOR.md): Arquitectura, DER, endpoints de la API y despliegue.
 
 ---
